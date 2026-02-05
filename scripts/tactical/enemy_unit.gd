@@ -38,6 +38,7 @@ var base_damage: int = 20
 var grid_position: Vector2i = Vector2i.ZERO
 
 var is_alerted: bool = false
+var is_targetable: bool = false  # Whether this enemy can be attacked by current unit
 
 var _moving: bool = false
 var _move_path: PackedVector2Array = []
@@ -45,6 +46,7 @@ var _move_speed: float = 150.0
 
 # Animation
 var _idle_tween: Tween = null
+var _targetable_tween: Tween = null
 
 
 func _ready() -> void:
@@ -164,8 +166,13 @@ func _flash_damage() -> void:
 	if not sprite:
 		return
 	var tween = create_tween()
-	tween.tween_property(sprite, "modulate", Color(1.5, 0.3, 0.3, 1.0), 0.1)
-	tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+	# Sharp white flash, then red, then back to normal with recoil effect
+	tween.tween_property(sprite, "modulate", Color(2.0, 2.0, 2.0, 1.0), 0.03)  # White flash
+	tween.tween_property(sprite, "modulate", Color(1.8, 0.2, 0.2, 1.0), 0.08)  # Red
+	tween.parallel().tween_property(sprite, "position:x", sprite.position.x + 5.0, 0.04)  # Knockback
+	tween.tween_property(sprite, "position:x", sprite.position.x - 5.0, 0.04)
+	tween.tween_property(sprite, "position:x", sprite.position.x, 0.04)
+	tween.parallel().tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.15)
 
 
 func _start_idle_animation() -> void:
@@ -233,3 +240,43 @@ func face_towards(target_pos: Vector2i) -> void:
 	# Flip sprite based on direction
 	if sprite and direction.x != 0:
 		sprite.flip_h = direction.x < 0
+
+
+## Set targetable state (highlights enemy when player can attack them)
+func set_targetable(targetable: bool) -> void:
+	if is_targetable == targetable:
+		return
+	
+	is_targetable = targetable
+	
+	# Stop any existing targetable animation
+	if _targetable_tween:
+		_targetable_tween.kill()
+		_targetable_tween = null
+	
+	if targetable:
+		_start_targetable_highlight()
+	else:
+		_stop_targetable_highlight()
+
+
+## Start pulsing highlight effect for targetable enemies
+func _start_targetable_highlight() -> void:
+	if not sprite:
+		return
+	
+	_targetable_tween = create_tween()
+	_targetable_tween.set_loops()
+	
+	# Pulsing red/orange glow to indicate enemy can be attacked
+	_targetable_tween.tween_property(sprite, "modulate", Color(1.4, 0.6, 0.3, 1.0), 0.4).set_ease(Tween.EASE_IN_OUT)
+	_targetable_tween.tween_property(sprite, "modulate", Color(1.0, 0.4, 0.2, 1.0), 0.4).set_ease(Tween.EASE_IN_OUT)
+
+
+## Stop targetable highlight effect
+func _stop_targetable_highlight() -> void:
+	if not sprite:
+		return
+	
+	# Reset modulate to normal
+	sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)

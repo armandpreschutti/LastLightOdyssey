@@ -221,8 +221,13 @@ func _flash_damage() -> void:
 	if not sprite:
 		return
 	var tween = create_tween()
-	tween.tween_property(sprite, "modulate", Color(1.5, 0.3, 0.3, 1.0), 0.1)
-	tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+	# Sharp white flash, then red, then back to normal with screen shake effect
+	tween.tween_property(sprite, "modulate", Color(2.0, 2.0, 2.0, 1.0), 0.03)  # White flash
+	tween.tween_property(sprite, "modulate", Color(1.8, 0.2, 0.2, 1.0), 0.08)  # Red
+	tween.parallel().tween_property(sprite, "position:x", sprite.position.x + 4.0, 0.04)  # Knockback
+	tween.tween_property(sprite, "position:x", sprite.position.x - 4.0, 0.04)
+	tween.tween_property(sprite, "position:x", sprite.position.x, 0.04)
+	tween.parallel().tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.15)
 
 
 func _flash_heal() -> void:

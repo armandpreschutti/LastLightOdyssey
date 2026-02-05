@@ -9,10 +9,10 @@ signal camera_transition_complete
 @export var transition_speed: float = 3.0  # Camera movement speed
 
 ## Scroll wheel zoom settings
-@export var zoom_min: Vector2 = Vector2(0.5, 0.5)  # Maximum zoom out
-@export var zoom_max: Vector2 = Vector2(2.5, 2.5)  # Maximum zoom in
-@export var zoom_step: float = 0.1  # Zoom increment per scroll
-@export var zoom_smooth_speed: float = 10.0  # How fast zoom transitions
+@export var zoom_min: Vector2 = Vector2(0.4, 0.4)  # Maximum zoom out (wider view)
+@export var zoom_max: Vector2 = Vector2(3.0, 3.0)  # Maximum zoom in (closer)
+@export var zoom_step: float = 0.2  # Zoom increment per scroll (doubled for more responsive zooming)
+@export var zoom_smooth_speed: float = 12.0  # How fast zoom transitions
 
 ## Pan settings (middle mouse button)
 @export var pan_speed: float = 1.0  # Pan sensitivity multiplier

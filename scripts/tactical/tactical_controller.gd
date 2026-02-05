@@ -220,6 +220,9 @@ func _select_unit(unit: Node2D) -> void:
 	
 	# Update ability buttons
 	tactical_hud.update_ability_buttons(unit.officer_type, unit.current_ap)
+	
+	# Update attackable enemy highlights
+	_update_attackable_highlights()
 
 
 func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
@@ -271,7 +274,7 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 	# Reveal fog around new position
 	tactical_map.reveal_around(pos, unit.sight_range)
 	
-	# Update enemy visibility
+	# Update enemy visibility (also updates attackable highlights)
 	_update_enemy_visibility()
 	
 	# Auto-pickup: Check if there's an interactable at this position
@@ -310,6 +313,9 @@ func _interact_with(interactable: Node2D) -> void:
 				tactical_map.set_movement_range(selected_unit.get_grid_position(), selected_unit.move_range)
 			else:
 				tactical_map.clear_movement_range()
+		
+		# Update attackable highlights (AP spent)
+		_update_attackable_highlights()
 
 
 func _auto_pickup(interactable: Node2D) -> void:
@@ -339,6 +345,9 @@ func _pickup_item(interactable: Node2D) -> void:
 func _on_end_turn_pressed() -> void:
 	if not mission_active:
 		return
+	
+	# Clear attackable highlights before changing turns
+	_clear_attackable_highlights()
 	
 	# Advance to next unit's turn
 	current_unit_index += 1
@@ -433,6 +442,9 @@ func _on_officer_died(officer_key: String) -> void:
 func _end_mission(success: bool) -> void:
 	mission_active = false
 	GameState.exit_tactical_mode()
+
+	# Clear attackable highlights
+	_clear_attackable_highlights()
 
 	# Clear the map
 	for officer in deployed_officers:
@@ -712,6 +724,9 @@ func _phase_resolution(shooter: Node2D) -> void:
 				tactical_map.set_movement_range(shooter.get_grid_position(), shooter.move_range)
 			else:
 				tactical_map.clear_movement_range()
+		
+		# Update attackable enemy highlights (AP spent, enemy may have died)
+		_update_attackable_highlights()
 	
 	await get_tree().create_timer(0.3).timeout
 
@@ -834,6 +849,59 @@ func _update_enemy_visibility() -> void:
 			continue
 		
 		enemy.visible = _is_enemy_visible(enemy)
+	
+	# Also update attackable highlights (visibility affects targeting)
+	_update_attackable_highlights()
+
+
+## Update which enemies are highlighted as attackable by the current unit
+func _update_attackable_highlights() -> void:
+	# First clear all highlights
+	for enemy in enemies:
+		if enemy.current_hp > 0:
+			enemy.set_targetable(false)
+	
+	# If no unit selected or selected unit can't attack, don't highlight anything
+	if not selected_unit or selected_unit not in deployed_officers:
+		return
+	
+	# Check if it's the current unit's turn and they have AP to attack
+	if selected_unit != deployed_officers[current_unit_index]:
+		return
+	
+	if not selected_unit.has_ap(1):
+		return
+	
+	var shooter_pos = selected_unit.get_grid_position()
+	
+	# Check each visible enemy
+	for enemy in enemies:
+		if enemy.current_hp <= 0:
+			continue
+		
+		if not enemy.visible:
+			continue
+		
+		var enemy_pos = enemy.get_grid_position()
+		
+		# Check if in range
+		var distance = abs(enemy_pos.x - shooter_pos.x) + abs(enemy_pos.y - shooter_pos.y)
+		if distance > selected_unit.shoot_range:
+			continue
+		
+		# Check line of sight
+		if not has_line_of_sight(shooter_pos, enemy_pos):
+			continue
+		
+		# This enemy is attackable - highlight it!
+		enemy.set_targetable(true)
+
+
+## Clear all attackable enemy highlights
+func _clear_attackable_highlights() -> void:
+	for enemy in enemies:
+		if enemy.current_hp > 0:
+			enemy.set_targetable(false)
 
 
 func _on_ability_used(ability_type: String) -> void:
