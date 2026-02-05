@@ -167,6 +167,7 @@ func _draw_line_with_label(from: Vector2, to: Vector2, fuel_cost: int) -> void:
 	var label = Label.new()
 	label.text = "%d" % fuel_cost
 	label.position = midpoint - Vector2(8, 12)  # Offset to center text
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Don't block clicks
 	label.add_theme_color_override("font_color", Color(1, 0.8, 0.2))  # Bright amber
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	label.add_theme_constant_override("outline_size", 3)

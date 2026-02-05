@@ -1,4 +1,4 @@
-extends Node
+﻿extends Node
 ## Main game controller for Last Light Odyssey
 ## Manages the game loop and switches between management and tactical modes
 
@@ -21,12 +21,33 @@ var current_event: Dictionary = {}
 var pending_node_type: int = -1  # EventManager.NodeType
 var star_map_generator: StarMapGenerator = null
 
+# Tutorial system
+var tutorial_overlay: CanvasLayer = null
+var _first_node_clicked: bool = false
+var _first_event_seen: bool = false
+
 
 func _ready() -> void:
 	_connect_signals()
 	_initialize_star_map()
+	_initialize_tutorial()
 	game_over_panel.visible = false
 	tactical_mode.visible = false
+
+
+func _initialize_tutorial() -> void:
+	# Load and add the tutorial overlay
+	var tutorial_scene = load("res://scenes/ui/tutorial_overlay.tscn")
+	if tutorial_scene:
+		tutorial_overlay = tutorial_scene.instantiate()
+		add_child(tutorial_overlay)
+		print("Main: Tutorial overlay added")
+	else:
+		push_error("Main: Failed to load tutorial_overlay.tscn")
+		return
+	
+	# Start the tutorial (TutorialManager will check if already completed)
+	TutorialManager.start_tutorial()
 
 
 func _connect_signals() -> void:
@@ -61,6 +82,11 @@ func _on_node_clicked(node_id: int) -> void:
 	if current_phase != GamePhase.IDLE:
 		print("Main: Not in IDLE phase, ignoring click")
 		return
+	
+	# Tutorial: Notify first node click
+	if not _first_node_clicked:
+		_first_node_clicked = true
+		TutorialManager.notify_trigger("node_clicked")
 	
 	print("Main: Executing jump to node %d" % node_id)
 	
@@ -101,6 +127,14 @@ func _on_node_clicked(node_id: int) -> void:
 func _trigger_random_event() -> void:
 	current_event = EventManager.roll_random_event()
 	current_phase = GamePhase.EVENT_DISPLAY
+	
+	# Tutorial: Show event intro if this is the first event
+	if not _first_event_seen and TutorialManager.is_active():
+		_first_event_seen = true
+		# Advance past resources_intro if we're still there
+		if TutorialManager.is_at_step("resources_intro"):
+			TutorialManager.acknowledge_step()
+	
 	event_dialog.show_event(current_event)
 
 
@@ -109,6 +143,9 @@ func _on_event_choice_made(use_specialist: bool) -> void:
 		return
 
 	EventManager.resolve_event(current_event, use_specialist)
+	
+	# Tutorial: Notify that an event was closed
+	TutorialManager.notify_trigger("event_closed")
 
 	current_phase = GamePhase.IDLE
 	current_event = {}
@@ -116,6 +153,9 @@ func _on_event_choice_made(use_specialist: bool) -> void:
 
 func _on_team_selected(officer_keys: Array[String]) -> void:
 	current_phase = GamePhase.TACTICAL
+	
+	# Tutorial: Notify that team was selected
+	TutorialManager.notify_trigger("team_selected")
 
 	# Hide management UI, show tactical
 	management_layer.visible = false
@@ -138,6 +178,9 @@ func _on_mission_complete(success: bool) -> void:
 	management_background.visible = true
 
 	current_phase = GamePhase.IDLE
+	
+	# Tutorial: Notify mission complete
+	TutorialManager.notify_trigger("mission_complete")
 	
 	# Refresh the star map
 	star_map.refresh()
@@ -174,6 +217,11 @@ func _on_restart_pressed() -> void:
 	current_phase = GamePhase.IDLE
 	current_event = {}
 	game_over_panel.visible = false
+	_first_node_clicked = false
+	_first_event_seen = false
 	
 	# Regenerate the star map
 	_initialize_star_map()
+	
+	# Restart tutorial if not completed
+	TutorialManager.start_tutorial()

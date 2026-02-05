@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://dp7k2m5qr8vnx"]
 
-[ext_resource type="Script" path="res://scripts/ui/tactical_hud.gd" id="1_hud"]
+[ext_resource type="Script" uid="uid://5cjenw3gw7mt" path="res://scripts/ui/tactical_hud.gd" id="1_hud"]
 
-[node name="TacticalHUD" type="Control"]
+[node name="TacticalHUD" type="Control" unique_id=627846871]
 visible = false
 layout_mode = 3
 anchors_preset = 1
@@ -11,33 +11,36 @@ anchor_right = 1.0
 offset_left = -340.0
 offset_bottom = 500.0
 grow_horizontal = 0
+mouse_filter = 2
 script = ExtResource("1_hud")
 
-[node name="PanelContainer" type="PanelContainer" parent="."]
+[node name="PanelContainer" type="PanelContainer" parent="." unique_id=1714522257]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 1
 
-[node name="VBoxContainer" type="VBoxContainer" parent="."]
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=201811114]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="HeaderLabel" type="Label" parent="VBoxContainer"]
+[node name="HeaderLabel" type="Label" parent="VBoxContainer" unique_id=1781754924]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
 theme_override_font_sizes/font_size = 18
 text = "[ TACTICAL MODE ]"
 horizontal_alignment = 1
 
-[node name="InstructionsLabel" type="Label" parent="VBoxContainer"]
+[node name="InstructionsLabel" type="Label" parent="VBoxContainer" unique_id=1401724093]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
 theme_override_font_sizes/font_size = 11
@@ -46,31 +49,33 @@ Shoot: Click enemy (1 AP)
 Interact: Click adjacent item"
 autowrap_mode = 2
 
-[node name="HSeparator" type="HSeparator" parent="VBoxContainer"]
+[node name="HSeparator" type="HSeparator" parent="VBoxContainer" unique_id=256488745]
 layout_mode = 2
+mouse_filter = 2
 
-[node name="TurnLabel" type="Label" parent="VBoxContainer"]
+[node name="TurnLabel" type="Label" parent="VBoxContainer" unique_id=1176507920]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
 theme_override_font_sizes/font_size = 16
 text = "TURN: 1"
 
-[node name="StabilityContainer" type="VBoxContainer" parent="VBoxContainer"]
+[node name="StabilityContainer" type="VBoxContainer" parent="VBoxContainer" unique_id=1226531059]
 layout_mode = 2
+mouse_filter = 2
 
-[node name="StabilityLabel" type="Label" parent="VBoxContainer/StabilityContainer"]
+[node name="StabilityLabel" type="Label" parent="VBoxContainer/StabilityContainer" unique_id=951693361]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
 theme_override_font_sizes/font_size = 14
 text = "CRYO-STABILITY: 100%"
 
-[node name="StabilityBar" type="ProgressBar" parent="VBoxContainer/StabilityContainer"]
+[node name="StabilityBar" type="ProgressBar" parent="VBoxContainer/StabilityContainer" unique_id=1547755024]
 layout_mode = 2
-max_value = 100.0
+mouse_filter = 2
 value = 100.0
 show_percentage = false
 
-[node name="CryoWarning" type="Label" parent="VBoxContainer"]
+[node name="CryoWarning" type="Label" parent="VBoxContainer" unique_id=657727693]
 visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.2, 0.2, 1)
@@ -78,55 +83,59 @@ theme_override_font_sizes/font_size = 14
 text = "[ CRYO-FAILURE: -10 COLONISTS ]"
 horizontal_alignment = 1
 
-[node name="HSeparator2" type="HSeparator" parent="VBoxContainer"]
+[node name="HSeparator2" type="HSeparator" parent="VBoxContainer" unique_id=1222420686]
 layout_mode = 2
+mouse_filter = 2
 
-[node name="SelectedContainer" type="VBoxContainer" parent="VBoxContainer"]
+[node name="SelectedContainer" type="VBoxContainer" parent="VBoxContainer" unique_id=1406198969]
 layout_mode = 2
+mouse_filter = 2
 
-[node name="SelectedLabel" type="Label" parent="VBoxContainer/SelectedContainer"]
+[node name="SelectedLabel" type="Label" parent="VBoxContainer/SelectedContainer" unique_id=596160667]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
 theme_override_font_sizes/font_size = 14
 text = "SELECTED: NONE"
 
-[node name="APLabel" type="Label" parent="VBoxContainer/SelectedContainer"]
+[node name="APLabel" type="Label" parent="VBoxContainer/SelectedContainer" unique_id=1768368466]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
 theme_override_font_sizes/font_size = 14
 text = "AP: 0 / 0"
 
-[node name="HPLabel" type="Label" parent="VBoxContainer/SelectedContainer"]
+[node name="HPLabel" type="Label" parent="VBoxContainer/SelectedContainer" unique_id=1510093781]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
 theme_override_font_sizes/font_size = 14
 text = "HEALTH: 0 / 0"
 
-[node name="MoveRangeLabel" type="Label" parent="VBoxContainer/SelectedContainer"]
+[node name="MoveRangeLabel" type="Label" parent="VBoxContainer/SelectedContainer" unique_id=12689372]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.4, 0.8, 1, 1)
 theme_override_font_sizes/font_size = 14
 text = "MOVE RANGE: 0 tiles"
 
-[node name="AttackRangeLabel" type="Label" parent="VBoxContainer/SelectedContainer"]
+[node name="AttackRangeLabel" type="Label" parent="VBoxContainer/SelectedContainer" unique_id=422486343]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.4, 0.4, 1)
 theme_override_font_sizes/font_size = 14
 text = "ATTACK RANGE: 0 tiles"
 
-[node name="TurnStatusLabel" type="Label" parent="VBoxContainer/SelectedContainer"]
+[node name="TurnStatusLabel" type="Label" parent="VBoxContainer/SelectedContainer" unique_id=584542273]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.2, 1, 0.2, 1)
 theme_override_font_sizes/font_size = 14
 text = "[ ACTIVE TURN ]"
 
-[node name="HSeparator3" type="HSeparator" parent="VBoxContainer"]
+[node name="HSeparator3" type="HSeparator" parent="VBoxContainer" unique_id=401396571]
 layout_mode = 2
+mouse_filter = 2
 
-[node name="HaulContainer" type="VBoxContainer" parent="VBoxContainer"]
+[node name="HaulContainer" type="VBoxContainer" parent="VBoxContainer" unique_id=2018366467]
 layout_mode = 2
+mouse_filter = 2
 
-[node name="HaulLabel" type="Label" parent="VBoxContainer/HaulContainer"]
+[node name="HaulLabel" type="Label" parent="VBoxContainer/HaulContainer" unique_id=979305634]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.8, 0.8, 0.2, 1)
 theme_override_font_sizes/font_size = 13
@@ -134,27 +143,29 @@ text = "MISSION HAUL:
 FUEL: +0
 SCRAP: +0"
 
-[node name="HSeparator4" type="HSeparator" parent="VBoxContainer"]
+[node name="HSeparator4" type="HSeparator" parent="VBoxContainer" unique_id=1323839971]
 layout_mode = 2
+mouse_filter = 2
 
-[node name="AbilityContainer" type="VBoxContainer" parent="VBoxContainer"]
+[node name="AbilityContainer" type="VBoxContainer" parent="VBoxContainer" unique_id=349441042]
 visible = false
 layout_mode = 2
+mouse_filter = 2
 theme_override_constants/separation = 6
 
-[node name="AbilityLabel" type="Label" parent="VBoxContainer/AbilityContainer"]
+[node name="AbilityLabel" type="Label" parent="VBoxContainer/AbilityContainer" unique_id=438081734]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 1, 0.6, 1)
 theme_override_font_sizes/font_size = 14
 text = "SPECIALIST ABILITY:"
 
-[node name="OverwatchButton" type="Button" parent="VBoxContainer/AbilityContainer"]
+[node name="OverwatchButton" type="Button" parent="VBoxContainer/AbilityContainer" unique_id=309006304]
 visible = false
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "[ OVERWATCH ] (1 AP)"
 
-[node name="OverwatchDesc" type="Label" parent="VBoxContainer/AbilityContainer"]
+[node name="OverwatchDesc" type="Label" parent="VBoxContainer/AbilityContainer" unique_id=453154134]
 visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
@@ -163,13 +174,13 @@ text = "Auto-shoot first enemy
 that moves in LOS"
 autowrap_mode = 2
 
-[node name="BreachButton" type="Button" parent="VBoxContainer/AbilityContainer"]
+[node name="BreachButton" type="Button" parent="VBoxContainer/AbilityContainer" unique_id=1318817483]
 visible = false
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "[ BREACH ] (1 AP)"
 
-[node name="BreachDesc" type="Label" parent="VBoxContainer/AbilityContainer"]
+[node name="BreachDesc" type="Label" parent="VBoxContainer/AbilityContainer" unique_id=1436019480]
 visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
@@ -178,13 +189,13 @@ text = "Destroy cover or wall
 tile instantly"
 autowrap_mode = 2
 
-[node name="PatchButton" type="Button" parent="VBoxContainer/AbilityContainer"]
+[node name="PatchButton" type="Button" parent="VBoxContainer/AbilityContainer" unique_id=375262125]
 visible = false
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "[ PATCH ] (2 AP)"
 
-[node name="PatchDesc" type="Label" parent="VBoxContainer/AbilityContainer"]
+[node name="PatchDesc" type="Label" parent="VBoxContainer/AbilityContainer" unique_id=353908892]
 visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
@@ -193,19 +204,21 @@ text = "Heal adjacent ally
 for 50% max HP"
 autowrap_mode = 2
 
-[node name="HSeparator5" type="HSeparator" parent="VBoxContainer"]
+[node name="HSeparator5" type="HSeparator" parent="VBoxContainer" unique_id=1629365624]
 layout_mode = 2
+mouse_filter = 2
 
-[node name="ButtonContainer" type="VBoxContainer" parent="VBoxContainer"]
+[node name="ButtonContainer" type="VBoxContainer" parent="VBoxContainer" unique_id=980278019]
 layout_mode = 2
+mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="EndTurnButton" type="Button" parent="VBoxContainer/ButtonContainer"]
+[node name="EndTurnButton" type="Button" parent="VBoxContainer/ButtonContainer" unique_id=1048483943]
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "[ END UNIT TURN ]"
 
-[node name="ExtractButton" type="Button" parent="VBoxContainer/ButtonContainer"]
+[node name="ExtractButton" type="Button" parent="VBoxContainer/ButtonContainer" unique_id=2129546874]
 visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.2, 1, 0.2, 1)

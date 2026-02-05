@@ -245,6 +245,9 @@ func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
 	# Move unit
 	unit.set_grid_position(target_pos)
 	unit.move_along_path(path)
+	
+	# Tutorial: Notify that a unit moved
+	TutorialManager.notify_trigger("unit_moved")
 
 	# Update HUD
 	tactical_hud.update_selected_unit_full(
@@ -625,6 +628,9 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 	# Calculate hit chance (pass shooter for class-specific calculations)
 	var hit_chance = calculate_hit_chance(shooter_pos, target_pos, shooter)
 	var damage = shooter.base_damage if "base_damage" in shooter else 25
+	
+	# Tutorial: Notify that a unit attacked
+	TutorialManager.notify_trigger("unit_attacked")
 	
 	# PHASE 1: AIMING (0.5s)
 	await _phase_aiming(shooter, shooter_pos, target_pos, hit_chance)

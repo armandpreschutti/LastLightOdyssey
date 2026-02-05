@@ -1,0 +1,276 @@
+[gd_scene format=3 uid="uid://fn1of7gc2wrv"]
+
+[ext_resource type="Script" uid="uid://tt17rhov16a4" path="res://scripts/ui/settings_menu.gd" id="1_settings"]
+[ext_resource type="FontFile" uid="uid://xqiy7ijtjsrv" path="res://assets/fonts/VT323-Regular.ttf" id="2_font"]
+
+[node name="SettingsMenu" type="Control" unique_id=1891688156]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_settings")
+
+[node name="Background" type="ColorRect" parent="." unique_id=867668163]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0.85)
+
+[node name="PanelContainer" type="PanelContainer" parent="." unique_id=1876034130]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -280.0
+offset_right = 300.0
+offset_bottom = 280.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer" unique_id=493973720]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 25
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 25
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer" unique_id=1658289233]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 20
+
+[node name="TitleLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1127856454]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.75, 0.2, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 36
+text = "[ SETTINGS ]"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1275497612]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="DisplaySection" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=104668564]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 12
+
+[node name="DisplayLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/DisplaySection" unique_id=92100339]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.8, 0.5, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 22
+text = "DISPLAY"
+
+[node name="FullscreenContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/DisplaySection" unique_id=379515364]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 20
+
+[node name="FullscreenLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/DisplaySection/FullscreenContainer" unique_id=253710846]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 20
+text = "Fullscreen:"
+
+[node name="FullscreenToggle" type="CheckButton" parent="PanelContainer/MarginContainer/VBoxContainer/DisplaySection/FullscreenContainer" unique_id=728951946]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 18
+
+[node name="ResolutionContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/DisplaySection" unique_id=1457047882]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 20
+
+[node name="ResolutionLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/DisplaySection/ResolutionContainer" unique_id=189758995]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 20
+text = "Resolution:"
+
+[node name="ResolutionSelector" type="OptionButton" parent="PanelContainer/MarginContainer/VBoxContainer/DisplaySection/ResolutionContainer" unique_id=2033775266]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 18
+selected = 1
+item_count = 3
+popup/item_0/text = "1280 x 720"
+popup/item_0/id = 0
+popup/item_1/text = "1600 x 900"
+popup/item_1/id = 1
+popup/item_2/text = "1920 x 1080"
+popup/item_2/id = 2
+
+[node name="HSeparator2" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1191369115]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="AudioSection" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=163101074]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 12
+
+[node name="AudioLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/AudioSection" unique_id=1091722532]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.8, 0.5, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 22
+text = "AUDIO"
+
+[node name="MasterContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/AudioSection" unique_id=730399183]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 15
+
+[node name="MasterLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/AudioSection/MasterContainer" unique_id=1044615745]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 20
+text = "Master:"
+
+[node name="MasterSlider" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/AudioSection/MasterContainer" unique_id=622363537]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+value = 80.0
+
+[node name="MasterValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/AudioSection/MasterContainer" unique_id=1836658033]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 18
+text = "80%"
+horizontal_alignment = 2
+
+[node name="SFXContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/AudioSection" unique_id=1536024494]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 15
+
+[node name="SFXLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/AudioSection/SFXContainer" unique_id=2145847817]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 20
+text = "SFX:"
+
+[node name="SFXSlider" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/AudioSection/SFXContainer" unique_id=580868020]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+value = 100.0
+
+[node name="SFXValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/AudioSection/SFXContainer" unique_id=199343552]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 18
+text = "100%"
+horizontal_alignment = 2
+
+[node name="MusicContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/AudioSection" unique_id=1801340535]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 15
+
+[node name="MusicLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/AudioSection/MusicContainer" unique_id=1699502698]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 20
+text = "Music:"
+
+[node name="MusicSlider" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer/AudioSection/MusicContainer" unique_id=836637141]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+value = 70.0
+
+[node name="MusicValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/AudioSection/MusicContainer" unique_id=424534476]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 18
+text = "70%"
+horizontal_alignment = 2
+
+[node name="HSeparator3" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=179277713]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="TutorialSection" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1602678270]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 12
+
+[node name="TutorialLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/TutorialSection" unique_id=377631400]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.8, 0.5, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 22
+text = "TUTORIAL"
+
+[node name="ResetTutorialButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/TutorialSection" unique_id=1458483885]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.6, 0.4, 1)
+theme_override_colors/font_hover_color = Color(1, 0.8, 0.5, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 18
+text = "[ RESET TUTORIAL ]"
+
+[node name="HSeparator4" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1312687403]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="ButtonContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=238411676]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 30
+alignment = 1
+
+[node name="ApplyButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer" unique_id=1565032235]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 1, 0.4, 1)
+theme_override_colors/font_hover_color = Color(0.6, 1, 0.6, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 22
+text = "[ APPLY ]"
+
+[node name="BackButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer" unique_id=599242378]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+theme_override_colors/font_hover_color = Color(1, 0.85, 0.4, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 22
+text = "[ BACK ]"
