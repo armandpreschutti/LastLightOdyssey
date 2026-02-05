@@ -1,0 +1,79 @@
+[gd_scene format=3 uid="uid://bhd16wq58r0sj"]
+
+[ext_resource type="Script" uid="uid://bhfsk44lrvrqc" path="res://scripts/ui/management_hud.gd" id="1_hud"]
+
+[node name="ManagementHUD" type="Control" unique_id=1202243277]
+layout_mode = 3
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -280.0
+offset_right = 400.0
+grow_vertical = 0
+script = ExtResource("1_hud")
+
+[node name="PanelContainer" type="PanelContainer" parent="." unique_id=1400647952]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=234660455]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 8
+
+[node name="HeaderLabel" type="Label" parent="VBoxContainer" unique_id=1275764347]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_font_sizes/font_size = 18
+text = "[ SHIP STATUS ]"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="VBoxContainer" unique_id=330743790]
+layout_mode = 2
+
+[node name="StatsContainer" type="VBoxContainer" parent="VBoxContainer" unique_id=271874304]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ColonistsLabel" type="Label" parent="VBoxContainer/StatsContainer" unique_id=88158498]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_font_sizes/font_size = 16
+text = "COLONISTS: 1000"
+
+[node name="FuelLabel" type="Label" parent="VBoxContainer/StatsContainer" unique_id=1091140983]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_font_sizes/font_size = 16
+text = "FUEL CELLS: 10"
+
+[node name="IntegrityLabel" type="Label" parent="VBoxContainer/StatsContainer" unique_id=1493876721]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_font_sizes/font_size = 16
+text = "HULL INTEGRITY: 100%"
+
+[node name="ScrapLabel" type="Label" parent="VBoxContainer/StatsContainer" unique_id=944519047]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_font_sizes/font_size = 16
+text = "SCRAP: 0"
+
+[node name="HSeparator2" type="HSeparator" parent="VBoxContainer" unique_id=756201566]
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="VBoxContainer" unique_id=1406390285]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.2, 0.2, 1)
+theme_override_font_sizes/font_size = 14
+text = "[ DRIFT MODE - NO FUEL ]"
+horizontal_alignment = 1

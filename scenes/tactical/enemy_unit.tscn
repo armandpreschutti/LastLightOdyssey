@@ -1,0 +1,42 @@
+[gd_scene format=3 uid="uid://bb1cu6k0xsoas"]
+
+[ext_resource type="Script" path="res://scripts/tactical/enemy_unit.gd" id="1_enemy"]
+[ext_resource type="Texture2D" uid="uid://cn5k7v8w2m4px" path="res://assets/sprites/characters/enemy_basic.png" id="2_sprite"]
+[ext_resource type="Texture2D" uid="uid://cxk3n5w7qv2p8" path="res://assets/sprites/characters/shadow.png" id="3_shadow"]
+
+[node name="EnemyUnit" type="Node2D"]
+script = ExtResource("1_enemy")
+
+[node name="Shadow" type="Sprite2D" parent="."]
+position = Vector2(0, 4)
+modulate = Color(1, 1, 1, 0.5)
+texture = ExtResource("3_shadow")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+texture = ExtResource("2_sprite")
+texture_filter = 1
+
+[node name="HPBarBG" type="ColorRect" parent="."]
+offset_left = -14.0
+offset_top = -20.0
+offset_right = 14.0
+offset_bottom = -16.0
+mouse_filter = 2
+color = Color(0.2, 0.2, 0.2, 0.8)
+
+[node name="HPBar" type="ColorRect" parent="."]
+offset_left = -13.0
+offset_top = -19.0
+offset_right = 13.0
+offset_bottom = -17.0
+mouse_filter = 2
+color = Color(0, 1, 0, 1)
+
+[node name="AlertIndicator" type="ColorRect" parent="."]
+visible = false
+offset_left = -3.0
+offset_top = -26.0
+offset_right = 3.0
+offset_bottom = -22.0
+mouse_filter = 2
+color = Color(1, 0.3, 0.3, 1)

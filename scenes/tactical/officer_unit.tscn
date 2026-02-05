@@ -1,0 +1,69 @@
+[gd_scene format=3 uid="uid://c6h8nwx2kpf3m"]
+
+[ext_resource type="Script" path="res://scripts/tactical/officer_unit.gd" id="1_officer"]
+[ext_resource type="Texture2D" uid="uid://dw8kp2m5vqx4r" path="res://assets/sprites/characters/officer_scout.png" id="2_sprite"]
+[ext_resource type="Texture2D" uid="uid://cxk3n5w7qv2p8" path="res://assets/sprites/characters/shadow.png" id="3_shadow"]
+[ext_resource type="Texture2D" uid="uid://bm4k7v9xn3p2w" path="res://assets/sprites/characters/selection_ring.png" id="4_selection"]
+
+[node name="OfficerUnit" type="Node2D"]
+script = ExtResource("1_officer")
+
+[node name="Shadow" type="Sprite2D" parent="."]
+position = Vector2(0, 4)
+modulate = Color(1, 1, 1, 0.5)
+texture = ExtResource("3_shadow")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+texture = ExtResource("2_sprite")
+texture_filter = 1
+
+[node name="SelectionIndicator" type="Sprite2D" parent="."]
+visible = false
+modulate = Color(0.2, 1, 0.2, 0.8)
+texture = ExtResource("4_selection")
+texture_filter = 1
+
+[node name="HPBarBG" type="ColorRect" parent="."]
+offset_left = -14.0
+offset_top = 14.0
+offset_right = 14.0
+offset_bottom = 18.0
+mouse_filter = 2
+color = Color(0.2, 0.2, 0.2, 0.8)
+
+[node name="HPBar" type="ColorRect" parent="."]
+offset_left = -13.0
+offset_top = 15.0
+offset_right = 13.0
+offset_bottom = 17.0
+mouse_filter = 2
+color = Color(0, 1, 0, 1)
+
+[node name="APIndicator" type="HBoxContainer" parent="."]
+offset_left = -10.0
+offset_top = -22.0
+offset_right = 10.0
+offset_bottom = -14.0
+mouse_filter = 2
+alignment = 1
+
+[node name="AP1" type="ColorRect" parent="APIndicator"]
+custom_minimum_size = Vector2(6, 6)
+layout_mode = 2
+mouse_filter = 2
+color = Color(1, 0.8, 0, 1)
+
+[node name="AP2" type="ColorRect" parent="APIndicator"]
+custom_minimum_size = Vector2(6, 6)
+layout_mode = 2
+mouse_filter = 2
+color = Color(1, 0.8, 0, 1)
+
+[node name="OverwatchIndicator" type="ColorRect" parent="."]
+visible = false
+offset_left = -3.0
+offset_top = -28.0
+offset_right = 3.0
+offset_bottom = -24.0
+mouse_filter = 2
+color = Color(0, 0.8, 1, 1)

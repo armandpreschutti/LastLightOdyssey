@@ -1,0 +1,82 @@
+[gd_scene format=3 uid="uid://s0sd51xhy2to"]
+
+[ext_resource type="Script" uid="uid://bb1nggh5w8f4u" path="res://scripts/management/map_node.gd" id="1_mapnode"]
+[ext_resource type="Texture2D" uid="uid://dxw3s2n4c5ph1" path="res://assets/sprites/navigation/planet_earth.png" id="2_planet"]
+
+[node name="MapNode" type="Control"]
+custom_minimum_size = Vector2(80, 80)
+layout_mode = 3
+anchors_preset = 0
+offset_right = 80.0
+offset_bottom = 80.0
+pivot_offset = Vector2(40, 40)
+script = ExtResource("1_mapnode")
+
+[node name="GlowEffect" type="ColorRect" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -8.0
+offset_top = -8.0
+offset_right = 8.0
+offset_bottom = 8.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.3)
+
+[node name="Sprite" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_planet")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -40.0
+offset_top = -4.0
+offset_right = 40.0
+offset_bottom = 16.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 2
+theme_override_font_sizes/font_size = 10
+text = "Node"
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="CurrentIndicator" type="ColorRect" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -4.0
+offset_top = -12.0
+offset_right = 4.0
+offset_bottom = -4.0
+grow_horizontal = 2
+mouse_filter = 2
+color = Color(0.2, 1, 0.2, 1)
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]

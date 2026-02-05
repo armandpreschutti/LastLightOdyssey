@@ -1,0 +1,139 @@
+[gd_scene load_steps=8 format=3 uid="uid://dh5r2kv8pnq6x"]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="PackedScene" uid="uid://bm7xk5qvch1tm" path="res://scenes/ui/management_hud.tscn" id="2_hud"]
+[ext_resource type="PackedScene" uid="uid://dp8k7m6qv5n2w" path="res://scenes/management/star_map.tscn" id="3_starmap"]
+[ext_resource type="PackedScene" uid="uid://cg8k2qaxnv5rl" path="res://scenes/ui/event_dialog.tscn" id="3_event"]
+[ext_resource type="PackedScene" uid="uid://c5h7k8m9n0p1q" path="res://scenes/ui/trading_dialog.tscn" id="4_trading"]
+[ext_resource type="PackedScene" uid="uid://bk9m7n4qp2x5v" path="res://scenes/ui/team_select_dialog.tscn" id="4_team"]
+[ext_resource type="PackedScene" uid="uid://dm8k9n5qv3p6r" path="res://scenes/tactical/tactical_mode.tscn" id="5_tactical"]
+
+[node name="Main" type="Node"]
+script = ExtResource("1_main")
+
+[node name="ManagementBackground" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0509804, 0.0509804, 0.0509804, 1)
+
+[node name="ManagementLayer" type="CanvasLayer" parent="."]
+
+[node name="StarMap" parent="ManagementLayer" instance=ExtResource("3_starmap")]
+
+[node name="InstructionsPanel" type="PanelContainer" parent="ManagementLayer"]
+offset_left = 450.0
+offset_top = 20.0
+offset_right = 1150.0
+offset_bottom = 140.0
+
+[node name="MarginContainer" type="MarginContainer" parent="ManagementLayer/InstructionsPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 15
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 15
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ManagementLayer/InstructionsPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TitleLabel" type="Label" parent="ManagementLayer/InstructionsPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+theme_override_font_sizes/font_size = 18
+text = "[ NAVIGATION SYSTEM ]"
+horizontal_alignment = 1
+
+[node name="InstructionLabel" type="Label" parent="ManagementLayer/InstructionsPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+theme_override_font_sizes/font_size = 14
+text = "Click on AMBER nodes to jump to them.
+Fuel cost varies by distance (shown on connection lines).
+Plan your route to NEW EARTH carefully.
+Node types: EMPTY (events)  SCAVENGE (missions)  TRADE (outposts)"
+autowrap_mode = 2
+
+[node name="ManagementHUD" parent="ManagementLayer" instance=ExtResource("2_hud")]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -300.0
+offset_right = 420.0
+offset_bottom = -20.0
+
+[node name="EventDialog" parent="ManagementLayer" instance=ExtResource("3_event")]
+visible = false
+layout_mode = 1
+
+[node name="TradingDialog" parent="ManagementLayer" instance=ExtResource("4_trading")]
+visible = false
+layout_mode = 1
+
+[node name="TeamSelectDialog" parent="ManagementLayer" instance=ExtResource("4_team")]
+visible = false
+layout_mode = 1
+
+[node name="GameOverPanel" type="Control" parent="ManagementLayer"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ColorRect" type="ColorRect" parent="ManagementLayer/GameOverPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.8)
+
+[node name="PanelContainer" type="PanelContainer" parent="ManagementLayer/GameOverPanel"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -150.0
+offset_right = 300.0
+offset_bottom = 150.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="ManagementLayer/GameOverPanel/PanelContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 30
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 30
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ManagementLayer/GameOverPanel/PanelContainer/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="GameOverLabel" type="Label" parent="ManagementLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_font_sizes/font_size = 18
+text = "GAME OVER"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="RestartButton" type="Button" parent="ManagementLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "[ RESTART ]"
+
+[node name="TacticalMode" parent="." instance=ExtResource("5_tactical")]
+visible = false

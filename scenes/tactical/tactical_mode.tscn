@@ -1,0 +1,70 @@
+[gd_scene format=3 uid="uid://dm8lan5qv3p6r"]
+
+[ext_resource type="Script" path="res://scripts/tactical/tactical_controller.gd" id="1_controller"]
+[ext_resource type="PackedScene" uid="uid://cn5k7v8qp2m4x" path="res://scenes/tactical/tactical_map.tscn" id="2_map"]
+[ext_resource type="PackedScene" uid="uid://dp7k2m5qr8vnx" path="res://scenes/ui/tactical_hud.tscn" id="3_hud"]
+[ext_resource type="Script" path="res://scripts/tactical/combat_camera.gd" id="4_camera"]
+[ext_resource type="Script" path="res://scripts/tactical/projectile.gd" id="5_projectile"]
+
+[node name="TacticalMode" type="Node2D"]
+script = ExtResource("1_controller")
+
+[node name="CombatCamera" type="Camera2D" parent="."]
+position = Vector2(640, 360)
+script = ExtResource("4_camera")
+
+[node name="Background" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0509804, 0.0509804, 0.0509804, 1)
+
+[node name="MapContainer" type="Node2D" parent="."]
+position = Vector2(300, 200)
+
+[node name="TacticalMap" parent="MapContainer" instance=ExtResource("2_map")]
+
+[node name="EffectsLayer" type="Node2D" parent="MapContainer"]
+
+[node name="Projectile" type="Line2D" parent="MapContainer/EffectsLayer"]
+script = ExtResource("5_projectile")
+
+[node name="DamagePopupContainer" type="Node2D" parent="MapContainer/EffectsLayer"]
+
+[node name="UILayer" type="CanvasLayer" parent="."]
+
+[node name="TacticalHUD" parent="UILayer" instance=ExtResource("3_hud")]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -340.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = 350.0
+
+[node name="CombatMessageContainer" type="CenterContainer" parent="UILayer"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -50.0
+offset_right = 200.0
+offset_bottom = 50.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CombatMessage" type="Label" parent="UILayer/CombatMessageContainer"]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 0.2, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 32
+text = "AIMING..."
+horizontal_alignment = 1
+vertical_alignment = 1
