@@ -12,9 +12,11 @@ signal game_over(reason: String)
 signal game_won(ending_type: String)
 
 # Primary Statistics (Section 2.1 of GDD)
+const MAX_COLONISTS: int = 1000
+
 var colonist_count: int = 1000:
 	set(value):
-		colonist_count = maxi(0, value)
+		colonist_count = clampi(value, 0, MAX_COLONISTS)
 		colonists_changed.emit(colonist_count)
 		if colonist_count <= 0:
 			_trigger_game_over("colonists_depleted")
@@ -54,6 +56,7 @@ var officers: Dictionary = {
 	"scout": {"alive": true, "deployed": false},
 	"tech": {"alive": true, "deployed": false},
 	"medic": {"alive": true, "deployed": false},
+	"heavy": {"alive": true, "deployed": false},
 }
 
 # Game progression
@@ -190,3 +193,170 @@ func get_game_over_text(reason: String) -> String:
 			return "LEADERSHIP LOST\nThe Captain has fallen. Without leadership, the mission cannot continue."
 		_:
 			return "GAME OVER"
+
+
+#region Save/Load System
+const SAVE_PATH = "user://savegame.dat"
+
+## Star map data (saved to preserve the exact node layout)
+var saved_star_map_data: Dictionary = {}
+
+
+## Save the current game state to disk
+func save_game() -> bool:
+	var save_data = {
+		"version": 1,
+		"colonist_count": colonist_count,
+		"fuel": fuel,
+		"ship_integrity": ship_integrity,
+		"scrap": scrap,
+		"current_node_index": current_node_index,
+		"visited_nodes": visited_nodes,
+		"node_types": node_types,
+		"officers": officers,
+		"star_map_data": saved_star_map_data,
+	}
+	
+	var file = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file == null:
+		push_error("Failed to open save file for writing: %s" % FileAccess.get_open_error())
+		return false
+	
+	var json_string = JSON.stringify(save_data)
+	file.store_string(json_string)
+	file.close()
+	
+	print("Game saved successfully!")
+	return true
+
+
+## Load a saved game from disk
+func load_game() -> bool:
+	if not FileAccess.file_exists(SAVE_PATH):
+		push_error("No save file found!")
+		return false
+	
+	var file = FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if file == null:
+		push_error("Failed to open save file for reading: %s" % FileAccess.get_open_error())
+		return false
+	
+	var json_string = file.get_as_text()
+	file.close()
+	
+	var json = JSON.new()
+	var parse_result = json.parse(json_string)
+	if parse_result != OK:
+		push_error("Failed to parse save file: %s" % json.get_error_message())
+		return false
+	
+	var save_data = json.data
+	if not save_data is Dictionary:
+		push_error("Invalid save file format!")
+		return false
+	
+	# Restore game state (avoid triggering setters that emit signals during load)
+	colonist_count = int(save_data.get("colonist_count", 1000))
+	fuel = int(save_data.get("fuel", 10))
+	ship_integrity = int(save_data.get("ship_integrity", 100))
+	scrap = int(save_data.get("scrap", 0))
+	current_node_index = int(save_data.get("current_node_index", 0))
+	
+	# Restore visited nodes (JSON parses arrays as generic arrays)
+	visited_nodes.clear()
+	var loaded_visited = save_data.get("visited_nodes", [])
+	for node_id in loaded_visited:
+		visited_nodes.append(int(node_id))
+	
+	# Restore node types
+	node_types.clear()
+	var loaded_types = save_data.get("node_types", {})
+	for key in loaded_types.keys():
+		node_types[int(key)] = int(loaded_types[key])
+	
+	# Restore officers
+	var loaded_officers = save_data.get("officers", {})
+	for officer_key in loaded_officers.keys():
+		if officers.has(officer_key):
+			officers[officer_key]["alive"] = loaded_officers[officer_key].get("alive", true)
+			officers[officer_key]["deployed"] = loaded_officers[officer_key].get("deployed", false)
+	
+	# Restore star map data
+	saved_star_map_data = save_data.get("star_map_data", {})
+	
+	# Reset tactical state
+	cryo_stability = 100
+	tactical_turn_count = 0
+	is_in_tactical_mode = false
+	
+	print("Game loaded successfully!")
+	return true
+
+
+## Check if a save file exists
+func has_save_file() -> bool:
+	return FileAccess.file_exists(SAVE_PATH)
+
+
+## Delete the save file
+func delete_save() -> void:
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.remove_absolute(SAVE_PATH)
+		print("Save file deleted!")
+
+
+## Store star map data for saving
+func store_star_map_data(generator: StarMapGenerator) -> void:
+	saved_star_map_data.clear()
+	var nodes_data = []
+	
+	for node in generator.nodes:
+		var node_data = {
+			"id": node.id,
+			"column": node.column,
+			"row": node.row,
+			"connections": node.connections,
+			"node_type": node.node_type,
+			"connection_fuel_costs": node.connection_fuel_costs,
+		}
+		nodes_data.append(node_data)
+	
+	saved_star_map_data["nodes"] = nodes_data
+
+
+## Check if we have saved star map data
+func has_saved_star_map_data() -> bool:
+	return saved_star_map_data.has("nodes") and saved_star_map_data["nodes"].size() > 0
+
+
+## Recreate a StarMapGenerator from saved data
+func restore_star_map_generator() -> StarMapGenerator:
+	if not has_saved_star_map_data():
+		return null
+	
+	var generator = StarMapGenerator.new()
+	generator.nodes.clear()
+	
+	var nodes_data = saved_star_map_data["nodes"]
+	for node_dict in nodes_data:
+		var node = StarMapGenerator.MapNode.new(
+			int(node_dict["id"]),
+			int(node_dict["column"]),
+			int(node_dict["row"])
+		)
+		
+		# Restore connections
+		for conn_id in node_dict["connections"]:
+			node.connections.append(int(conn_id))
+		
+		node.node_type = int(node_dict["node_type"])
+		
+		# Restore fuel costs
+		var fuel_costs = node_dict.get("connection_fuel_costs", {})
+		for key in fuel_costs.keys():
+			node.connection_fuel_costs[int(key)] = int(fuel_costs[key])
+		
+		generator.nodes.append(node)
+	
+	return generator
+#endregion

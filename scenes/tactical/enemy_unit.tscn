@@ -1,22 +1,22 @@
 [gd_scene format=3 uid="uid://bb1cu6k0xsoas"]
 
-[ext_resource type="Script" path="res://scripts/tactical/enemy_unit.gd" id="1_enemy"]
-[ext_resource type="Texture2D" uid="uid://cn5k7v8w2m4px" path="res://assets/sprites/characters/enemy_basic.png" id="2_sprite"]
-[ext_resource type="Texture2D" uid="uid://cxk3n5w7qv2p8" path="res://assets/sprites/characters/shadow.png" id="3_shadow"]
+[ext_resource type="Script" uid="uid://bjn5o7l08q3vd" path="res://scripts/tactical/enemy_unit.gd" id="1_enemy"]
+[ext_resource type="Texture2D" uid="uid://cf4h2qdxd86mk" path="res://assets/sprites/characters/enemy_basic.png" id="2_sprite"]
+[ext_resource type="Texture2D" uid="uid://ba83faogdhwth" path="res://assets/sprites/characters/shadow.png" id="3_shadow"]
 
-[node name="EnemyUnit" type="Node2D"]
+[node name="EnemyUnit" type="Node2D" unique_id=977318848]
 script = ExtResource("1_enemy")
 
-[node name="Shadow" type="Sprite2D" parent="."]
-position = Vector2(0, 4)
+[node name="Shadow" type="Sprite2D" parent="." unique_id=1841597080]
 modulate = Color(1, 1, 1, 0.5)
+position = Vector2(0, 4)
 texture = ExtResource("3_shadow")
 
-[node name="Sprite" type="Sprite2D" parent="."]
-texture = ExtResource("2_sprite")
+[node name="Sprite" type="Sprite2D" parent="." unique_id=1096534209]
 texture_filter = 1
+texture = ExtResource("2_sprite")
 
-[node name="HPBarBG" type="ColorRect" parent="."]
+[node name="HPBarBG" type="ColorRect" parent="." unique_id=1820016805]
 offset_left = -14.0
 offset_top = -20.0
 offset_right = 14.0
@@ -24,7 +24,7 @@ offset_bottom = -16.0
 mouse_filter = 2
 color = Color(0.2, 0.2, 0.2, 0.8)
 
-[node name="HPBar" type="ColorRect" parent="."]
+[node name="HPBar" type="ColorRect" parent="." unique_id=93757956]
 offset_left = -13.0
 offset_top = -19.0
 offset_right = 13.0
@@ -32,7 +32,7 @@ offset_bottom = -17.0
 mouse_filter = 2
 color = Color(0, 1, 0, 1)
 
-[node name="AlertIndicator" type="ColorRect" parent="."]
+[node name="AlertIndicator" type="ColorRect" parent="." unique_id=2068067724]
 visible = false
 offset_left = -3.0
 offset_top = -26.0
@@ -40,3 +40,41 @@ offset_right = 3.0
 offset_bottom = -22.0
 mouse_filter = 2
 color = Color(1, 0.3, 0.3, 1)
+
+[node name="HalfCoverIndicator" type="Node2D" parent="." unique_id=512526958]
+visible = false
+position = Vector2(12, -12)
+
+[node name="ShieldHalf" type="Polygon2D" parent="HalfCoverIndicator" unique_id=254405674]
+color = Color(0.9, 0.7, 0.2, 0.9)
+polygon = PackedVector2Array(-4, -5, 4, -5, 4, 0, 0, 4, -4, 0)
+
+[node name="DividerLine" type="Line2D" parent="HalfCoverIndicator" unique_id=1617829323]
+points = PackedVector2Array(-3, -1, 3, -1)
+width = 1.5
+default_color = Color(0.6, 0.45, 0.1, 0.8)
+
+[node name="FullCoverIndicator" type="Node2D" parent="." unique_id=806448604]
+visible = false
+position = Vector2(12, -12)
+
+[node name="ShieldFull" type="Polygon2D" parent="FullCoverIndicator" unique_id=1831262861]
+color = Color(0.3, 0.6, 0.9, 0.9)
+polygon = PackedVector2Array(-5, -6, 5, -6, 5, 0, 0, 5, -5, 0)
+
+[node name="ShieldHighlight" type="Polygon2D" parent="FullCoverIndicator" unique_id=1974226143]
+color = Color(0.5, 0.8, 1, 0.6)
+polygon = PackedVector2Array(-3, -4, 0, -4, 0, 0, -2, 2, -3, 0)
+
+[node name="HitChanceLabel" type="Label" parent="." unique_id=1545962341]
+offset_left = -16.0
+offset_top = 6.0
+offset_right = 16.0
+offset_bottom = 19.0
+theme_override_colors/font_color = Color(1, 0.95, 0.4, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 12
+text = "75%"
+horizontal_alignment = 1
+vertical_alignment = 1

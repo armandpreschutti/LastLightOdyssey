@@ -9,6 +9,7 @@ signal turn_ended(turn_number: int)
 @onready var combat_camera: Camera2D = $CombatCamera
 @onready var projectile: Line2D = $MapContainer/EffectsLayer/Projectile
 @onready var damage_popup_container: Node2D = $MapContainer/EffectsLayer/DamagePopupContainer
+@onready var ui_layer: CanvasLayer = $UILayer
 
 var deployed_officers: Array[Node2D] = []
 var enemies: Array[Node2D] = []
@@ -18,6 +19,7 @@ var breach_mode: bool = false  # When true, clicking selects breach target
 var current_turn: int = 0
 var current_unit_index: int = 0  # Which unit's turn it is (0-based index)
 var mission_active: bool = false
+var is_paused: bool = false  # Track pause state
 var extraction_positions: Array[Vector2i] = []
 var mission_fuel_collected: int = 0  # Fuel collected during this mission
 var mission_scrap_collected: int = 0  # Scrap collected during this mission
@@ -26,6 +28,8 @@ var FuelCrateScene: PackedScene
 var ScrapPileScene: PackedScene
 var OfficerUnitScene: PackedScene
 var EnemyUnitScene: PackedScene
+var PauseMenuScene: PackedScene
+var current_pause_menu: Control = null
 
 # Combat constants
 const BASE_HIT_CHANCE: float = 70.0
@@ -33,6 +37,11 @@ const RANGE_PENALTY_START: int = 5
 const RANGE_PENALTY_PER_TILE: float = 5.0
 const MIN_HIT_CHANCE: float = 10.0
 const MAX_HIT_CHANCE: float = 95.0
+const FLANK_DAMAGE_BONUS: float = 0.50  # 50% bonus damage when flanking
+
+# Cover attack bonuses (attacker in cover gets accuracy buff)
+const FULL_COVER_ATTACK_BONUS: float = 15.0   # +15% hit chance when firing from full cover
+const HALF_COVER_ATTACK_BONUS: float = 10.0   # +10% hit chance when firing from half cover
 
 
 func _ready() -> void:
@@ -40,11 +49,52 @@ func _ready() -> void:
 	ScrapPileScene = load("res://scenes/tactical/scrap_pile.tscn")
 	OfficerUnitScene = load("res://scenes/tactical/officer_unit.tscn")
 	EnemyUnitScene = load("res://scenes/tactical/enemy_unit.tscn")
+	PauseMenuScene = load("res://scenes/ui/pause_menu.tscn")
 
 	tactical_map.tile_clicked.connect(_on_tile_clicked)
 	tactical_hud.end_turn_pressed.connect(_on_end_turn_pressed)
 	tactical_hud.extract_pressed.connect(_on_extract_pressed)
 	tactical_hud.ability_used.connect(_on_ability_used)
+	tactical_hud.pause_pressed.connect(_show_pause_menu)
+
+
+func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel") and mission_active and not is_paused:
+		_show_pause_menu()
+		get_viewport().set_input_as_handled()
+
+
+func _show_pause_menu() -> void:
+	if current_pause_menu != null:
+		return
+	
+	is_paused = true
+	get_tree().paused = true
+	
+	current_pause_menu = PauseMenuScene.instantiate()
+	current_pause_menu.process_mode = Node.PROCESS_MODE_ALWAYS
+	current_pause_menu.resume_pressed.connect(_on_pause_resume)
+	current_pause_menu.abandon_pressed.connect(_on_pause_abandon)
+	ui_layer.add_child(current_pause_menu)
+	
+	# Pass the mission haul so it can be forfeited on abandon
+	current_pause_menu.set_mission_haul(mission_fuel_collected, mission_scrap_collected)
+	current_pause_menu.show_menu()
+
+
+func _on_pause_resume() -> void:
+	is_paused = false
+	get_tree().paused = false
+	current_pause_menu = null
+
+
+func _on_pause_abandon() -> void:
+	is_paused = false
+	get_tree().paused = false
+	current_pause_menu = null
+	
+	# End mission as failure (colonist cost already applied by pause menu)
+	_end_mission(false)
 
 
 func start_mission(officer_keys: Array[String]) -> void:
@@ -109,6 +159,9 @@ func start_mission(officer_keys: Array[String]) -> void:
 	
 	# Update enemy visibility after spawning all units
 	_update_enemy_visibility()
+	
+	# Update cover indicators for all units
+	_update_all_cover_indicators()
 
 	# Update HUD
 	tactical_hud.update_turn(current_turn)
@@ -206,7 +259,8 @@ func _select_unit(unit: Node2D) -> void:
 	else:
 		tactical_map.clear_movement_range()
 	
-	# Update HUD with full unit info
+	# Update HUD with full unit info (include cover level for attack bonus display)
+	var unit_cover_level = tactical_map.get_adjacent_cover_level(unit.get_grid_position())
 	tactical_hud.update_selected_unit_full(
 		unit.officer_key,
 		unit.current_ap,
@@ -215,7 +269,8 @@ func _select_unit(unit: Node2D) -> void:
 		unit.max_hp,
 		unit.move_range,
 		unit == deployed_officers[current_unit_index],  # Is it their turn?
-		unit.shoot_range
+		unit.shoot_range,
+		unit_cover_level
 	)
 	
 	# Update ability buttons
@@ -249,7 +304,7 @@ func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
 	# Tutorial: Notify that a unit moved
 	TutorialManager.notify_trigger("unit_moved")
 
-	# Update HUD
+	# Update HUD (cover level will be updated after movement finishes)
 	tactical_hud.update_selected_unit_full(
 		unit.officer_key,
 		unit.current_ap,
@@ -258,7 +313,8 @@ func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
 		unit.max_hp,
 		unit.move_range,
 		unit == deployed_officers[current_unit_index],
-		unit.shoot_range
+		unit.shoot_range,
+		0  # Cover level updated in movement_finished callback
 	)
 	# Update movement range display (only if it's their turn and has AP)
 	if unit == deployed_officers[current_unit_index] and unit.has_ap():
@@ -277,6 +333,9 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 	# Reveal fog around new position
 	tactical_map.reveal_around(pos, unit.sight_range)
 	
+	# Update cover indicator for this unit
+	_update_unit_cover_indicator(unit)
+	
 	# Update enemy visibility (also updates attackable highlights)
 	_update_enemy_visibility()
 	
@@ -287,6 +346,21 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 
 	# Check extraction availability
 	_check_extraction_available()
+	
+	# Update HUD with new cover level after movement
+	if selected_unit == unit and unit in deployed_officers:
+		var new_cover_level = tactical_map.get_adjacent_cover_level(pos)
+		tactical_hud.update_selected_unit_full(
+			unit.officer_key,
+			unit.current_ap,
+			unit.max_ap,
+			unit.current_hp,
+			unit.max_hp,
+			unit.move_range,
+			unit == deployed_officers[current_unit_index],
+			unit.shoot_range,
+			new_cover_level
+		)
 	
 	# Update movement range display (only if has AP remaining)
 	if selected_unit == unit and unit == deployed_officers[current_unit_index]:
@@ -300,6 +374,7 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 func _interact_with(interactable: Node2D) -> void:
 	if selected_unit.use_ap(interactable.interaction_ap_cost):
 		_pickup_item(interactable)
+		var interact_cover_level = tactical_map.get_adjacent_cover_level(selected_unit.get_grid_position())
 		tactical_hud.update_selected_unit_full(
 			selected_unit.officer_key,
 			selected_unit.current_ap,
@@ -308,7 +383,8 @@ func _interact_with(interactable: Node2D) -> void:
 			selected_unit.max_hp,
 			selected_unit.move_range,
 			selected_unit == deployed_officers[current_unit_index],
-			selected_unit.shoot_range
+			selected_unit.shoot_range,
+			interact_cover_level
 		)
 		# Update movement range display (clear if out of AP)
 		if selected_unit == deployed_officers[current_unit_index]:
@@ -343,6 +419,22 @@ func _pickup_item(interactable: Node2D) -> void:
 	
 	# Update haul display
 	tactical_hud.update_haul(mission_fuel_collected, mission_scrap_collected)
+
+
+## Update cover indicator for a single unit
+func _update_unit_cover_indicator(unit: Node2D) -> void:
+	if unit.has_method("update_cover_indicator"):
+		var pos = unit.get_grid_position()
+		var cover_level = tactical_map.get_adjacent_cover_level(pos)
+		unit.update_cover_indicator(cover_level)
+
+
+## Update cover indicators for all units
+func _update_all_cover_indicators() -> void:
+	for officer in deployed_officers:
+		_update_unit_cover_indicator(officer)
+	for enemy in enemies:
+		_update_unit_cover_indicator(enemy)
 
 
 func _on_end_turn_pressed() -> void:
@@ -476,9 +568,13 @@ func calculate_hit_chance(shooter_pos: Vector2i, target_pos: Vector2i, shooter: 
 	# Base hit chance varies by class and distance
 	var hit_chance = _get_base_hit_chance_for_shooter(shooter, distance)
 	
-	# Cover modifier
+	# Cover modifier (defender's cover reduces hit chance)
 	var cover_modifier = _get_cover_modifier(shooter_pos, target_pos)
 	hit_chance -= cover_modifier
+	
+	# Attacker's cover bonus (shooting from cover provides stability)
+	var attacker_cover_bonus = _get_attacker_cover_bonus(shooter_pos)
+	hit_chance += attacker_cover_bonus
 	
 	# Clamp to valid range
 	return clampf(hit_chance, MIN_HIT_CHANCE, MAX_HIT_CHANCE)
@@ -519,6 +615,16 @@ func _get_base_hit_chance_for_shooter(shooter: Node2D, distance: int) -> float:
 				return 50.0
 			else:
 				return 35.0
+		"heavy":
+			# Heavy is decent at close-mid range, weaker at distance
+			if distance <= 4:
+				return 80.0
+			elif distance <= 6:
+				return 65.0
+			elif distance <= 8:
+				return 45.0
+			else:
+				return 30.0
 		"tech", "medic":
 			# Support classes are weaker at range
 			if distance <= 4:
@@ -541,28 +647,63 @@ func _get_base_hit_chance_for_shooter(shooter: Node2D, distance: int) -> float:
 				return 30.0
 
 
-## Get cover modifier for a shot
+## Get cover modifier for a shot (only defender benefits from cover if not flanked)
 func _get_cover_modifier(shooter_pos: Vector2i, target_pos: Vector2i) -> float:
-	# Check tiles between shooter and target for cover
-	var tiles = _get_line_tiles(shooter_pos, target_pos)
+	# Cover only benefits the defender (target) if the cover is between them and the attacker
+	# Flanking: attacking from a direction where target has no cover = no cover penalty
 	var max_cover = 0.0
 	
-	for tile_pos in tiles:
-		# Skip shooter and target positions
-		if tile_pos == shooter_pos or tile_pos == target_pos:
+	# Get direction from target to shooter
+	var dir_to_shooter = Vector2(shooter_pos - target_pos).normalized()
+	
+	# Check the 4 adjacent tiles to the target
+	var adjacent_dirs = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	
+	for adj_dir in adjacent_dirs:
+		var adj_pos = target_pos + adj_dir
+		
+		# Check if this adjacent tile has cover
+		var cover_value = tactical_map.get_cover_value(adj_pos)
+		if cover_value <= 0:
 			continue
 		
-		# Check cover value of this tile
-		var cover_value = tactical_map.get_cover_value(tile_pos)
-		if cover_value > max_cover:
-			max_cover = cover_value
-	
-	# Also check if target is standing in/behind cover
-	var target_cover = tactical_map.get_cover_value(target_pos)
-	if target_cover > max_cover:
-		max_cover = target_cover
+		# Check if this cover is between the target and shooter (protects from this angle)
+		# Cover direction points FROM target TO cover
+		var cover_dir = Vector2(adj_dir).normalized()
+		var dot = cover_dir.dot(dir_to_shooter)
+		
+		# Cover provides protection only if attacker is shooting from that direction
+		# dot > 0.5 means the attack is coming from roughly the same direction as the cover
+		# If attacking from the opposite side (flanking), dot will be negative = no protection
+		if dot > 0.5:
+			if cover_value > max_cover:
+				max_cover = cover_value
 	
 	return max_cover
+
+
+## Get accuracy bonus for attacker based on their cover (stable shooting position)
+func _get_attacker_cover_bonus(shooter_pos: Vector2i) -> float:
+	var cover_level = tactical_map.get_adjacent_cover_level(shooter_pos)
+	
+	match cover_level:
+		2:  # Full cover (adjacent to wall)
+			return FULL_COVER_ATTACK_BONUS
+		1:  # Half cover (adjacent to half cover object)
+			return HALF_COVER_ATTACK_BONUS
+		_:  # No cover
+			return 0.0
+
+
+## Check if an attack is flanking (bypasses cover)
+func is_flanking_attack(shooter_pos: Vector2i, target_pos: Vector2i) -> bool:
+	# If target has adjacent cover but the attack comes from an unprotected direction
+	var has_any_cover = tactical_map.has_adjacent_cover(target_pos)
+	if not has_any_cover:
+		return false  # No cover to flank
+	
+	var cover_modifier = _get_cover_modifier(shooter_pos, target_pos)
+	return cover_modifier == 0.0  # Has cover but modifier is 0 = flanking
 
 
 ## Check if shooter has line of sight to target
@@ -575,8 +716,8 @@ func has_line_of_sight(shooter_pos: Vector2i, target_pos: Vector2i) -> bool:
 		if tile_pos == shooter_pos or tile_pos == target_pos:
 			continue
 		
-		# Check if tile blocks LOS (walls block)
-		if not tactical_map.is_tile_walkable(tile_pos):
+		# Check if tile blocks LOS (only walls block, cover does not)
+		if tactical_map.blocks_line_of_sight(tile_pos):
 			return false
 	
 	return true
@@ -627,26 +768,33 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 	
 	# Calculate hit chance (pass shooter for class-specific calculations)
 	var hit_chance = calculate_hit_chance(shooter_pos, target_pos, shooter)
-	var damage = shooter.base_damage if "base_damage" in shooter else 25
+	var base_damage = shooter.base_damage if "base_damage" in shooter else 25
+	
+	# Check for flanking and calculate bonus damage
+	var is_flanking = is_flanking_attack(shooter_pos, target_pos)
+	var damage = base_damage
+	if is_flanking:
+		damage = int(base_damage * (1.0 + FLANK_DAMAGE_BONUS))
+		print("Flanking attack! Base damage: %d -> Flanking damage: %d (+%d%%)" % [base_damage, damage, int(FLANK_DAMAGE_BONUS * 100)])
 	
 	# Tutorial: Notify that a unit attacked
 	TutorialManager.notify_trigger("unit_attacked")
 	
-	# PHASE 1: AIMING (0.5s)
-	await _phase_aiming(shooter, shooter_pos, target_pos, hit_chance)
+	# PHASE 1: AIMING (0.8s)
+	await _phase_aiming(shooter, shooter_pos, target_pos, hit_chance, is_flanking, damage)
 	
 	# PHASE 2: FIRING (0.3s)
 	var hit = await _phase_firing(shooter, shooter_pos, target_pos, hit_chance, damage)
 	
-	# PHASE 3: IMPACT (0.4s)
-	await _phase_impact(shooter, target_pos, target, hit, damage)
+	# PHASE 3: IMPACT (0.7s)
+	await _phase_impact(shooter, target_pos, target, hit, damage, is_flanking)
 	
-	# PHASE 4: RESOLUTION (0.3s)
+	# PHASE 4: RESOLUTION (0.5s)
 	await _phase_resolution(shooter)
 
 
 ## Phase 1: Aiming
-func _phase_aiming(shooter: Node2D, _shooter_pos: Vector2i, target_pos: Vector2i, hit_chance: float) -> void:
+func _phase_aiming(shooter: Node2D, shooter_pos: Vector2i, target_pos: Vector2i, hit_chance: float, is_flanking: bool = false, damage: int = 0) -> void:
 	# Focus camera on action
 	var shooter_world = shooter.position
 	var target_world = Vector2(target_pos.x * 32 + 16, target_pos.y * 32 + 16)
@@ -655,10 +803,21 @@ func _phase_aiming(shooter: Node2D, _shooter_pos: Vector2i, target_pos: Vector2i
 	# Shooter faces target
 	shooter.face_towards(target_pos)
 	
-	# Display aiming message
-	tactical_hud.show_combat_message("AIMING... %d%%" % int(hit_chance), Color(1, 1, 0.2))
+	# Check for cover bonus to display
+	var attacker_cover_bonus = _get_attacker_cover_bonus(shooter_pos)
+	var cover_level = tactical_map.get_adjacent_cover_level(shooter_pos)
 	
-	await get_tree().create_timer(0.5).timeout
+	# Display aiming message with flanking indicator, damage preview, and cover bonus
+	if is_flanking:
+		tactical_hud.show_combat_message("FLANKING! %d%% (+%d%% DMG)" % [int(hit_chance), int(FLANK_DAMAGE_BONUS * 100)], Color(1, 0.6, 0.2))
+	elif cover_level == 2:
+		tactical_hud.show_combat_message("STABLE AIM [FULL COVER] %d%%" % int(hit_chance), Color(0.4, 0.9, 1.0))
+	elif cover_level == 1:
+		tactical_hud.show_combat_message("STABLE AIM [HALF COVER] %d%%" % int(hit_chance), Color(0.6, 0.9, 0.8))
+	else:
+		tactical_hud.show_combat_message("AIMING... %d%%" % int(hit_chance), Color(1, 1, 0.2))
+	
+	await get_tree().create_timer(0.8).timeout
 
 
 ## Phase 2: Firing
@@ -681,18 +840,24 @@ func _phase_firing(shooter: Node2D, _shooter_pos: Vector2i, target_pos: Vector2i
 
 
 ## Phase 3: Impact
-func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: bool, damage: int) -> void:
-	# Display hit/miss message
+func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: bool, damage: int, is_flanking: bool = false) -> void:
+	# Display hit/miss message with flanking indicator
 	if hit:
-		tactical_hud.show_combat_message("HIT!", Color(1, 0.2, 0.2))
+		if is_flanking:
+			tactical_hud.show_combat_message("FLANKING HIT!", Color(1, 0.5, 0.1))
+		else:
+			tactical_hud.show_combat_message("HIT!", Color(1, 0.2, 0.2))
 		
 		# Apply damage
 		if target:
 			target.take_damage(damage)
-			print("Hit! Dealt %d damage" % damage)
+			if is_flanking:
+				print("Flanking Hit! Dealt %d damage (includes +%d%% bonus)" % [damage, int(FLANK_DAMAGE_BONUS * 100)])
+			else:
+				print("Hit! Dealt %d damage" % damage)
 			
-			# Show damage popup
-			_spawn_damage_popup(damage, true, target.position)
+			# Show damage popup (flanking hits use special color via is_crit parameter)
+			_spawn_damage_popup(damage, true, target.position, false, is_flanking)
 	else:
 		tactical_hud.show_combat_message("MISS!", Color(0.6, 0.6, 0.6))
 		print("Miss! (Hit chance was calculated)")
@@ -701,7 +866,7 @@ func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: 
 		var target_world = Vector2(target_pos.x * 32 + 16, target_pos.y * 32 + 16)
 		_spawn_damage_popup(0, false, target_world)
 	
-	await get_tree().create_timer(0.4).timeout
+	await get_tree().create_timer(0.7).timeout
 
 
 ## Phase 4: Resolution
@@ -714,6 +879,7 @@ func _phase_resolution(shooter: Node2D) -> void:
 	
 	# Update HUD
 	if shooter in deployed_officers:
+		var shooter_cover_level = tactical_map.get_adjacent_cover_level(shooter.get_grid_position())
 		tactical_hud.update_selected_unit_full(
 			shooter.officer_key,
 			shooter.current_ap,
@@ -722,7 +888,8 @@ func _phase_resolution(shooter: Node2D) -> void:
 			shooter.max_hp,
 			shooter.move_range,
 			shooter == deployed_officers[current_unit_index],
-			shooter.shoot_range
+			shooter.shoot_range,
+			shooter_cover_level
 		)
 		# Update movement range display (clear if out of AP)
 		if shooter == selected_unit and shooter == deployed_officers[current_unit_index]:
@@ -734,15 +901,15 @@ func _phase_resolution(shooter: Node2D) -> void:
 		# Update attackable enemy highlights (AP spent, enemy may have died)
 		_update_attackable_highlights()
 	
-	await get_tree().create_timer(0.3).timeout
+	await get_tree().create_timer(0.5).timeout
 
 
 ## Spawn a damage popup number
-func _spawn_damage_popup(damage: int, is_hit: bool, world_pos: Vector2, is_heal: bool = false) -> void:
+func _spawn_damage_popup(damage: int, is_hit: bool, world_pos: Vector2, is_heal: bool = false, is_flank: bool = false) -> void:
 	var popup = Label.new()
 	popup.script = load("res://scripts/tactical/damage_popup.gd")
 	damage_popup_container.add_child(popup)
-	popup.initialize(damage, is_hit, world_pos, is_heal)
+	popup.initialize(damage, is_hit, world_pos, is_heal, is_flank)
 
 
 ## Execute AI turn for all enemies
@@ -899,8 +1066,11 @@ func _update_attackable_highlights() -> void:
 		if not has_line_of_sight(shooter_pos, enemy_pos):
 			continue
 		
-		# This enemy is attackable - highlight it!
-		enemy.set_targetable(true)
+		# Calculate hit chance for this enemy
+		var hit_chance = calculate_hit_chance(shooter_pos, enemy_pos, selected_unit)
+		
+		# This enemy is attackable - highlight it with hit chance!
+		enemy.set_targetable(true, hit_chance)
 
 
 ## Clear all attackable enemy highlights
@@ -966,6 +1136,31 @@ func _on_ability_used(ability_type: String) -> void:
 			
 			# Try to auto-heal adjacent ally
 			_try_auto_patch()
+		
+		"taunt":
+			if selected_unit.officer_type != "heavy":
+				print("Only Heavy can use Taunt!")
+				return
+			
+			if selected_unit.taunt_active:
+				print("Taunt is already active!")
+				tactical_hud.show_combat_message("TAUNT ALREADY ACTIVE", Color(1, 0.5, 0))
+				await get_tree().create_timer(1.0).timeout
+				tactical_hud.hide_combat_message()
+				return
+			
+			if selected_unit.use_taunt():
+				print("Heavy activates TAUNT!")
+				tactical_hud.show_combat_message("TAUNT ACTIVATED! ENEMIES WILL TARGET YOU", Color(1, 0.5, 0.1))
+				await get_tree().create_timer(1.5).timeout
+				tactical_hud.hide_combat_message()
+				# Update HUD to reflect AP change
+				_select_unit(selected_unit)
+			else:
+				print("Not enough AP for Taunt")
+				tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
+				await get_tree().create_timer(1.0).timeout
+				tactical_hud.hide_combat_message()
 
 
 ## Try to breach a tile (destroy wall/cover)
@@ -1047,7 +1242,14 @@ func _check_overwatch_shots(enemy: Node2D, enemy_pos: Vector2i) -> void:
 		# Overwatch triggered!
 		print("Overwatch triggered by %s on Enemy %d!" % [officer.officer_key, enemy.enemy_id])
 		tactical_hud.show_combat_message("OVERWATCH TRIGGERED!", Color(1, 1, 0.2))
-		await get_tree().create_timer(0.5).timeout
+		await get_tree().create_timer(0.8).timeout
+		
+		# Check for flanking and calculate damage
+		var is_flanking = is_flanking_attack(officer_pos, enemy_pos)
+		var damage = officer.base_damage
+		if is_flanking:
+			damage = int(officer.base_damage * (1.0 + FLANK_DAMAGE_BONUS))
+			print("Flanking overwatch! Base damage: %d -> Flanking damage: %d" % [officer.base_damage, damage])
 		
 		# Take the shot
 		var hit_chance = calculate_hit_chance(officer_pos, enemy_pos, officer)
@@ -1061,14 +1263,17 @@ func _check_overwatch_shots(enemy: Node2D, enemy_pos: Vector2i) -> void:
 		
 		# Apply damage if hit
 		if hit:
-			tactical_hud.show_combat_message("HIT!", Color(1, 0.2, 0.2))
-			enemy.take_damage(officer.base_damage)
-			_spawn_damage_popup(officer.base_damage, true, enemy.position)
+			if is_flanking:
+				tactical_hud.show_combat_message("FLANKING HIT!", Color(1, 0.5, 0.1))
+			else:
+				tactical_hud.show_combat_message("HIT!", Color(1, 0.2, 0.2))
+			enemy.take_damage(damage)
+			_spawn_damage_popup(damage, true, enemy.position, false, is_flanking)
 		else:
 			tactical_hud.show_combat_message("MISS!", Color(0.6, 0.6, 0.6))
 			_spawn_damage_popup(0, false, enemy.position)
 		
-		await get_tree().create_timer(0.5).timeout
+		await get_tree().create_timer(0.7).timeout
 		tactical_hud.hide_combat_message()
 		
 		# Only one overwatch shot per enemy movement

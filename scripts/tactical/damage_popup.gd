@@ -31,15 +31,21 @@ func _process(delta: float) -> void:
 
 
 ## Initialize with damage amount, miss text, or heal amount
-func initialize(damage: int, is_hit: bool, world_pos: Vector2, is_heal: bool = false) -> void:
+func initialize(damage: int, is_hit: bool, world_pos: Vector2, is_heal: bool = false, is_flank: bool = false) -> void:
 	position = world_pos
 	
 	if is_heal:
 		text = "+%d" % damage
 		add_theme_color_override("font_color", Color(0.2, 1, 0.2))  # Green for healing
 	elif is_hit:
-		text = "-%d" % damage
-		add_theme_color_override("font_color", Color(1, 0.2, 0.2))  # Red for damage
+		if is_flank:
+			text = "-%d!" % damage  # Exclamation mark for flanking hits
+			add_theme_color_override("font_color", Color(1, 0.5, 0.1))  # Orange for flanking damage
+			add_theme_font_size_override("font_size", 28)  # Larger text for flanking
+			_velocity = Vector2(0, -60)  # Float up faster for emphasis
+		else:
+			text = "-%d" % damage
+			add_theme_color_override("font_color", Color(1, 0.2, 0.2))  # Red for damage
 	else:
 		text = "MISS"
 		add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))  # Gray for miss

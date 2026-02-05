@@ -4,8 +4,9 @@ extends Control
 
 signal node_clicked(node_id: int)
 
-@onready var nodes_container: Control = $NodesContainer
-@onready var lines_container: Control = $LinesContainer
+@onready var map_content: Control = $MapContent
+@onready var nodes_container: Control = $MapContent/NodesContainer
+@onready var lines_container: Control = $MapContent/LinesContainer
 
 var MapNodeScene: PackedScene
 var node_graph: Array[StarMapGenerator.MapNode] = []
@@ -23,18 +24,83 @@ const LINE_WIDTH_ACTIVE = 3.0
 
 var map_center_offset: Vector2 = Vector2.ZERO  # Calculated to center the map
 
+# Panning variables
+var _is_panning: bool = false
+var _pan_start_pos: Vector2 = Vector2.ZERO
+var _content_start_pos: Vector2 = Vector2.ZERO
+
+# Zoom variables
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 2.0
+const ZOOM_STEP = 0.1
+var _current_zoom: float = 1.0
+
 
 func _ready() -> void:
 	MapNodeScene = load("res://scenes/management/map_node.tscn")
 
 
+## Handle input for panning the map (right-click or middle-click drag)
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_RIGHT or event.button_index == MOUSE_BUTTON_MIDDLE:
+			if event.pressed:
+				_is_panning = true
+				_pan_start_pos = event.position
+				_content_start_pos = map_content.position
+			else:
+				_is_panning = false
+		# Mouse wheel zoom
+		elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+			_zoom_at_point(event.position, ZOOM_STEP)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+			_zoom_at_point(event.position, -ZOOM_STEP)
+	
+	if event is InputEventMouseMotion and _is_panning:
+		var delta = event.position - _pan_start_pos
+		map_content.position = _content_start_pos + delta
+
+
+## Zoom the map at the given screen position
+func _zoom_at_point(screen_pos: Vector2, zoom_delta: float) -> void:
+	var old_zoom = _current_zoom
+	_current_zoom = clamp(_current_zoom + zoom_delta, MIN_ZOOM, MAX_ZOOM)
+	
+	if old_zoom == _current_zoom:
+		return
+	
+	# Calculate the point in map content space before zoom
+	var local_pos = (screen_pos - map_content.position) / old_zoom
+	
+	# Apply new scale
+	map_content.scale = Vector2(_current_zoom, _current_zoom)
+	
+	# Adjust position so the point under the mouse stays fixed
+	map_content.position = screen_pos - local_pos * _current_zoom
+
+
 ## Initialize the star map with generated node graph
 func initialize(generator: StarMapGenerator) -> void:
+	# Clear any existing map artifacts from previous voyage
+	_clear_existing_map()
+	
 	node_graph = generator.nodes
 	_calculate_map_center()
 	_create_visual_nodes()
 	_draw_connection_lines()
 	_update_node_states()
+
+
+## Clear all existing visual elements from the map
+func _clear_existing_map() -> void:
+	# Clear all visual node instances
+	for child in nodes_container.get_children():
+		child.queue_free()
+	node_visuals.clear()
+	
+	# Clear all connection lines and labels
+	for child in lines_container.get_children():
+		child.queue_free()
 
 
 ## Calculate the center offset to center the map on screen
@@ -145,7 +211,6 @@ func _draw_line(from: Vector2, to: Vector2, dimmed: bool = false) -> void:
 	line.add_point(to)
 	line.default_color = LINE_COLOR if not dimmed else LINE_COLOR_DIMMED
 	line.width = LINE_WIDTH
-	line.z_index = -1
 	line.antialiased = true
 	lines_container.add_child(line)
 
@@ -158,22 +223,40 @@ func _draw_line_with_label(from: Vector2, to: Vector2, fuel_cost: int) -> void:
 	line.add_point(to)
 	line.default_color = LINE_COLOR_ACTIVE
 	line.width = LINE_WIDTH_ACTIVE
-	line.z_index = -1
 	line.antialiased = true
 	lines_container.add_child(line)
 	
-	# Create fuel cost label at midpoint
+	# Calculate offset perpendicular to the line for cleaner label placement
 	var midpoint = (from + to) / 2.0
+	var direction = (to - from).normalized()
+	var perpendicular = Vector2(-direction.y, direction.x)  # Rotate 90 degrees
+	var label_offset = perpendicular * 14.0  # Offset distance from line
+	
+	# Create fuel cost badge container
+	var badge = PanelContainer.new()
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	# Style the badge
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.1, 0.1, 0.15, 0.9)
+	style.border_color = Color(1.0, 0.69, 0.0, 0.6)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	style.set_content_margin_all(4)
+	badge.add_theme_stylebox_override("panel", style)
+	
+	# Create fuel cost label
 	var label = Label.new()
 	label.text = "%d" % fuel_cost
-	label.position = midpoint - Vector2(8, 12)  # Offset to center text
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Don't block clicks
-	label.add_theme_color_override("font_color", Color(1, 0.8, 0.2))  # Bright amber
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	label.add_theme_constant_override("outline_size", 3)
-	label.add_theme_font_size_override("font_size", 14)
-	label.z_index = 0
-	lines_container.add_child(label)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	label.add_theme_font_size_override("font_size", 12)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	badge.add_child(label)
+	
+	# Position the badge offset from the line
+	badge.position = midpoint + label_offset - Vector2(12, 10)
+	lines_container.add_child(badge)
 
 
 ## Determine initial state for a node

@@ -12,6 +12,7 @@ const OFFICER_DATA: Dictionary = {
 	"scout": { "color": Color.GREEN, "move_range": 6, "sight_range": 8, "max_hp": 80 },
 	"tech": { "color": Color.CYAN, "move_range": 4, "sight_range": 5, "max_hp": 70 },
 	"medic": { "color": Color.MAGENTA, "move_range": 5, "sight_range": 5, "max_hp": 75 },
+	"heavy": { "color": Color.ORANGE_RED, "move_range": 3, "sight_range": 5, "max_hp": 120 },
 }
 
 # Sprite textures for different officer types
@@ -20,6 +21,7 @@ const OFFICER_SPRITES = {
 	"scout": preload("res://assets/sprites/characters/officer_scout.png"),
 	"tech": preload("res://assets/sprites/characters/officer_tech.png"),
 	"medic": preload("res://assets/sprites/characters/officer_medic.png"),
+	"heavy": preload("res://assets/sprites/characters/officer_heavy.png"),
 }
 
 @onready var sprite: Sprite2D = $Sprite
@@ -29,6 +31,8 @@ const OFFICER_SPRITES = {
 @onready var hp_bar_bg: ColorRect = $HPBarBG
 @onready var ap_indicator: HBoxContainer = $APIndicator
 @onready var overwatch_indicator: ColorRect = $OverwatchIndicator
+@onready var half_cover_indicator: Node2D = $HalfCoverIndicator
+@onready var full_cover_indicator: Node2D = $FullCoverIndicator
 
 var officer_key: String = ""
 var officer_type: String = ""  # scout, tech, medic, captain
@@ -45,6 +49,10 @@ var grid_position: Vector2i = Vector2i.ZERO
 
 # Specialist abilities
 var overwatch_active: bool = false  # Scout ability
+var taunt_active: bool = false  # Heavy ability - forces enemies to target this unit
+
+# Passive bonuses
+const HEAVY_DAMAGE_REDUCTION: float = 0.20  # Heavy takes 20% less damage
 
 var _moving: bool = false
 var _move_path: PackedVector2Array = []
@@ -99,6 +107,9 @@ func _apply_specialist_bonuses() -> void:
 		"medic":
 			# Medic can see exact HP values
 			pass  # Visual only, handled in UI
+		"heavy":
+			# Heavy has higher base damage
+			base_damage = 30
 
 
 func _process(delta: float) -> void:
@@ -171,10 +182,22 @@ func has_ap(amount: int = 1) -> bool:
 func reset_ap() -> void:
 	current_ap = max_ap
 	_update_ap_display()
+	
+	# Heavy: Taunt expires at start of new turn
+	if officer_type == "heavy" and taunt_active:
+		taunt_active = false
+		print("Heavy's Taunt has expired")
 
 
 func take_damage(amount: int) -> void:
-	current_hp -= amount
+	var actual_damage = amount
+	
+	# Heavy passive: Armor Plating - takes 20% less damage
+	if officer_type == "heavy":
+		actual_damage = int(amount * (1.0 - HEAVY_DAMAGE_REDUCTION))
+		print("Heavy's Armor Plating reduces damage: %d -> %d" % [amount, actual_damage])
+	
+	current_hp -= actual_damage
 	_update_hp_bar()
 	
 	# Damage flash effect
@@ -367,8 +390,32 @@ func can_use_ability(ability_type: String) -> bool:
 			return officer_type == "tech" and has_ap(1)
 		"patch":
 			return officer_type == "medic" and has_ap(2)
+		"taunt":
+			return officer_type == "heavy" and has_ap(1) and not taunt_active
 		_:
 			return false
+
+
+## Activate Taunt ability (Heavy) - forces enemies to target this unit
+func use_taunt() -> bool:
+	if officer_type != "heavy":
+		return false
+	
+	if taunt_active:
+		print("Taunt is already active!")
+		return false
+	
+	if not use_ap(1):
+		return false
+	
+	taunt_active = true
+	print("Heavy activates TAUNT! Enemies within range will prioritize this unit.")
+	return true
+
+
+## Check if this unit has taunt active (for enemy AI)
+func has_taunt_active() -> bool:
+	return officer_type == "heavy" and taunt_active
 
 
 ## Face towards a target position (for aiming phase)
@@ -379,3 +426,11 @@ func face_towards(target_pos: Vector2i) -> void:
 	# Flip sprite based on direction
 	if sprite and direction.x != 0:
 		sprite.flip_h = direction.x < 0
+
+
+## Update cover indicator visibility based on cover level (0=none, 1=half, 2=full)
+func update_cover_indicator(cover_level: int) -> void:
+	if half_cover_indicator:
+		half_cover_indicator.visible = (cover_level == 1)
+	if full_cover_indicator:
+		full_cover_indicator.visible = (cover_level == 2)

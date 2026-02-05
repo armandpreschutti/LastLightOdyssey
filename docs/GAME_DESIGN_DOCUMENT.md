@@ -1,5 +1,5 @@
 # Last Light Odyssey - Game Design Document
-**Version 2.0 | Engine: Godot 4.6 | Last Updated: February 2026**
+**Version 2.1 | Engine: Godot 4.6 | Last Updated: February 5, 2026**
 
 > *"The last journey of the human race isn't a hero's quest; it's a survival marathon."*
 
@@ -63,7 +63,7 @@ A procedurally generated node graph with **20 nodes** leading to New Earth.
 |------|-----------|-------------|
 | **Empty Space** | 40% | No tactical map, just a random event roll. |
 | **Scavenge Site** | 40% | Triggers Isometric Tactical Mode for resource gathering. |
-| **Trading Outpost** | 20% | Menu-based screen to trade Scrap for Fuel or repairs. |
+| **Trading Outpost** | 20% | Menu-based screen to trade Scrap for Fuel (10→1) or repairs (15→10%). |
 
 ### 2.3 Random Event System
 
@@ -130,11 +130,19 @@ Close (2 tiles): 90%
 Medium (3-6 tiles): 50-85% (class-dependent)
 Long (7+ tiles): 25-65% (class-dependent)
 
-Cover Modifier:
+Defender Cover Modifier (reduces attacker's hit chance):
   - Half Cover (crates): −25% hit chance
-  - Full Cover (walls): −50% hit chance (if firing through)
+  - Full Cover (walls): −50% hit chance
 
-Final Hit Chance = clamp(Base - Cover, 10%, 95%)
+Attacker Cover Bonus (stable firing position):
+  - Half Cover: +10% hit chance
+  - Full Cover: +15% hit chance
+
+Flanking Bonus:
+  - Attacking from unprotected angle: +50% DAMAGE
+  - Cover only protects from the direction it faces
+
+Final Hit Chance = clamp(Base - DefenderCover + AttackerBonus, 10%, 95%)
 ```
 
 **Class Accuracy Profiles:**
@@ -144,13 +152,16 @@ Final Hit Chance = clamp(Base - Cover, 10%, 95%)
 
 ### 3.4 Cover & Destruction
 
-| Cover Type | Hit Penalty | Destructible |
-|------------|-------------|--------------|
-| Half Cover | −25% | Yes (destroyed by damage or Breach) |
-| Full Cover | −50% | Yes (Tech's Breach ability only) |
-| Walls | Blocks LOS | Some can be breached |
+| Cover Type | Defender Penalty | Attacker Bonus | Destructible |
+|------------|------------------|----------------|--------------|
+| Half Cover | −25% to hit | +10% accuracy | Yes (Breach) |
+| Full Cover | −50% to hit | +15% accuracy | Yes (Tech only) |
+| Walls | Blocks LOS | — | Some breachable |
 
 When cover is destroyed, it becomes rubble (0% cover value).
+
+**Flanking System:**
+Cover only protects from the direction it faces. Attacking from an unprotected angle (flanking) bypasses cover AND deals **+50% bonus damage**. Tactical positioning is crucial!
 
 ### 3.5 Fog of War
 
@@ -199,6 +210,14 @@ To prevent players from spending unlimited turns looting, the **Cryo-Stability T
 - Mission ends when **all surviving officers** reach extraction tiles
 - Resources collected during mission are added to ship totals upon extraction
 
+### Mission Abort
+
+Players can pause during tactical missions and choose to **Abandon Mission**:
+- Costs **20 colonists** as penalty
+- All deployed officers return safely (even if surrounded)
+- No resources are gained from the mission
+- Useful when a mission goes badly wrong
+
 ---
 
 ## 5. Win/Loss Logic
@@ -235,6 +254,21 @@ Reach the **"New Earth"** node (node 19) with **Colonists > 0**.
 - **Diegetic/Retro**: 1980s monochrome CRT terminal aesthetic
 - Amber text on dark backgrounds
 - Minimal, functional displays
+
+### Tutorial System
+First-time players receive a **9-step guided tutorial** that covers:
+
+1. **Star Map Navigation** - How to plot course and fuel costs
+2. **Resource Management** - Understanding colonists, fuel, hull, and scrap
+3. **Random Events** - How events work and specialist mitigation
+4. **Scavenge Missions** - Team selection and permadeath warning
+5. **Tactical Movement** - Action points and movement
+6. **Combat** - Attacking enemies and cover mechanics
+7. **Abilities** - Specialist unique abilities (Scout, Tech, Medic)
+8. **Cryo-Stability** - Time pressure and colonist loss
+9. **Extraction** - Completing missions
+
+Tutorial can be skipped at any time and reset from the Settings menu.
 
 ---
 
@@ -299,9 +333,55 @@ Items and cover objects found on tactical maps.
 | ![Grid](../assets/sprites/environment/overlay_grid.png) | ![Movement](../assets/sprites/environment/overlay_movement.png) | ![Attack](../assets/sprites/environment/overlay_attack.png) | ![Hover](../assets/sprites/environment/overlay_hover.png) |
 
 **Special Tiles**
-| Extraction Zone | Half Cover | Space Background |
-|:---------------:|:----------:|:----------------:|
-| ![Extraction](../assets/sprites/environment/extraction.png) | ![Half Cover](../assets/sprites/environment/half_cover.png) | ![Space](../assets/sprites/environment/space_background.png) |
+| Extraction Zone | Half Cover | Space Background | Tileset Atlas |
+|:---------------:|:----------:|:----------------:|:-------------:|
+| ![Extraction](../assets/sprites/environment/extraction.png) | ![Half Cover](../assets/sprites/environment/half_cover.png) | ![Space](../assets/sprites/environment/space_background.png) | ![Atlas](../assets/sprites/environment/tileset_atlas.png) |
+
+---
+
+#### Terrain Tiles (Procedural Map Generation)
+
+Additional tile variants used for procedural tactical map generation.
+
+**Floor Variants**
+| Metal 1 | Metal 2 | Metal Rusty | Concrete 1 | Concrete 2 | Dirt | Tiles |
+|:-------:|:-------:|:-----------:|:----------:|:----------:|:----:|:-----:|
+| ![Metal1](../assets/sprites/terrain/floor_metal_1.png) | ![Metal2](../assets/sprites/terrain/floor_metal_2.png) | ![Rusty](../assets/sprites/terrain/floor_metal_rusty.png) | ![Concrete1](../assets/sprites/terrain/floor_concrete_1.png) | ![Concrete2](../assets/sprites/terrain/floor_concrete_2.png) | ![Dirt](../assets/sprites/terrain/floor_dirt_1.png) | ![Tiles](../assets/sprites/terrain/floor_tiles.png) |
+
+**Wall Variants**
+| Metal | Concrete | Border | Debris |
+|:-----:|:--------:|:------:|:------:|
+| ![WallMetal](../assets/sprites/terrain/wall_metal_1.png) | ![WallConcrete](../assets/sprites/terrain/wall_concrete_1.png) | ![Border](../assets/sprites/terrain/wall_border.png) | ![Debris](../assets/sprites/terrain/wall_debris_1.png) |
+
+**Cover Variants**
+| Crate Cover | Barrier Cover |
+|:-----------:|:-------------:|
+| ![CrateCover](../assets/sprites/terrain/cover_crate_1.png) | ![BarrierCover](../assets/sprites/terrain/cover_barrier_1.png) |
+
+**Decorations & Details**
+| Floor Grime | Cracks | Debris | Wires | Blood |
+|:-----------:|:------:|:------:|:-----:|:-----:|
+| ![Grime](../assets/sprites/terrain/floor_grime.png) | ![Cracks](../assets/sprites/terrain/decor_cracks.png) | ![Debris](../assets/sprites/terrain/decor_debris.png) | ![Wires](../assets/sprites/terrain/decor_wires.png) | ![Blood](../assets/sprites/terrain/decor_blood.png) |
+
+**Fog of War (Terrain)**
+| Fog Full | Fog Edge |
+|:--------:|:--------:|
+| ![FogFull](../assets/sprites/terrain/fog_full.png) | ![FogEdge](../assets/sprites/terrain/fog_edge.png) |
+
+**Tile Highlights**
+| Grid Overlay | Movement | Attack | Hover |
+|:------------:|:--------:|:------:|:-----:|
+| ![Grid](../assets/sprites/terrain/grid_overlay.png) | ![Move](../assets/sprites/terrain/highlight_movement.png) | ![Attack](../assets/sprites/terrain/highlight_attack.png) | ![Hover](../assets/sprites/terrain/highlight_hover.png) |
+
+**Extraction Zone (Terrain)**
+| Extraction Tile | Extraction Glow |
+|:---------------:|:---------------:|
+| ![Extract](../assets/sprites/terrain/extraction_1.png) | ![Glow](../assets/sprites/terrain/extraction_glow.png) |
+
+**Ambient Effects**
+| Dust Particles | Smoke | Vignette |
+|:--------------:|:-----:|:--------:|
+| ![Dust](../assets/sprites/terrain/ambient_dust.png) | ![Smoke](../assets/sprites/terrain/ambient_smoke.png) | ![Vignette](../assets/sprites/terrain/vignette.png) |
 
 ---
 
@@ -386,33 +466,93 @@ Visual elements for the management layer star map.
 - [x] Projectile visual effects
 - [x] Idle animations for units
 
-### ⏳ Phase 8: UI & UX Polish (IN PROGRESS)
+### ✅ Phase 8: UI & UX Polish (COMPLETE)
 - [x] Tactical HUD with unit info
 - [x] Management HUD with ship stats
 - [x] Team selection dialog
-- [x] Trading dialog
+- [x] Trading dialog with fuel purchase and hull repair
 - [x] Event dialog with choices
-- [ ] Title menu polish
-- [ ] Settings/options menu
-- [ ] Tutorial/help system
+- [x] Title menu with animated starfield, typewriter subtitle, and polish
+- [x] Settings menu (display, audio sliders, tutorial reset)
+- [x] Tutorial system with 9-step guided onboarding
+- [x] Pause menu with abandon mission option
+- [x] Confirmation dialog for destructive actions
+- [x] Game over and victory screens with ending text
+- [x] Restart game functionality
 
-### ❌ Phase 9: Audio (NOT STARTED)
+### ✅ Phase 9: Save/Load System (COMPLETE)
+- [x] Save game state to JSON file (colonists, fuel, integrity, scrap, officers)
+- [x] Save star map layout and node progress
+- [x] Load game state on continue
+- [x] Continue button on title menu (disabled if no save)
+- [x] New game confirmation dialog when save exists
+- [x] Delete save functionality
+- [x] Settings persistence (display, audio, tutorial state)
+
+### ⏳ Phase 10: Audio (NOT STARTED)
 - [ ] Background ambient music
 - [ ] UI sound effects
 - [ ] Combat sound effects (shots, impacts)
 - [ ] Alarm sounds for warnings
 - [ ] Movement sounds
 
-### ❌ Phase 10: Game Feel & Balance (NOT STARTED)
+### ❌ Phase 11: Game Feel & Balance (NOT STARTED)
 - [ ] Difficulty balancing
 - [ ] Resource economy tuning
 - [ ] Event frequency/impact balance
 - [ ] Combat damage/accuracy tuning
-- [ ] Save/Load system
 
 ---
 
 ## 8. Next Steps & Roadmap
+
+### ✅ Recently Completed
+
+#### Title Menu & Game Flow
+- [x] Animated starfield background with 200 parallax stars
+- [x] Typewriter subtitle animation ("The final journey of humanity begins")
+- [x] Title glow pulsing effect
+- [x] Button hover scale animations
+- [x] New Game / Continue / Settings / Quit buttons
+- [x] Continue button disabled when no save exists
+- [x] Confirmation dialog for new game when save exists
+- [x] Fade transitions between scenes
+- [x] Game over screen with restart option
+- [x] Victory screen with ending tier text
+
+#### Save/Load System
+- [x] Full game state persistence (colonists, fuel, integrity, scrap)
+- [x] Officer status persistence (alive/deployed state)
+- [x] Star map layout persistence (nodes, connections, types, fuel costs)
+- [x] Node progress persistence (current node, visited nodes)
+- [x] Continue game from title menu
+- [x] Delete save when starting new game
+
+#### Settings Menu
+- [x] Display settings (fullscreen toggle, resolution: 720p/900p/1080p)
+- [x] Audio volume sliders (Master, SFX, Music) - UI ready for Phase 10
+- [x] Reset Tutorial button with visual feedback
+- [x] Settings persistence to user://settings.cfg
+- [x] Apply button with confirmation feedback
+
+#### Tutorial System
+- [x] TutorialManager autoload singleton
+- [x] 9-step guided onboarding sequence
+- [x] Tutorial overlay with animated prompts
+- [x] Directional arrow indicators
+- [x] Skip tutorial option
+- [x] Tutorial state persistence
+- [x] Reset tutorial from settings
+
+#### Trading System Enhancement
+- [x] Buy fuel: 10 scrap → 1 fuel
+- [x] Repair hull: 15 scrap → 10% integrity
+- [x] Status feedback on transactions
+- [x] Button availability based on resources
+
+#### Additional UI
+- [x] Pause menu with abandon mission option (costs 20 colonists)
+- [x] Reusable confirmation dialog component
 
 ### Immediate Priority (Week 1-2)
 
@@ -423,51 +563,41 @@ Visual elements for the management layer star map.
 - [ ] Add Cryo-Stability alarm sound
 - [ ] Add movement footstep sounds
 
-#### 2. Title Menu & Game Flow
-- [ ] Polish title menu visuals (CRT aesthetic)
-- [ ] Add New Game / Continue buttons
-- [ ] Implement game-over screen with restart option
-- [ ] Implement victory screen with ending text
-- [ ] Add transition effects between scenes
-
-#### 3. Trading System Enhancement
-- [ ] Implement full trading mechanics (Scrap → Fuel)
-- [ ] Add ship repair option (Scrap → Integrity)
-- [ ] Visual trading interface with animated transactions
-
-### Short-Term Goals (Week 3-4)
-
-#### 4. Save/Load System
-- [ ] Save game state to file (colonists, fuel, integrity, officers, node progress)
-- [ ] Load game state on continue
-- [ ] Auto-save at key moments (after jumps, after missions)
-
-#### 5. Tutorial System
-- [ ] Add first-time player guidance
-- [ ] Tooltip system for UI elements
-- [ ] Mission briefing before tactical deployment
-
-#### 6. Visual Effects Polish
+#### 2. Visual Effects Polish
 - [ ] Screen shake on damage
 - [ ] Particle effects for explosions/impacts
 - [ ] Enhanced fog of war transitions
 - [ ] Animated tileset elements (flickering lights, steam vents)
 
+### Short-Term Goals (Week 3-4)
+
+#### 3. Game Balance Pass
+- [ ] Difficulty balancing (event damage, enemy stats)
+- [ ] Resource economy tuning (fuel costs, scrap drops)
+- [ ] Event frequency/impact balance
+- [ ] Combat damage/accuracy tuning
+
+#### 4. Quality of Life
+- [ ] Auto-save after jumps and missions
+- [ ] Tooltip system for UI elements
+- [ ] Mission briefing before tactical deployment
+- [ ] Keyboard shortcuts reference
+
 ### Medium-Term Goals (Month 2)
 
-#### 7. Content Expansion
+#### 5. Content Expansion
 - [ ] Additional random events (expand to 20+)
 - [ ] New enemy types (ranged, explosive, boss)
 - [ ] Environmental hazards on tactical maps
 - [ ] Special mission types (rescue, sabotage)
 
-#### 8. Procedural Generation Improvements
+#### 6. Procedural Generation Improvements
 - [ ] More map templates/themes
 - [ ] Room-based generation for interior maps
 - [ ] Loot distribution balancing
 - [ ] Enemy placement variety
 
-#### 9. Officer System Expansion
+#### 7. Officer System Expansion
 - [ ] Recruit new officers at trading posts
 - [ ] Officer experience/leveling (optional)
 - [ ] Unique officer traits/perks
@@ -475,14 +605,14 @@ Visual elements for the management layer star map.
 
 ### Long-Term Goals (Month 3+)
 
-#### 10. Advanced Features
+#### 8. Advanced Features
 - [ ] Multiple difficulty modes
 - [ ] Endless/roguelike mode
 - [ ] Achievement system
 - [ ] Statistics tracking (missions completed, enemies killed, etc.)
 - [ ] Controller support
 
-#### 11. Story & Narrative
+#### 9. Story & Narrative
 - [ ] "Captain's Log" intro sequence
 - [ ] Story events tied to specific nodes
 - [ ] Character interactions/dialogue
@@ -522,8 +652,9 @@ Last Light Odyssey/
 ```
 
 ### Key Autoloads
-- **GameState**: Global statistics, officer tracking, win/loss logic
+- **GameState**: Global statistics, officer tracking, win/loss logic, save/load system
 - **EventManager**: Random events, node types, event resolution
+- **TutorialManager**: Tutorial state, step progression, persistence
 
 ### Design Philosophy
 > *"Start with Gray Boxes."* Don't polish art until the mechanics feel fun. If the game is stressful and addictive with just squares and numbers, it will be a masterpiece once polish is added.

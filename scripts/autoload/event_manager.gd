@@ -55,7 +55,7 @@ var random_events: Array[Dictionary] = [
 		"description": "Raiders emerge from a nearby asteroid field.",
 		"colonist_loss": 40,
 		"integrity_loss": 25,
-		"specialist_mitigation": "scout",
+		"specialist_mitigation": "heavy",
 		"mitigated_colonist_loss": 10,
 		"mitigated_integrity_loss": 10,
 	},

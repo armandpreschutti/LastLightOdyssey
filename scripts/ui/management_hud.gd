@@ -2,11 +2,14 @@ extends Control
 ## Management HUD - Displays ship stats and provides jump controls
 ## 1980s terminal aesthetic with amber text
 
+signal quit_to_menu_pressed
+
 @onready var colonists_label: Label = $VBoxContainer/StatsContainer/ColonistsLabel
 @onready var fuel_label: Label = $VBoxContainer/StatsContainer/FuelLabel
 @onready var integrity_label: Label = $VBoxContainer/StatsContainer/IntegrityLabel
 @onready var scrap_label: Label = $VBoxContainer/StatsContainer/ScrapLabel
 @onready var status_label: Label = $VBoxContainer/StatusLabel
+@onready var quit_button: Button = $VBoxContainer/QuitButton
 
 
 func _ready() -> void:
@@ -19,6 +22,13 @@ func _connect_signals() -> void:
 	GameState.fuel_changed.connect(_on_fuel_changed)
 	GameState.integrity_changed.connect(_on_integrity_changed)
 	GameState.scrap_changed.connect(_on_scrap_changed)
+	quit_button.pressed.connect(_on_quit_pressed)
+
+
+func _on_quit_pressed() -> void:
+	# Save game before quitting to menu
+	GameState.save_game()
+	quit_to_menu_pressed.emit()
 
 
 func _update_all_stats() -> void:

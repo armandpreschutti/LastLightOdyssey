@@ -149,6 +149,12 @@ func _update_volume_labels() -> void:
 
 
 func _apply_display_settings() -> void:
+	# Check if running in editor - display settings have limitations there
+	if OS.has_feature("editor"):
+		print("SettingsMenu: Running in editor - display settings saved but window changes may not apply fully")
+		print("SettingsMenu: Settings will apply correctly when running exported build")
+		return
+	
 	# Apply fullscreen
 	if _pending_fullscreen:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
@@ -228,8 +234,14 @@ func _on_apply_pressed() -> void:
 	_apply_display_settings()
 	_apply_audio_settings()
 	
-	# Visual feedback
-	apply_button.text = "[ APPLIED! ]"
+	# Visual feedback - show different message in editor
+	var feedback_text: String
+	if OS.has_feature("editor"):
+		feedback_text = "[ SAVED! ]"  # Settings saved but display changes limited in editor
+	else:
+		feedback_text = "[ APPLIED! ]"
+	
+	apply_button.text = feedback_text
 	apply_button.disabled = true
 	
 	var tween = create_tween()

@@ -17,7 +17,10 @@ const COLOR_WALL := Color(0.35, 0.28, 0.22)        # Rusty brown - metal walls
 const COLOR_WALL_HIGHLIGHT := Color(0.42, 0.35, 0.28)  # Wall edge highlight
 const COLOR_EXTRACTION := Color(0.12, 0.28, 0.15)  # Dark green safe zone
 const COLOR_EXTRACTION_GLOW := Color(0.2, 0.45, 0.25)  # Brighter extraction center
-const COLOR_HALF_COVER := Color(0.32, 0.27, 0.20)  # Cover/crate color
+const COLOR_CONCRETE := Color(0.45, 0.42, 0.4)       # Gray concrete
+const COLOR_CONCRETE_DARK := Color(0.32, 0.3, 0.28)  # Dark concrete shadow
+const COLOR_CONCRETE_LIGHT := Color(0.55, 0.52, 0.48) # Light concrete highlight
+const COLOR_ROCK := Color(0.38, 0.35, 0.32)          # Rock/stone color
 const COLOR_FOG := Color(0.02, 0.02, 0.03)         # Near black fog
 const COLOR_MOVEMENT_RANGE := Color(0.25, 0.5, 0.7, 0.25)  # Blue movement highlight
 const COLOR_HOVER := Color(1.0, 0.9, 0.5, 0.3)     # Yellow hover
@@ -53,7 +56,7 @@ func initialize_map(layout: Dictionary) -> void:
 
 func _update_astar_solids() -> void:
 	for pos in tile_data:
-		var is_solid = tile_data[pos] == TileType.WALL
+		var is_solid = tile_data[pos] == TileType.WALL or tile_data[pos] == TileType.HALF_COVER
 		astar.set_point_solid(pos, is_solid)
 
 
@@ -116,6 +119,13 @@ func is_tile_walkable(pos: Vector2i) -> bool:
 	if pos.x < 0 or pos.x >= MAP_WIDTH or pos.y < 0 or pos.y >= MAP_HEIGHT:
 		return false
 	return not astar.is_point_solid(pos)
+
+
+## Check if a tile blocks line of sight (only walls block LOS, not cover)
+func blocks_line_of_sight(pos: Vector2i) -> bool:
+	if pos.x < 0 or pos.x >= MAP_WIDTH or pos.y < 0 or pos.y >= MAP_HEIGHT:
+		return true  # Out of bounds blocks LOS
+	return tile_data.get(pos, TileType.FLOOR) == TileType.WALL
 
 
 func is_extraction_tile(pos: Vector2i) -> bool:
@@ -181,23 +191,7 @@ func _draw_tile(x: int, y: int, rect: Rect2, tile_type: TileType) -> void:
 				draw_line(start, end, Color(0.1, 0.09, 0.08), 1.0)
 		
 		TileType.WALL:
-			# Main wall body
-			draw_rect(rect, COLOR_WALL)
-			
-			# Top edge highlight (3D effect)
-			var top_rect = Rect2(rect.position.x, rect.position.y, TILE_SIZE, 4)
-			draw_rect(top_rect, COLOR_WALL_HIGHLIGHT)
-			
-			# Dark bottom edge
-			var bottom_rect = Rect2(rect.position.x, rect.position.y + TILE_SIZE - 3, TILE_SIZE, 3)
-			draw_rect(bottom_rect, Color(0.2, 0.15, 0.1))
-			
-			# Rivet/bolt detail
-			if hash_val < 50:
-				var rivet_pos = rect.position + Vector2(6, 14)
-				draw_circle(rivet_pos, 2, Color(0.28, 0.22, 0.18))
-				var rivet_pos2 = rect.position + Vector2(26, 14)
-				draw_circle(rivet_pos2, 2, Color(0.28, 0.22, 0.18))
+			_draw_wall_autotile(x, y, rect, hash_val)
 		
 		TileType.EXTRACTION:
 			# Base extraction floor
@@ -219,18 +213,291 @@ func _draw_tile(x: int, y: int, rect: Rect2, tile_type: TileType) -> void:
 		TileType.HALF_COVER:
 			# Floor underneath
 			draw_rect(rect, COLOR_FLOOR_BASE)
-			
-			# Cover object (crate/barrier shape)
-			var cover_rect = Rect2(rect.position.x + 4, rect.position.y + 6, TILE_SIZE - 8, TILE_SIZE - 10)
-			draw_rect(cover_rect, COLOR_HALF_COVER)
-			
-			# Top highlight
-			var cover_top = Rect2(rect.position.x + 4, rect.position.y + 6, TILE_SIZE - 8, 3)
-			draw_rect(cover_top, Color(0.4, 0.35, 0.28))
-			
-			# Shadow
-			var shadow_rect = Rect2(rect.position.x + 6, rect.position.y + TILE_SIZE - 4, TILE_SIZE - 10, 2)
-			draw_rect(shadow_rect, Color(0.08, 0.07, 0.06, 0.6))
+			# Draw organic cover shape
+			_draw_cover_object(rect, hash_val)
+
+
+## Draw cover objects (concrete barriers and rocks)
+func _draw_cover_object(rect: Rect2, hash_val: int) -> void:
+	var center = rect.position + Vector2(TILE_SIZE / 2, TILE_SIZE / 2)
+	var cover_type = hash_val % 3
+	
+	match cover_type:
+		0:  # Concrete jersey barrier
+			_draw_concrete_barrier(center, hash_val)
+		1:  # Rock pile
+			_draw_rock_pile(center, hash_val)
+		2:  # Broken concrete chunks
+			_draw_rubble_pile(center, hash_val)
+
+
+## Draw a concrete jersey barrier shape
+func _draw_concrete_barrier(center: Vector2, hash_val: int) -> void:
+	var angle_var = ((hash_val % 20) - 10) * 0.015  # Slight rotation
+	
+	# Shadow underneath
+	var shadow: PackedVector2Array = [
+		center + Vector2(-12, 6).rotated(angle_var) + Vector2(2, 2),
+		center + Vector2(12, 6).rotated(angle_var) + Vector2(2, 2),
+		center + Vector2(10, 12).rotated(angle_var) + Vector2(2, 2),
+		center + Vector2(-10, 12).rotated(angle_var) + Vector2(2, 2)
+	]
+	draw_polygon(shadow, [Color(0.06, 0.05, 0.04, 0.5)])
+	
+	# Jersey barrier shape - wider at bottom, narrower at top
+	# Back face (darker)
+	var back: PackedVector2Array = [
+		center + Vector2(-10, -10).rotated(angle_var),
+		center + Vector2(10, -10).rotated(angle_var),
+		center + Vector2(12, 10).rotated(angle_var),
+		center + Vector2(-12, 10).rotated(angle_var)
+	]
+	draw_polygon(back, [COLOR_CONCRETE_DARK])
+	
+	# Front face (main color)
+	var front: PackedVector2Array = [
+		center + Vector2(-8, -12).rotated(angle_var),
+		center + Vector2(8, -12).rotated(angle_var),
+		center + Vector2(11, 8).rotated(angle_var),
+		center + Vector2(-11, 8).rotated(angle_var)
+	]
+	draw_polygon(front, [COLOR_CONCRETE])
+	
+	# Top surface highlight
+	var top: PackedVector2Array = [
+		center + Vector2(-8, -12).rotated(angle_var),
+		center + Vector2(8, -12).rotated(angle_var),
+		center + Vector2(10, -10).rotated(angle_var),
+		center + Vector2(-10, -10).rotated(angle_var)
+	]
+	draw_polygon(top, [COLOR_CONCRETE_LIGHT])
+	
+	# Weathering/damage details
+	if hash_val % 4 == 0:
+		# Crack
+		var crack_start = center + Vector2(-3, -8).rotated(angle_var)
+		var crack_end = center + Vector2(2, 4).rotated(angle_var)
+		draw_line(crack_start, crack_end, COLOR_CONCRETE_DARK, 1.5)
+	
+	if hash_val % 3 == 0:
+		# Chip/damage mark
+		draw_circle(center + Vector2(5, -2).rotated(angle_var), 3, COLOR_CONCRETE_DARK)
+
+
+## Draw a rock pile
+func _draw_rock_pile(center: Vector2, hash_val: int) -> void:
+	# Shadow underneath
+	var shadow_points: PackedVector2Array = []
+	for i in range(8):
+		var angle = (i / 8.0) * TAU
+		var radius = 12.0 + (hash_val % 4)
+		shadow_points.append(center + Vector2(cos(angle) * radius + 2, sin(angle) * radius * 0.7 + 3))
+	draw_polygon(shadow_points, [Color(0.06, 0.05, 0.04, 0.5)])
+	
+	# Large back rock
+	var rock1: PackedVector2Array = [
+		center + Vector2(-8, -6),
+		center + Vector2(-2, -10),
+		center + Vector2(6, -7),
+		center + Vector2(10, -2),
+		center + Vector2(8, 6),
+		center + Vector2(-4, 8),
+		center + Vector2(-10, 3)
+	]
+	draw_polygon(rock1, [COLOR_ROCK])
+	
+	# Highlight on top-left
+	draw_line(center + Vector2(-6, -5), center + Vector2(0, -9), Color(0.48, 0.45, 0.42), 2.0)
+	
+	# Medium front rock
+	var rock2: PackedVector2Array = [
+		center + Vector2(2, 0),
+		center + Vector2(8, -4),
+		center + Vector2(12, 2),
+		center + Vector2(9, 9),
+		center + Vector2(3, 10),
+		center + Vector2(-1, 6)
+	]
+	draw_polygon(rock2, [Color(0.42, 0.38, 0.35)])
+	
+	# Small rock on top
+	var rock3: PackedVector2Array = [
+		center + Vector2(-5, -4),
+		center + Vector2(0, -7),
+		center + Vector2(4, -3),
+		center + Vector2(2, 1),
+		center + Vector2(-4, 0)
+	]
+	draw_polygon(rock3, [Color(0.5, 0.46, 0.42)])
+	
+	# Rock surface details
+	draw_line(center + Vector2(-6, 2), center + Vector2(-2, 5), COLOR_CONCRETE_DARK, 1.0)
+	draw_line(center + Vector2(5, 3), center + Vector2(8, 6), COLOR_CONCRETE_DARK, 1.0)
+
+
+## Draw broken concrete rubble
+func _draw_rubble_pile(center: Vector2, hash_val: int) -> void:
+	var offset = Vector2(((hash_val % 5) - 2) * 0.5, ((hash_val % 7) - 3) * 0.5)
+	
+	# Shadow
+	draw_polygon([
+		center + Vector2(-11, 4) + offset + Vector2(2, 2),
+		center + Vector2(11, 3) + offset + Vector2(2, 2),
+		center + Vector2(10, 11) + offset + Vector2(2, 2),
+		center + Vector2(-10, 10) + offset + Vector2(2, 2)
+	], [Color(0.06, 0.05, 0.04, 0.5)])
+	
+	# Large concrete chunk (tilted)
+	var chunk1: PackedVector2Array = [
+		center + Vector2(-10, -8) + offset,
+		center + Vector2(-2, -11) + offset,
+		center + Vector2(4, -6) + offset,
+		center + Vector2(6, 2) + offset,
+		center + Vector2(-4, 6) + offset,
+		center + Vector2(-11, 1) + offset
+	]
+	draw_polygon(chunk1, [COLOR_CONCRETE])
+	# Rebar sticking out
+	draw_line(center + Vector2(3, -5) + offset, center + Vector2(8, -9) + offset, Color(0.45, 0.3, 0.2), 2.0)
+	
+	# Smaller chunk on top
+	var chunk2: PackedVector2Array = [
+		center + Vector2(3, -3) + offset,
+		center + Vector2(10, -5) + offset,
+		center + Vector2(12, 4) + offset,
+		center + Vector2(8, 9) + offset,
+		center + Vector2(2, 6) + offset
+	]
+	draw_polygon(chunk2, [Color(0.48, 0.45, 0.42)])
+	
+	# Top highlight
+	draw_line(center + Vector2(4, -4) + offset, center + Vector2(9, -4) + offset, COLOR_CONCRETE_LIGHT, 2.0)
+	
+	# Small debris piece
+	var chunk3: PackedVector2Array = [
+		center + Vector2(-6, 4) + offset,
+		center + Vector2(-1, 2) + offset,
+		center + Vector2(1, 8) + offset,
+		center + Vector2(-5, 10) + offset
+	]
+	draw_polygon(chunk3, [COLOR_CONCRETE_DARK])
+	
+	# Cracks and damage
+	draw_line(center + Vector2(-7, -4) + offset, center + Vector2(-3, 2) + offset, COLOR_CONCRETE_DARK, 1.5)
+
+
+## Draw wall with autotiling - connects adjacent walls with organic shapes
+func _draw_wall_autotile(x: int, y: int, rect: Rect2, hash_val: int) -> void:
+	var pos = Vector2i(x, y)
+	
+	# Check adjacent tiles for walls
+	var has_wall_above = tile_data.get(pos + Vector2i(0, -1), TileType.FLOOR) == TileType.WALL
+	var has_wall_below = tile_data.get(pos + Vector2i(0, 1), TileType.FLOOR) == TileType.WALL
+	var has_wall_left = tile_data.get(pos + Vector2i(-1, 0), TileType.FLOOR) == TileType.WALL
+	var has_wall_right = tile_data.get(pos + Vector2i(1, 0), TileType.FLOOR) == TileType.WALL
+	
+	# Check diagonal neighbors for corner connections
+	var has_wall_tl = tile_data.get(pos + Vector2i(-1, -1), TileType.FLOOR) == TileType.WALL
+	var has_wall_tr = tile_data.get(pos + Vector2i(1, -1), TileType.FLOOR) == TileType.WALL
+	var has_wall_bl = tile_data.get(pos + Vector2i(-1, 1), TileType.FLOOR) == TileType.WALL
+	var has_wall_br = tile_data.get(pos + Vector2i(1, 1), TileType.FLOOR) == TileType.WALL
+	
+	var center = rect.position + Vector2(TILE_SIZE / 2, TILE_SIZE / 2)
+	
+	# Determine wall type based on neighbors
+	var neighbor_count = int(has_wall_above) + int(has_wall_below) + int(has_wall_left) + int(has_wall_right)
+	
+	# Draw floor base first
+	draw_rect(rect, COLOR_FLOOR_BASE)
+	
+	# Build wall polygon based on connections
+	var wall_points: PackedVector2Array = []
+	var inset = 4.0  # How much to inset non-connected edges
+	var edge_var = (hash_val % 6) - 3  # Edge variation
+	
+	# Corners with slight irregularity
+	var tl = rect.position + Vector2(inset if not has_wall_left else 0, inset if not has_wall_above else 0)
+	var tr = rect.position + Vector2(TILE_SIZE - (inset if not has_wall_right else 0), inset if not has_wall_above else 0)
+	var br = rect.position + Vector2(TILE_SIZE - (inset if not has_wall_right else 0), TILE_SIZE - (inset if not has_wall_below else 0))
+	var bl = rect.position + Vector2(inset if not has_wall_left else 0, TILE_SIZE - (inset if not has_wall_below else 0))
+	
+	# Add irregular edges for non-connected sides
+	if not has_wall_above:
+		# Top edge - add some roughness
+		wall_points.append(tl + Vector2(0, edge_var * 0.3))
+		wall_points.append(tl + Vector2(TILE_SIZE * 0.3, -1 + edge_var * 0.2))
+		wall_points.append(tr + Vector2(-TILE_SIZE * 0.3, 1 + edge_var * 0.2))
+		wall_points.append(tr + Vector2(0, edge_var * 0.3))
+	else:
+		wall_points.append(tl)
+		wall_points.append(tr)
+	
+	if not has_wall_right:
+		# Right edge roughness
+		wall_points.append(tr + Vector2(edge_var * 0.3, TILE_SIZE * 0.25))
+		wall_points.append(br + Vector2(-edge_var * 0.2, -TILE_SIZE * 0.25))
+	
+	if not has_wall_below:
+		wall_points.append(br + Vector2(0, -edge_var * 0.3))
+		wall_points.append(br + Vector2(-TILE_SIZE * 0.3, 1 - edge_var * 0.2))
+		wall_points.append(bl + Vector2(TILE_SIZE * 0.3, -1 - edge_var * 0.2))
+		wall_points.append(bl + Vector2(0, -edge_var * 0.3))
+	else:
+		wall_points.append(br)
+		wall_points.append(bl)
+	
+	if not has_wall_left:
+		wall_points.append(bl + Vector2(-edge_var * 0.3, -TILE_SIZE * 0.25))
+		wall_points.append(tl + Vector2(edge_var * 0.2, TILE_SIZE * 0.25))
+	
+	# Draw shadow first
+	var shadow_points: PackedVector2Array = []
+	for p in wall_points:
+		shadow_points.append(p + Vector2(2, 2))
+	if shadow_points.size() >= 3:
+		draw_polygon(shadow_points, [Color(0.08, 0.06, 0.04, 0.6)])
+	
+	# Draw main wall body
+	if wall_points.size() >= 3:
+		draw_polygon(wall_points, [COLOR_WALL])
+	
+	# Draw highlights on exposed edges
+	var highlight_color = COLOR_WALL_HIGHLIGHT
+	var shadow_color = Color(0.2, 0.14, 0.1)
+	
+	if not has_wall_above:
+		draw_line(tl + Vector2(2, 2), tr + Vector2(-2, 2), highlight_color, 2.0)
+	if not has_wall_left:
+		draw_line(tl + Vector2(2, 2), bl + Vector2(2, -2), Color(0.38, 0.3, 0.24), 2.0)
+	if not has_wall_below:
+		draw_line(bl + Vector2(2, -2), br + Vector2(-2, -2), shadow_color, 2.0)
+	if not has_wall_right:
+		draw_line(tr + Vector2(-2, 2), br + Vector2(-2, -2), shadow_color, 1.5)
+	
+	# Add surface details
+	var detail_color = Color(0.28, 0.22, 0.16)
+	var is_edge_piece = neighbor_count < 4
+	
+	if is_edge_piece:
+		# Damage/wear marks on edges
+		if hash_val % 3 == 0 and not has_wall_above:
+			var notch_x = rect.position.x + 8 + (hash_val % 12)
+			draw_line(Vector2(notch_x, rect.position.y + inset), Vector2(notch_x + 3, rect.position.y + inset + 4), detail_color, 2.0)
+		
+		# Rivets on exposed faces
+		if hash_val % 2 == 0:
+			if not has_wall_left:
+				draw_circle(rect.position + Vector2(inset + 3, TILE_SIZE * 0.35), 2, detail_color)
+				draw_circle(rect.position + Vector2(inset + 3, TILE_SIZE * 0.65), 2, detail_color)
+			if not has_wall_right:
+				draw_circle(rect.position + Vector2(TILE_SIZE - inset - 3, TILE_SIZE * 0.35), 2, detail_color)
+				draw_circle(rect.position + Vector2(TILE_SIZE - inset - 3, TILE_SIZE * 0.65), 2, detail_color)
+		
+		# Pipe/cable detail on some walls
+		if hash_val % 5 == 0 and has_wall_above and has_wall_below:
+			var pipe_x = rect.position.x + TILE_SIZE * 0.3 + (hash_val % 8)
+			draw_line(Vector2(pipe_x, rect.position.y), Vector2(pipe_x, rect.position.y + TILE_SIZE), Color(0.25, 0.2, 0.15), 3.0)
+			draw_line(Vector2(pipe_x - 1, rect.position.y), Vector2(pipe_x - 1, rect.position.y + TILE_SIZE), Color(0.32, 0.26, 0.2), 1.0)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -365,9 +632,9 @@ func set_tile_type(pos: Vector2i, new_type: TileType) -> void:
 		tile_data[pos] = new_type
 		
 		# Update pathfinding if changing walkability
-		if new_type == TileType.WALL:
+		if new_type == TileType.WALL or new_type == TileType.HALF_COVER:
 			astar.set_point_solid(pos, true)
-		elif tile_data.get(pos, TileType.FLOOR) == TileType.WALL:
+		else:
 			astar.set_point_solid(pos, false)
 		
 		queue_redraw()
@@ -384,3 +651,25 @@ func breach_tile(pos: Vector2i) -> void:
 	if current_type == TileType.WALL or current_type == TileType.HALF_COVER:
 		set_tile_type(pos, TileType.FLOOR)
 		print("Breached tile at %s (was: %s)" % [pos, current_type])
+
+
+## Check if a position has adjacent cover (for cover indicator)
+## Returns: 0 = no cover, 1 = half cover, 2 = full cover
+func get_adjacent_cover_level(pos: Vector2i) -> int:
+	var adjacent_dirs = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	var max_cover_level = 0
+	
+	for dir in adjacent_dirs:
+		var adj_pos = pos + dir
+		var tile_type = tile_data.get(adj_pos, TileType.FLOOR)
+		if tile_type == TileType.WALL:
+			max_cover_level = 2  # Full cover
+		elif tile_type == TileType.HALF_COVER and max_cover_level < 2:
+			max_cover_level = 1  # Half cover
+	
+	return max_cover_level
+
+
+## Check if a position has adjacent cover (for cover indicator) - legacy compatibility
+func has_adjacent_cover(pos: Vector2i) -> bool:
+	return get_adjacent_cover_level(pos) > 0

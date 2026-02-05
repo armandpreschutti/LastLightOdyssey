@@ -33,12 +33,54 @@ var _current_subtitle_char: int = 0
 
 
 func _ready() -> void:
+	# Apply saved display settings on startup
+	_apply_startup_settings()
+	
 	_generate_stars()
 	_setup_buttons()
 	_animate_intro()
 	
 	# Connect starfield drawing
 	starfield.draw.connect(_draw_starfield)
+
+
+func _apply_startup_settings() -> void:
+	## Load and apply display settings from config file on game launch
+	const CONFIG_PATH: String = "user://settings.cfg"
+	var config = ConfigFile.new()
+	var err = config.load(CONFIG_PATH)
+	
+	# Default to fullscreen if no config exists (better for exported games)
+	var is_fullscreen: bool = true
+	var resolution_index: int = 2  # 1920x1080
+	
+	if err == OK:
+		is_fullscreen = config.get_value("display", "fullscreen", true)
+		resolution_index = config.get_value("display", "resolution", 2)
+	else:
+		# No config file exists yet - create one with fullscreen default
+		config.set_value("display", "fullscreen", true)
+		config.set_value("display", "resolution", 2)
+		config.save(CONFIG_PATH)
+	
+	# Apply display settings
+	if is_fullscreen:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		# Apply resolution when windowed
+		const RESOLUTIONS: Array[Vector2i] = [
+			Vector2i(1280, 720),
+			Vector2i(1600, 900),
+			Vector2i(1920, 1080)
+		]
+		if resolution_index >= 0 and resolution_index < RESOLUTIONS.size():
+			var res = RESOLUTIONS[resolution_index]
+			DisplayServer.window_set_size(res)
+			# Center window
+			var screen_size = DisplayServer.screen_get_size()
+			var window_pos = (screen_size - res) / 2
+			DisplayServer.window_set_position(window_pos)
 
 
 func _process(delta: float) -> void:
@@ -85,14 +127,14 @@ func _setup_buttons() -> void:
 	_check_save_exists()
 
 
-func _check_save_exists() -> void:
-	# TODO: Implement actual save detection in Phase 10
-	var save_exists = FileAccess.file_exists("user://savegame.dat")
+func _check_save_exists() -> bool:
+	var save_exists = GameState.has_save_file()
 	continue_button.disabled = not save_exists
 	if save_exists:
 		continue_button.modulate = Color(1, 1, 1, 1)
 	else:
 		continue_button.modulate = Color(0.5, 0.5, 0.5, 0.7)
+	return save_exists
 
 
 func _animate_intro() -> void:
@@ -202,6 +244,43 @@ func _on_new_game_pressed() -> void:
 	if not _ready_for_input:
 		return
 	
+	# Check if save exists - show confirmation dialog if so
+	if GameState.has_save_file():
+		_show_new_game_confirmation()
+		return
+	
+	_proceed_with_new_game()
+
+
+func _show_new_game_confirmation() -> void:
+	var dialog_scene = load("res://scenes/ui/confirm_dialog.tscn")
+	var dialog = dialog_scene.instantiate()
+	add_child(dialog)
+	
+	dialog.setup(
+		"[ ABANDON VOYAGE? ]",
+		"Starting a new voyage will erase\nyour existing save data.\n\nThis cannot be undone!",
+		"ERASE & START",
+		"CANCEL"
+	)
+	
+	dialog.confirmed.connect(_on_new_game_confirmed)
+	dialog.cancelled.connect(_on_new_game_cancelled)
+	dialog.show_dialog()
+
+
+func _on_new_game_confirmed() -> void:
+	# Delete existing save and start new game
+	GameState.delete_save()
+	_proceed_with_new_game()
+
+
+func _on_new_game_cancelled() -> void:
+	# Dialog closes itself, nothing else to do
+	pass
+
+
+func _proceed_with_new_game() -> void:
 	# Stop glow effect
 	if _glow_tween:
 		_glow_tween.kill()
@@ -231,9 +310,31 @@ func _on_continue_pressed() -> void:
 		_show_no_save_message()
 		return
 	
-	# TODO: Load saved game in Phase 10
-	# For now, just start a new game
-	_on_new_game_pressed()
+	# Load saved game
+	if GameState.load_game():
+		_proceed_with_continue()
+	else:
+		_show_no_save_message()
+
+
+func _proceed_with_continue() -> void:
+	# Stop glow effect
+	if _glow_tween:
+		_glow_tween.kill()
+	
+	# Fade out and transition to game (loaded state)
+	var tween = create_tween()
+	tween.set_ease(Tween.EASE_IN)
+	tween.set_trans(Tween.TRANS_CUBIC)
+	tween.set_parallel(true)
+	tween.tween_property(self, "modulate:a", 0.0, 0.8)
+	tween.set_parallel(false)
+	tween.tween_callback(_continue_game)
+
+
+func _continue_game() -> void:
+	# Load main scene - it will use the loaded GameState
+	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 
 func _show_no_save_message() -> void:

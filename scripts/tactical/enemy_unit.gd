@@ -15,8 +15,8 @@ const ENEMY_SPRITES = {
 
 # Enemy type stats
 const ENEMY_DATA = {
-	"basic": { "max_hp": 50, "move_range": 4, "sight_range": 6, "shoot_range": 8, "damage": 20 },
-	"heavy": { "max_hp": 80, "move_range": 3, "sight_range": 5, "shoot_range": 6, "damage": 35 },
+	"basic": { "max_hp": 50, "max_ap": 2, "move_range": 4, "sight_range": 6, "shoot_range": 8, "damage": 20 },
+	"heavy": { "max_hp": 80, "max_ap": 3, "move_range": 3, "sight_range": 5, "shoot_range": 6, "damage": 35 },
 }
 
 @onready var sprite: Sprite2D = $Sprite
@@ -24,6 +24,9 @@ const ENEMY_DATA = {
 @onready var hp_bar: ColorRect = $HPBar
 @onready var hp_bar_bg: ColorRect = $HPBarBG
 @onready var alert_indicator: ColorRect = $AlertIndicator
+@onready var half_cover_indicator: Node2D = $HalfCoverIndicator
+@onready var full_cover_indicator: Node2D = $FullCoverIndicator
+@onready var hit_chance_label: Label = $HitChanceLabel
 
 var enemy_id: int = 0
 var enemy_type: String = "basic"
@@ -67,12 +70,14 @@ func initialize(id: int, type: String = "basic") -> void:
 	# Apply type-based stats
 	var data = ENEMY_DATA.get(type, ENEMY_DATA["basic"])
 	max_hp = data["max_hp"]
+	max_ap = data["max_ap"]
 	move_range = data["move_range"]
 	sight_range = data["sight_range"]
 	shoot_range = data["shoot_range"]
 	base_damage = data["damage"]
 	
 	current_hp = max_hp
+	current_ap = max_ap
 	_update_hp_bar()
 
 
@@ -243,10 +248,8 @@ func face_towards(target_pos: Vector2i) -> void:
 
 
 ## Set targetable state (highlights enemy when player can attack them)
-func set_targetable(targetable: bool) -> void:
-	if is_targetable == targetable:
-		return
-	
+## hit_chance: -1 means don't show hit chance, otherwise show the percentage
+func set_targetable(targetable: bool, hit_chance: float = -1.0) -> void:
 	is_targetable = targetable
 	
 	# Stop any existing targetable animation
@@ -256,8 +259,37 @@ func set_targetable(targetable: bool) -> void:
 	
 	if targetable:
 		_start_targetable_highlight()
+		_show_hit_chance(hit_chance)
 	else:
 		_stop_targetable_highlight()
+		_hide_hit_chance()
+
+
+## Show hit chance label
+func _show_hit_chance(hit_chance: float) -> void:
+	if not hit_chance_label:
+		return
+	
+	if hit_chance < 0:
+		hit_chance_label.visible = false
+		return
+	
+	hit_chance_label.text = "%d%%" % int(hit_chance)
+	hit_chance_label.visible = true
+	
+	# Color based on hit chance
+	if hit_chance >= 75:
+		hit_chance_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3, 1.0))  # Green - high chance
+	elif hit_chance >= 50:
+		hit_chance_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3, 1.0))  # Yellow - medium chance
+	else:
+		hit_chance_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3, 1.0))  # Red - low chance
+
+
+## Hide hit chance label
+func _hide_hit_chance() -> void:
+	if hit_chance_label:
+		hit_chance_label.visible = false
 
 
 ## Start pulsing highlight effect for targetable enemies
@@ -280,3 +312,11 @@ func _stop_targetable_highlight() -> void:
 	
 	# Reset modulate to normal
 	sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)
+
+
+## Update cover indicator visibility based on cover level (0=none, 1=half, 2=full)
+func update_cover_indicator(cover_level: int) -> void:
+	if half_cover_indicator:
+		half_cover_indicator.visible = (cover_level == 1)
+	if full_cover_indicator:
+		full_cover_indicator.visible = (cover_level == 2)

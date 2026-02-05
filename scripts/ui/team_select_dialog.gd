@@ -58,7 +58,7 @@ func _populate_officers() -> void:
 		var check = CheckButton.new()
 		check.text = _get_officer_display_name(officer_key)
 		check.add_theme_color_override("font_color", _get_officer_color(officer_key))
-		check.add_theme_font_size_override("font_size", 16)
+		check.add_theme_font_size_override("font_size", 18)
 		check.toggled.connect(_on_officer_toggled.bind(officer_key))
 
 		officer_buttons[officer_key] = check
@@ -69,9 +69,9 @@ func _populate_officers() -> void:
 		var desc_label = Label.new()
 		desc_label.text = _get_officer_description(officer_key)
 		desc_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-		desc_label.add_theme_font_size_override("font_size", 11)
+		desc_label.add_theme_font_size_override("font_size", 15)
 		desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		desc_label.custom_minimum_size = Vector2(500, 0)
+		desc_label.custom_minimum_size = Vector2(600, 0)
 		vbox.add_child(desc_label)
 		
 		officer_container.add_child(vbox)
@@ -83,6 +83,7 @@ func _get_officer_display_name(key: String) -> String:
 		"scout": return "SCOUT"
 		"tech": return "TECH"
 		"medic": return "MEDIC"
+		"heavy": return "HEAVY"
 		_: return key.to_upper()
 
 
@@ -94,6 +95,8 @@ func _get_officer_description(key: String) -> String:
 			return "Demolitions expert. Ability: BREACH - Destroy adjacent walls or cover to create new paths (1 AP)."
 		"medic":
 			return "Field surgeon. Ability: PATCH - Heal adjacent ally for 50% max HP (2 AP)."
+		"heavy":
+			return "Armored tank with 20% damage reduction. Ability: TAUNT - Force enemies within 5 tiles to target you (1 AP)."
 		_:
 			return ""
 
@@ -104,6 +107,7 @@ func _get_officer_color(key: String) -> Color:
 		"scout": return Color.GREEN
 		"tech": return Color.CYAN
 		"medic": return Color.MAGENTA
+		"heavy": return Color.ORANGE_RED
 		_: return Color.WHITE
 
 

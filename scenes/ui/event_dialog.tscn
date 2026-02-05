@@ -53,7 +53,7 @@ theme_override_constants/separation = 16
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 24
 text = "[ EVENT TITLE ]"
 horizontal_alignment = 1
 
@@ -61,7 +61,7 @@ horizontal_alignment = 1
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 16
 text = "Event description goes here."
 horizontal_alignment = 1
 autowrap_mode = 2
@@ -79,14 +79,14 @@ theme_override_constants/separation = 8
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(1, 0.3, 0.3, 1)
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 16
 text = "PROJECTED LOSSES:"
 
 [node name="LossesLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 16
 text = "COLONISTS: -50
 HULL: -10%"
 
@@ -94,7 +94,7 @@ HULL: -10%"
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.2, 1, 0.2, 1)
-theme_override_font_sizes/font_size = 13
+theme_override_font_sizes/font_size = 16
 text = "WITH SPECIALIST:
 COLONISTS: -10
 HULL: 0%"
@@ -113,11 +113,11 @@ theme_override_constants/separation = 20
 [node name="AcceptButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer"]
 custom_minimum_size = Vector2(200, 40)
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 18
 text = "[ ACCEPT LOSSES ]"
 
 [node name="MitigateButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer"]
 custom_minimum_size = Vector2(200, 40)
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 18
 text = "[ DEPLOY SPECIALIST ]"

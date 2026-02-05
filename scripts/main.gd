@@ -1,4 +1,4 @@
-﻿extends Node
+extends Node
 ## Main game controller for Last Light Odyssey
 ## Manages the game loop and switches between management and tactical modes
 
@@ -20,8 +20,6 @@ var current_phase: GamePhase = GamePhase.IDLE
 var current_event: Dictionary = {}
 var pending_node_type: int = -1  # EventManager.NodeType
 var star_map_generator: StarMapGenerator = null
-
-# Tutorial system
 var tutorial_overlay: CanvasLayer = null
 var _first_node_clicked: bool = false
 var _first_event_seen: bool = false
@@ -35,21 +33,6 @@ func _ready() -> void:
 	tactical_mode.visible = false
 
 
-func _initialize_tutorial() -> void:
-	# Load and add the tutorial overlay
-	var tutorial_scene = load("res://scenes/ui/tutorial_overlay.tscn")
-	if tutorial_scene:
-		tutorial_overlay = tutorial_scene.instantiate()
-		add_child(tutorial_overlay)
-		print("Main: Tutorial overlay added")
-	else:
-		push_error("Main: Failed to load tutorial_overlay.tscn")
-		return
-	
-	# Start the tutorial (TutorialManager will check if already completed)
-	TutorialManager.start_tutorial()
-
-
 func _connect_signals() -> void:
 	event_dialog.event_choice_made.connect(_on_event_choice_made)
 	trading_dialog.trading_complete.connect(_on_trading_complete)
@@ -59,20 +42,44 @@ func _connect_signals() -> void:
 	GameState.game_over.connect(_on_game_over)
 	GameState.game_won.connect(_on_game_won)
 	restart_button.pressed.connect(_on_restart_pressed)
+	management_hud.quit_to_menu_pressed.connect(_on_quit_to_menu_pressed)
 
 
 func _initialize_star_map() -> void:
-	# Generate the node graph
-	star_map_generator = StarMapGenerator.new()
-	var node_graph = star_map_generator.generate()
-	
-	# Store node types in GameState for consistency
-	for node_data in node_graph:
-		GameState.node_types[node_data.id] = node_data.node_type
+	# Check if we have saved star map data to restore
+	if GameState.has_saved_star_map_data():
+		# Restore from saved data
+		star_map_generator = GameState.restore_star_map_generator()
+		print("Main: Restored star map from save data")
+	else:
+		# Generate new node graph
+		star_map_generator = StarMapGenerator.new()
+		star_map_generator.generate()
+		
+		# Store node types in GameState for consistency
+		for node_data in star_map_generator.nodes:
+			GameState.node_types[node_data.id] = node_data.node_type
+		
+		# Save the star map data for future saves
+		GameState.store_star_map_data(star_map_generator)
+		print("Main: Generated new star map")
 	
 	# Initialize the visual star map
 	star_map.initialize(star_map_generator)
-	star_map.node_clicked.connect(_on_node_clicked)
+	
+	# Connect signal only if not already connected (avoid duplicates on restart)
+	if not star_map.node_clicked.is_connected(_on_node_clicked):
+		star_map.node_clicked.connect(_on_node_clicked)
+
+
+func _initialize_tutorial() -> void:
+	# Load and add the tutorial overlay
+	var tutorial_scene = load("res://scenes/ui/tutorial_overlay.tscn")
+	tutorial_overlay = tutorial_scene.instantiate()
+	add_child(tutorial_overlay)
+	
+	# Start the tutorial (TutorialManager will check if already completed)
+	TutorialManager.start_tutorial()
 
 
 func _on_node_clicked(node_id: int) -> void:
@@ -83,12 +90,12 @@ func _on_node_clicked(node_id: int) -> void:
 		print("Main: Not in IDLE phase, ignoring click")
 		return
 	
-	# Tutorial: Notify first node click
+	print("Main: Executing jump to node %d" % node_id)
+	
+	# Tutorial: Notify that a node was clicked (first time only for intro step)
 	if not _first_node_clicked:
 		_first_node_clicked = true
 		TutorialManager.notify_trigger("node_clicked")
-	
-	print("Main: Executing jump to node %d" % node_id)
 	
 	# Get fuel cost for this jump
 	var from_node = GameState.current_node_index
@@ -112,6 +119,12 @@ func _on_node_clicked(node_id: int) -> void:
 			# Show team selection for tactical mission
 			print("Main: Showing team selection dialog")
 			current_phase = GamePhase.TEAM_SELECT
+			
+			# Tutorial: Trigger scavenge intro before showing dialog
+			if TutorialManager.is_at_step("scavenge_intro"):
+				# The tutorial overlay will show, then player dismisses it
+				pass
+			
 			team_select_dialog.show_dialog()
 		EventManager.NodeType.TRADING_OUTPOST:
 			# Show trading interface
@@ -153,14 +166,14 @@ func _on_event_choice_made(use_specialist: bool) -> void:
 
 func _on_team_selected(officer_keys: Array[String]) -> void:
 	current_phase = GamePhase.TACTICAL
-	
-	# Tutorial: Notify that team was selected
-	TutorialManager.notify_trigger("team_selected")
 
 	# Hide management UI, show tactical
 	management_layer.visible = false
 	management_background.visible = false
 	tactical_mode.visible = true
+	
+	# Tutorial: Notify that team was selected
+	TutorialManager.notify_trigger("team_selected")
 
 	# Start the mission
 	tactical_mode.start_mission(officer_keys)
@@ -193,6 +206,9 @@ func _on_game_over(reason: String) -> void:
 	management_layer.visible = true
 	management_background.visible = true
 
+	# Delete save file on game over
+	GameState.delete_save()
+
 	game_over_label.text = GameState.get_game_over_text(reason)
 	game_over_panel.visible = true
 
@@ -203,6 +219,9 @@ func _on_game_won(ending_type: String) -> void:
 	tactical_mode.visible = false
 	management_layer.visible = true
 	management_background.visible = true
+
+	# Delete save file on win
+	GameState.delete_save()
 
 	game_over_label.text = GameState.get_ending_text(ending_type)
 	game_over_panel.visible = true
@@ -225,3 +244,8 @@ func _on_restart_pressed() -> void:
 	
 	# Restart tutorial if not completed
 	TutorialManager.start_tutorial()
+
+
+func _on_quit_to_menu_pressed() -> void:
+	# Save is done in management_hud before this signal
+	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")

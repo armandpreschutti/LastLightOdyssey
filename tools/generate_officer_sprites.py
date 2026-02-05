@@ -330,6 +330,85 @@ def generate_medic():
     return img
 
 
+def generate_heavy():
+    """Generate heavy sprite - armored tank with shield."""
+    img = create_base_image()
+    draw = ImageDraw.Draw(img)
+    
+    colors = {
+        "primary": (180, 90, 50),       # Orange-red armor
+        "secondary": (150, 70, 40),     # Darker orange
+        "pants": (70, 65, 60),          # Dark gray pants
+        "shoes": (50, 45, 40),          # Dark boots
+        "accent": (255, 150, 50),       # Bright orange
+        "metal": (140, 140, 150),       # Metal gray
+        "dark_metal": (90, 90, 100),    # Dark metal
+    }
+    hair_color = (50, 40, 35)  # Dark brown/black
+    
+    # Draw body (bulkier version)
+    draw_base_body(draw, colors)
+    
+    # Draw head with military cut
+    draw_base_head(draw, hair_color, "military")
+    
+    # === HEAVY ARMOR PLATING ===
+    # Shoulder pauldrons (large, armored)
+    draw.rectangle((3, 17, 8, 22), fill=colors["metal"])
+    draw.rectangle((2, 17, 2, 22), fill=OUTLINE)
+    draw.rectangle((3, 17, 8, 17), fill=OUTLINE)
+    draw.rectangle((3, 17, 8, 18), fill=(180, 180, 190))  # Highlight
+    
+    draw.rectangle((23, 17, 28, 22), fill=colors["metal"])
+    draw.rectangle((29, 17, 29, 22), fill=OUTLINE)
+    draw.rectangle((23, 17, 28, 17), fill=OUTLINE)
+    draw.rectangle((23, 17, 28, 18), fill=(180, 180, 190))  # Highlight
+    
+    # Chest plate (extra armor layer)
+    draw.rectangle((10, 19, 21, 26), fill=colors["primary"])
+    draw.rectangle((11, 20, 20, 25), fill=colors["secondary"])
+    # Armor rivets
+    draw.point((12, 21), fill=colors["metal"])
+    draw.point((19, 21), fill=colors["metal"])
+    draw.point((12, 24), fill=colors["metal"])
+    draw.point((19, 24), fill=colors["metal"])
+    
+    # Central armor emblem (shield icon)
+    draw.rectangle((14, 21, 17, 24), fill=colors["accent"])
+    draw.polygon([(14, 24), (15, 25), (16, 25), (17, 24)], fill=colors["accent"])
+    draw.point((15, 22), fill=WHITE)  # Emblem highlight
+    
+    # === HEAVY HELMET ===
+    # Armored helmet
+    draw.rectangle((7, 2, 24, 8), fill=colors["metal"])
+    draw.rectangle((6, 2, 6, 8), fill=OUTLINE)
+    draw.rectangle((25, 2, 25, 8), fill=OUTLINE)
+    draw.rectangle((7, 1, 24, 2), fill=OUTLINE)
+    # Visor
+    draw.rectangle((9, 5, 22, 7), fill=(40, 40, 50))
+    draw.rectangle((10, 5, 21, 6), fill=(80, 60, 50))  # Tinted visor
+    draw.line((10, 5, 21, 5), fill=(120, 100, 80))  # Visor reflection
+    # Helmet details
+    draw.rectangle((14, 2, 17, 4), fill=colors["accent"])  # Top stripe
+    
+    # === ARM ARMOR ===
+    # Armored gauntlets
+    draw.rectangle((4, 23, 8, 27), fill=colors["dark_metal"])
+    draw.rectangle((23, 23, 27, 27), fill=colors["dark_metal"])
+    
+    # === LEG ARMOR ===
+    # Knee pads
+    draw.rectangle((9, 26, 13, 28), fill=colors["metal"])
+    draw.rectangle((18, 26, 22, 28), fill=colors["metal"])
+    
+    # Heavy belt with equipment
+    draw.rectangle((8, 25, 23, 26), fill=colors["dark_metal"])
+    draw.rectangle((13, 24, 18, 26), fill=colors["metal"])  # Belt buckle
+    draw.point((15, 25), fill=colors["accent"])  # Buckle detail
+    
+    return img
+
+
 def main():
     """Generate all officer sprites."""
     # Ensure output directory exists
@@ -340,6 +419,7 @@ def main():
         "officer_scout.png": generate_scout,
         "officer_tech.png": generate_tech,
         "officer_medic.png": generate_medic,
+        "officer_heavy.png": generate_heavy,
     }
     
     for filename, generator in sprites.items():
