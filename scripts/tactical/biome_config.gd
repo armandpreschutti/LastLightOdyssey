@@ -68,15 +68,13 @@ const ASTEROID_THEME := {
 	"ambient_tint": Color(0.4, 0.5, 0.8, 0.08),    # Cool blue tint
 }
 
-## Planet biome - Hostile alien world with teal/pink/orange bioluminescence
+## Planet biome - Hostile alien world with alien grass and bioluminescence
 const PLANET_THEME := {
-	# Floor colors - alien teal/cyan terrain (sandy alien soil)
-	"floor_base": Color(0.18, 0.28, 0.30),         # Teal-gray alien soil
-	"floor_var": Color(0.22, 0.32, 0.35),          # Lighter teal variation
-	"floor_accent": Color(0.12, 0.22, 0.25, 0.6),  # Darker teal patches
-	"floor_highlight": Color(0.28, 0.40, 0.42),    # Lighter terrain highlight
-	"floor_sand": Color(0.55, 0.48, 0.35),         # Sandy tan patches (like reference)
-	"floor_sand_dark": Color(0.42, 0.36, 0.28),    # Darker sand
+	# Floor colors - alien grass/vegetation terrain
+	"floor_base": Color(0.12, 0.18, 0.10),         # Dark green grass base
+	"floor_var": Color(0.15, 0.22, 0.12),          # Slightly lighter grass variation
+	"floor_accent": Color(0.08, 0.12, 0.06, 0.6),  # Darker grass shadow/seam
+	"floor_highlight": Color(0.18, 0.26, 0.14),    # Lighter grass highlight
 	
 	# Wall colors - alien purple/magenta crystal formations
 	"wall": Color(0.45, 0.28, 0.50),               # Purple alien rock/crystal

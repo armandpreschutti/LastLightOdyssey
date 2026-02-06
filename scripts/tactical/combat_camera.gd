@@ -79,12 +79,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	
 	# Handle mouse motion for panning
 	if event is InputEventMouseMotion and _panning:
-		if not _transitioning:  # Don't pan during combat transitions
+		# Allow panning during non-combat transitions (like unit centering)
+		# Only block panning during combat transitions (attack animations)
+		if not _combat_transition:
 			# Move camera opposite to mouse movement (drag to pan)
 			# Divide by zoom to keep pan speed consistent at different zoom levels
 			var pan_delta = -event.relative * pan_speed / zoom.x
 			position += pan_delta
 			_target_position = position
+			# Cancel transition if user manually pans
+			if _transitioning:
+				_transitioning = false
 			get_viewport().set_input_as_handled()
 
 
@@ -178,9 +183,26 @@ func snap_to_position(world_pos: Vector2, use_combat_zoom: bool = false) -> void
 ## Center camera on a world position without affecting zoom (for turn transitions)
 func center_on_unit(world_pos: Vector2, map_offset: Vector2 = Vector2(300, 200)) -> void:
 	# Account for MapContainer offset to center properly
-	_target_position = world_pos + map_offset
+	var new_target = world_pos + map_offset
+	
+	# If already at or very close to target, snap immediately to avoid blocking user input
+	var distance_to_target = position.distance_to(new_target)
+	if distance_to_target < 1.0:
+		# Already at target - snap immediately and don't block input
+		position = new_target
+		_target_position = new_target
+		_pre_combat_position = new_target
+		_transitioning = false
+		_combat_transition = false
+		_manual_zoom = false
+		_panning = false
+		return
+	
+	# Need to transition - but this is not a combat transition, so allow user input
+	_target_position = new_target
 	_pre_combat_position = _target_position
 	_transitioning = true
+	_combat_transition = false  # Not a combat transition, so allow user zoom/pan
 	_manual_zoom = false
 	_panning = false
 	# Keep current zoom - don't modify _target_zoom

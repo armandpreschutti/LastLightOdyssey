@@ -15,7 +15,9 @@ var deployed_officers: Array[Node2D] = []
 var enemies: Array[Node2D] = []
 var selected_unit: Node2D = null
 var selected_target: Vector2i = Vector2i(-1, -1)  # For targeting enemies
-var breach_mode: bool = false  # When true, clicking selects breach target
+var execute_mode: bool = false  # When true, clicking selects execute target
+var charge_mode: bool = false  # When true, clicking selects charge target
+var turret_mode: bool = false  # When true, clicking selects turret placement tile
 var current_turn: int = 0
 var current_unit_index: int = 0  # Which unit's turn it is (0-based index)
 var mission_active: bool = false
@@ -29,8 +31,12 @@ var FuelCrateScene: PackedScene
 var ScrapPileScene: PackedScene
 var OfficerUnitScene: PackedScene
 var EnemyUnitScene: PackedScene
+var TurretUnitScene: PackedScene
 var PauseMenuScene: PackedScene
 var current_pause_menu: Control = null
+
+# Active turrets placed by Tech officer
+var active_turrets: Array[Node2D] = []
 
 # Combat constants
 const BASE_HIT_CHANCE: float = 70.0
@@ -50,6 +56,7 @@ func _ready() -> void:
 	ScrapPileScene = load("res://scenes/tactical/scrap_pile.tscn")
 	OfficerUnitScene = load("res://scenes/tactical/officer_unit.tscn")
 	EnemyUnitScene = load("res://scenes/tactical/enemy_unit.tscn")
+	TurretUnitScene = load("res://scenes/tactical/turret_unit.tscn")
 	PauseMenuScene = load("res://scenes/ui/pause_menu.tscn")
 
 	tactical_map.tile_clicked.connect(_on_tile_clicked)
@@ -199,9 +206,17 @@ func _on_tile_clicked(grid_pos: Vector2i) -> void:
 	if not _is_current_unit_turn():
 		return
 	
-	# Handle breach mode
-	if breach_mode and selected_unit and selected_unit.officer_type == "tech":
-		_try_breach_tile(grid_pos)
+	# Handle ability targeting modes
+	if turret_mode and selected_unit and selected_unit.officer_type == "tech":
+		_try_place_turret(grid_pos)
+		return
+	
+	if charge_mode and selected_unit and selected_unit.officer_type == "heavy":
+		_try_charge_enemy(grid_pos)
+		return
+	
+	if execute_mode and selected_unit and selected_unit.officer_type == "captain":
+		_try_execute_enemy(grid_pos)
 		return
 
 	# Check if clicking on a unit
@@ -259,6 +274,7 @@ func _select_unit(unit: Node2D) -> void:
 	if selected_unit:
 		selected_unit.set_selected(false)
 		tactical_map.clear_movement_range()
+		tactical_map.clear_execute_range()
 
 	selected_unit = unit
 	selected_unit.set_selected(true)
@@ -284,8 +300,8 @@ func _select_unit(unit: Node2D) -> void:
 		unit_cover_level
 	)
 	
-	# Update ability buttons
-	tactical_hud.update_ability_buttons(unit.officer_type, unit.current_ap)
+	# Update ability buttons (with cooldown info)
+	tactical_hud.update_ability_buttons(unit.officer_type, unit.current_ap, unit.get_ability_cooldown())
 	
 	# Update attackable enemy highlights
 	_update_attackable_highlights()
@@ -384,6 +400,10 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 	# Center camera on unit after movement (only for player units)
 	if unit in deployed_officers:
 		_center_camera_on_unit(unit)
+	
+	# Check if unit is out of AP and auto-end turn
+	if unit == deployed_officers[current_unit_index]:
+		_check_auto_end_turn()
 
 
 func _interact_with(interactable: Node2D) -> void:
@@ -410,6 +430,10 @@ func _interact_with(interactable: Node2D) -> void:
 		
 		# Update attackable highlights (AP spent)
 		_update_attackable_highlights()
+		
+		# Check if unit is out of AP and auto-end turn
+		if selected_unit == deployed_officers[current_unit_index]:
+			_check_auto_end_turn()
 
 
 func _auto_pickup(interactable: Node2D) -> void:
@@ -452,6 +476,25 @@ func _update_all_cover_indicators() -> void:
 		_update_unit_cover_indicator(enemy)
 
 
+## Check if current unit is out of AP and automatically end their turn
+func _check_auto_end_turn() -> void:
+	if not mission_active:
+		return
+	
+	# Only check if it's a player unit's turn
+	if current_unit_index >= deployed_officers.size():
+		return
+	
+	var current_unit = deployed_officers[current_unit_index]
+	if not current_unit:
+		return
+	
+	# If unit has no AP remaining, automatically end their turn
+	if not current_unit.has_ap():
+		print("Unit %s out of AP, auto-ending turn" % current_unit.officer_key)
+		_on_end_turn_pressed()
+
+
 func _on_end_turn_pressed() -> void:
 	if not mission_active:
 		return
@@ -474,9 +517,13 @@ func _on_end_turn_pressed() -> void:
 		# Process turn (stability drain) - only once per round
 		GameState.process_tactical_turn()
 		
-		# Reset AP for all officers at start of new round
+		# Reset AP and reduce cooldowns for all officers at start of new round
 		for officer in deployed_officers:
 			officer.reset_ap()
+			officer.reduce_cooldown()
+		
+		# Process turret auto-fire before player actions
+		await _process_turrets()
 		
 		# Reset AP for all enemies
 		for enemy in enemies:
@@ -573,6 +620,11 @@ func _end_mission(success: bool) -> void:
 	for enemy in enemies:
 		enemy.queue_free()
 	enemies.clear()
+	
+	# Clear turrets
+	for turret in active_turrets:
+		turret.queue_free()
+	active_turrets.clear()
 
 	for interactable in tactical_map.interactables_container.get_children():
 		interactable.queue_free()
@@ -807,11 +859,34 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 	# PHASE 1: AIMING (0.8s)
 	await _phase_aiming(shooter, shooter_pos, target_pos, hit_chance, is_flanking, damage)
 	
+	# Safety: abort if shooter or target was freed during aiming phase
+	if not is_instance_valid(shooter):
+		print("Shot aborted: shooter was destroyed during aiming")
+		tactical_hud.hide_combat_message()
+		combat_camera.return_to_tactical()
+		return
+	
 	# PHASE 2: FIRING (0.3s)
 	var hit = await _phase_firing(shooter, shooter_pos, target_pos, hit_chance, damage)
 	
+	# Safety: abort if shooter was freed during firing phase
+	if not is_instance_valid(shooter):
+		print("Shot aborted: shooter was destroyed during firing")
+		tactical_hud.hide_combat_message()
+		combat_camera.return_to_tactical()
+		return
+	
 	# PHASE 3: IMPACT (0.7s)
-	await _phase_impact(shooter, target_pos, target, hit, damage, is_flanking)
+	# Target may have been freed - _phase_impact already has a null check
+	var valid_target = target if is_instance_valid(target) else null
+	await _phase_impact(shooter, target_pos, valid_target, hit, damage, is_flanking)
+	
+	# Safety: abort if shooter was freed during impact phase
+	if not is_instance_valid(shooter):
+		print("Shot aborted: shooter was destroyed during impact")
+		tactical_hud.hide_combat_message()
+		combat_camera.return_to_tactical()
+		return
 	
 	# PHASE 4: RESOLUTION (0.5s)
 	await _phase_resolution(shooter)
@@ -872,8 +947,8 @@ func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: 
 		else:
 			tactical_hud.show_combat_message("HIT!", Color(1, 0.2, 0.2))
 		
-		# Apply damage
-		if target:
+		# Apply damage (check validity in case target was freed during earlier phases)
+		if is_instance_valid(target):
 			target.take_damage(damage)
 			if is_flanking:
 				print("Flanking Hit! Dealt %d damage (includes +%d%% bonus)" % [damage, int(FLANK_DAMAGE_BONUS * 100)])
@@ -882,6 +957,10 @@ func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: 
 			
 			# Show damage popup (flanking hits use special color via is_crit parameter)
 			_spawn_damage_popup(damage, true, target.position, false, is_flanking)
+		else:
+			# Target was freed - show popup at grid position instead
+			var target_world = Vector2(target_pos.x * 32 + 16, target_pos.y * 32 + 16)
+			_spawn_damage_popup(damage, true, target_world, false, is_flanking)
 	else:
 		tactical_hud.show_combat_message("MISS!", Color(0.6, 0.6, 0.6))
 		print("Miss! (Hit chance was calculated)")
@@ -924,6 +1003,10 @@ func _phase_resolution(shooter: Node2D) -> void:
 		
 		# Update attackable enemy highlights (AP spent, enemy may have died)
 		_update_attackable_highlights()
+		
+		# Check if unit is out of AP and auto-end turn
+		if shooter == deployed_officers[current_unit_index]:
+			_check_auto_end_turn()
 	
 	await get_tree().create_timer(0.5).timeout
 
@@ -1115,6 +1198,14 @@ func _on_ability_used(ability_type: String) -> void:
 		tactical_hud.hide_combat_message()
 		return
 	
+	# Check cooldown first
+	if selected_unit.is_ability_on_cooldown():
+		print("Ability on cooldown! %d turns remaining" % selected_unit.get_ability_cooldown())
+		tactical_hud.show_combat_message("COOLDOWN: %d TURNS" % selected_unit.get_ability_cooldown(), Color(1, 0.5, 0))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+	
 	match ability_type:
 		"overwatch":
 			if selected_unit.officer_type != "scout":
@@ -1129,29 +1220,31 @@ func _on_ability_used(ability_type: String) -> void:
 				tactical_hud.hide_combat_message()
 				# Update HUD to reflect AP change
 				_select_unit(selected_unit)
+				
+				# Check if unit is out of AP and auto-end turn
+				_check_auto_end_turn()
 			else:
 				print("Not enough AP for Overwatch")
 				tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
 				await get_tree().create_timer(1.0).timeout
 				tactical_hud.hide_combat_message()
 		
-		"breach":
+		"turret":
 			if selected_unit.officer_type != "tech":
-				print("Only Techs can use Breach!")
+				print("Only Tech can use Turret!")
 				return
 			
 			if not selected_unit.has_ap(1):
-				print("Not enough AP for Breach")
+				print("Not enough AP for Turret")
 				tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
 				await get_tree().create_timer(1.0).timeout
 				tactical_hud.hide_combat_message()
 				return
 			
-			# Enter breach targeting mode
-			breach_mode = true
-			print("Breach ability - click an adjacent wall or cover tile to destroy it")
-			tactical_hud.show_combat_message("SELECT ADJACENT TILE TO BREACH", Color(0, 1, 1))
-			# Message stays until target selected or cancelled
+			# Enter turret placement mode
+			turret_mode = true
+			print("Turret ability - click an adjacent walkable tile to place turret")
+			tactical_hud.show_combat_message("SELECT ADJACENT TILE FOR TURRET", Color(0, 1, 1))
 		
 		"patch":
 			if selected_unit.officer_type != "medic":
@@ -1161,82 +1254,43 @@ func _on_ability_used(ability_type: String) -> void:
 			# Try to auto-heal adjacent ally
 			_try_auto_patch()
 		
-		"taunt":
+		"charge":
 			if selected_unit.officer_type != "heavy":
-				print("Only Heavy can use Taunt!")
+				print("Only Heavy can use Charge!")
 				return
 			
-			if selected_unit.taunt_active:
-				print("Taunt is already active!")
-				tactical_hud.show_combat_message("TAUNT ALREADY ACTIVE", Color(1, 0.5, 0))
-				await get_tree().create_timer(1.0).timeout
-				tactical_hud.hide_combat_message()
-				return
-			
-			if selected_unit.use_taunt():
-				print("Heavy activates TAUNT!")
-				tactical_hud.show_combat_message("TAUNT ACTIVATED! ENEMIES WILL TARGET YOU", Color(1, 0.5, 0.1))
-				await get_tree().create_timer(1.5).timeout
-				tactical_hud.hide_combat_message()
-				# Update HUD to reflect AP change
-				_select_unit(selected_unit)
-			else:
-				print("Not enough AP for Taunt")
+			if not selected_unit.has_ap(1):
+				print("Not enough AP for Charge")
 				tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
 				await get_tree().create_timer(1.0).timeout
 				tactical_hud.hide_combat_message()
-
-
-## Try to breach a tile (destroy wall/cover)
-func _try_breach_tile(grid_pos: Vector2i) -> void:
-	breach_mode = false
-	tactical_hud.hide_combat_message()
-	
-	if not selected_unit or selected_unit.officer_type != "tech":
-		return
-	
-	var tech_pos = selected_unit.get_grid_position()
-	var distance = abs(grid_pos.x - tech_pos.x) + abs(grid_pos.y - tech_pos.y)
-	
-	# Must be adjacent
-	if distance != 1:
-		print("Breach target must be adjacent (distance: %d)" % distance)
-		tactical_hud.show_combat_message("TARGET TOO FAR", Color(1, 0.3, 0.3))
-		await get_tree().create_timer(1.0).timeout
-		tactical_hud.hide_combat_message()
-		return
-	
-	# Check if tile is breachable (wall or cover)
-	if not tactical_map.is_tile_walkable(grid_pos):
-		# It's a wall - can breach it
-		if selected_unit.use_breach():
-			print("Breaching wall at %s" % grid_pos)
-			tactical_map.breach_tile(grid_pos)
-			tactical_hud.show_combat_message("WALL BREACHED!", Color(0, 1, 1))
-			await get_tree().create_timer(1.0).timeout
-			tactical_hud.hide_combat_message()
-			_select_unit(selected_unit)
-		else:
-			print("Failed to use breach (no AP)")
-	else:
-		# Check if there's cover
-		var cover_value = tactical_map.get_cover_value(grid_pos)
-		if cover_value > 0:
-			# Has cover - breach it
-			if selected_unit.use_breach():
-				print("Breaching cover at %s" % grid_pos)
-				tactical_map.breach_tile(grid_pos)
-				tactical_hud.show_combat_message("COVER DESTROYED!", Color(0, 1, 1))
+				return
+			
+			# Enter charge targeting mode - show red range tiles
+			charge_mode = true
+			tactical_map.clear_movement_range()
+			tactical_map.set_execute_range(selected_unit.get_grid_position(), 4)  # Reuse execute range (red tiles)
+			print("Charge ability - click an enemy within 4 tiles to rush them")
+			tactical_hud.show_combat_message("SELECT ENEMY TO CHARGE (4 TILES)", Color(1, 0.5, 0.1))
+		
+		"execute":
+			if selected_unit.officer_type != "captain":
+				print("Only Captain can use Execute!")
+				return
+			
+			if not selected_unit.has_ap(1):
+				print("Not enough AP for Execute")
+				tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
 				await get_tree().create_timer(1.0).timeout
 				tactical_hud.hide_combat_message()
-				_select_unit(selected_unit)
-			else:
-				print("Failed to use breach (no AP)")
-		else:
-			print("Nothing to breach at %s" % grid_pos)
-			tactical_hud.show_combat_message("NOTHING TO BREACH", Color(1, 0.5, 0))
-			await get_tree().create_timer(1.0).timeout
-			tactical_hud.hide_combat_message()
+				return
+			
+			# Enter execute targeting mode - show red range tiles
+			execute_mode = true
+			tactical_map.clear_movement_range()
+			tactical_map.set_execute_range(selected_unit.get_grid_position(), 4)
+			print("Execute ability - click an enemy within 4 tiles below 50%% HP")
+			tactical_hud.show_combat_message("SELECT ENEMY WITHIN 4 TILES (<50%% HP)", Color(1, 0.2, 0.2))
 
 
 ## Check if any officer on overwatch can shoot the enemy
@@ -1275,8 +1329,8 @@ func _check_overwatch_shots(enemy: Node2D, enemy_pos: Vector2i) -> void:
 			damage = int(officer.base_damage * (1.0 + FLANK_DAMAGE_BONUS))
 			print("Flanking overwatch! Base damage: %d -> Flanking damage: %d" % [officer.base_damage, damage])
 		
-		# Take the shot
-		var hit_chance = calculate_hit_chance(officer_pos, enemy_pos, officer)
+		# Take the shot (Overwatch is GUARANTEED HIT)
+		var hit_chance = 100.0  # Overwatch always hits
 		var hit = officer.try_overwatch_shot(enemy_pos, hit_chance)
 		
 		# Fire projectile
@@ -1285,17 +1339,14 @@ func _check_overwatch_shots(enemy: Node2D, enemy_pos: Vector2i) -> void:
 		projectile.fire(officer_world, enemy_world)
 		await projectile.impact_reached
 		
-		# Apply damage if hit
+		# Overwatch always hits - apply damage
 		if hit:
 			if is_flanking:
-				tactical_hud.show_combat_message("FLANKING HIT!", Color(1, 0.5, 0.1))
+				tactical_hud.show_combat_message("OVERWATCH FLANKING HIT!", Color(1, 0.5, 0.1))
 			else:
-				tactical_hud.show_combat_message("HIT!", Color(1, 0.2, 0.2))
+				tactical_hud.show_combat_message("OVERWATCH HIT!", Color(0.2, 1, 0.2))
 			enemy.take_damage(damage)
 			_spawn_damage_popup(damage, true, enemy.position, false, is_flanking)
-		else:
-			tactical_hud.show_combat_message("MISS!", Color(0.6, 0.6, 0.6))
-			_spawn_damage_popup(0, false, enemy.position)
 		
 		await get_tree().create_timer(0.7).timeout
 		tactical_hud.hide_combat_message()
@@ -1327,6 +1378,12 @@ func _try_auto_patch() -> void:
 			if officer.get_grid_position() == check_pos and officer.current_hp < officer.max_hp:
 				# Found injured adjacent ally
 				if selected_unit.use_patch(officer):
+					# Focus camera on healing action
+					var medic_world = selected_unit.position
+					var target_world = officer.position
+					combat_camera.focus_on_action(medic_world, target_world)
+					await get_tree().create_timer(0.2).timeout  # Wait for camera to zoom in
+					
 					var heal_amount = int(officer.max_hp * 0.5)
 					print("Healed %s for %d HP!" % [officer.officer_key, heal_amount])
 					tactical_hud.show_combat_message("HEALED %s (+%d HP)" % [officer.officer_key.to_upper(), heal_amount], Color(0.2, 1, 0.2))
@@ -1336,10 +1393,437 @@ func _try_auto_patch() -> void:
 					
 					await get_tree().create_timer(1.0).timeout
 					tactical_hud.hide_combat_message()
+					
+					# Return camera to tactical view
+					combat_camera.return_to_tactical()
+					
 					_select_unit(selected_unit)
+					
+					# Check if unit is out of AP and auto-end turn
+					_check_auto_end_turn()
 					return
 	
 	print("No injured allies adjacent to heal!")
 	tactical_hud.show_combat_message("NO INJURED ALLIES NEARBY", Color(1, 0.5, 0))
 	await get_tree().create_timer(1.0).timeout
 	tactical_hud.hide_combat_message()
+
+
+## Try to place a turret on an adjacent tile (Tech ability)
+func _try_place_turret(grid_pos: Vector2i) -> void:
+	turret_mode = false
+	tactical_hud.hide_combat_message()
+	
+	if not selected_unit or selected_unit.officer_type != "tech":
+		return
+	
+	var tech_pos = selected_unit.get_grid_position()
+	var distance = abs(grid_pos.x - tech_pos.x) + abs(grid_pos.y - tech_pos.y)
+	
+	# Must be adjacent
+	if distance != 1:
+		print("Turret must be placed on adjacent tile (distance: %d)" % distance)
+		tactical_hud.show_combat_message("MUST BE ADJACENT", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+	
+	# Must be a walkable, empty tile
+	if not tactical_map.is_tile_walkable(grid_pos):
+		print("Cannot place turret on non-walkable tile")
+		tactical_hud.show_combat_message("INVALID TILE", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+	
+	# Check no unit is already there
+	var unit_at = tactical_map.get_unit_at(grid_pos)
+	if unit_at:
+		print("Cannot place turret on occupied tile")
+		tactical_hud.show_combat_message("TILE OCCUPIED", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+	
+	# Use the ability (spends AP and starts cooldown)
+	if selected_unit.use_turret():
+		var turret = TurretUnitScene.instantiate()
+		turret.set_grid_position(grid_pos)
+		turret.position = Vector2(grid_pos.x * 32 + 16, grid_pos.y * 32 + 16)
+		tactical_map.add_child(turret)
+		turret.initialize()
+		active_turrets.append(turret)
+		
+		# Focus camera on turret placement
+		var tech_world = selected_unit.position
+		var turret_world = turret.position
+		combat_camera.focus_on_action(tech_world, turret_world)
+		await get_tree().create_timer(0.2).timeout  # Wait for camera to zoom in
+		
+		print("Turret placed at %s! Will auto-fire for 3 turns." % grid_pos)
+		tactical_hud.show_combat_message("TURRET DEPLOYED!", Color(0, 1, 1))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		
+		# Return camera to tactical view
+		combat_camera.return_to_tactical()
+		
+		_select_unit(selected_unit)
+		
+		# Check if unit is out of AP and auto-end turn
+		_check_auto_end_turn()
+	else:
+		print("Failed to place turret (no AP or cooldown)")
+
+
+## Try to charge an enemy (Heavy ability)
+func _try_charge_enemy(grid_pos: Vector2i) -> void:
+	charge_mode = false
+	tactical_map.clear_execute_range()  # Clear red charge range tiles
+	tactical_hud.hide_combat_message()
+	
+	if not selected_unit or selected_unit.officer_type != "heavy":
+		return
+	
+	var heavy_pos = selected_unit.get_grid_position()
+	var distance = abs(grid_pos.x - heavy_pos.x) + abs(grid_pos.y - heavy_pos.y)
+	
+	# Must be within 4 tiles
+	if distance > 4 or distance < 1:
+		print("Charge target must be within 4 tiles (distance: %d)" % distance)
+		tactical_hud.show_combat_message("TARGET OUT OF RANGE (MAX 4)", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+	
+	# Must be clicking on an enemy
+	var target_enemy: Node2D = null
+	for enemy in enemies:
+		if enemy.get_grid_position() == grid_pos and enemy.current_hp > 0:
+			target_enemy = enemy
+			break
+	
+	if not target_enemy:
+		print("No enemy at that position")
+		tactical_hud.show_combat_message("NO ENEMY THERE", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+	
+	# Must be visible
+	if not _is_enemy_visible(target_enemy):
+		print("Cannot charge: Enemy not visible")
+		tactical_hud.show_combat_message("ENEMY NOT VISIBLE", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+	
+	# Use the ability (spends AP and starts cooldown)
+	if not selected_unit.use_charge():
+		print("Failed to use Charge (no AP or cooldown)")
+		return
+	
+	# Find adjacent position to the enemy to move to
+	var charge_destination = _find_charge_destination(heavy_pos, grid_pos)
+	
+	if charge_destination == heavy_pos:
+		# Can't find path, but still deal damage at range
+		print("No path for charge, attacking from current position")
+	else:
+		# Move heavy to adjacent tile of enemy
+		tactical_map.set_unit_position_solid(heavy_pos, false)
+		selected_unit.set_grid_position(charge_destination)
+		
+		# Animate rush movement (fast)
+		var path = tactical_map.find_path(heavy_pos, charge_destination)
+		if path and path.size() > 1:
+			tactical_hud.show_combat_message("CHARGING!", Color(1, 0.5, 0.1))
+			selected_unit.move_along_path(path)
+			await selected_unit.movement_finished
+		else:
+			# Direct teleport if no path
+			selected_unit.position = Vector2(charge_destination.x * 32 + 16, charge_destination.y * 32 + 16)
+		
+		tactical_map.set_unit_position_solid(charge_destination, true)
+	
+	# Calculate damage - instant kill basic enemies, heavy damage to heavy enemies
+	var charge_damage: int
+	var is_instant_kill: bool = false
+	if target_enemy.enemy_type == "basic":
+		# Instant kill basic enemies
+		charge_damage = target_enemy.current_hp
+		is_instant_kill = true
+		print("CHARGE instant-kills basic enemy!")
+	else:
+		# Heavy damage to heavy enemies (2x base damage)
+		charge_damage = selected_unit.base_damage * 2
+		print("CHARGE deals %d damage to heavy enemy!" % charge_damage)
+	
+	# Face the enemy
+	selected_unit.face_towards(grid_pos)
+	
+	# Perform melee attack animation
+	await _perform_charge_melee_attack(selected_unit, target_enemy, charge_damage, is_instant_kill)
+	
+	await get_tree().create_timer(0.5).timeout
+	tactical_hud.hide_combat_message()
+	
+	# Update fog/visibility/cover
+	tactical_map.reveal_around(selected_unit.get_grid_position(), selected_unit.sight_range)
+	_update_enemy_visibility()
+	_update_unit_cover_indicator(selected_unit)
+	_select_unit(selected_unit)
+	
+	# Check if unit is out of AP and auto-end turn
+	_check_auto_end_turn()
+
+
+## Find the best adjacent tile to move to when charging an enemy
+func _find_charge_destination(from: Vector2i, enemy_pos: Vector2i) -> Vector2i:
+	var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	var best_pos = from
+	var best_distance = 999
+	
+	for dir in directions:
+		var adjacent = enemy_pos + dir
+		if adjacent == from:
+			return from  # Already adjacent
+		if tactical_map.is_tile_walkable(adjacent) and not tactical_map.get_unit_at(adjacent):
+			var path = tactical_map.find_path(from, adjacent)
+			if path and path.size() > 1:
+				var path_distance = path.size() - 1
+				if path_distance < best_distance:
+					best_distance = path_distance
+					best_pos = adjacent
+	
+	return best_pos
+
+
+## Perform melee attack animation for charge ability
+func _perform_charge_melee_attack(attacker: Node2D, target: Node2D, damage: int, is_instant_kill: bool) -> void:
+	var attacker_sprite = attacker.get_node_or_null("Sprite")
+	if not attacker_sprite:
+		# Fallback: just deal damage without animation
+		target.take_damage(damage)
+		_spawn_damage_popup(damage, true, target.position)
+		return
+	
+	# Focus camera on action (like normal attacks)
+	var attacker_world = attacker.position
+	var target_world = target.position
+	combat_camera.focus_on_action(attacker_world, target_world)
+	await get_tree().create_timer(0.2).timeout  # Wait for camera to zoom in
+	
+	var original_pos = attacker_sprite.position
+	var target_direction = (target.position - attacker.position).normalized()
+	var lunge_distance = 12.0  # How far to lunge toward enemy
+	
+	# Phase 1: Wind-up (pull back slightly)
+	tactical_hud.show_combat_message("CHARGE!", Color(1, 0.5, 0.1))
+	var windup_tween = create_tween()
+	windup_tween.tween_property(attacker_sprite, "position", original_pos - Vector2(target_direction.x * 4, 0), 0.1)
+	windup_tween.parallel().tween_property(attacker_sprite, "modulate", Color(1.5, 0.8, 0.3, 1.0), 0.1)  # Orange glow
+	await windup_tween.finished
+	
+	# Phase 2: Lunge forward (fast strike)
+	var strike_tween = create_tween()
+	strike_tween.tween_property(attacker_sprite, "position", original_pos + Vector2(target_direction.x * lunge_distance, target_direction.y * lunge_distance * 0.5), 0.08).set_ease(Tween.EASE_OUT)
+	await strike_tween.finished
+	
+	# Phase 3: Impact - deal damage and show effects
+	if is_instant_kill:
+		tactical_hud.show_combat_message("DEVASTATING BLOW!", Color(1, 0.2, 0.1))
+	else:
+		tactical_hud.show_combat_message("HEAVY STRIKE! %d DMG" % damage, Color(1, 0.5, 0.1))
+	
+	# Impact flash on attacker
+	var impact_tween = create_tween()
+	impact_tween.tween_property(attacker_sprite, "modulate", Color(2.0, 1.5, 0.5, 1.0), 0.03)  # Bright flash
+	
+	# Deal damage and spawn popup
+	target.take_damage(damage)
+	_spawn_damage_popup(damage, true, target.position, false, true)  # Use flank style for charge hits
+	
+	# Screen shake effect (subtle)
+	var camera_offset = combat_camera.offset
+	var shake_tween = create_tween()
+	shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(4, 2), 0.03)
+	shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(-4, -2), 0.03)
+	shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(2, -1), 0.03)
+	shake_tween.tween_property(combat_camera, "offset", camera_offset, 0.05)
+	
+	await get_tree().create_timer(0.15).timeout
+	
+	# Phase 4: Return to original position
+	var return_tween = create_tween()
+	return_tween.tween_property(attacker_sprite, "position", original_pos, 0.15).set_ease(Tween.EASE_IN_OUT)
+	return_tween.parallel().tween_property(attacker_sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.15)
+	await return_tween.finished
+	
+	# Return camera to tactical view (like normal attacks)
+	combat_camera.return_to_tactical()
+
+
+## Try to execute an enemy (Captain ability)
+func _try_execute_enemy(grid_pos: Vector2i) -> void:
+	execute_mode = false
+	tactical_map.clear_execute_range()
+	tactical_hud.hide_combat_message()
+	
+	if not selected_unit or selected_unit.officer_type != "captain":
+		return
+	
+	var captain_pos = selected_unit.get_grid_position()
+	var distance = abs(grid_pos.x - captain_pos.x) + abs(grid_pos.y - captain_pos.y)
+	
+	# Must be within 4 tiles
+	if distance < 1 or distance > 4:
+		print("Execute target must be within 4 tiles (distance: %d)" % distance)
+		tactical_hud.show_combat_message("OUT OF RANGE (MAX 4 TILES)", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_select_unit(selected_unit)
+		return
+	
+	# Check line of sight
+	if not has_line_of_sight(captain_pos, grid_pos):
+		print("No line of sight for Execute")
+		tactical_hud.show_combat_message("NO LINE OF SIGHT", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_select_unit(selected_unit)
+		return
+	
+	# Must be clicking on an enemy
+	var target_enemy: Node2D = null
+	for enemy in enemies:
+		if enemy.get_grid_position() == grid_pos and enemy.current_hp > 0:
+			target_enemy = enemy
+			break
+	
+	if not target_enemy:
+		print("No enemy at that position")
+		tactical_hud.show_combat_message("NO ENEMY THERE", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_select_unit(selected_unit)
+		return
+	
+	# Enemy must be below 50% HP
+	var hp_percent = float(target_enemy.current_hp) / float(target_enemy.max_hp)
+	if hp_percent > 0.5:
+		print("Execute requires enemy below 50%% HP (currently %.0f%%)" % (hp_percent * 100))
+		tactical_hud.show_combat_message("ENEMY HP TOO HIGH (NEED <50%%)", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_select_unit(selected_unit)
+		return
+	
+	# Use the ability (spends AP and starts cooldown)
+	if not selected_unit.use_execute():
+		print("Failed to use Execute (no AP or cooldown)")
+		return
+	
+	# Guaranteed kill - deal remaining HP as damage
+	var execute_damage = target_enemy.current_hp
+	selected_unit.face_towards(grid_pos)
+	
+	# Focus camera on action (like normal attacks)
+	var shooter_world = selected_unit.position
+	var target_world = Vector2(grid_pos.x * 32 + 16, grid_pos.y * 32 + 16)
+	combat_camera.focus_on_action(shooter_world, target_world)
+	await get_tree().create_timer(0.2).timeout  # Wait for camera to zoom in
+	
+	# Cinematic execute sequence
+	tactical_hud.show_combat_message("EXECUTING...", Color(1, 0.2, 0.2))
+	await get_tree().create_timer(0.5).timeout
+	
+	# Fire projectile
+	projectile.fire(shooter_world, target_world)
+	await projectile.impact_reached
+	
+	# Apply lethal damage
+	tactical_hud.show_combat_message("EXECUTED!", Color(1, 0.1, 0.1))
+	target_enemy.take_damage(execute_damage)
+	_spawn_damage_popup(execute_damage, true, target_enemy.position)
+	
+	await get_tree().create_timer(1.0).timeout
+	tactical_hud.hide_combat_message()
+	
+	# Return camera to tactical view
+	combat_camera.return_to_tactical()
+	
+	_select_unit(selected_unit)
+	
+	# Check if unit is out of AP and auto-end turn
+	_check_auto_end_turn()
+
+
+## Process all active turrets (auto-fire at nearest enemy)
+func _process_turrets() -> void:
+	var turrets_to_remove: Array[Node2D] = []
+	
+	for turret in active_turrets:
+		# Tick down turn timer
+		if not turret.tick_turn():
+			# Turret expired
+			print("Turret at %s expired!" % turret.get_grid_position())
+			turrets_to_remove.append(turret)
+			continue
+		
+		# Auto-fire at nearest visible enemy
+		var turret_pos = turret.get_grid_position()
+		var nearest_enemy: Node2D = null
+		var nearest_dist = 999
+		
+		for enemy in enemies:
+			if enemy.current_hp <= 0:
+				continue
+			if not _is_enemy_visible(enemy):
+				continue
+			
+			var enemy_pos = enemy.get_grid_position()
+			var dist = abs(enemy_pos.x - turret_pos.x) + abs(enemy_pos.y - turret_pos.y)
+			
+			if dist <= turret.shoot_range and dist < nearest_dist:
+				if has_line_of_sight(turret_pos, enemy_pos):
+					nearest_dist = dist
+					nearest_enemy = enemy
+		
+		if nearest_enemy:
+			var enemy_pos = nearest_enemy.get_grid_position()
+			print("Turret at %s fires at enemy at %s!" % [turret_pos, enemy_pos])
+			
+			# Focus camera on turret attack
+			var turret_world = turret.position
+			var enemy_world = nearest_enemy.position
+			combat_camera.focus_on_action(turret_world, enemy_world)
+			await get_tree().create_timer(0.2).timeout  # Wait for camera to zoom in
+			
+			tactical_hud.show_combat_message("TURRET FIRES!", Color(0, 1, 1))
+			
+			# Fire projectile
+			projectile.fire(turret_world, enemy_world)
+			await projectile.impact_reached
+			
+			# Apply damage (turrets always hit)
+			nearest_enemy.take_damage(turret.base_damage)
+			_spawn_damage_popup(turret.base_damage, true, nearest_enemy.position)
+			tactical_hud.show_combat_message("TURRET HIT! %d DMG" % turret.base_damage, Color(0, 1, 1))
+			
+			await get_tree().create_timer(0.7).timeout
+			tactical_hud.hide_combat_message()
+			
+			# Return camera to tactical view
+			combat_camera.return_to_tactical()
+		
+		# Update turret visual (remaining turns)
+		turret.update_visual()
+	
+	# Remove expired turrets
+	for turret in turrets_to_remove:
+		active_turrets.erase(turret)
+		tactical_hud.show_combat_message("TURRET EXPIRED", Color(0.5, 0.5, 0.5))
+		turret.queue_free()
+		await get_tree().create_timer(0.5).timeout
+		tactical_hud.hide_combat_message()

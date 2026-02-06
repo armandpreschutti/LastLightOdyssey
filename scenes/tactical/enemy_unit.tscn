@@ -18,26 +18,26 @@ texture = ExtResource("2_sprite")
 
 [node name="HPBarBG" type="ColorRect" parent="." unique_id=1820016805]
 offset_left = -14.0
-offset_top = -20.0
+offset_top = 14.0
 offset_right = 14.0
-offset_bottom = -16.0
+offset_bottom = 18.0
 mouse_filter = 2
 color = Color(0.2, 0.2, 0.2, 0.8)
 
 [node name="HPBar" type="ColorRect" parent="." unique_id=93757956]
 offset_left = -13.0
-offset_top = -19.0
+offset_top = 15.0
 offset_right = 13.0
-offset_bottom = -17.0
+offset_bottom = 17.0
 mouse_filter = 2
 color = Color(0, 1, 0, 1)
 
 [node name="AlertIndicator" type="ColorRect" parent="." unique_id=2068067724]
 visible = false
 offset_left = -3.0
-offset_top = -26.0
+offset_top = -30.0
 offset_right = 3.0
-offset_bottom = -22.0
+offset_bottom = -26.0
 mouse_filter = 2
 color = Color(1, 0.3, 0.3, 1)
 
@@ -68,9 +68,9 @@ polygon = PackedVector2Array(-3, -4, 0, -4, 0, 0, -2, 2, -3, 0)
 
 [node name="HitChanceLabel" type="Label" parent="." unique_id=1545962341]
 offset_left = -16.0
-offset_top = 6.0
+offset_top = -26.0
 offset_right = 16.0
-offset_bottom = 19.0
+offset_bottom = -20.0
 theme_override_colors/font_color = Color(1, 0.95, 0.4, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3

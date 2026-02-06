@@ -101,13 +101,15 @@ func _get_officer_display_name(key: String) -> String:
 func _get_officer_description(key: String) -> String:
 	match key:
 		"scout":
-			return "High mobility & extended vision. Ability: OVERWATCH - Automatically shoots at enemies who move in range (1 AP)."
+			return "High mobility & extended vision. Ability: OVERWATCH - Guaranteed hit on the first enemy that moves in range (1 AP). 2-turn cooldown."
 		"tech":
-			return "Demolitions expert. Ability: BREACH - Destroy adjacent walls or cover to create new paths (1 AP)."
+			return "Combat engineer. Ability: TURRET - Deploy an auto-firing sentry turret on an adjacent tile. Lasts 3 turns (1 AP). 2-turn cooldown."
 		"medic":
-			return "Field surgeon. Ability: PATCH - Heal adjacent ally for 50% max HP (2 AP)."
+			return "Field surgeon. Ability: PATCH - Heal adjacent ally for 50% max HP (2 AP). 2-turn cooldown."
 		"heavy":
-			return "Armored tank with 20% damage reduction. Ability: TAUNT - Force enemies within 5 tiles to target you (1 AP)."
+			return "Heavily armed bruiser. Ability: CHARGE - Rush an enemy within 4 tiles. Instant-kills basic enemies, heavy damage to elites (1 AP). 2-turn cooldown."
+		"captain":
+			return "Squad leader. Ability: EXECUTE - Guaranteed kill on an enemy within 4 tiles below 50% HP. Never misses (1 AP). 2-turn cooldown."
 		_:
 			return ""
 

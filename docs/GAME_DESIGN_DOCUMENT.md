@@ -1,5 +1,5 @@
 # Last Light Odyssey - Game Design Document
-**Version 2.2 | Engine: Godot 4.6 | Last Updated: February 6, 2026**
+**Version 2.3 | Engine: Godot 4.6 | Last Updated: February 6, 2026**
 
 > *"The last journey of the human race isn't a hero's quest; it's a survival marathon."*
 
@@ -55,6 +55,8 @@ A procedurally generated node graph with **20 nodes** leading to New Earth.
 - 9 columns of nodes with layout: [1, 2, 3, 3, 3, 2, 3, 2, 1] = 20 total nodes
 - Each node connects to 1-2 nodes in the next column (natural flow + branching)
 - Variable fuel costs: base 2 fuel, +1 for diagonal movement
+- Fuel costs are calculated per connection and saved with the star map
+- If insufficient fuel for a jump, ship enters "Drift Mode" and loses 20 colonists per fuel deficit
 
 **Node Types:**
 
@@ -101,11 +103,11 @@ When the ship docks at a Scavenge Site, the game switches to isometric turn-base
 
 | Role | Passive Ability | Active Ability | HP | Move | Sight |
 |------|-----------------|----------------|-----|------|-------|
-| **Captain** | — | — | 100 | 5 | 6 |
-| **Scout** | +2 sight range, extended enemy detection | **Overwatch** (1 AP): Reaction shot at first enemy that moves in LOS | 80 | 6 | 10 |
-| **Tech** | Can see items through walls | **Breach** (1 AP): Destroy 1 tile of cover or wall | 70 | 4 | 5 |
-| **Medic** | Can see exact enemy HP | **Patch** (2 AP): Heal adjacent ally for 50% max HP | 75 | 5 | 5 |
-| **Heavy** | Armor Plating (−20% damage taken) | **Taunt** (1 AP): Forces enemies within 5 tiles to target this unit for 1 turn | 120 | 3 | 5 |
+| **Captain** | — | **Execute** (1 AP): Guaranteed kill on enemy within 4 tiles below 50% HP. Never misses. 2-turn cooldown. | 100 | 5 | 6 |
+| **Scout** | +2 sight range, extended enemy detection | **Overwatch** (1 AP): Reaction shot at first enemy that moves in LOS. Guaranteed hit. 2-turn cooldown. | 80 | 6 | 10 |
+| **Tech** | Can see items through walls | **Turret** (1 AP): Deploy auto-firing sentry on adjacent tile. Lasts 3 turns, auto-shoots nearest enemy each turn (15 DMG, 6 tile range). 2-turn cooldown. | 70 | 4 | 5 |
+| **Medic** | Can see exact enemy HP | **Patch** (2 AP): Heal adjacent ally for 50% max HP. 2-turn cooldown. | 75 | 5 | 5 |
+| **Heavy** | Armor Plating (−20% damage taken), +35 base damage | **Charge** (1 AP): Rush enemy within 4 tiles. Instant-kills basic enemies; deals 2x base damage to heavy enemies. 2-turn cooldown. | 120 | 3 | 5 |
 
 ### 3.3 Combat System
 
@@ -148,29 +150,62 @@ Final Hit Chance = clamp(Base - DefenderCover + AttackerBonus, 10%, 95%)
 **Class Accuracy Profiles:**
 - **Scout**: Best at long range (65% at 8+ tiles)
 - **Captain**: Balanced (50% at 8+ tiles)
-- **Heavy**: Good close-mid range, weaker at distance (45% at 8+ tiles), +30 base damage
+- **Heavy**: Good close-mid range, weaker at distance (45% at 8+ tiles), 35 base damage
 - **Tech/Medic**: Support-focused, weaker at range (40% at 8+ tiles)
 
 ### 3.4 Cover & Destruction
 
 | Cover Type | Defender Penalty | Attacker Bonus | Destructible |
 |------------|------------------|----------------|--------------|
-| Half Cover | −25% to hit | +10% accuracy | Yes (Breach) |
-| Full Cover | −50% to hit | +15% accuracy | Yes (Tech only) |
-| Walls | Blocks LOS | — | Some breachable |
+| Half Cover | −25% to hit | +10% accuracy | Yes |
+| Full Cover | −50% to hit | +15% accuracy | Yes |
+| Walls | Blocks LOS | — | Some destructible |
 
 When cover is destroyed, it becomes rubble (0% cover value).
 
 **Flanking System:**
 Cover only protects from the direction it faces. Attacking from an unprotected angle (flanking) bypasses cover AND deals **+50% bonus damage**. Tactical positioning is crucial!
 
-### 3.5 Fog of War
+### 3.5 Specialist Abilities Detail
+
+#### Turret System (Tech Ability)
+Tech officers can deploy **auto-firing sentry turrets** on tactical maps:
+
+- **Placement**: Adjacent tile only, must be walkable and unoccupied
+- **Duration**: 3 turns (auto-expires after 3 enemy turns)
+- **Auto-Fire**: Each turn, turret automatically targets and shoots the nearest visible enemy within range
+- **Range**: 6 tiles (Manhattan distance)
+- **Damage**: 15 per shot (always hits)
+- **Cooldown**: 2-turn cooldown after deployment
+- **Visual Feedback**: Turret displays remaining turns with color-coded indicator
+
+#### Charge System (Heavy Ability)
+Heavy officers can **rush enemies** in close combat:
+
+- **Range**: 4 tiles (Manhattan distance)
+- **Movement**: Heavy automatically moves adjacent to target (if path exists)
+- **Basic Enemies**: Instant kill on contact
+- **Heavy Enemies**: Deals 2x base damage (70 damage from Heavy's 35 base damage)
+- **Cooldown**: 2-turn cooldown after use
+- **Visual**: Cinematic melee attack animation with camera focus
+
+#### Execute System (Captain Ability)
+Captains can **finish off weakened enemies** with precision:
+
+- **Range**: 4 tiles (Manhattan distance)
+- **Requirement**: Target must be below 50% HP
+- **Effect**: Guaranteed instant kill (deals damage equal to target's current HP)
+- **Accuracy**: Never misses (bypasses all cover and hit chance calculations)
+- **Cooldown**: 2-turn cooldown after use
+- **Visual**: Cinematic execution sequence with camera focus
+
+### 3.6 Fog of War
 
 - Map starts blacked out
 - Reveals in radius around each officer (sight_range)
 - Enemies are only visible when in revealed areas AND within sight range
 
-### 3.6 Enemy AI
+### 3.7 Enemy AI
 
 **Smart AI Behavior Priority:**
 1. If flanked (in ineffective cover) → **Reposition to effective cover**
@@ -186,9 +221,11 @@ Cover only protects from the direction it faces. Attacking from an unprotected a
 - Penalty for being too close or losing LOS
 - Repositions when flanked to find effective cover
 
-**Heavy Taunt Response:**
-- Enemies prioritize taunted Heavy officers within 5 tiles
-- Overrides normal target selection for the turn
+**Heavy Charge Ability:**
+- Heavy can rush enemies within 4 tiles
+- Instant-kills basic enemies on contact
+- Deals double base damage (70) to heavy enemies
+- Heavy has 35 base damage (increased from standard 25)
 
 **Enemy Types:**
 
@@ -199,7 +236,7 @@ Cover only protects from the direction it faces. Attacking from an unprotected a
 
 *Note: Spawn rates vary by biome (see Section 3.7 Biome System).*
 
-### 3.7 Biome System
+### 3.8 Biome System
 
 Scavenge sites have one of three procedurally-assigned biome types, each with unique map generation, visuals, and enemy distribution.
 
@@ -294,7 +331,7 @@ First-time players receive a **9-step guided tutorial** that covers:
 4. **Scavenge Missions** - Team selection and permadeath warning
 5. **Tactical Movement** - Action points and movement
 6. **Combat** - Attacking enemies and cover mechanics
-7. **Abilities** - Specialist unique abilities (Scout, Tech, Medic, Heavy)
+7. **Abilities** - Specialist unique abilities (Scout Overwatch, Tech Turret, Medic Patch, Heavy Charge, Captain Execute)
 8. **Cryo-Stability** - Time pressure and colonist loss
 9. **Extraction** - Completing missions
 
@@ -479,11 +516,14 @@ Visual elements for the management layer star map.
 - [x] Cover indicators on units showing protection level
 
 ### ✅ Phase 5: Specialist Abilities (COMPLETE)
-- [x] Scout: Overwatch (reaction shots)
-- [x] Tech: Breach (destroy cover/walls)
+- [x] Scout: Overwatch (reaction shots, guaranteed hit)
+- [x] Tech: Turret (deploy auto-firing sentry, 3 turns)
 - [x] Medic: Patch (heal allies)
-- [x] Heavy: Taunt (force enemy targeting)
+- [x] Heavy: Charge (rush and devastate enemies)
 - [x] Heavy: Armor Plating passive (20% damage reduction)
+- [x] Heavy: Increased base damage (35 vs standard 25)
+- [x] Captain: Execute (guaranteed kill on low-HP enemies)
+- [x] Ability cooldown system (2-turn cooldown after use)
 - [x] Ability buttons in HUD
 - [x] AP cost validation
 
@@ -596,8 +636,9 @@ Visual elements for the management layer star map.
 #### Heavy Officer Class
 - [x] New officer type: Heavy
 - [x] Armor Plating passive ability (20% damage reduction)
-- [x] Taunt active ability (1 AP, forces enemy targeting for 1 turn)
-- [x] 120 HP, 3 move range, 5 sight range, 30 base damage
+- [x] Charge active ability (1 AP, rush enemy within 4 tiles, instant-kills basic enemies)
+- [x] Increased base damage (35 vs standard 25)
+- [x] 120 HP, 3 move range, 5 sight range
 - [x] Heavy sprite and animations
 - [x] Pirate Ambush event mitigation
 
@@ -615,8 +656,16 @@ Visual elements for the management layer star map.
 - [x] Flanking awareness - AI recognizes when cover is ineffective
 - [x] Automatic repositioning when being flanked
 - [x] Prioritizes finding cover that protects from threats
-- [x] Responds to Heavy's Taunt ability
 - [x] Evaluates cover effectiveness based on threat directions
+
+#### Specialist Abilities Expansion
+- [x] Tech: Turret deployment system (replaces Breach ability)
+- [x] Heavy: Charge melee attack system (replaces Taunt ability)
+- [x] Captain: Execute instant-kill system (new ability)
+- [x] Ability cooldown system (2-turn cooldown for all abilities)
+- [x] Turret auto-fire system (processes before player actions each turn)
+- [x] Charge pathfinding and melee animation
+- [x] Execute targeting mode with range visualization
 
 #### Combat System Enhancements
 - [x] Hit chance display on targetable enemies

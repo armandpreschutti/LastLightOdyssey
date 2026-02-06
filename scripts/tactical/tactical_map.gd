@@ -17,9 +17,10 @@ var map_height: int = DEFAULT_MAP_SIZE
 var current_theme: Dictionary = BiomeConfig.STATION_THEME
 var current_biome: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION
 
-# Gameplay highlight colors (consistent across biomes)
-const COLOR_MOVEMENT_RANGE := Color(0.25, 0.5, 0.7, 0.25)  # Blue movement highlight
-const COLOR_HOVER := Color(1.0, 0.9, 0.5, 0.3)     # Yellow hover
+# Gameplay highlight colors (consistent across biomes, high visibility)
+const COLOR_MOVEMENT_RANGE := Color(0.3, 0.6, 0.9, 0.35)  # Brighter blue movement highlight
+const COLOR_EXECUTE_RANGE := Color(0.9, 0.2, 0.2, 0.35)  # Red execute range highlight
+const COLOR_HOVER := Color(1.0, 0.9, 0.4, 0.4)     # Brighter yellow hover
 
 @onready var units_container: Node2D = $Units
 @onready var interactables_container: Node2D = $Interactables
@@ -28,6 +29,7 @@ var astar: AStarGrid2D
 var tile_data: Dictionary = {}  # Vector2i -> TileType
 var revealed_tiles: Dictionary = {}  # Vector2i -> bool
 var movement_range_tiles: Dictionary = {}  # Vector2i -> bool (tiles within movement range)
+var execute_range_tiles: Dictionary = {}  # Vector2i -> bool (tiles within execute range)
 var hovered_tile: Vector2i = Vector2i(-1, -1)  # Currently hovered tile
 
 
@@ -174,6 +176,10 @@ func _draw() -> void:
 				if movement_range_tiles.get(pos, false):
 					draw_rect(rect, COLOR_MOVEMENT_RANGE)
 				
+				# Execute range highlight (red)
+				if execute_range_tiles.get(pos, false):
+					draw_rect(rect, COLOR_EXECUTE_RANGE)
+				
 				# Hover effect
 				if pos == hovered_tile:
 					draw_rect(rect, COLOR_HOVER)
@@ -213,142 +219,59 @@ func _draw_floor_tile(rect: Rect2, hash_val: int) -> void:
 
 func _draw_station_floor_details(rect: Rect2, hash_val: int) -> void:
 	var pos = rect.position
+	var panel_line_color = current_theme.get("floor_accent", Color(0.06, 0.07, 0.10, 0.8))
 	
-	# Draw metal panel grid pattern (every tile has panel lines)
-	var panel_line_color = current_theme.get("floor_accent", Color(0.1, 0.12, 0.16, 0.6))
-	var highlight_color = current_theme.get("floor_highlight", Color(0.25, 0.30, 0.38))
+	# Simple panel border lines (every tile has these for consistent grid look)
+	draw_line(pos, pos + Vector2(TILE_SIZE, 0), panel_line_color, 1.0)
+	draw_line(pos, pos + Vector2(0, TILE_SIZE), panel_line_color, 1.0)
 	
-	# Panel border lines (gives tiles a segmented look)
-	draw_line(pos + Vector2(0, 0), pos + Vector2(TILE_SIZE, 0), panel_line_color, 1.0)  # Top edge
-	draw_line(pos + Vector2(0, 0), pos + Vector2(0, TILE_SIZE), panel_line_color, 1.0)  # Left edge
-	draw_line(pos + Vector2(1, 1), pos + Vector2(TILE_SIZE - 1, 1), highlight_color.darkened(0.5), 1.0)  # Inner highlight
-	
-	# Sub-panel divisions on some tiles
-	if hash_val % 4 == 0:
-		# Horizontal sub-division
-		draw_line(pos + Vector2(4, TILE_SIZE / 2), pos + Vector2(TILE_SIZE - 4, TILE_SIZE / 2), panel_line_color, 1.0)
-	elif hash_val % 4 == 1:
-		# Cross pattern sub-panel
-		draw_line(pos + Vector2(TILE_SIZE / 2, 4), pos + Vector2(TILE_SIZE / 2, TILE_SIZE - 4), panel_line_color, 1.0)
-	
-	# Decorative details based on hash
+	# Only 2 decoration types - keep it simple (about 15% of tiles get decoration)
 	if hash_val < 8:
 		# Blood splatter
-		var blood_color = current_theme.get("blood", Color(0.45, 0.08, 0.08, 0.7))
-		draw_circle(pos + Vector2(12, 18), 4, blood_color)
-		draw_circle(pos + Vector2(16, 14), 2, blood_color.darkened(0.2))
-		draw_circle(pos + Vector2(20, 20), 3, blood_color.lightened(0.1))
-	elif hash_val < 15:
-		# Rust stain
-		var rust_color = current_theme.get("rust", Color(0.35, 0.20, 0.12, 0.4))
-		var rust_rect = Rect2(pos.x + 6, pos.y + 8, 10, 8)
-		draw_rect(rust_rect, rust_color)
-	elif hash_val < 22:
-		# Small cables/wires on floor
-		var cable_color = current_theme.get("cables", Color(0.12, 0.14, 0.18))
-		draw_line(pos + Vector2(4, 8), pos + Vector2(14, 24), cable_color, 2.0)
-		draw_line(pos + Vector2(14, 24), pos + Vector2(28, 20), cable_color, 2.0)
-	elif hash_val < 28:
-		# Metal grating/vent
-		var grate_color = panel_line_color.lightened(0.1)
-		for i in range(4):
-			var y_offset = 6 + i * 6
-			draw_line(pos + Vector2(8, y_offset), pos + Vector2(24, y_offset), grate_color, 1.0)
+		var blood_color = current_theme.get("blood", Color(0.55, 0.08, 0.08, 0.75))
+		draw_circle(pos + Vector2(14, 16), 3, blood_color)
+		draw_circle(pos + Vector2(18, 18), 2, blood_color.darkened(0.2))
 	elif hash_val > 92:
-		# Cyan accent light strip (floor lighting)
-		var accent_color = current_theme.get("accent_dim", Color(0.15, 0.5, 0.6, 0.5))
-		draw_rect(Rect2(pos.x + 2, pos.y + 14, 28, 4), accent_color)
-	elif hash_val > 85:
-		# Debris/damage marks
-		var debris_color = current_theme.get("debris", Color(0.25, 0.28, 0.32))
-		draw_circle(pos + Vector2(10, 12), 3, debris_color)
-		draw_circle(pos + Vector2(22, 20), 2, debris_color.darkened(0.2))
-		# Scratch marks
-		draw_line(pos + Vector2(6, 20), pos + Vector2(18, 26), panel_line_color, 1.0)
+		# Cyan accent light strip
+		var accent_color = current_theme.get("accent_dim", Color(0.2, 0.6, 0.75, 0.6))
+		draw_rect(Rect2(pos.x + 4, pos.y + 14, 24, 4), accent_color)
 
 
 func _draw_asteroid_floor_details(rect: Rect2, hash_val: int) -> void:
-	if hash_val < 20:
-		# Rocky crevice
-		var crevice_rect = Rect2(rect.position.x + 6, rect.position.y + 12, 8, 3)
-		draw_rect(crevice_rect, current_theme["floor_accent"])
-	elif hash_val > 80:
-		# Small mineral deposit shimmer
-		draw_circle(rect.position + Vector2(16, 16), 2, Color(0.3, 0.4, 0.6, 0.3))
+	var pos = rect.position
+	var accent_color = current_theme.get("floor_accent", Color(0.12, 0.1, 0.08, 0.6))
+	
+	# Simple rocky texture lines (subtle grid-like cracks)
+	draw_line(pos, pos + Vector2(TILE_SIZE, 0), accent_color, 1.0)
+	draw_line(pos, pos + Vector2(0, TILE_SIZE), accent_color, 1.0)
+	
+	# Only 2 decoration types - keep it simple (about 15% of tiles get decoration)
+	if hash_val < 8:
+		# Rocky crevice/crack
+		draw_line(pos + Vector2(6, 8), pos + Vector2(26, 24), accent_color.darkened(0.3), 1.5)
+	elif hash_val > 92:
+		# Small blue mineral shimmer
+		draw_circle(pos + Vector2(16, 16), 2, Color(0.3, 0.45, 0.65, 0.4))
 
 
 func _draw_planet_floor_details(rect: Rect2, hash_val: int) -> void:
 	var pos = rect.position
+	var accent_color = current_theme.get("floor_accent", Color(0.08, 0.12, 0.06))
+	var highlight_color = current_theme.get("floor_highlight", Color(0.18, 0.26, 0.14))
 	
-	# Get alien colors from theme
-	var sand_color = current_theme.get("floor_sand", Color(0.55, 0.48, 0.35))
-	var sand_dark = current_theme.get("floor_sand_dark", Color(0.42, 0.36, 0.28))
-	var accent_color = current_theme.get("floor_accent", Color(0.12, 0.22, 0.25))
-	var highlight_color = current_theme.get("floor_highlight", Color(0.28, 0.40, 0.42))
-	var biolum_orange = current_theme.get("biolum_orange", Color(0.95, 0.60, 0.15, 0.9))
-	var biolum_yellow = current_theme.get("biolum_yellow", Color(1.0, 0.85, 0.30, 0.85))
-	var alien_plant = current_theme.get("alien_plant", Color(0.30, 0.55, 0.50))
-	var spore_color = current_theme.get("spore", Color(0.90, 0.75, 0.40, 0.7))
+	# Subtle grass texture - soft edge lines
+	draw_line(pos, pos + Vector2(TILE_SIZE, 0), accent_color, 1.0)
+	draw_line(pos, pos + Vector2(0, TILE_SIZE), accent_color, 1.0)
 	
-	# Subtle terrain texture lines (alien soil patterns)
-	var line_color = accent_color.lightened(0.1)
-	if hash_val % 3 == 0:
-		draw_line(pos + Vector2(2, 8), pos + Vector2(30, 12), line_color, 1.0)
-	if hash_val % 3 == 1:
-		draw_line(pos + Vector2(4, 20), pos + Vector2(28, 18), line_color, 1.0)
-	
-	# Decorative details based on hash
-	if hash_val < 12:
-		# Sandy patch (tan colored like reference)
-		var sand_rect = Rect2(pos.x + 4, pos.y + 6, 14, 10)
-		draw_rect(sand_rect, sand_color)
-		draw_rect(Rect2(pos.x + 6, pos.y + 8, 10, 6), sand_dark)
-	
-	elif hash_val < 20:
-		# Small alien plant/grass tuft (teal colored)
-		draw_circle(pos + Vector2(10, 20), 4, alien_plant)
-		draw_circle(pos + Vector2(14, 18), 3, alien_plant.lightened(0.15))
-		# Tiny stems
-		draw_line(pos + Vector2(10, 16), pos + Vector2(8, 10), alien_plant.darkened(0.2), 1.5)
-		draw_line(pos + Vector2(14, 14), pos + Vector2(16, 8), alien_plant.darkened(0.2), 1.5)
-	
-	elif hash_val < 28:
-		# Bioluminescent spore patch (glowing orange/yellow)
-		draw_circle(pos + Vector2(12, 14), 3, biolum_orange)
-		draw_circle(pos + Vector2(12, 14), 2, biolum_yellow)
-		draw_circle(pos + Vector2(20, 20), 2, biolum_orange.darkened(0.2))
-		draw_circle(pos + Vector2(20, 20), 1, biolum_yellow)
-	
-	elif hash_val < 35:
-		# Alien tendril/root on ground
-		var tendril_color = current_theme.get("tendril", Color(0.50, 0.35, 0.55))
-		draw_line(pos + Vector2(4, 12), pos + Vector2(16, 8), tendril_color, 2.0)
-		draw_line(pos + Vector2(16, 8), pos + Vector2(28, 14), tendril_color, 2.0)
-		draw_line(pos + Vector2(16, 8), pos + Vector2(20, 24), tendril_color.darkened(0.2), 1.5)
-	
-	elif hash_val > 92:
-		# Bright bioluminescent spot (like glowing mushroom spores)
-		draw_circle(pos + Vector2(16, 16), 5, biolum_yellow.darkened(0.3))
-		draw_circle(pos + Vector2(16, 16), 3, biolum_yellow)
-		draw_circle(pos + Vector2(16, 16), 1.5, Color(1.0, 1.0, 0.9, 0.9))
-	
-	elif hash_val > 85:
-		# Small purple crystal shard on ground
-		var crystal_color = current_theme.get("wall_crystal", Color(0.70, 0.40, 0.75))
-		var points: PackedVector2Array = [
-			pos + Vector2(14, 22),
-			pos + Vector2(16, 12),
-			pos + Vector2(18, 22)
-		]
-		draw_polygon(points, [crystal_color])
-		draw_line(pos + Vector2(16, 12), pos + Vector2(16, 18), crystal_color.lightened(0.3), 1.0)
-	
-	elif hash_val > 78:
-		# Floating spore particles
-		draw_circle(pos + Vector2(8, 10), 1.5, spore_color)
-		draw_circle(pos + Vector2(22, 8), 1, spore_color)
-		draw_circle(pos + Vector2(18, 22), 1.5, spore_color)
-		draw_circle(pos + Vector2(6, 24), 1, spore_color.darkened(0.2))
+	# Small grass blade marks on some tiles (very subtle)
+	if hash_val < 25:
+		# A few grass blade strokes
+		draw_line(pos + Vector2(8, 20), pos + Vector2(10, 12), highlight_color, 1.0)
+		draw_line(pos + Vector2(22, 22), pos + Vector2(24, 14), highlight_color, 1.0)
+	elif hash_val > 75:
+		# Different grass pattern
+		draw_line(pos + Vector2(14, 24), pos + Vector2(16, 16), highlight_color, 1.0)
+		draw_line(pos + Vector2(18, 26), pos + Vector2(19, 18), highlight_color, 1.0)
 
 
 ## Draw wall tile with autotiling and biome-specific appearance
@@ -1306,6 +1229,30 @@ func set_movement_range(center: Vector2i, move_range: int) -> void:
 func clear_movement_range() -> void:
 	movement_range_tiles.clear()
 	hovered_tile = Vector2i(-1, -1)
+	queue_redraw()
+
+
+## Set execute range highlight (manhattan distance, red tiles)
+func set_execute_range(center: Vector2i, exec_range: int) -> void:
+	execute_range_tiles.clear()
+	
+	for x in range(center.x - exec_range, center.x + exec_range + 1):
+		for y in range(center.y - exec_range, center.y + exec_range + 1):
+			var pos = Vector2i(x, y)
+			if pos.x < 0 or pos.x >= map_width or pos.y < 0 or pos.y >= map_height:
+				continue
+			if pos == center:
+				continue
+			var distance = abs(pos.x - center.x) + abs(pos.y - center.y)
+			if distance <= exec_range and revealed_tiles.get(pos, false):
+				execute_range_tiles[pos] = true
+	
+	queue_redraw()
+
+
+## Clear execute range highlight
+func clear_execute_range() -> void:
+	execute_range_tiles.clear()
 	queue_redraw()
 
 

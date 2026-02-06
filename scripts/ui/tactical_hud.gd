@@ -226,45 +226,68 @@ func _on_extract_pressed() -> void:
 	extract_pressed.emit()
 
 
-func update_ability_buttons(officer_type: String, current_ap: int) -> void:
+func update_ability_buttons(officer_type: String, current_ap: int, cooldown: int = 0) -> void:
 	# Hide by default
 	ability_container.visible = false
 	_current_ability_type = ""
 	
-	# Show relevant ability based on officer type
+	# Determine ability info based on officer type
+	var ability_name := ""
+	var ability_text := ""
+	var ability_description := ""
+	var ability_tooltip := ""
+	var ap_cost := 1
+	
 	match officer_type:
 		"scout":
-			ability_container.visible = true
-			ability_header.text = "SPECIALIST ABILITY:"
-			ability_button.text = "[ OVERWATCH ] - 1 AP"
-			ability_desc.text = "Enter overwatch stance. Automatically shoot the first enemy that moves within line of sight."
-			ability_button.disabled = current_ap < 1
-			ability_button.tooltip_text = "Overwatch: Costs 1 AP. Auto-attacks enemies that move in your sight."
-			_current_ability_type = "overwatch"
+			ability_name = "overwatch"
+			ability_text = "[ OVERWATCH ] - 1 AP"
+			ability_description = "Enter overwatch stance. Guaranteed hit on the first enemy that moves within line of sight."
+			ability_tooltip = "Overwatch: Costs 1 AP. Guaranteed hit on enemies that move in your sight."
+			ap_cost = 1
 		"tech":
-			ability_container.visible = true
-			ability_header.text = "SPECIALIST ABILITY:"
-			ability_button.text = "[ BREACH ] - 1 AP"
-			ability_desc.text = "Destroy an adjacent wall or cover tile, creating a new path or removing enemy cover."
-			ability_button.disabled = current_ap < 1
-			ability_button.tooltip_text = "Breach: Costs 1 AP. Destroys adjacent walls or cover."
-			_current_ability_type = "breach"
+			ability_name = "turret"
+			ability_text = "[ TURRET ] - 1 AP"
+			ability_description = "Deploy a sentry turret on an adjacent tile. Auto-shoots the nearest enemy each turn for 3 turns."
+			ability_tooltip = "Turret: Costs 1 AP. Place auto-firing sentry (3 turns, 15 DMG/turn)."
+			ap_cost = 1
 		"medic":
-			ability_container.visible = true
-			ability_header.text = "SPECIALIST ABILITY:"
-			ability_button.text = "[ PATCH ] - 2 AP"
-			ability_desc.text = "Heal an adjacent friendly unit for 50% of their maximum health."
-			ability_button.disabled = current_ap < 2
-			ability_button.tooltip_text = "Patch: Costs 2 AP. Heals adjacent ally for 50% max HP."
-			_current_ability_type = "patch"
+			ability_name = "patch"
+			ability_text = "[ PATCH ] - 2 AP"
+			ability_description = "Heal an adjacent friendly unit for 50% of their maximum health."
+			ability_tooltip = "Patch: Costs 2 AP. Heals adjacent ally for 50% max HP."
+			ap_cost = 2
 		"heavy":
-			ability_container.visible = true
+			ability_name = "charge"
+			ability_text = "[ CHARGE ] - 1 AP"
+			ability_description = "Rush an enemy within 4 tiles. Instant-kills basic enemies; deals heavy damage to elites."
+			ability_tooltip = "Charge: Costs 1 AP. Rush and devastate an enemy within 4 tiles."
+			ap_cost = 1
+		"captain":
+			ability_name = "execute"
+			ability_text = "[ EXECUTE ] - 1 AP"
+			ability_description = "Guaranteed kill on an enemy within 4 tiles below 50% HP. Never misses."
+			ability_tooltip = "Execute: Costs 1 AP. Instant kill on enemy within 4 tiles below 50% HP."
+			ap_cost = 1
+	
+	# Show ability if officer has one
+	if ability_name != "":
+		ability_container.visible = true
+		_current_ability_type = ability_name
+		
+		# Check cooldown
+		if cooldown > 0:
+			ability_header.text = "SPECIALIST ABILITY: [COOLDOWN %d]" % cooldown
+			ability_button.text = "%s (CD: %d)" % [ability_text, cooldown]
+			ability_button.disabled = true
+			ability_desc.text = ability_description + "\n>> On cooldown for %d more turn(s)." % cooldown
+			ability_button.tooltip_text = ability_tooltip + "\nCooldown: %d turn(s) remaining." % cooldown
+		else:
 			ability_header.text = "SPECIALIST ABILITY:"
-			ability_button.text = "[ TAUNT ] - 1 AP"
-			ability_desc.text = "Force enemies within 5 tiles to target you until your next turn. Passive: 20% damage reduction."
-			ability_button.disabled = current_ap < 1
-			ability_button.tooltip_text = "Taunt: Costs 1 AP. Enemies within range must attack you."
-			_current_ability_type = "taunt"
+			ability_button.text = ability_text
+			ability_button.disabled = current_ap < ap_cost
+			ability_desc.text = ability_description
+			ability_button.tooltip_text = ability_tooltip
 
 
 func _on_ability_pressed() -> void:

@@ -49,10 +49,10 @@ var grid_position: Vector2i = Vector2i.ZERO
 
 # Specialist abilities
 var overwatch_active: bool = false  # Scout ability
-var taunt_active: bool = false  # Heavy ability - forces enemies to target this unit
 
-# Passive bonuses
-const HEAVY_DAMAGE_REDUCTION: float = 0.20  # Heavy takes 20% less damage
+# Ability cooldown system (2-turn cooldown after use)
+var ability_cooldown: int = 0
+const ABILITY_MAX_COOLDOWN: int = 2
 
 var _moving: bool = false
 var _move_path: PackedVector2Array = []
@@ -108,8 +108,11 @@ func _apply_specialist_bonuses() -> void:
 			# Medic can see exact HP values
 			pass  # Visual only, handled in UI
 		"heavy":
-			# Heavy has higher base damage
-			base_damage = 30
+			# Heavy has higher base damage for CHARGE
+			base_damage = 35
+		"captain":
+			# Captain is balanced - no passive bonuses
+			pass
 
 
 func _process(delta: float) -> void:
@@ -182,21 +185,31 @@ func has_ap(amount: int = 1) -> bool:
 func reset_ap() -> void:
 	current_ap = max_ap
 	_update_ap_display()
-	
-	# Heavy: Taunt expires at start of new turn
-	if officer_type == "heavy" and taunt_active:
-		taunt_active = false
-		print("Heavy's Taunt has expired")
+
+
+## Reduce ability cooldown by 1 (called at start of each round)
+func reduce_cooldown() -> void:
+	if ability_cooldown > 0:
+		ability_cooldown -= 1
+
+
+## Check if ability is on cooldown
+func is_ability_on_cooldown() -> bool:
+	return ability_cooldown > 0
+
+
+## Get remaining cooldown turns
+func get_ability_cooldown() -> int:
+	return ability_cooldown
+
+
+## Start ability cooldown after use
+func _start_cooldown() -> void:
+	ability_cooldown = ABILITY_MAX_COOLDOWN
 
 
 func take_damage(amount: int) -> void:
 	var actual_damage = amount
-	
-	# Heavy passive: Armor Plating - takes 20% less damage
-	if officer_type == "heavy":
-		actual_damage = int(amount * (1.0 - HEAVY_DAMAGE_REDUCTION))
-		print("Heavy's Armor Plating reduces damage: %d -> %d" % [amount, actual_damage])
-	
 	current_hp -= actual_damage
 	_update_hp_bar()
 	
@@ -309,10 +322,17 @@ func toggle_overwatch() -> bool:
 	if officer_type != "scout":
 		return false
 	
+	if is_ability_on_cooldown():
+		return false
+	
 	if not overwatch_active and not use_ap(1):
 		return false
 	
 	overwatch_active = not overwatch_active
+	
+	# Start cooldown when activating
+	if overwatch_active:
+		_start_cooldown()
 	
 	# Update overwatch indicator
 	if overwatch_indicator:
@@ -321,23 +341,22 @@ func toggle_overwatch() -> bool:
 	return true
 
 
-## Perform overwatch shot if enemy moves in LOS
-func try_overwatch_shot(enemy_pos: Vector2i, hit_chance: float) -> bool:
+## Perform overwatch shot if enemy moves in LOS (guaranteed hit)
+func try_overwatch_shot(enemy_pos: Vector2i, _hit_chance: float) -> bool:
 	if not overwatch_active:
 		return false
 	
 	# Overwatch shot doesn't cost AP (already paid to activate)
+	# Overwatch is a GUARANTEED HIT - always deals damage
 	var damage = base_damage
-	var roll = randf()
-	var hit = roll <= (hit_chance / 100.0)
 	
-	shot_fired.emit(enemy_pos, hit, damage if hit else 0)
+	shot_fired.emit(enemy_pos, true, damage)
 	overwatch_active = false  # Deactivate after shooting
 	
 	if overwatch_indicator:
 		overwatch_indicator.visible = false
 	
-	return hit
+	return true  # Always hits
 
 
 ## Check if this unit can detect enemies (Scout passive)
@@ -355,20 +374,27 @@ func can_see_exact_hp() -> bool:
 	return officer_type == "medic"
 
 
-## Use Breach ability (Tech) - destroy cover or wall
-func use_breach() -> bool:
+## Use Turret ability (Tech) - place auto-firing sentry on adjacent tile
+func use_turret() -> bool:
 	if officer_type != "tech":
+		return false
+	
+	if is_ability_on_cooldown():
 		return false
 	
 	if not use_ap(1):
 		return false
 	
+	_start_cooldown()
 	return true
 
 
 ## Use Patch ability (Medic) - heal adjacent ally
 func use_patch(target: Node2D) -> bool:
 	if officer_type != "medic":
+		return false
+	
+	if is_ability_on_cooldown():
 		return false
 	
 	if not use_ap(2):
@@ -378,44 +404,58 @@ func use_patch(target: Node2D) -> bool:
 	var heal_amount = int(target.max_hp * 0.5)
 	target.heal(heal_amount)
 	
+	_start_cooldown()
 	return true
 
 
-## Check if unit can use their special ability
-func can_use_ability(ability_type: String) -> bool:
-	match ability_type:
-		"overwatch":
-			return officer_type == "scout" and has_ap(1)
-		"breach":
-			return officer_type == "tech" and has_ap(1)
-		"patch":
-			return officer_type == "medic" and has_ap(2)
-		"taunt":
-			return officer_type == "heavy" and has_ap(1) and not taunt_active
-		_:
-			return false
-
-
-## Activate Taunt ability (Heavy) - forces enemies to target this unit
-func use_taunt() -> bool:
+## Use Charge ability (Heavy) - rush enemy within 4 tiles
+func use_charge() -> bool:
 	if officer_type != "heavy":
 		return false
 	
-	if taunt_active:
-		print("Taunt is already active!")
+	if is_ability_on_cooldown():
 		return false
 	
 	if not use_ap(1):
 		return false
 	
-	taunt_active = true
-	print("Heavy activates TAUNT! Enemies within range will prioritize this unit.")
+	_start_cooldown()
 	return true
 
 
-## Check if this unit has taunt active (for enemy AI)
-func has_taunt_active() -> bool:
-	return officer_type == "heavy" and taunt_active
+## Use Execute ability (Captain) - guaranteed kill on adjacent enemy below 50% HP
+func use_execute() -> bool:
+	if officer_type != "captain":
+		return false
+	
+	if is_ability_on_cooldown():
+		return false
+	
+	if not use_ap(1):
+		return false
+	
+	_start_cooldown()
+	return true
+
+
+## Check if unit can use their special ability
+func can_use_ability(ability_type: String) -> bool:
+	if is_ability_on_cooldown():
+		return false
+	
+	match ability_type:
+		"overwatch":
+			return officer_type == "scout" and has_ap(1)
+		"turret":
+			return officer_type == "tech" and has_ap(1)
+		"patch":
+			return officer_type == "medic" and has_ap(2)
+		"charge":
+			return officer_type == "heavy" and has_ap(1)
+		"execute":
+			return officer_type == "captain" and has_ap(1)
+		_:
+			return false
 
 
 ## Face towards a target position (for aiming phase)
