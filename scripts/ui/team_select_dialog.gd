@@ -4,7 +4,8 @@ extends Control
 signal team_selected(officer_keys: Array[String])
 signal cancelled
 
-@onready var title_label: Label = $PanelContainer/MarginContainer/VBoxContainer/TitleLabel
+# Updated paths for new styled layout
+@onready var title_label: Label = $PanelContainer/MarginContainer/VBoxContainer/HeaderContainer/TitleLabel
 @onready var officer_container: VBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/OfficerContainer
 @onready var selected_label: Label = $PanelContainer/MarginContainer/VBoxContainer/SelectedLabel
 @onready var deploy_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/DeployButton
@@ -36,9 +37,9 @@ func show_dialog(biome_type: int = -1) -> void:
 func _update_title() -> void:
 	if current_biome_type >= 0:
 		var biome_name = BiomeConfig.get_biome_name(current_biome_type)
-		title_label.text = "SCAVENGE MISSION: %s" % biome_name.to_upper()
+		title_label.text = "[ SCAVENGE: %s ]" % biome_name.to_upper()
 	else:
-		title_label.text = "SCAVENGE MISSION"
+		title_label.text = "[ SELECT AWAY TEAM ]"
 
 
 func _populate_officers() -> void:
@@ -79,7 +80,7 @@ func _populate_officers() -> void:
 		# Officer description
 		var desc_label = Label.new()
 		desc_label.text = _get_officer_description(officer_key)
-		desc_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+		desc_label.add_theme_color_override("font_color", Color(0.5, 0.7, 0.8))
 		desc_label.add_theme_font_size_override("font_size", 15)
 		desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		desc_label.custom_minimum_size = Vector2(600, 0)
@@ -95,6 +96,7 @@ func _get_officer_display_name(key: String) -> String:
 		"tech": return "TECH"
 		"medic": return "MEDIC"
 		"heavy": return "HEAVY"
+		"sniper": return "SNIPER"
 		_: return key.to_upper()
 
 
@@ -110,17 +112,20 @@ func _get_officer_description(key: String) -> String:
 			return "Heavily armed bruiser. Ability: CHARGE - Rush an enemy within 4 tiles. Instant-kills basic enemies, heavy damage to elites (1 AP). 2-turn cooldown."
 		"captain":
 			return "Squad leader. Ability: EXECUTE - Guaranteed kill on an enemy within 4 tiles below 50% HP. Never misses (1 AP). 2-turn cooldown."
+		"sniper":
+			return "Long-range marksman. Ability: PRECISION SHOT - Guaranteed hit on enemies 8+ tiles away, deals 2x damage (60). (1 AP). 2-turn cooldown."
 		_:
 			return ""
 
 
 func _get_officer_color(key: String) -> Color:
 	match key:
-		"captain": return Color.YELLOW
-		"scout": return Color.GREEN
-		"tech": return Color.CYAN
-		"medic": return Color.MAGENTA
-		"heavy": return Color.ORANGE_RED
+		"captain": return Color(1.0, 0.69, 0.0)  # Amber
+		"scout": return Color(0.2, 1.0, 0.5)  # Green
+		"tech": return Color(0.4, 0.9, 1.0)  # Cyan
+		"medic": return Color(1.0, 0.5, 0.8)  # Pink
+		"heavy": return Color(1.0, 0.4, 0.3)  # Red-orange
+		"sniper": return Color(0.6, 0.55, 0.7)  # Dark gray with purple tint
 		_: return Color.WHITE
 
 

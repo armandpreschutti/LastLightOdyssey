@@ -50,6 +50,7 @@ var _move_speed: float = 150.0
 # Animation
 var _idle_tween: Tween = null
 var _targetable_tween: Tween = null
+var _attack_tween: Tween = null
 
 
 func _ready() -> void:
@@ -230,8 +231,8 @@ func shoot_at(target_pos: Vector2i, hit_chance: float, damage: int = -1) -> bool
 		return false
 	
 	var actual_damage = damage if damage > 0 else base_damage
-	var roll = randf()
-	var hit = roll <= (hit_chance / 100.0)
+	# Use forgiving RNG system (enemies don't get bad luck protection by default)
+	var hit = CombatRNG.roll_attack(hit_chance, false, get_instance_id())
 	
 	shot_fired.emit(target_pos, hit, actual_damage if hit else 0)
 	return hit
@@ -320,3 +321,168 @@ func update_cover_indicator(cover_level: int) -> void:
 		half_cover_indicator.visible = (cover_level == 1)
 	if full_cover_indicator:
 		full_cover_indicator.visible = (cover_level == 2)
+
+
+#region Attack Animations
+
+## Kill any running attack tween to prevent conflicts
+func _kill_attack_tween() -> void:
+	if _attack_tween and _attack_tween.is_valid():
+		_attack_tween.kill()
+		_attack_tween = null
+
+
+## Play the unique attack animation for this enemy type
+func play_attack_animation() -> void:
+	if not sprite:
+		return
+	_kill_attack_tween()
+	_stop_idle_animation()
+	
+	match enemy_type:
+		"basic": _play_basic_enemy_attack()
+		"heavy": _play_heavy_enemy_attack()
+		_:       _play_basic_enemy_attack()
+
+
+## Basic Enemy - Aggressive snap: forward lurch, red flash, sharp recoil, fast recovery
+func _play_basic_enemy_attack() -> void:
+	var recoil_dir = -1.0 if not sprite.flip_h else 1.0
+	var lurch_dir = -recoil_dir  # Lurch toward target (opposite of recoil)
+	_attack_tween = create_tween()
+	# Quick forward lurch toward target
+	_attack_tween.tween_property(sprite, "position:x", lurch_dir * 3.0, 0.03).set_ease(Tween.EASE_OUT)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(1.8, 0.3, 0.2, 1.0), 0.03)
+	# Sharp recoil back
+	_attack_tween.tween_property(sprite, "position:x", recoil_dir * 4.0, 0.04).set_ease(Tween.EASE_OUT)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(1.4, 0.5, 0.3, 1.0), 0.04)
+	# Fast recovery
+	_attack_tween.tween_property(sprite, "position:x", 0.0, 0.10).set_ease(Tween.EASE_IN_OUT)
+	_attack_tween.parallel().tween_property(sprite, "position:y", 0.0, 0.10)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.10)
+	_attack_tween.tween_callback(_start_idle_animation)
+
+
+## Heavy Enemy - Brute force: strong recoil + crouch, orange flash, heavy scale squeeze, slow recovery
+func _play_heavy_enemy_attack() -> void:
+	var recoil_dir = -1.0 if not sprite.flip_h else 1.0
+	var rot_dir = 1.0 if not sprite.flip_h else -1.0
+	_attack_tween = create_tween()
+	# Heavy recoil + crouch + orange flash + scale squeeze
+	_attack_tween.tween_property(sprite, "position:x", recoil_dir * 5.0, 0.05).set_ease(Tween.EASE_OUT)
+	_attack_tween.parallel().tween_property(sprite, "position:y", 3.0, 0.05)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(1.8, 0.7, 0.2, 1.0), 0.05)
+	_attack_tween.parallel().tween_property(sprite, "scale", Vector2(0.88, 0.88), 0.05)
+	_attack_tween.parallel().tween_property(sprite, "rotation", rot_dir * 0.04, 0.05)
+	# Bounce back overshoot
+	_attack_tween.tween_property(sprite, "scale", Vector2(1.06, 1.06), 0.10)
+	_attack_tween.parallel().tween_property(sprite, "position:x", recoil_dir * -1.0, 0.10)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(1.3, 0.9, 0.5, 1.0), 0.10)
+	# Slow settle to baseline (conveys weight)
+	_attack_tween.tween_property(sprite, "position:x", 0.0, 0.20).set_ease(Tween.EASE_IN_OUT)
+	_attack_tween.parallel().tween_property(sprite, "position:y", 0.0, 0.20).set_ease(Tween.EASE_IN_OUT)
+	_attack_tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.20)
+	_attack_tween.parallel().tween_property(sprite, "rotation", 0.0, 0.20)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.20)
+	_attack_tween.tween_callback(_start_idle_animation)
+
+#endregion
+
+
+#region Death Animations
+
+var _death_tween: Tween = null
+
+
+## Play the death animation for this enemy type and return when complete
+func play_death_animation() -> void:
+	if not sprite:
+		return
+	
+	# Stop all other animations
+	_stop_idle_animation()
+	_kill_attack_tween()
+	if _targetable_tween:
+		_targetable_tween.kill()
+		_targetable_tween = null
+	
+	# Hide UI elements
+	if hp_bar:
+		hp_bar.visible = false
+	if hp_bar_bg:
+		hp_bar_bg.visible = false
+	if alert_indicator:
+		alert_indicator.visible = false
+	if hit_chance_label:
+		hit_chance_label.visible = false
+	if half_cover_indicator:
+		half_cover_indicator.visible = false
+	if full_cover_indicator:
+		full_cover_indicator.visible = false
+	
+	match enemy_type:
+		"basic": await _play_basic_enemy_death()
+		"heavy": await _play_heavy_enemy_death()
+		_:       await _play_basic_enemy_death()
+
+
+## Basic Enemy Death - Quick collapse with red flash, spin, and fade out
+func _play_basic_enemy_death() -> void:
+	_death_tween = create_tween()
+	
+	# Initial hit reaction - red flash and jolt
+	_death_tween.tween_property(sprite, "modulate", Color(2.0, 0.3, 0.2, 1.0), 0.05)
+	_death_tween.parallel().tween_property(sprite, "position:y", -8.0, 0.05).set_ease(Tween.EASE_OUT)
+	
+	# Collapse downward with rotation and scale
+	_death_tween.tween_property(sprite, "position:y", 12.0, 0.25).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	_death_tween.parallel().tween_property(sprite, "rotation", 1.2, 0.25).set_ease(Tween.EASE_IN)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(0.8, 0.6), 0.25)
+	_death_tween.parallel().tween_property(sprite, "modulate", Color(0.8, 0.2, 0.1, 0.8), 0.25)
+	
+	# Fade out and shrink
+	_death_tween.tween_property(sprite, "modulate:a", 0.0, 0.2)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(0.4, 0.3), 0.2)
+	
+	# Fade shadow
+	if shadow:
+		_death_tween.parallel().tween_property(shadow, "modulate:a", 0.0, 0.2)
+	
+	await _death_tween.finished
+
+
+## Heavy Enemy Death - Slow heavy fall with orange flash, scale down, dramatic collapse
+func _play_heavy_enemy_death() -> void:
+	_death_tween = create_tween()
+	
+	# Initial hit reaction - orange flash and stagger back
+	_death_tween.tween_property(sprite, "modulate", Color(2.0, 0.8, 0.2, 1.0), 0.08)
+	_death_tween.parallel().tween_property(sprite, "position:x", 4.0, 0.08).set_ease(Tween.EASE_OUT)
+	_death_tween.parallel().tween_property(sprite, "position:y", -4.0, 0.08)
+	
+	# Stagger forward (losing balance)
+	_death_tween.tween_property(sprite, "position:x", -6.0, 0.15).set_ease(Tween.EASE_IN_OUT)
+	_death_tween.parallel().tween_property(sprite, "rotation", -0.15, 0.15)
+	_death_tween.parallel().tween_property(sprite, "modulate", Color(1.5, 0.5, 0.2, 1.0), 0.15)
+	
+	# Heavy collapse - fall forward with weight
+	_death_tween.tween_property(sprite, "position:y", 16.0, 0.35).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	_death_tween.parallel().tween_property(sprite, "rotation", 1.5, 0.35).set_ease(Tween.EASE_IN)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(1.1, 0.7), 0.35)
+	_death_tween.parallel().tween_property(sprite, "modulate", Color(0.6, 0.3, 0.1, 0.9), 0.35)
+	
+	# Ground impact - slight bounce and settle
+	_death_tween.tween_property(sprite, "position:y", 14.0, 0.1).set_ease(Tween.EASE_OUT)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(1.2, 0.5), 0.1)
+	
+	# Final fade out
+	_death_tween.tween_property(sprite, "modulate:a", 0.0, 0.3)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(0.6, 0.3), 0.3)
+	
+	# Fade shadow
+	if shadow:
+		_death_tween.parallel().tween_property(shadow, "modulate:a", 0.0, 0.3)
+	
+	await _death_tween.finished
+
+#endregion

@@ -4,15 +4,21 @@ extends Node
 
 @onready var management_hud: Control = $ManagementLayer/ManagementHUD
 @onready var star_map: Control = $ManagementLayer/StarMap
+@onready var event_scene_dialog: Control = $DialogLayer/EventSceneDialog
 @onready var event_dialog: Control = $DialogLayer/EventDialog
 @onready var trading_dialog: Control = $DialogLayer/TradingDialog
+@onready var mission_recap: Control = $DialogLayer/MissionRecap
+@onready var new_earth_scene: Control = $DialogLayer/NewEarthSceneDialog
+@onready var voyage_recap: Control = $DialogLayer/VoyageRecap
 @onready var game_over_panel: Control = $DialogLayer/GameOverPanel
-@onready var game_over_label: Label = $DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer/GameOverLabel
+@onready var game_over_label: Label = $DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer/HeaderContainer/GameOverLabel
 @onready var restart_button: Button = $DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer/RestartButton
 @onready var team_select_dialog: Control = $DialogLayer/TeamSelectDialog
 @onready var tactical_mode: Node2D = $TacticalMode
 @onready var management_layer: CanvasLayer = $ManagementLayer
 @onready var management_background: ColorRect = $ManagementBackground
+
+var _pending_ending_type: String = ""  # Store ending type for the win sequence
 
 enum GamePhase { IDLE, EVENT_DISPLAY, TEAM_SELECT, TACTICAL, TRADING, GAME_OVER, GAME_WON }
 
@@ -35,11 +41,15 @@ func _ready() -> void:
 
 
 func _connect_signals() -> void:
+	event_scene_dialog.scene_dismissed.connect(_on_event_scene_dismissed)
 	event_dialog.event_choice_made.connect(_on_event_choice_made)
 	trading_dialog.trading_complete.connect(_on_trading_complete)
 	team_select_dialog.team_selected.connect(_on_team_selected)
 	team_select_dialog.cancelled.connect(_on_team_select_cancelled)
 	tactical_mode.mission_complete.connect(_on_mission_complete)
+	mission_recap.recap_dismissed.connect(_on_recap_dismissed)
+	new_earth_scene.scene_dismissed.connect(_on_new_earth_scene_dismissed)
+	voyage_recap.recap_dismissed.connect(_on_voyage_recap_dismissed)
 	management_hud.quit_to_menu_pressed.connect(_on_quit_to_menu)
 	GameState.game_over.connect(_on_game_over)
 	GameState.game_won.connect(_on_game_won)
@@ -140,6 +150,12 @@ func _trigger_random_event() -> void:
 		if TutorialManager.is_at_step("resources_intro"):
 			TutorialManager.acknowledge_step()
 	
+	# Show Oregon Trail-style event scene first, then the choice dialog
+	event_scene_dialog.show_scene(current_event)
+
+
+func _on_event_scene_dismissed() -> void:
+	# After the scene is dismissed, show the event choice dialog
 	event_dialog.show_event(current_event)
 
 
@@ -177,12 +193,17 @@ func _on_team_select_cancelled() -> void:
 	pending_biome_type = -1
 
 
-func _on_mission_complete(_success: bool) -> void:
-	# Return to management mode
+func _on_mission_complete(_success: bool, stats: Dictionary) -> void:
+	# Hide tactical mode
 	tactical_mode.visible = false
 	management_layer.visible = true
 	management_background.visible = true
+	
+	# Show mission recap screen before returning to management
+	mission_recap.show_recap(stats)
 
+
+func _on_recap_dismissed() -> void:
 	current_phase = GamePhase.IDLE
 	pending_biome_type = -1
 	
@@ -206,13 +227,24 @@ func _on_game_over(reason: String) -> void:
 
 func _on_game_won(ending_type: String) -> void:
 	current_phase = GamePhase.GAME_WON
+	_pending_ending_type = ending_type
 	event_dialog.hide_dialog()
 	tactical_mode.visible = false
-	management_layer.visible = true
+	management_layer.visible = false
 	management_background.visible = true
 
-	game_over_label.text = GameState.get_ending_text(ending_type)
-	game_over_panel.visible = true
+	# Show New Earth arrival scene first
+	new_earth_scene.show_scene(ending_type)
+
+
+func _on_new_earth_scene_dismissed() -> void:
+	# After New Earth scene, show voyage recap
+	voyage_recap.show_recap(_pending_ending_type)
+
+
+func _on_voyage_recap_dismissed() -> void:
+	# After voyage recap, return to title menu
+	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
 
 
 func _on_trading_complete() -> void:

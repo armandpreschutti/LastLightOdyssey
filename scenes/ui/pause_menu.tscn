@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://bpausemenu001"]
 
-[ext_resource type="Script" path="res://scripts/ui/pause_menu.gd" id="1_pause"]
+[ext_resource type="Script" uid="uid://cao7qq2o8vyvx" path="res://scripts/ui/pause_menu.gd" id="1_pause"]
 
-[node name="PauseMenu" type="Control"]
+[node name="PauseMenu" type="Control" unique_id=1420741629]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -12,7 +12,7 @@ grow_vertical = 2
 mouse_filter = 1
 script = ExtResource("1_pause")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=405586837]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -20,9 +20,41 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 1
-color = Color(0, 0, 0, 0.7)
+color = Color(0, 0, 0.05, 0.75)
 
-[node name="PanelContainer" type="PanelContainer" parent="."]
+[node name="GlowEffect" type="ColorRect" parent="." unique_id=1021896356]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -208.0
+offset_top = -158.0
+offset_right = 208.0
+offset_bottom = 158.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.15)
+
+[node name="BorderOuter" type="ColorRect" parent="." unique_id=1899356064]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -204.0
+offset_top = -180.0
+offset_right = 204.0
+offset_bottom = 180.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.6)
+
+[node name="PanelContainer" type="PanelContainer" parent="." unique_id=1527626838]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -36,64 +68,158 @@ offset_bottom = 150.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="MarginContainer" type="MarginContainer" parent="PanelContainer"]
+[node name="BackgroundGradient" type="ColorRect" parent="PanelContainer" unique_id=202529033]
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.02, 0.04, 0.08, 0.98)
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer" unique_id=1594959733]
 layout_mode = 2
 theme_override_constants/margin_left = 20
 theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 20
 theme_override_constants/margin_bottom = 20
 
-[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer" unique_id=542762291]
 layout_mode = 2
-theme_override_constants/separation = 20
+theme_override_constants/separation = 16
 
-[node name="TitleLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HeaderContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=212491315]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+mouse_filter = 2
+alignment = 1
+
+[node name="LeftDecor" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=307327314]
+custom_minimum_size = Vector2(20, 2)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.5)
+
+[node name="TitleLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=1792600233]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
 theme_override_font_sizes/font_size = 28
 text = "[ MISSION PAUSED ]"
 horizontal_alignment = 1
 
-[node name="HSeparator" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="RightDecor" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=1558525504]
+custom_minimum_size = Vector2(20, 2)
 layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.5)
 
-[node name="WarningLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HSeparator" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=434625645]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.4, 0.3, 1)
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.3)
+
+[node name="WarningLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1093497007]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.3, 0.2, 1)
 theme_override_font_sizes/font_size = 14
 text = "WARNING: Abandoning mission will
 result in colonist casualties!"
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="CostLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="CostLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1635858537]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.6, 0.2, 1)
+theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
 theme_override_font_sizes/font_size = 16
 text = "Abandoning costs 20 colonists"
 horizontal_alignment = 1
 
-[node name="HSeparator2" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HSeparator2" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1611034594]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.3)
 
-[node name="ButtonContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="ButtonContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=653487567]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="ResumeButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer"]
+[node name="ResumeButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer" unique_id=1540793983]
 custom_minimum_size = Vector2(0, 45)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.2, 1, 0.2, 1)
-theme_override_colors/font_hover_color = Color(0.5, 1, 0.5, 1)
-theme_override_colors/font_pressed_color = Color(0.1, 0.8, 0.1, 1)
+theme_override_colors/font_color = Color(0.2, 1, 0.5, 1)
+theme_override_colors/font_pressed_color = Color(0.1, 0.8, 0.3, 1)
+theme_override_colors/font_hover_color = Color(0.4, 1, 0.7, 1)
 theme_override_font_sizes/font_size = 18
 text = "[ RESUME MISSION ]"
 
-[node name="AbandonButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer"]
+[node name="AbandonButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer" unique_id=1073317876]
 custom_minimum_size = Vector2(0, 45)
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.4, 0.3, 1)
-theme_override_colors/font_hover_color = Color(1, 0.6, 0.5, 1)
-theme_override_colors/font_pressed_color = Color(0.8, 0.2, 0.2, 1)
+theme_override_colors/font_color = Color(1, 0.3, 0.2, 1)
+theme_override_colors/font_pressed_color = Color(0.8, 0.2, 0.1, 1)
+theme_override_colors/font_hover_color = Color(1, 0.5, 0.4, 1)
 theme_override_font_sizes/font_size = 18
 text = "[ ABANDON MISSION ]"
+
+[node name="CornerTL" type="ColorRect" parent="." unique_id=856527143]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -176.0
+offset_right = -192.0
+offset_bottom = -168.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.8)
+
+[node name="CornerTR" type="ColorRect" parent="." unique_id=1566598832]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 192.0
+offset_top = -176.0
+offset_right = 200.0
+offset_bottom = -168.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.8)
+
+[node name="CornerBL" type="ColorRect" parent="." unique_id=1716809364]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = 168.0
+offset_right = -192.0
+offset_bottom = 176.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.8)
+
+[node name="CornerBR" type="ColorRect" parent="." unique_id=1342162887]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 192.0
+offset_top = 168.0
+offset_right = 200.0
+offset_bottom = 176.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.8)

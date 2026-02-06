@@ -1,19 +1,51 @@
-[gd_scene format=3 uid="uid://bhd16wq58r0sj"]
+[gd_scene load_steps=6 format=3 uid="uid://bhd16wq58r0sj"]
 
 [ext_resource type="Script" uid="uid://bhfsk44lrvrqc" path="res://scripts/ui/management_hud.gd" id="1_hud"]
+[ext_resource type="Texture2D" uid="uid://icon_colonists" path="res://assets/sprites/ui/icons/icon_colonists.png" id="2_colonists"]
+[ext_resource type="Texture2D" uid="uid://icon_fuel" path="res://assets/sprites/ui/icons/icon_fuel.png" id="3_fuel"]
+[ext_resource type="Texture2D" uid="uid://icon_hull" path="res://assets/sprites/ui/icons/icon_hull.png" id="4_hull"]
+[ext_resource type="Texture2D" uid="uid://icon_scrap" path="res://assets/sprites/ui/icons/icon_scrap.png" id="5_scrap"]
 
-[node name="ManagementHUD" type="Control" unique_id=1202243277]
+[node name="ManagementHUD" type="Control"]
 layout_mode = 3
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_top = -280.0
-offset_right = 400.0
+offset_top = -240.0
+offset_right = 280.0
 grow_vertical = 0
 mouse_filter = 2
 script = ExtResource("1_hud")
 
-[node name="PanelContainer" type="PanelContainer" parent="." unique_id=1400647952]
+[node name="GlowEffect" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -4.0
+offset_top = -4.0
+offset_right = 4.0
+offset_bottom = 4.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.4, 0.9, 1.0, 0.15)
+
+[node name="BorderOuter" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -2.0
+offset_top = -2.0
+offset_right = 2.0
+offset_bottom = 2.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.4, 0.9, 1.0, 0.6)
+
+[node name="PanelContainer" type="PanelContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -22,82 +54,221 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=234660455]
+[node name="BackgroundGradient" type="ColorRect" parent="PanelContainer"]
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.02, 0.05, 0.1, 0.95)
+
+[node name="ScanlineOverlay" type="ColorRect" parent="PanelContainer"]
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.4, 0.9, 1.0, 0.03)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_bottom = 12
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="HeaderLabel" type="Label" parent="VBoxContainer" unique_id=1275764347]
+[node name="HeaderContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+alignment = 1
+
+[node name="LeftDecor" type="ColorRect" parent="MarginContainer/VBoxContainer/HeaderContainer"]
+custom_minimum_size = Vector2(30, 2)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+color = Color(0.4, 0.9, 1.0, 0.5)
+
+[node name="HeaderLabel" type="Label" parent="MarginContainer/VBoxContainer/HeaderContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 1.0, 1)
 theme_override_font_sizes/font_size = 22
 text = "[ SHIP STATUS ]"
 horizontal_alignment = 1
 
-[node name="HSeparator" type="HSeparator" parent="VBoxContainer" unique_id=330743790]
+[node name="RightDecor" type="ColorRect" parent="MarginContainer/VBoxContainer/HeaderContainer"]
+custom_minimum_size = Vector2(30, 2)
 layout_mode = 2
+size_flags_vertical = 4
 mouse_filter = 2
+color = Color(0.4, 0.9, 1.0, 0.5)
 
-[node name="StatsContainer" type="VBoxContainer" parent="VBoxContainer" unique_id=271874304]
+[node name="HSeparator" type="ColorRect" parent="MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 4
+color = Color(0.4, 0.9, 1.0, 0.3)
 
-[node name="ColonistsLabel" type="Label" parent="VBoxContainer/StatsContainer" unique_id=88158498]
+[node name="StatsContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_constants/separation = 6
+
+[node name="ColonistsRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StatsContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 10
+
+[node name="ColonistsIcon" type="TextureRect" parent="MarginContainer/VBoxContainer/StatsContainer/ColonistsRow"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("2_colonists")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ColonistsLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/ColonistsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
 theme_override_font_sizes/font_size = 18
 text = "COLONISTS: 1000"
 
-[node name="FuelLabel" type="Label" parent="VBoxContainer/StatsContainer" unique_id=1091140983]
+[node name="FuelRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StatsContainer"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_constants/separation = 10
+
+[node name="FuelIcon" type="TextureRect" parent="MarginContainer/VBoxContainer/StatsContainer/FuelRow"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("3_fuel")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="FuelLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/FuelRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_colors/font_color = Color(1.0, 0.69, 0.0, 1)
 theme_override_font_sizes/font_size = 18
 text = "FUEL CELLS: 10"
 
-[node name="IntegrityLabel" type="Label" parent="VBoxContainer/StatsContainer" unique_id=1493876721]
+[node name="IntegrityRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StatsContainer"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_constants/separation = 10
+
+[node name="IntegrityIcon" type="TextureRect" parent="MarginContainer/VBoxContainer/StatsContainer/IntegrityRow"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("4_hull")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="IntegrityLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/IntegrityRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
 theme_override_font_sizes/font_size = 18
 text = "HULL INTEGRITY: 100%"
 
-[node name="ScrapLabel" type="Label" parent="VBoxContainer/StatsContainer" unique_id=944519047]
+[node name="ScrapRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StatsContainer"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_constants/separation = 10
+
+[node name="ScrapIcon" type="TextureRect" parent="MarginContainer/VBoxContainer/StatsContainer/ScrapRow"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("5_scrap")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ScrapLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/ScrapRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_colors/font_color = Color(1.0, 0.69, 0.0, 1)
 theme_override_font_sizes/font_size = 18
 text = "SCRAP: 0"
 
-[node name="HSeparator2" type="HSeparator" parent="VBoxContainer" unique_id=756201566]
+[node name="HSeparator2" type="ColorRect" parent="MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
+color = Color(0.4, 0.9, 1.0, 0.3)
 
-[node name="StatusLabel" type="Label" parent="VBoxContainer" unique_id=1406390285]
+[node name="StatusLabel" type="Label" parent="MarginContainer/VBoxContainer"]
 visible = false
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.2, 0.2, 1)
+theme_override_colors/font_color = Color(1.0, 0.3, 0.2, 1)
 theme_override_font_sizes/font_size = 16
 text = "[ DRIFT MODE - NO FUEL ]"
 horizontal_alignment = 1
 
-[node name="HSeparator3" type="HSeparator" parent="VBoxContainer"]
+[node name="HSeparator3" type="ColorRect" parent="MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
+color = Color(0.4, 0.9, 1.0, 0.3)
 
-[node name="QuitButton" type="Button" parent="VBoxContainer"]
+[node name="QuitButton" type="Button" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1)
-theme_override_colors/font_hover_color = Color(0.9, 0.9, 1, 1)
-theme_override_colors/font_pressed_color = Color(0.4, 0.4, 0.5, 1)
+theme_override_colors/font_color = Color(0.6, 0.3, 0.3, 1)
+theme_override_colors/font_hover_color = Color(1.0, 0.4, 0.3, 1)
+theme_override_colors/font_pressed_color = Color(0.4, 0.2, 0.2, 1)
 theme_override_font_sizes/font_size = 16
 text = "[ QUIT TO MENU ]"
+
+[node name="CornerTL" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 0
+offset_right = 8.0
+offset_bottom = 8.0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1.0, 0.8)
+
+[node name="CornerTR" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -8.0
+offset_bottom = 8.0
+grow_horizontal = 0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1.0, 0.8)
+
+[node name="CornerBL" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -8.0
+offset_right = 8.0
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1.0, 0.8)
+
+[node name="CornerBR" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -8.0
+offset_top = -8.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1.0, 0.8)

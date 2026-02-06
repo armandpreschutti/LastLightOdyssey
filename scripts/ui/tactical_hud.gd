@@ -10,19 +10,19 @@ signal pause_pressed
 # Pause button (top left)
 @onready var pause_button: Button = $TopLeftPanel/PauseButton
 
-# Top bar elements
-@onready var turn_label: Label = $TopBar/HBox/TurnContainer/TurnLabel
+# Top bar elements - updated paths for icon-based layout
+@onready var turn_label: Label = $TopBar/HBox/TurnContainer/TurnRow/TurnLabel
 @onready var stability_container: VBoxContainer = $TopBar/HBox/StabilityContainer
-@onready var stability_label: Label = $TopBar/HBox/StabilityContainer/StabilityLabel
+@onready var stability_label: Label = $TopBar/HBox/StabilityContainer/StabilityRow/StabilityLabel
 @onready var stability_bar: ProgressBar = $TopBar/HBox/StabilityContainer/StabilityBar
 @onready var haul_container: VBoxContainer = $TopBar/HBox/HaulContainer
-@onready var fuel_label: Label = $TopBar/HBox/HaulContainer/FuelLabel
-@onready var scrap_label: Label = $TopBar/HBox/HaulContainer/ScrapLabel
+@onready var fuel_label: Label = $TopBar/HBox/HaulContainer/FuelRow/FuelLabel
+@onready var scrap_label: Label = $TopBar/HBox/HaulContainer/ScrapRow/ScrapLabel
 
 # Warning overlay
 @onready var cryo_warning: Label = $CryoWarning
 
-# Side panel elements
+# Side panel elements - updated paths for icon-based layout
 @onready var side_panel: PanelContainer = $SidePanel
 @onready var selected_header: Label = $SidePanel/VBox/SelectedHeader
 @onready var selected_name: Label = $SidePanel/VBox/SelectedName
@@ -32,7 +32,7 @@ signal pause_pressed
 @onready var ap_container: HBoxContainer = $SidePanel/VBox/APContainer
 @onready var ap_label: Label = $SidePanel/VBox/APContainer/APLabel
 @onready var ap_bar: ProgressBar = $SidePanel/VBox/APContainer/APBar
-@onready var move_label: Label = $SidePanel/VBox/MoveLabel
+@onready var move_label: Label = $SidePanel/VBox/MoveRow/MoveLabel
 @onready var attack_label: Label = $SidePanel/VBox/AttackLabel
 @onready var cover_bonus_label: Label = $SidePanel/VBox/CoverBonusLabel
 @onready var status_label: Label = $SidePanel/VBox/StatusLabel
@@ -79,7 +79,7 @@ func _setup_tooltips() -> void:
 	hp_container.tooltip_text = "Health Points: Unit's remaining health.\nIf HP reaches 0, the unit dies permanently."
 	ap_container.tooltip_text = "Action Points: Used for moving and attacking.\nMovement costs 1 AP. Shooting costs 1 AP. Resets each round."
 	end_turn_button.tooltip_text = "End this unit's turn and move to the next unit.\nAfter all units act, enemies take their turn."
-	extract_button.tooltip_text = "Extract all units from the mission.\nAll units must be on extraction tiles (green areas)."
+	extract_button.tooltip_text = "Extract units from the mission.\nAt least 1 unit must be on extraction tiles (green areas).\nUnits not in the extraction zone will be left behind (KIA)."
 
 
 func update_turn(turn_number: int) -> void:
@@ -88,7 +88,7 @@ func update_turn(turn_number: int) -> void:
 
 func update_stability(stability: int) -> void:
 	stability_bar.value = stability
-	stability_label.text = "CRYO-STABILITY: %d%%" % stability
+	stability_label.text = "CRYO: %d%%" % stability
 
 	if stability <= 0:
 		stability_label.add_theme_color_override("font_color", Color(1, 0.2, 0.2))
@@ -97,7 +97,7 @@ func update_stability(stability: int) -> void:
 		stability_label.add_theme_color_override("font_color", Color(1, 1, 0.2))
 		stability_bar.modulate = Color(1, 1, 0.3)
 	else:
-		stability_label.add_theme_color_override("font_color", Color(1, 0.69, 0))
+		stability_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.9))
 		stability_bar.modulate = Color(1, 1, 1)
 
 
@@ -106,11 +106,11 @@ func update_selected_unit(officer_name: String, current_ap: int, max_ap: int) ->
 	update_selected_unit_full(officer_name, current_ap, max_ap, 100, 100, 5)
 
 
-func update_selected_unit_full(officer_name: String, current_ap: int, max_ap: int, current_hp: int, max_hp: int, move_range: int, is_their_turn: bool = true, attack_range: int = 10, cover_level: int = 0) -> void:
+func update_selected_unit_full(officer_name: String, current_ap: int, max_ap: int, current_hp: int, max_hp: int, move_range: int, is_their_turn: bool = true, attack_range: int = 10, cover_level: int = 0, _officer_type: String = "") -> void:
 	selected_name.text = officer_name.to_upper()
 	
-	# Health display
-	hp_label.text = "HEALTH: %d / %d" % [current_hp, max_hp]
+	# Health display - shorter format for icon layout
+	hp_label.text = "HP: %d / %d" % [current_hp, max_hp]
 	hp_bar.max_value = max_hp
 	hp_bar.value = current_hp
 	
@@ -123,8 +123,8 @@ func update_selected_unit_full(officer_name: String, current_ap: int, max_ap: in
 	else:
 		hp_bar.modulate = Color(0.3, 1, 0.3)
 	
-	# Action points display
-	ap_label.text = "ACTION POINTS: %d / %d" % [current_ap, max_ap]
+	# Action points display - shorter format for icon layout
+	ap_label.text = "AP: %d / %d" % [current_ap, max_ap]
 	ap_bar.max_value = max_ap
 	ap_bar.value = current_ap
 	
@@ -132,10 +132,10 @@ func update_selected_unit_full(officer_name: String, current_ap: int, max_ap: in
 	if current_ap == 0:
 		ap_bar.modulate = Color(0.5, 0.5, 0.5)
 	else:
-		ap_bar.modulate = Color(0.3, 0.6, 1)
+		ap_bar.modulate = Color(1.0, 0.69, 0.0)
 	
 	# Movement and attack range
-	move_label.text = "MOVEMENT RANGE: %d tiles" % move_range
+	move_label.text = "MOVE: %d tiles" % move_range
 	attack_label.text = "ATTACK RANGE: %d tiles" % attack_range
 	
 	# Update tooltips with current values
@@ -151,20 +151,20 @@ func update_selected_unit_full(officer_name: String, current_ap: int, max_ap: in
 
 func _update_status(is_their_turn: bool, current_ap: int, current_hp: int, max_hp: int) -> void:
 	if not is_their_turn:
-		status_label.text = "STATUS: ◌ WAITING FOR TURN"
+		status_label.text = "STATUS: ◌ WAITING"
 		status_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
 		status_label.tooltip_text = "This unit is waiting. Other units must finish their turns first."
 	elif current_ap == 0:
-		status_label.text = "STATUS: ✗ OUT OF ACTIONS"
+		status_label.text = "STATUS: ✗ NO ACTIONS"
 		status_label.add_theme_color_override("font_color", Color(1, 0.5, 0.3))
 		status_label.tooltip_text = "No Action Points remaining. Click END TURN to proceed."
 	elif current_hp <= max_hp * 0.25:
-		status_label.text = "STATUS: ⚠ CRITICAL HEALTH"
+		status_label.text = "STATUS: ⚠ CRITICAL"
 		status_label.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
 		status_label.tooltip_text = "Unit is badly wounded! Consider retreating or healing."
 	else:
-		status_label.text = "STATUS: ▶ READY TO ACT"
-		status_label.add_theme_color_override("font_color", Color(0.2, 1, 0.2))
+		status_label.text = "STATUS: ▶ READY"
+		status_label.add_theme_color_override("font_color", Color(0.2, 1, 0.5))
 		status_label.tooltip_text = "This unit can act. Click tiles to move or enemies to attack."
 
 
@@ -175,12 +175,12 @@ func _update_cover_bonus_display(cover_level: int) -> void:
 	match cover_level:
 		2:  # Full cover
 			cover_bonus_label.visible = true
-			cover_bonus_label.text = "COVER BONUS: +15% ACC"
+			cover_bonus_label.text = "COVER: +15% ACC"
 			cover_bonus_label.add_theme_color_override("font_color", Color(0.4, 0.9, 1.0))
 			cover_bonus_label.tooltip_text = "Firing from full cover provides a stable shooting position.\n+15% accuracy bonus to all attacks."
 		1:  # Half cover
 			cover_bonus_label.visible = true
-			cover_bonus_label.text = "COVER BONUS: +10% ACC"
+			cover_bonus_label.text = "COVER: +10% ACC"
 			cover_bonus_label.add_theme_color_override("font_color", Color(0.6, 0.9, 0.8))
 			cover_bonus_label.tooltip_text = "Firing from half cover provides some stability.\n+10% accuracy bonus to all attacks."
 		_:  # No cover
@@ -188,8 +188,8 @@ func _update_cover_bonus_display(cover_level: int) -> void:
 
 
 func update_haul(fuel: int, scrap: int) -> void:
-	fuel_label.text = "FUEL COLLECTED: +%d" % fuel
-	scrap_label.text = "SCRAP COLLECTED: +%d" % scrap
+	fuel_label.text = "FUEL: +%d" % fuel
+	scrap_label.text = "SCRAP: +%d" % scrap
 	fuel_label.tooltip_text = "Fuel cells collected this mission.\nFuel is used to jump between star systems."
 	scrap_label.tooltip_text = "Scrap collected this mission.\nScrap can be traded for repairs and supplies."
 
@@ -212,6 +212,10 @@ func hide_cryo_warning() -> void:
 @warning_ignore("shadowed_variable_base_class")
 func set_extract_visible(is_visible: bool) -> void:
 	extract_button.visible = is_visible
+
+
+func set_end_turn_enabled(enabled: bool) -> void:
+	end_turn_button.disabled = not enabled
 
 
 func _on_pause_pressed() -> void:
@@ -269,6 +273,12 @@ func update_ability_buttons(officer_type: String, current_ap: int, cooldown: int
 			ability_description = "Guaranteed kill on an enemy within 4 tiles below 50% HP. Never misses."
 			ability_tooltip = "Execute: Costs 1 AP. Instant kill on enemy within 4 tiles below 50% HP."
 			ap_cost = 1
+		"sniper":
+			ability_name = "precision"
+			ability_text = "[ PRECISION SHOT ] - 1 AP"
+			ability_description = "Guaranteed hit on enemies 8+ tiles away. Deals 2x damage (60)."
+			ability_tooltip = "Precision Shot: Costs 1 AP. Guaranteed hit at 8+ tiles for 60 damage."
+			ap_cost = 1
 	
 	# Show ability if officer has one
 	if ability_name != "":
@@ -277,7 +287,7 @@ func update_ability_buttons(officer_type: String, current_ap: int, cooldown: int
 		
 		# Check cooldown
 		if cooldown > 0:
-			ability_header.text = "SPECIALIST ABILITY: [COOLDOWN %d]" % cooldown
+			ability_header.text = "ABILITY: [CD %d]" % cooldown
 			ability_button.text = "%s (CD: %d)" % [ability_text, cooldown]
 			ability_button.disabled = true
 			ability_desc.text = ability_description + "\n>> On cooldown for %d more turn(s)." % cooldown

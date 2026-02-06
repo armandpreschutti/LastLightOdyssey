@@ -1,15 +1,16 @@
 extends Control
 ## Management HUD - Displays ship stats and provides jump controls
-## 1980s terminal aesthetic with amber text
+## Retro sci-fi terminal aesthetic with cyan/amber accents
 
 signal quit_to_menu_pressed
 
-@onready var colonists_label: Label = $VBoxContainer/StatsContainer/ColonistsLabel
-@onready var fuel_label: Label = $VBoxContainer/StatsContainer/FuelLabel
-@onready var integrity_label: Label = $VBoxContainer/StatsContainer/IntegrityLabel
-@onready var scrap_label: Label = $VBoxContainer/StatsContainer/ScrapLabel
-@onready var status_label: Label = $VBoxContainer/StatusLabel
-@onready var quit_button: Button = $VBoxContainer/QuitButton
+# Updated paths for new icon-based layout
+@onready var colonists_label: Label = $MarginContainer/VBoxContainer/StatsContainer/ColonistsRow/ColonistsLabel
+@onready var fuel_label: Label = $MarginContainer/VBoxContainer/StatsContainer/FuelRow/FuelLabel
+@onready var integrity_label: Label = $MarginContainer/VBoxContainer/StatsContainer/IntegrityRow/IntegrityLabel
+@onready var scrap_label: Label = $MarginContainer/VBoxContainer/StatsContainer/ScrapRow/ScrapLabel
+@onready var status_label: Label = $MarginContainer/VBoxContainer/StatusLabel
+@onready var quit_button: Button = $MarginContainer/VBoxContainer/QuitButton
 
 
 func _ready() -> void:

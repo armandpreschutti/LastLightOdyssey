@@ -4,8 +4,11 @@ extends Control
 
 signal trading_complete
 
-@onready var title_label: Label = $PanelContainer/MarginContainer/VBoxContainer/TitleLabel
-@onready var resources_label: Label = $PanelContainer/MarginContainer/VBoxContainer/ResourcesLabel
+# Updated paths for new icon-based layout
+@onready var title_label: Label = $PanelContainer/MarginContainer/VBoxContainer/HeaderContainer/TitleLabel
+@onready var scrap_label: Label = $PanelContainer/MarginContainer/VBoxContainer/ResourcesContainer/ScrapDisplay/ScrapLabel
+@onready var fuel_label: Label = $PanelContainer/MarginContainer/VBoxContainer/ResourcesContainer/FuelDisplay/FuelLabel
+@onready var hull_label: Label = $PanelContainer/MarginContainer/VBoxContainer/ResourcesContainer/HullDisplay/HullLabel
 @onready var fuel_trade_button: Button = $PanelContainer/MarginContainer/VBoxContainer/TradesContainer/FuelTradeButton
 @onready var repair_trade_button: Button = $PanelContainer/MarginContainer/VBoxContainer/TradesContainer/RepairTradeButton
 @onready var close_button: Button = $PanelContainer/MarginContainer/VBoxContainer/CloseButton
@@ -30,12 +33,10 @@ func show_trading() -> void:
 
 
 func _update_display() -> void:
-	# Update resource display
-	resources_label.text = "CURRENT RESOURCES:\nSCRAP: %d\nFUEL: %d\nHULL: %d%%" % [
-		GameState.scrap,
-		GameState.fuel,
-		GameState.ship_integrity
-	]
+	# Update individual resource displays with icons
+	scrap_label.text = "SCRAP: %d" % GameState.scrap
+	fuel_label.text = "FUEL: %d" % GameState.fuel
+	hull_label.text = "HULL: %d%%" % GameState.ship_integrity
 	
 	# Update trade button availability
 	var can_buy_fuel = GameState.scrap >= SCRAP_PER_FUEL
@@ -45,8 +46,8 @@ func _update_display() -> void:
 	repair_trade_button.disabled = not can_buy_repair
 	
 	# Update button text
-	fuel_trade_button.text = "[ BUY FUEL: %d SCRAP ]" % SCRAP_PER_FUEL
-	repair_trade_button.text = "[ REPAIR HULL: %d SCRAP ]" % SCRAP_PER_REPAIR
+	fuel_trade_button.text = "[ BUY FUEL CELL: %d SCRAP ]" % SCRAP_PER_FUEL
+	repair_trade_button.text = "[ REPAIR HULL +%d%%: %d SCRAP ]" % [REPAIR_AMOUNT, SCRAP_PER_REPAIR]
 
 
 func _on_fuel_trade_pressed() -> void:

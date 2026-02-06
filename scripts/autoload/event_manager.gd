@@ -18,6 +18,7 @@ var random_events: Array[Dictionary] = [
 		"specialist_mitigation": "tech",
 		"mitigated_colonist_loss": 10,
 		"mitigated_integrity_loss": 0,
+		"mitigation_scrap_cost": 12,
 	},
 	{
 		"id": 2,
@@ -28,6 +29,7 @@ var random_events: Array[Dictionary] = [
 		"specialist_mitigation": "scout",
 		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 5,
+		"mitigation_scrap_cost": 15,
 	},
 	{
 		"id": 3,
@@ -38,6 +40,7 @@ var random_events: Array[Dictionary] = [
 		"specialist_mitigation": "medic",
 		"mitigated_colonist_loss": 20,
 		"mitigated_integrity_loss": 0,
+		"mitigation_scrap_cost": 22,
 	},
 	{
 		"id": 4,
@@ -48,6 +51,7 @@ var random_events: Array[Dictionary] = [
 		"specialist_mitigation": "tech",
 		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 5,
+		"mitigation_scrap_cost": 10,
 	},
 	{
 		"id": 5,
@@ -58,6 +62,7 @@ var random_events: Array[Dictionary] = [
 		"specialist_mitigation": "heavy",
 		"mitigated_colonist_loss": 10,
 		"mitigated_integrity_loss": 10,
+		"mitigation_scrap_cost": 20,
 	},
 	{
 		"id": 6,
@@ -68,6 +73,7 @@ var random_events: Array[Dictionary] = [
 		"fuel_gain": 2,
 		"scrap_gain": 15,
 		"specialist_mitigation": "",
+		"mitigation_scrap_cost": 0,
 	},
 	{
 		"id": 7,
@@ -78,6 +84,7 @@ var random_events: Array[Dictionary] = [
 		"colonist_gain": 50,
 		"specialist_mitigation": "medic",
 		"mitigated_integrity_loss": 0,
+		"mitigation_scrap_cost": 12,
 	},
 	{
 		"id": 8,
@@ -88,6 +95,7 @@ var random_events: Array[Dictionary] = [
 		"specialist_mitigation": "tech",
 		"mitigated_colonist_loss": 15,
 		"mitigated_integrity_loss": 0,
+		"mitigation_scrap_cost": 18,
 	},
 	{
 		"id": 9,
@@ -98,6 +106,7 @@ var random_events: Array[Dictionary] = [
 		"specialist_mitigation": "medic",
 		"mitigated_colonist_loss": 30,
 		"mitigated_integrity_loss": 0,
+		"mitigation_scrap_cost": 28,
 	},
 	{
 		"id": 10,
@@ -106,6 +115,7 @@ var random_events: Array[Dictionary] = [
 		"colonist_loss": 0,
 		"integrity_loss": 0,
 		"specialist_mitigation": "",
+		"mitigation_scrap_cost": 0,
 	},
 ]
 
@@ -131,6 +141,9 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
 		result["mitigated"] = true
 		result["colonist_change"] = -event.get("mitigated_colonist_loss", event.get("colonist_loss", 0))
 		result["integrity_change"] = -event.get("mitigated_integrity_loss", event.get("integrity_loss", 0))
+		# Deduct scrap cost for mitigation
+		var scrap_cost = event.get("mitigation_scrap_cost", 0)
+		result["scrap_change"] -= scrap_cost
 	else:
 		result["colonist_change"] = -event.get("colonist_loss", 0)
 		result["integrity_change"] = -event.get("integrity_loss", 0)
@@ -138,7 +151,7 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
 	# Add any gains
 	result["colonist_change"] += event.get("colonist_gain", 0)
 	result["fuel_change"] = event.get("fuel_gain", 0)
-	result["scrap_change"] = event.get("scrap_gain", 0)
+	result["scrap_change"] += event.get("scrap_gain", 0)
 
 	# Apply changes to game state
 	GameState.colonist_count += result["colonist_change"]
@@ -155,7 +168,11 @@ func can_mitigate_event(event: Dictionary) -> bool:
 	var specialist_key = event.get("specialist_mitigation", "")
 	if specialist_key == "":
 		return false
-	return GameState.is_officer_alive(specialist_key)
+	if not GameState.is_officer_alive(specialist_key):
+		return false
+	# Check if player has enough scrap
+	var scrap_cost = event.get("mitigation_scrap_cost", 0)
+	return GameState.scrap >= scrap_cost
 
 
 func get_node_type(node_index: int = -1) -> NodeType:

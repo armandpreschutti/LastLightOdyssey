@@ -1,6 +1,10 @@
-[gd_scene format=3 uid="uid://cg8k2qaxnv5rl"]
+[gd_scene load_steps=6 format=3 uid="uid://cg8k2qaxnv5rl"]
 
 [ext_resource type="Script" path="res://scripts/ui/event_dialog.gd" id="1_event"]
+[ext_resource type="Texture2D" uid="uid://icon_colonists" path="res://assets/sprites/ui/icons/icon_colonists.png" id="2_colonists"]
+[ext_resource type="Texture2D" uid="uid://icon_hull" path="res://assets/sprites/ui/icons/icon_hull.png" id="3_hull"]
+[ext_resource type="Texture2D" uid="uid://icon_fuel" path="res://assets/sprites/ui/icons/icon_fuel.png" id="4_fuel"]
+[ext_resource type="Texture2D" uid="uid://icon_scrap" path="res://assets/sprites/ui/icons/icon_scrap.png" id="5_scrap"]
 
 [node name="EventDialog" type="Control"]
 layout_mode = 3
@@ -20,7 +24,39 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 0
-color = Color(0, 0, 0, 0.7)
+color = Color(0, 0, 0.05, 0.75)
+
+[node name="GlowEffect" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -308.0
+offset_top = -228.0
+offset_right = 308.0
+offset_bottom = 228.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1.0, 0.3, 0.2, 0.15)
+
+[node name="BorderOuter" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -304.0
+offset_top = -224.0
+offset_right = 304.0
+offset_bottom = 224.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1.0, 0.3, 0.2, 0.6)
 
 [node name="PanelContainer" type="PanelContainer" parent="."]
 layout_mode = 1
@@ -36,6 +72,11 @@ offset_bottom = 220.0
 grow_horizontal = 2
 grow_vertical = 2
 
+[node name="BackgroundGradient" type="ColorRect" parent="PanelContainer"]
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.03, 0.02, 0.05, 0.98)
+
 [node name="MarginContainer" type="MarginContainer" parent="PanelContainer"]
 layout_mode = 2
 mouse_filter = 2
@@ -49,26 +90,47 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 16
 
-[node name="TitleLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HeaderContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+alignment = 1
+
+[node name="LeftDecor" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer/HeaderContainer"]
+custom_minimum_size = Vector2(30, 2)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+color = Color(1.0, 0.3, 0.2, 0.5)
+
+[node name="TitleLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/HeaderContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1.0, 0.3, 0.2, 1)
 theme_override_font_sizes/font_size = 24
 text = "[ EVENT TITLE ]"
 horizontal_alignment = 1
 
+[node name="RightDecor" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer/HeaderContainer"]
+custom_minimum_size = Vector2(30, 2)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+color = Color(1.0, 0.3, 0.2, 0.5)
+
 [node name="DescriptionLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
 theme_override_font_sizes/font_size = 16
 text = "Event description goes here."
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="HSeparator" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HSeparator" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
+color = Color(1.0, 0.3, 0.2, 0.3)
 
 [node name="LossesContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -78,14 +140,113 @@ theme_override_constants/separation = 8
 [node name="LossesHeaderLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.3, 0.3, 1)
+theme_override_colors/font_color = Color(1.0, 0.3, 0.2, 1)
 theme_override_font_sizes/font_size = 16
 text = "PROJECTED LOSSES:"
 
-[node name="LossesLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer"]
+[node name="LossesRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_constants/separation = 20
+
+[node name="ColonistsLoss" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ColonistsIcon" type="TextureRect" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ColonistsLoss"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+texture = ExtResource("2_colonists")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ColonistsLossLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ColonistsLoss"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1.0, 0.7, 0.2, 1)
+theme_override_font_sizes/font_size = 16
+text = "COLONISTS: -50"
+
+[node name="HullLoss" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="HullIcon" type="TextureRect" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/HullLoss"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+texture = ExtResource("3_hull")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HullLossLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/HullLoss"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1.0, 0.7, 0.2, 1)
+theme_override_font_sizes/font_size = 16
+text = "HULL: -10%"
+
+[node name="FuelGain" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="FuelIcon" type="TextureRect" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/FuelGain"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+texture = ExtResource("4_fuel")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="FuelGainLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/FuelGain"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.2, 1.0, 0.5, 1)
+theme_override_font_sizes/font_size = 16
+text = "FUEL: +2"
+
+[node name="ScrapGain" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ScrapIcon" type="TextureRect" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ScrapGain"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+texture = ExtResource("5_scrap")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ScrapGainLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ScrapGain"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.2, 1.0, 0.5, 1)
+theme_override_font_sizes/font_size = 16
+text = "SCRAP: +15"
+
+[node name="ColonistsGain" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ColonistsGainIcon" type="TextureRect" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ColonistsGain"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+texture = ExtResource("2_colonists")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ColonistsGainLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ColonistsGain"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.2, 1.0, 0.5, 1)
+theme_override_font_sizes/font_size = 16
+text = "COLONISTS: +50"
+
+[node name="LossesLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer"]
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(1.0, 0.7, 0.2, 1)
 theme_override_font_sizes/font_size = 16
 text = "COLONISTS: -50
 HULL: -10%"
@@ -93,16 +254,18 @@ HULL: -10%"
 [node name="MitigatedLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.2, 1, 0.2, 1)
+theme_override_colors/font_color = Color(0.2, 1.0, 0.5, 1)
 theme_override_font_sizes/font_size = 16
 text = "WITH SPECIALIST:
 COLONISTS: -10
 HULL: 0%"
 autowrap_mode = 2
 
-[node name="HSeparator2" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HSeparator2" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
+color = Color(1.0, 0.3, 0.2, 0.3)
 
 [node name="ButtonContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -113,11 +276,81 @@ theme_override_constants/separation = 20
 [node name="AcceptButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer"]
 custom_minimum_size = Vector2(200, 40)
 layout_mode = 2
+theme_override_colors/font_color = Color(1.0, 0.7, 0.2, 1)
+theme_override_colors/font_hover_color = Color(1.0, 0.85, 0.4, 1)
+theme_override_colors/font_pressed_color = Color(0.8, 0.5, 0.1, 1)
 theme_override_font_sizes/font_size = 18
 text = "[ ACCEPT LOSSES ]"
 
 [node name="MitigateButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer"]
 custom_minimum_size = Vector2(200, 40)
 layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 1.0, 1)
+theme_override_colors/font_hover_color = Color(0.7, 1.0, 1.0, 1)
+theme_override_colors/font_pressed_color = Color(0.2, 0.6, 0.8, 1)
 theme_override_font_sizes/font_size = 18
 text = "[ DEPLOY SPECIALIST ]"
+
+[node name="CornerTL" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -220.0
+offset_right = -292.0
+offset_bottom = -212.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1.0, 0.3, 0.2, 0.8)
+
+[node name="CornerTR" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 292.0
+offset_top = -220.0
+offset_right = 300.0
+offset_bottom = -212.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1.0, 0.3, 0.2, 0.8)
+
+[node name="CornerBL" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = 212.0
+offset_right = -292.0
+offset_bottom = 220.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1.0, 0.3, 0.2, 0.8)
+
+[node name="CornerBR" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 292.0
+offset_top = 212.0
+offset_right = 300.0
+offset_bottom = 220.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1.0, 0.3, 0.2, 0.8)

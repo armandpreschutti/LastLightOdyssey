@@ -1,5 +1,5 @@
 # Last Light Odyssey - Game Design Document
-**Version 2.3 | Engine: Godot 4.6 | Last Updated: February 6, 2026**
+**Version 2.4 | Engine: Godot 4.6 | Last Updated: February 6, 2026**
 
 > *"The last journey of the human race isn't a hero's quest; it's a survival marathon."*
 
@@ -95,7 +95,7 @@ When the ship docks at a Scavenge Site, the game switches to isometric turn-base
 
 ### 3.1 The Away Team
 
-- Players select **3 Officers** from a roster of 5 (Captain, Scout, Tech, Medic, Heavy)
+- Players select **3 Officers** from a roster of 6 (Captain, Scout, Tech, Medic, Heavy, Sniper)
 - **Permadeath**: Dead officers are removed permanently
 - Losing a specialist disables their event mitigation options
 
@@ -108,6 +108,7 @@ When the ship docks at a Scavenge Site, the game switches to isometric turn-base
 | **Tech** | Can see items through walls | **Turret** (1 AP): Deploy auto-firing sentry on adjacent tile. Lasts 3 turns, auto-shoots nearest enemy each turn (15 DMG, 6 tile range). 2-turn cooldown. | 70 | 4 | 5 |
 | **Medic** | Can see exact enemy HP | **Patch** (2 AP): Heal adjacent ally for 50% max HP. 2-turn cooldown. | 75 | 5 | 5 |
 | **Heavy** | Armor Plating (−20% damage taken), +35 base damage | **Charge** (1 AP): Rush enemy within 4 tiles. Instant-kills basic enemies; deals 2x base damage to heavy enemies. 2-turn cooldown. | 120 | 3 | 5 |
+| **Sniper** | +2 sight range, +2 shoot range, +30 base damage | **Precision Shot** (1 AP): Guaranteed hit on enemy 8+ tiles away. Deals 2x base damage (60). 2-turn cooldown. | 70 | 4 | 9 |
 
 ### 3.3 Combat System
 
@@ -148,7 +149,8 @@ Final Hit Chance = clamp(Base - DefenderCover + AttackerBonus, 10%, 95%)
 ```
 
 **Class Accuracy Profiles:**
-- **Scout**: Best at long range (65% at 8+ tiles)
+- **Sniper**: Best long-range accuracy (65% at 10+ tiles, 70% at 8-10 tiles), slightly weaker at close range (85% at 2-4 tiles)
+- **Scout**: Excellent at long range (65% at 8+ tiles)
 - **Captain**: Balanced (50% at 8+ tiles)
 - **Heavy**: Good close-mid range, weaker at distance (45% at 8+ tiles), 35 base damage
 - **Tech/Medic**: Support-focused, weaker at range (40% at 8+ tiles)
@@ -198,6 +200,16 @@ Captains can **finish off weakened enemies** with precision:
 - **Accuracy**: Never misses (bypasses all cover and hit chance calculations)
 - **Cooldown**: 2-turn cooldown after use
 - **Visual**: Cinematic execution sequence with camera focus
+
+#### Precision Shot System (Sniper Ability)
+Snipers can **deliver devastating long-range shots** with perfect accuracy:
+
+- **Range**: 8-12 tiles (Manhattan distance) - requires minimum 8 tiles distance
+- **Requirement**: Target must be 8+ tiles away and within line of sight
+- **Effect**: Guaranteed hit dealing 2x base damage (60 damage from 30 base damage)
+- **Accuracy**: Never misses (bypasses all cover and hit chance calculations)
+- **Cooldown**: 2-turn cooldown after use
+- **Visual**: Cinematic precision aiming sequence with camera focus, "TAKING AIM..." message
 
 ### 3.6 Fog of War
 
@@ -300,6 +312,18 @@ Reach the **"New Earth"** node (node 19) with **Colonists > 0**.
 | 500–999 | Good | "The Hard Foundation" |
 | 1–499 | Bad | "The Endangered Species" |
 
+### Voyage Recap Screen
+Upon reaching New Earth, players are shown a comprehensive **Voyage Recap** screen displaying:
+- **Final State**: Colonists remaining, fuel reserves, ship integrity, scrap stockpile
+- **Officer Status**: Survival status for all 6 officers (alive or K.I.A.)
+- **Cumulative Statistics** (tracked across entire voyage):
+  - Total fuel collected from missions
+  - Total scrap collected from missions
+  - Total hostiles eliminated
+  - Missions completed
+  - Tactical turns survived
+  - Sectors traversed (nodes visited)
+
 ### Loss Conditions
 
 | Condition | Message |
@@ -331,7 +355,7 @@ First-time players receive a **9-step guided tutorial** that covers:
 4. **Scavenge Missions** - Team selection and permadeath warning
 5. **Tactical Movement** - Action points and movement
 6. **Combat** - Attacking enemies and cover mechanics
-7. **Abilities** - Specialist unique abilities (Scout Overwatch, Tech Turret, Medic Patch, Heavy Charge, Captain Execute)
+7. **Abilities** - Specialist unique abilities (Scout Overwatch, Tech Turret, Medic Patch, Heavy Charge, Captain Execute, Sniper Precision Shot)
 8. **Cryo-Stability** - Time pressure and colonist loss
 9. **Extraction** - Completing missions
 
@@ -344,10 +368,10 @@ Tutorial can be skipped at any time and reset from the Settings menu.
 #### Officer Characters
 The player's controllable units, each with distinct visual identity matching their role.
 
-| Captain | Scout | Tech | Medic | Heavy |
-|:-------:|:-----:|:----:|:-----:|:-----:|
-| ![Captain](../assets/sprites/characters/officer_captain.png) | ![Scout](../assets/sprites/characters/officer_scout.png) | ![Tech](../assets/sprites/characters/officer_tech.png) | ![Medic](../assets/sprites/characters/officer_medic.png) | ![Heavy](../assets/sprites/characters/officer_heavy.png) |
-| Command leader | Recon specialist | Engineer | Field medic | Tank/Defender |
+| Captain | Scout | Tech | Medic | Heavy | Sniper |
+|:-------:|:-----:|:----:|:-----:|:-----:|:------:|
+| ![Captain](../assets/sprites/characters/officer_captain.png) | ![Scout](../assets/sprites/characters/officer_scout.png) | ![Tech](../assets/sprites/characters/officer_tech.png) | ![Medic](../assets/sprites/characters/officer_medic.png) | ![Heavy](../assets/sprites/characters/officer_heavy.png) | ![Sniper](../assets/sprites/characters/officer_sniper.png) |
+| Command leader | Recon specialist | Engineer | Field medic | Tank/Defender | Long-range marksman |
 
 #### Enemy Units
 Hostile forces encountered during tactical missions.
@@ -562,6 +586,7 @@ Visual elements for the management layer star map.
 - [x] Save game state to JSON file (colonists, fuel, integrity, scrap, officers)
 - [x] Save star map layout and node progress
 - [x] Save node types and biome assignments
+- [x] Save cumulative mission statistics (fuel collected, scrap collected, enemies killed, missions completed, tactical turns)
 - [x] Load game state on continue
 - [x] Continue button on title menu (disabled if no save)
 - [x] New game confirmation dialog when save exists
@@ -641,6 +666,15 @@ Visual elements for the management layer star map.
 - [x] 120 HP, 3 move range, 5 sight range
 - [x] Heavy sprite and animations
 - [x] Pirate Ambush event mitigation
+
+#### Sniper Officer Class
+- [x] New officer type: Sniper
+- [x] Extended sight range (+2) and shoot range (+2) for long-range combat
+- [x] Increased base damage (30 vs standard 25)
+- [x] Precision Shot active ability (1 AP, guaranteed hit at 8+ tiles for 2x damage)
+- [x] 70 HP, 4 move range, 9 sight range, 12 shoot range
+- [x] Best long-range accuracy profile (65% at 10+ tiles)
+- [x] Sniper sprite with hood and targeting monocle
 
 #### Biome System
 - [x] Three biome types: Station, Asteroid, Planet

@@ -14,11 +14,14 @@ var is_highlighted: bool = false
 
 # Hover tween
 var _hover_tween: Tween = null
+# Idle animation tween
+var _idle_tween: Tween = null
 
 
 func _ready() -> void:
 	if highlight:
 		highlight.visible = false
+	_start_idle_animation()
 
 
 func set_grid_position(pos: Vector2i) -> void:
@@ -77,7 +80,49 @@ func _stop_hover_effect() -> void:
 		sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)
 
 
+func _start_idle_animation() -> void:
+	# Stop any existing idle animation
+	if _idle_tween:
+		_idle_tween.kill()
+	
+	# Wait for sprite to be ready
+	if not sprite:
+		return
+	
+	# Store initial sprite properties (use offset to avoid interfering with grid positioning)
+	var initial_offset = sprite.position
+	var initial_rotation = sprite.rotation
+	var initial_scale = sprite.scale
+	
+	# Create continuous idle animation
+	_idle_tween = create_tween()
+	_idle_tween.set_loops()
+	_idle_tween.set_parallel(true)
+	
+	# Gentle vertical bobbing (floating effect) - animate sprite offset, not root position
+	_idle_tween.tween_property(sprite, "position:y", initial_offset.y - 3.0, 1.5)
+	_idle_tween.tween_property(sprite, "position:y", initial_offset.y, 1.5)
+	
+	# Subtle rotation back and forth
+	_idle_tween.tween_property(sprite, "rotation", initial_rotation + 0.05, 2.0)
+	_idle_tween.tween_property(sprite, "rotation", initial_rotation - 0.05, 2.0)
+	_idle_tween.tween_property(sprite, "rotation", initial_rotation, 2.0)
+	
+	# Very subtle scale pulse (breathing effect)
+	_idle_tween.tween_property(sprite, "scale", initial_scale * 1.05, 1.2)
+	_idle_tween.tween_property(sprite, "scale", initial_scale, 1.2)
+
+
+func _stop_idle_animation() -> void:
+	if _idle_tween:
+		_idle_tween.kill()
+		_idle_tween = null
+
+
 func _play_collect_effect() -> void:
+	# Stop idle animation during collection
+	_stop_idle_animation()
+	
 	# Scale up and fade out effect
 	var tween = create_tween()
 	tween.set_parallel(true)

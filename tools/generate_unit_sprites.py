@@ -375,6 +375,154 @@ def generate_medic():
     return img
 
 
+def generate_sniper():
+    """
+    Sniper - Long-range precision marksman with hood and scope
+    Dark slate blue/gray stealth suit, tactical hood, targeting monocle
+    """
+    img = create_base_image()
+    draw = ImageDraw.Draw(img)
+    
+    colors = {
+        "primary": (70, 75, 90),         # Dark slate blue-gray
+        "secondary": (55, 58, 72),       # Darker slate
+        "pants": (50, 52, 62),           # Dark matching pants
+        "shoes": (38, 38, 45),           # Very dark boots
+        "accent": (160, 180, 220),       # Pale blue highlight
+        "hood": (60, 65, 80),            # Hood color
+        "hood_shadow": (45, 48, 62),     # Hood shadow
+        "scope": (200, 60, 60),          # Red scope lens
+        "metal": (110, 115, 125),        # Gun metal
+        "dark_metal": (65, 68, 78),      # Dark metal
+    }
+    
+    draw_shadow(draw)
+    
+    cx = 16
+    
+    # === BODY (slim, stealthy build) ===
+    # Feet
+    draw.ellipse((cx - 6, 27, cx - 2, 30), fill=colors["shoes"])
+    draw.ellipse((cx - 6, 27, cx - 2, 29), fill=OUTLINE)
+    draw.ellipse((cx + 2, 27, cx + 6, 30), fill=colors["shoes"])
+    draw.ellipse((cx + 2, 27, cx + 6, 29), fill=OUTLINE)
+    
+    # Legs
+    draw.rectangle((cx - 5, 24, cx - 2, 28), fill=colors["pants"])
+    draw.rectangle((cx + 2, 24, cx + 5, 28), fill=colors["pants"])
+    
+    # Torso (slightly slimmer than default)
+    draw.ellipse((cx - 8, 17, cx + 8, 27), fill=colors["primary"])
+    draw.ellipse((cx - 5, 19, cx + 5, 25), fill=colors["secondary"])
+    # Body outline
+    draw.arc((cx - 8, 17, cx + 8, 27), 30, 150, fill=OUTLINE, width=1)
+    
+    # === CLOAK/CAPE TATTERED EDGES (ghillie-style) ===
+    # Tattered cloak pieces hanging from shoulders
+    draw.polygon([(cx - 9, 20), (cx - 11, 26), (cx - 8, 25)], fill=colors["hood"])
+    draw.polygon([(cx + 9, 20), (cx + 11, 26), (cx + 8, 25)], fill=colors["hood"])
+    # Extra tatter strips
+    draw.polygon([(cx - 7, 24), (cx - 9, 28), (cx - 6, 27)], fill=colors["hood_shadow"])
+    draw.polygon([(cx + 7, 24), (cx + 9, 28), (cx + 6, 27)], fill=colors["hood_shadow"])
+    
+    # === ARMS ===
+    # Left arm
+    draw.ellipse((cx - 10, 19, cx - 6, 25), fill=colors["primary"])
+    draw.arc((cx - 10, 19, cx - 6, 25), 90, 270, fill=OUTLINE, width=1)
+    draw.ellipse((cx - 9, 23, cx - 6, 26), fill=SKIN_MID)
+    
+    # Right arm (holding rifle)
+    draw.ellipse((cx + 6, 19, cx + 10, 25), fill=colors["primary"])
+    draw.arc((cx + 6, 19, cx + 10, 25), 270, 90, fill=OUTLINE, width=1)
+    draw.ellipse((cx + 6, 23, cx + 9, 26), fill=SKIN_MID)
+    
+    # === SNIPER RIFLE (slung across back, visible from top-down) ===
+    # Rifle barrel (diagonal across back/shoulder)
+    draw.line((cx + 5, 10, cx + 13, 26), fill=colors["metal"], width=2)
+    draw.line((cx + 5, 10, cx + 13, 26), fill=colors["dark_metal"], width=1)
+    # Rifle scope on the gun
+    draw.ellipse((cx + 6, 12, cx + 9, 15), fill=colors["dark_metal"])
+    draw.ellipse((cx + 7, 13, cx + 8, 14), fill=colors["scope"])  # Scope lens glow
+    # Rifle stock
+    draw.rectangle((cx + 11, 23, cx + 14, 27), fill=(80, 65, 50))  # Wood stock
+    draw.rectangle((cx + 11, 23, cx + 14, 23), fill=OUTLINE)
+    
+    # === CHEST DETAILS ===
+    # Ammo bandolier across chest
+    draw.line((cx - 5, 19, cx + 4, 25), fill=(90, 85, 70), width=2)
+    # Bullet bumps on bandolier
+    draw.point((cx - 4, 20), fill=colors["accent"])
+    draw.point((cx - 2, 21), fill=colors["accent"])
+    draw.point((cx, 22), fill=colors["accent"])
+    draw.point((cx + 2, 23), fill=colors["accent"])
+    
+    # Crosshair emblem on chest
+    draw.point((cx, 20), fill=colors["scope"])
+    draw.line((cx - 1, 20, cx + 1, 20), fill=colors["accent"], width=1)
+    draw.line((cx, 19, cx, 21), fill=colors["accent"], width=1)
+    
+    # Belt
+    draw.rectangle((cx - 7, 24, cx + 7, 25), fill=colors["dark_metal"])
+    draw.rectangle((cx - 2, 24, cx + 2, 25), fill=colors["metal"])
+    draw.point((cx, 24), fill=colors["accent"])  # Belt buckle
+    
+    # === HOODED HEAD (key sniper visual) ===
+    head_top = 3
+    head_bottom = 18
+    head_left = cx - 9
+    head_right = cx + 9
+    
+    # Head base (slightly visible under hood)
+    draw.ellipse((head_left, head_top, head_right, head_bottom), fill=SKIN_LIGHT)
+    # Face shadow
+    draw.ellipse((head_left + 2, head_top + 8, head_right - 2, head_bottom - 1), fill=SKIN_MID)
+    
+    # === HOOD (covers top of head - crucial top-down element) ===
+    # Hood - large, covering most of head from above
+    draw.ellipse((head_left - 2, head_top - 2, head_right + 2, head_top + 12), fill=colors["hood"])
+    # Hood top surface (visible from above)
+    draw.ellipse((head_left, head_top - 1, head_right, head_top + 8), fill=colors["hood_shadow"])
+    # Hood inner shadow near face
+    draw.arc((head_left + 1, head_top + 4, head_right - 1, head_top + 12), 0, 180, fill=OUTLINE, width=1)
+    # Hood peak/point at top
+    draw.polygon([(cx - 3, head_top), (cx, head_top - 3), (cx + 3, head_top)], fill=colors["hood"])
+    draw.polygon([(cx - 2, head_top), (cx, head_top - 2), (cx + 2, head_top)], fill=colors["hood_shadow"])
+    
+    # Hood draping down sides (visible from front)
+    draw.polygon([(head_left - 1, head_top + 7), (head_left - 2, head_top + 14), (head_left + 2, head_top + 10)], 
+                 fill=colors["hood"])
+    draw.polygon([(head_right + 1, head_top + 7), (head_right + 2, head_top + 14), (head_right - 2, head_top + 10)], 
+                 fill=colors["hood"])
+    
+    # === FACE (partially shadowed by hood) ===
+    # Eyes in shadow
+    eye_y = head_top + 10
+    # Left eye (normal)
+    draw.rectangle((cx - 5, eye_y, cx - 3, eye_y + 2), fill=EYE_WHITE)
+    draw.rectangle((cx - 4, eye_y, cx - 3, eye_y + 2), fill=EYE_DARK)
+    draw.point((cx - 4, eye_y), fill=WHITE)  # Shine
+    
+    # Right eye (covered by targeting monocle)
+    draw.rectangle((cx + 3, eye_y, cx + 5, eye_y + 2), fill=EYE_WHITE)
+    draw.rectangle((cx + 3, eye_y, cx + 4, eye_y + 2), fill=EYE_DARK)
+    
+    # === TARGETING MONOCLE/SCOPE (over right eye) ===
+    # Monocle frame
+    draw.ellipse((cx + 2, eye_y - 1, cx + 7, eye_y + 3), fill=colors["dark_metal"])
+    draw.ellipse((cx + 3, eye_y, cx + 6, eye_y + 2), fill=colors["scope"])  # Red lens
+    draw.point((cx + 4, eye_y), fill=(255, 150, 150))  # Lens shine
+    # Monocle arm to ear
+    draw.line((cx + 6, eye_y + 1, cx + 8, eye_y), fill=colors["metal"], width=1)
+    
+    # Mouth
+    draw.line((cx - 2, head_top + 14, cx + 2, head_top + 14), fill=SKIN_SHADOW, width=1)
+    
+    # Chin/jaw outline
+    draw.arc((head_left, head_top, head_right, head_bottom), 30, 150, fill=OUTLINE, width=1)
+    
+    return img
+
+
 def generate_heavy():
     """
     Heavy - Armored tank with helmet and heavy armor
@@ -606,6 +754,7 @@ def main():
         "officer_tech.png": generate_tech,
         "officer_medic.png": generate_medic,
         "officer_heavy.png": generate_heavy,
+        "officer_sniper.png": generate_sniper,
         # Enemies
         "enemy_basic.png": generate_enemy_basic,
         "enemy_heavy.png": generate_enemy_heavy,

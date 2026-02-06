@@ -1,6 +1,6 @@
 extends Control
 ## Pause Menu - Allows player to abandon tactical mission at a cost
-## 1980s terminal aesthetic with amber text
+## Retro sci-fi terminal aesthetic with amber accents
 
 signal resume_pressed
 signal abandon_pressed
@@ -8,7 +8,8 @@ signal abandon_pressed
 const ABANDON_COLONIST_COST: int = 20
 
 @onready var panel: PanelContainer = $PanelContainer
-@onready var title_label: Label = $PanelContainer/MarginContainer/VBoxContainer/TitleLabel
+# Updated paths for new styled layout
+@onready var title_label: Label = $PanelContainer/MarginContainer/VBoxContainer/HeaderContainer/TitleLabel
 @onready var warning_label: Label = $PanelContainer/MarginContainer/VBoxContainer/WarningLabel
 @onready var cost_label: Label = $PanelContainer/MarginContainer/VBoxContainer/CostLabel
 @onready var resume_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/ResumeButton

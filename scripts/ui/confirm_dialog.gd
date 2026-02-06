@@ -5,7 +5,7 @@ extends Control
 signal confirmed
 signal cancelled
 
-@onready var title_label: Label = $PanelContainer/MarginContainer/VBoxContainer/TitleLabel
+@onready var title_label: Label = $PanelContainer/MarginContainer/VBoxContainer/HeaderContainer/TitleLabel
 @onready var message_label: Label = $PanelContainer/MarginContainer/VBoxContainer/MessageLabel
 @onready var yes_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/YesButton
 @onready var no_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/NoButton

@@ -57,6 +57,7 @@ var officers: Dictionary = {
 	"tech": {"alive": true, "deployed": false},
 	"medic": {"alive": true, "deployed": false},
 	"heavy": {"alive": true, "deployed": false},
+	"sniper": {"alive": true, "deployed": false},
 }
 
 # Game progression
@@ -67,6 +68,13 @@ var node_types: Dictionary = {}  # Pre-rolled node types (node_id -> NodeType)
 var node_biomes: Dictionary = {}  # Pre-rolled biome types for scavenge nodes (node_id -> BiomeType)
 var is_in_tactical_mode: bool = false
 var tactical_turn_count: int = 0
+
+# Cumulative mission statistics (tracked across entire voyage)
+var total_fuel_collected: int = 0
+var total_scrap_collected: int = 0
+var total_enemies_killed: int = 0
+var total_missions_completed: int = 0
+var total_tactical_turns: int = 0
 
 
 func _ready() -> void:
@@ -85,10 +93,26 @@ func reset_game() -> void:
 	node_biomes.clear()
 	tactical_turn_count = 0
 	is_in_tactical_mode = false
+	
+	# Reset cumulative stats
+	total_fuel_collected = 0
+	total_scrap_collected = 0
+	total_enemies_killed = 0
+	total_missions_completed = 0
+	total_tactical_turns = 0
 
 	for officer_key in officers:
 		officers[officer_key]["alive"] = true
 		officers[officer_key]["deployed"] = false
+
+
+## Add mission stats to cumulative totals (called after successful missions)
+func add_mission_stats(fuel_collected: int, scrap_collected: int, enemies_killed: int, turns_taken: int) -> void:
+	total_fuel_collected += fuel_collected
+	total_scrap_collected += scrap_collected
+	total_enemies_killed += enemies_killed
+	total_tactical_turns += turns_taken
+	total_missions_completed += 1
 
 
 func jump_to_next_node() -> void:
@@ -207,7 +231,7 @@ var saved_star_map_data: Dictionary = {}
 ## Save the current game state to disk
 func save_game() -> bool:
 	var save_data = {
-		"version": 2,
+		"version": 3,
 		"colonist_count": colonist_count,
 		"fuel": fuel,
 		"ship_integrity": ship_integrity,
@@ -218,6 +242,12 @@ func save_game() -> bool:
 		"node_biomes": node_biomes,
 		"officers": officers,
 		"star_map_data": saved_star_map_data,
+		# Cumulative mission stats (v3)
+		"total_fuel_collected": total_fuel_collected,
+		"total_scrap_collected": total_scrap_collected,
+		"total_enemies_killed": total_enemies_killed,
+		"total_missions_completed": total_missions_completed,
+		"total_tactical_turns": total_tactical_turns,
 	}
 	
 	var file = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -292,6 +322,13 @@ func load_game() -> bool:
 	
 	# Restore star map data
 	saved_star_map_data = save_data.get("star_map_data", {})
+	
+	# Restore cumulative mission stats (v3+)
+	total_fuel_collected = int(save_data.get("total_fuel_collected", 0))
+	total_scrap_collected = int(save_data.get("total_scrap_collected", 0))
+	total_enemies_killed = int(save_data.get("total_enemies_killed", 0))
+	total_missions_completed = int(save_data.get("total_missions_completed", 0))
+	total_tactical_turns = int(save_data.get("total_tactical_turns", 0))
 	
 	# Reset tactical state
 	cryo_stability = 100

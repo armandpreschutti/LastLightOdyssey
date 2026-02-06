@@ -1,91 +1,173 @@
-[gd_scene load_steps=8 format=3 uid="uid://dh5r2kv8pnq6x"]
+[gd_scene format=3 uid="uid://dh5r2kv8pnq6x"]
 
-[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
-[ext_resource type="PackedScene" uid="uid://bm7xk5qvch1tm" path="res://scenes/ui/management_hud.tscn" id="2_hud"]
-[ext_resource type="PackedScene" uid="uid://dp8k7m6qv5n2w" path="res://scenes/management/star_map.tscn" id="3_starmap"]
+[ext_resource type="Script" uid="uid://dnjl221ah58w7" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="PackedScene" uid="uid://bhd16wq58r0sj" path="res://scenes/ui/management_hud.tscn" id="2_hud"]
 [ext_resource type="PackedScene" uid="uid://cg8k2qaxnv5rl" path="res://scenes/ui/event_dialog.tscn" id="3_event"]
-[ext_resource type="PackedScene" uid="uid://c5h7k8m9n0p1q" path="res://scenes/ui/trading_dialog.tscn" id="4_trading"]
-[ext_resource type="PackedScene" uid="uid://bk9m7n4qp2x5v" path="res://scenes/ui/team_select_dialog.tscn" id="4_team"]
-[ext_resource type="PackedScene" uid="uid://dm8k9n5qv3p6r" path="res://scenes/tactical/tactical_mode.tscn" id="5_tactical"]
+[ext_resource type="PackedScene" uid="uid://dp8k7m6qv5n2w" path="res://scenes/management/star_map.tscn" id="3_starmap"]
+[ext_resource type="PackedScene" uid="uid://blam7n4qp2x5v" path="res://scenes/ui/team_select_dialog.tscn" id="4_team"]
+[ext_resource type="PackedScene" uid="uid://c5h7k8nan0p1q" path="res://scenes/ui/trading_dialog.tscn" id="4_trading"]
+[ext_resource type="PackedScene" uid="uid://dm8lan5qv3p6r" path="res://scenes/tactical/tactical_mode.tscn" id="5_tactical"]
+[ext_resource type="PackedScene" path="res://scenes/ui/event_scene_dialog.tscn" id="6_event_scene"]
+[ext_resource type="PackedScene" path="res://scenes/ui/mission_recap.tscn" id="7_recap"]
+[ext_resource type="PackedScene" path="res://scenes/ui/new_earth_scene_dialog.tscn" id="8_new_earth"]
+[ext_resource type="PackedScene" path="res://scenes/ui/voyage_recap.tscn" id="9_voyage_recap"]
 
-[node name="Main" type="Node"]
+[node name="Main" type="Node" unique_id=588289983]
 script = ExtResource("1_main")
 
-[node name="ManagementBackground" type="ColorRect" parent="."]
+[node name="ManagementBackground" type="ColorRect" parent="." unique_id=436759780]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.0509804, 0.0509804, 0.0509804, 1)
+color = Color(0.02, 0.02, 0.08, 1)
 
-[node name="ManagementLayer" type="CanvasLayer" parent="."]
+[node name="ManagementLayer" type="CanvasLayer" parent="." unique_id=467690676]
 
-[node name="StarMap" parent="ManagementLayer" instance=ExtResource("3_starmap")]
+[node name="StarMap" parent="ManagementLayer" unique_id=1977024879 instance=ExtResource("3_starmap")]
 
-[node name="InstructionsPanel" type="PanelContainer" parent="ManagementLayer"]
-offset_left = 450.0
+[node name="InstructionsGlow" type="ColorRect" parent="ManagementLayer" unique_id=2076566904]
+offset_left = 640.0
+offset_top = 16.0
+offset_right = 1348.0
+offset_bottom = 144.0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.12)
+
+[node name="InstructionsBorder" type="ColorRect" parent="ManagementLayer" unique_id=1136280488]
+offset_left = 639.0
+offset_top = 14.0
+offset_right = 1350.0
+offset_bottom = 187.0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.5)
+
+[node name="InstructionsPanel" type="PanelContainer" parent="ManagementLayer" unique_id=30382744]
+offset_left = 644.0
 offset_top = 20.0
-offset_right = 1150.0
-offset_bottom = 140.0
+offset_right = 1344.0
+offset_bottom = 182.0
 mouse_filter = 2
 
-[node name="MarginContainer" type="MarginContainer" parent="ManagementLayer/InstructionsPanel"]
+[node name="BackgroundGradient" type="ColorRect" parent="ManagementLayer/InstructionsPanel" unique_id=113793915]
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.02, 0.04, 0.08, 0.95)
+
+[node name="MarginContainer" type="MarginContainer" parent="ManagementLayer/InstructionsPanel" unique_id=1015044764]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 15
+theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 15
+theme_override_constants/margin_bottom = 12
 
-[node name="VBoxContainer" type="VBoxContainer" parent="ManagementLayer/InstructionsPanel/MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="ManagementLayer/InstructionsPanel/MarginContainer" unique_id=1387730058]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 6
 
-[node name="TitleLabel" type="Label" parent="ManagementLayer/InstructionsPanel/MarginContainer/VBoxContainer"]
+[node name="HeaderContainer" type="HBoxContainer" parent="ManagementLayer/InstructionsPanel/MarginContainer/VBoxContainer" unique_id=185704368]
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+alignment = 1
+
+[node name="LeftDecor" type="ColorRect" parent="ManagementLayer/InstructionsPanel/MarginContainer/VBoxContainer/HeaderContainer" unique_id=741287534]
+custom_minimum_size = Vector2(40, 2)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.5)
+
+[node name="TitleLabel" type="Label" parent="ManagementLayer/InstructionsPanel/MarginContainer/VBoxContainer/HeaderContainer" unique_id=1861787288]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 22
 text = "[ NAVIGATION SYSTEM ]"
 horizontal_alignment = 1
 
-[node name="InstructionLabel" type="Label" parent="ManagementLayer/InstructionsPanel/MarginContainer/VBoxContainer"]
+[node name="RightDecor" type="ColorRect" parent="ManagementLayer/InstructionsPanel/MarginContainer/VBoxContainer/HeaderContainer" unique_id=667027263]
+custom_minimum_size = Vector2(40, 2)
 layout_mode = 2
+size_flags_vertical = 4
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+color = Color(0.4, 0.9, 1, 0.5)
+
+[node name="InstructionLabel" type="Label" parent="ManagementLayer/InstructionsPanel/MarginContainer/VBoxContainer" unique_id=149577086]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
 theme_override_font_sizes/font_size = 16
-text = "Click on AMBER nodes to jump to them.
+text = "Click on CYAN nodes to jump to them.
 Fuel cost varies by distance (shown on connection lines).
 Plan your route to NEW EARTH carefully.
 Node types: EMPTY (events)  SCAVENGE (missions)  TRADE (outposts)"
 autowrap_mode = 2
 
-[node name="ManagementHUD" parent="ManagementLayer" instance=ExtResource("2_hud")]
-layout_mode = 1
-anchors_preset = 2
-anchor_top = 1.0
-anchor_bottom = 1.0
+[node name="CornerTL" type="ColorRect" parent="ManagementLayer" unique_id=704142327]
+offset_left = 644.0
+offset_top = 20.0
+offset_right = 652.0
+offset_bottom = 28.0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.8)
+
+[node name="CornerTR" type="ColorRect" parent="ManagementLayer" unique_id=1414057248]
+offset_left = 1336.0
+offset_top = 20.0
+offset_right = 1344.0
+offset_bottom = 28.0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.8)
+
+[node name="CornerBL" type="ColorRect" parent="ManagementLayer" unique_id=1605959517]
+offset_left = 644.0
+offset_top = 175.0
+offset_right = 652.0
+offset_bottom = 183.0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.8)
+
+[node name="CornerBR" type="ColorRect" parent="ManagementLayer" unique_id=1083867956]
+offset_left = 1336.0
+offset_top = 175.0
+offset_right = 1344.0
+offset_bottom = 183.0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.8)
+
+[node name="ManagementHUD" parent="ManagementLayer" unique_id=357450589 instance=ExtResource("2_hud")]
 offset_left = 20.0
-offset_top = -300.0
-offset_right = 420.0
+offset_top = -260.0
+offset_right = 300.0
 offset_bottom = -20.0
 
-[node name="DialogLayer" type="CanvasLayer" parent="."]
+[node name="DialogLayer" type="CanvasLayer" parent="." unique_id=1428451193]
 layer = 10
 
-[node name="EventDialog" parent="DialogLayer" instance=ExtResource("3_event")]
+[node name="EventSceneDialog" parent="DialogLayer" unique_id=1316561818 instance=ExtResource("6_event_scene")]
 visible = false
 
-[node name="TradingDialog" parent="DialogLayer" instance=ExtResource("4_trading")]
+[node name="EventDialog" parent="DialogLayer" unique_id=939277613 instance=ExtResource("3_event")]
 visible = false
 
-[node name="TeamSelectDialog" parent="DialogLayer" instance=ExtResource("4_team")]
+[node name="TradingDialog" parent="DialogLayer" unique_id=1428504120 instance=ExtResource("4_trading")]
 visible = false
 
-[node name="GameOverPanel" type="Control" parent="DialogLayer"]
+[node name="TeamSelectDialog" parent="DialogLayer" unique_id=1249424020 instance=ExtResource("4_team")]
+visible = false
+
+[node name="MissionRecap" parent="DialogLayer" unique_id=1150457164 instance=ExtResource("7_recap")]
+visible = false
+
+[node name="NewEarthSceneDialog" parent="DialogLayer" unique_id=1371997964 instance=ExtResource("8_new_earth")]
+visible = false
+
+[node name="VoyageRecap" parent="DialogLayer" unique_id=568586236 instance=ExtResource("9_voyage_recap")]
+visible = false
+
+[node name="GameOverPanel" type="Control" parent="DialogLayer" unique_id=600841004]
 visible = false
 layout_mode = 3
 anchors_preset = 15
@@ -95,7 +177,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="ColorRect" type="ColorRect" parent="DialogLayer/GameOverPanel"]
+[node name="ColorRect" type="ColorRect" parent="DialogLayer/GameOverPanel" unique_id=830853877]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -103,9 +185,41 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0, 0, 0, 0.8)
+color = Color(0, 0, 0.05, 0.85)
 
-[node name="PanelContainer" type="PanelContainer" parent="DialogLayer/GameOverPanel"]
+[node name="GlowEffect" type="ColorRect" parent="DialogLayer/GameOverPanel" unique_id=1603458117]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -308.0
+offset_top = -158.0
+offset_right = 308.0
+offset_bottom = 158.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.3, 0.2, 0.15)
+
+[node name="BorderOuter" type="ColorRect" parent="DialogLayer/GameOverPanel" unique_id=97271261]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -304.0
+offset_top = -154.0
+offset_right = 304.0
+offset_bottom = 154.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.3, 0.2, 0.6)
+
+[node name="PanelContainer" type="PanelContainer" parent="DialogLayer/GameOverPanel" unique_id=1667268322]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -119,29 +233,125 @@ offset_bottom = 150.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="MarginContainer" type="MarginContainer" parent="DialogLayer/GameOverPanel/PanelContainer"]
+[node name="BackgroundGradient" type="ColorRect" parent="DialogLayer/GameOverPanel/PanelContainer" unique_id=595503827]
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.03, 0.02, 0.05, 0.98)
+
+[node name="MarginContainer" type="MarginContainer" parent="DialogLayer/GameOverPanel/PanelContainer" unique_id=766491755]
 layout_mode = 2
 theme_override_constants/margin_left = 30
 theme_override_constants/margin_top = 30
 theme_override_constants/margin_right = 30
 theme_override_constants/margin_bottom = 30
 
-[node name="VBoxContainer" type="VBoxContainer" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer" unique_id=536367539]
 layout_mode = 2
 theme_override_constants/separation = 20
 
-[node name="GameOverLabel" type="Label" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HeaderContainer" type="HBoxContainer" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer" unique_id=43178947]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+mouse_filter = 2
+alignment = 1
+
+[node name="LeftDecor" type="ColorRect" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=1334344964]
+custom_minimum_size = Vector2(40, 2)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+color = Color(1, 0.3, 0.2, 0.5)
+
+[node name="GameOverLabel" type="Label" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=794628916]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.3, 0.2, 1)
 theme_override_font_sizes/font_size = 28
-text = "GAME OVER"
+text = "[ GAME OVER ]"
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="RestartButton" type="Button" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer"]
+[node name="RightDecor" type="ColorRect" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=1367484955]
+custom_minimum_size = Vector2(40, 2)
 layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+color = Color(1, 0.3, 0.2, 0.5)
+
+[node name="HSeparator" type="ColorRect" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer" unique_id=1553207437]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
+color = Color(1, 0.3, 0.2, 0.3)
+
+[node name="RestartButton" type="Button" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer" unique_id=36964410]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
+theme_override_colors/font_hover_color = Color(0.7, 1, 1, 1)
 theme_override_font_sizes/font_size = 20
 text = "[ RESTART ]"
 
-[node name="TacticalMode" parent="." instance=ExtResource("5_tactical")]
+[node name="CornerTL" type="ColorRect" parent="DialogLayer/GameOverPanel" unique_id=1379616265]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -150.0
+offset_right = -292.0
+offset_bottom = -142.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.3, 0.2, 0.8)
+
+[node name="CornerTR" type="ColorRect" parent="DialogLayer/GameOverPanel" unique_id=2094652331]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 292.0
+offset_top = -150.0
+offset_right = 300.0
+offset_bottom = -142.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.3, 0.2, 0.8)
+
+[node name="CornerBL" type="ColorRect" parent="DialogLayer/GameOverPanel" unique_id=1444555127]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = 142.0
+offset_right = -292.0
+offset_bottom = 150.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.3, 0.2, 0.8)
+
+[node name="CornerBR" type="ColorRect" parent="DialogLayer/GameOverPanel" unique_id=19097730]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 292.0
+offset_top = 142.0
+offset_right = 300.0
+offset_bottom = 150.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.3, 0.2, 0.8)
+
+[node name="TacticalMode" parent="." unique_id=45556294 instance=ExtResource("5_tactical")]
 visible = false

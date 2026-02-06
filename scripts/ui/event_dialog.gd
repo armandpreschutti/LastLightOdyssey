@@ -2,9 +2,17 @@ extends Control
 ## Event Dialog - Modal popup for displaying and resolving random events
 ## Shows event details, projected losses, and mitigation options
 
-@onready var title_label: Label = $PanelContainer/MarginContainer/VBoxContainer/TitleLabel
+# Updated paths for new icon-based layout
+@onready var title_label: Label = $PanelContainer/MarginContainer/VBoxContainer/HeaderContainer/TitleLabel
 @onready var description_label: Label = $PanelContainer/MarginContainer/VBoxContainer/DescriptionLabel
+@onready var losses_header_label: Label = $PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesHeaderLabel
 @onready var losses_label: Label = $PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesLabel
+@onready var colonists_loss_label: Label = $PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ColonistsLoss/ColonistsLossLabel
+@onready var hull_loss_label: Label = $PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/HullLoss/HullLossLabel
+@onready var fuel_gain_label: Label = $PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/FuelGain/FuelGainLabel
+@onready var scrap_gain_label: Label = $PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ScrapGain/ScrapGainLabel
+@onready var colonists_gain_label: Label = $PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ColonistsGain/ColonistsGainLabel
+@onready var losses_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow
 @onready var mitigated_label: Label = $PanelContainer/MarginContainer/VBoxContainer/LossesContainer/MitigatedLabel
 @onready var accept_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/AcceptButton
 @onready var mitigate_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/MitigateButton
@@ -26,9 +34,63 @@ func show_event(event: Dictionary) -> void:
 	title_label.text = "[ %s ]" % event.get("name", "UNKNOWN EVENT").to_upper()
 	description_label.text = event.get("description", "")
 
-	# Build losses text
-	var losses_text = _build_losses_text(event, false)
-	losses_label.text = losses_text
+	# Determine if event is positive (has gains, no losses) or negative (has losses)
+	var colonist_loss = event.get("colonist_loss", 0)
+	var integrity_loss = event.get("integrity_loss", 0)
+	var colonist_gain = event.get("colonist_gain", 0)
+	var fuel_gain = event.get("fuel_gain", 0)
+	var scrap_gain = event.get("scrap_gain", 0)
+	
+	var has_losses = colonist_loss > 0 or integrity_loss > 0
+	var has_gains = colonist_gain > 0 or fuel_gain > 0 or scrap_gain > 0
+	var is_positive_event = has_gains and not has_losses
+	
+	# Update header label text based on event type
+	if is_positive_event:
+		losses_header_label.text = "PROJECTED GAINS:"
+	else:
+		losses_header_label.text = "PROJECTED LOSSES:"
+	
+	# Update accept button text based on event type
+	if is_positive_event:
+		accept_button.text = "[ ACCEPT GAINS ]"
+	else:
+		accept_button.text = "[ ACCEPT LOSSES ]"
+	
+	# Update icon-based losses display
+	if colonist_loss > 0:
+		colonists_loss_label.text = "COLONISTS: -%d" % colonist_loss
+		colonists_loss_label.get_parent().visible = true
+	else:
+		colonists_loss_label.get_parent().visible = false
+	
+	if integrity_loss > 0:
+		hull_loss_label.text = "HULL: -%d%%" % integrity_loss
+		hull_loss_label.get_parent().visible = true
+	else:
+		hull_loss_label.get_parent().visible = false
+	
+	# Update icon-based gains display
+	if colonist_gain > 0:
+		colonists_gain_label.text = "COLONISTS: +%d" % colonist_gain
+		colonists_gain_label.get_parent().visible = true
+	else:
+		colonists_gain_label.get_parent().visible = false
+	
+	if fuel_gain > 0:
+		fuel_gain_label.text = "FUEL: +%d" % fuel_gain
+		fuel_gain_label.get_parent().visible = true
+	else:
+		fuel_gain_label.get_parent().visible = false
+	
+	if scrap_gain > 0:
+		scrap_gain_label.text = "SCRAP: +%d" % scrap_gain
+		scrap_gain_label.get_parent().visible = true
+	else:
+		scrap_gain_label.get_parent().visible = false
+	
+	# Show losses row if there are any losses or gains
+	losses_row.visible = has_losses or has_gains
 
 	# Check if mitigation is available
 	var specialist_key = event.get("specialist_mitigation", "")
@@ -39,16 +101,23 @@ func show_event(event: Dictionary) -> void:
 		var specialist_name = _get_specialist_display_name(specialist_key)
 		var specialist_desc = _get_specialist_description(specialist_key)
 		var is_alive = GameState.is_officer_alive(specialist_key)
+		var scrap_cost = event.get("mitigation_scrap_cost", 0)
+		var has_enough_scrap = GameState.scrap >= scrap_cost
 		
 		if is_alive:
-			mitigate_button.text = "[ DEPLOY %s ]" % specialist_name
-			mitigate_button.disabled = false
+			if has_enough_scrap:
+				mitigate_button.text = "[ DEPLOY %s ] (COST: %d SCRAP)" % [specialist_name, scrap_cost]
+				mitigate_button.disabled = false
+			else:
+				mitigate_button.text = "[ DEPLOY %s ] (NEED %d SCRAP)" % [specialist_name, scrap_cost]
+				mitigate_button.disabled = true
 		else:
 			mitigate_button.text = "[ %s - DECEASED ]" % specialist_name
 			mitigate_button.disabled = true
 		
 		var mitigated_text = _build_losses_text(event, true)
-		mitigated_label.text = "WITH %s:\n%s\n%s" % [specialist_name, specialist_desc, mitigated_text]
+		var scrap_cost_text = "SCRAP: -%d" % scrap_cost
+		mitigated_label.text = "WITH %s:\n%s\n%s\n%s" % [specialist_name, specialist_desc, scrap_cost_text, mitigated_text]
 		mitigated_label.visible = true
 	else:
 		mitigate_button.visible = false

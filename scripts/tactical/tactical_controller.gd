@@ -1,7 +1,7 @@
 extends Node2D
 ## Tactical Controller - Manages turn-based gameplay, unit selection, and mission flow
 
-signal mission_complete(success: bool)
+signal mission_complete(success: bool, stats: Dictionary)
 signal turn_ended(turn_number: int)
 
 @onready var tactical_map: Node2D = $MapContainer/TacticalMap
@@ -18,13 +18,16 @@ var selected_target: Vector2i = Vector2i(-1, -1)  # For targeting enemies
 var execute_mode: bool = false  # When true, clicking selects execute target
 var charge_mode: bool = false  # When true, clicking selects charge target
 var turret_mode: bool = false  # When true, clicking selects turret placement tile
+var precision_mode: bool = false  # When true, clicking selects precision shot target (Sniper)
 var current_turn: int = 0
 var current_unit_index: int = 0  # Which unit's turn it is (0-based index)
 var mission_active: bool = false
 var is_paused: bool = false  # Track pause state
+var is_animating: bool = false  # Track when animations are playing to prevent input
 var extraction_positions: Array[Vector2i] = []
 var mission_fuel_collected: int = 0  # Fuel collected during this mission
 var mission_scrap_collected: int = 0  # Scrap collected during this mission
+var mission_enemies_killed: int = 0  # Enemies killed during this mission
 var current_biome: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION
 
 var FuelCrateScene: PackedScene
@@ -33,6 +36,7 @@ var OfficerUnitScene: PackedScene
 var EnemyUnitScene: PackedScene
 var TurretUnitScene: PackedScene
 var PauseMenuScene: PackedScene
+var ConfirmDialogScene: PackedScene
 var current_pause_menu: Control = null
 
 # Active turrets placed by Tech officer
@@ -58,6 +62,7 @@ func _ready() -> void:
 	EnemyUnitScene = load("res://scenes/tactical/enemy_unit.tscn")
 	TurretUnitScene = load("res://scenes/tactical/turret_unit.tscn")
 	PauseMenuScene = load("res://scenes/ui/pause_menu.tscn")
+	ConfirmDialogScene = load("res://scenes/ui/confirm_dialog.tscn")
 
 	tactical_map.tile_clicked.connect(_on_tile_clicked)
 	tactical_hud.end_turn_pressed.connect(_on_end_turn_pressed)
@@ -111,6 +116,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	current_unit_index = 0
 	mission_fuel_collected = 0
 	mission_scrap_collected = 0
+	mission_enemies_killed = 0
 	deployed_officers.clear()
 	enemies.clear()
 	selected_target = Vector2i(-1, -1)
@@ -218,6 +224,10 @@ func _on_tile_clicked(grid_pos: Vector2i) -> void:
 	if execute_mode and selected_unit and selected_unit.officer_type == "captain":
 		_try_execute_enemy(grid_pos)
 		return
+	
+	if precision_mode and selected_unit and selected_unit.officer_type == "sniper":
+		_try_precision_shot(grid_pos)
+		return
 
 	# Check if clicking on a unit
 	var unit_at_pos = tactical_map.get_unit_at(grid_pos)
@@ -297,7 +307,8 @@ func _select_unit(unit: Node2D) -> void:
 		unit.move_range,
 		unit == deployed_officers[current_unit_index],  # Is it their turn?
 		unit.shoot_range,
-		unit_cover_level
+		unit_cover_level,
+		unit.officer_type
 	)
 	
 	# Update ability buttons (with cooldown info)
@@ -320,6 +331,9 @@ func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
 
 	if not unit.use_ap(1):
 		return
+	
+	# Disable end turn button during movement animation
+	_set_animating(true)
 
 	# Clear old position from pathfinding
 	tactical_map.set_unit_position_solid(current_pos, false)
@@ -341,7 +355,8 @@ func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
 		unit.move_range,
 		unit == deployed_officers[current_unit_index],
 		unit.shoot_range,
-		0  # Cover level updated in movement_finished callback
+		0,  # Cover level updated in movement_finished callback
+		unit.officer_type
 	)
 	# Update movement range display (only if it's their turn and has AP)
 	if unit == deployed_officers[current_unit_index] and unit.has_ap():
@@ -386,7 +401,8 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 			unit.move_range,
 			unit == deployed_officers[current_unit_index],
 			unit.shoot_range,
-			new_cover_level
+			new_cover_level,
+			unit.officer_type
 		)
 	
 	# Update movement range display (only if has AP remaining)
@@ -400,6 +416,10 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 	# Center camera on unit after movement (only for player units)
 	if unit in deployed_officers:
 		_center_camera_on_unit(unit)
+	
+	# Re-enable end turn button after player unit movement completes
+	if unit in deployed_officers:
+		_set_animating(false)
 	
 	# Check if unit is out of AP and auto-end turn
 	if unit == deployed_officers[current_unit_index]:
@@ -419,7 +439,8 @@ func _interact_with(interactable: Node2D) -> void:
 			selected_unit.move_range,
 			selected_unit == deployed_officers[current_unit_index],
 			selected_unit.shoot_range,
-			interact_cover_level
+			interact_cover_level,
+			selected_unit.officer_type
 		)
 		# Update movement range display (clear if out of AP)
 		if selected_unit == deployed_officers[current_unit_index]:
@@ -499,6 +520,10 @@ func _on_end_turn_pressed() -> void:
 	if not mission_active:
 		return
 	
+	# Prevent ending turn while animations are playing
+	if is_animating:
+		return
+	
 	# Clear attackable highlights before changing turns
 	_clear_attackable_highlights()
 	
@@ -508,6 +533,9 @@ func _on_end_turn_pressed() -> void:
 	# If all units have had their turn, advance to next round
 	if current_unit_index >= deployed_officers.size():
 		current_unit_index = 0
+		
+		# Disable end turn button during enemy turn and animations
+		_set_animating(true)
 		
 		# Execute enemy turn before starting new player round
 		await _execute_enemy_turn()
@@ -538,6 +566,9 @@ func _on_end_turn_pressed() -> void:
 			tactical_hud.show_cryo_warning()
 		
 		turn_ended.emit(current_turn)
+		
+		# Re-enable end turn button now that new turn has started
+		_set_animating(false)
 	
 	# Select the next unit whose turn it is
 	if deployed_officers.size() > 0:
@@ -552,6 +583,12 @@ func _is_current_unit_turn() -> bool:
 	return selected_unit == deployed_officers[current_unit_index]
 
 
+## Set animation state and update UI accordingly
+func _set_animating(animating: bool) -> void:
+	is_animating = animating
+	tactical_hud.set_end_turn_enabled(not animating)
+
+
 ## Center camera on a unit's position (used when turn starts)
 func _center_camera_on_unit(unit: Node2D) -> void:
 	var unit_pos = unit.get_grid_position()
@@ -560,36 +597,139 @@ func _center_camera_on_unit(unit: Node2D) -> void:
 
 
 func _check_extraction_available() -> void:
-	var all_on_extraction = true
+	var any_on_extraction = false
 	var any_alive = false
 
 	for officer in deployed_officers:
 		if officer.current_hp > 0:
 			any_alive = true
 			var pos = officer.get_grid_position()
-			if pos not in extraction_positions:
-				all_on_extraction = false
+			if pos in extraction_positions:
+				any_on_extraction = true
+				break  # At least one unit is in extraction zone
 
-	tactical_hud.set_extract_visible(all_on_extraction and any_alive)
+	tactical_hud.set_extract_visible(any_on_extraction and any_alive)
 
 
 func _on_extract_pressed() -> void:
 	if not mission_active:
 		return
 
+	# Check which units are in the extraction zone
+	var units_in_zone: Array[Node2D] = []
+	var units_outside_zone: Array[Node2D] = []
+	
+	for officer in deployed_officers:
+		if officer.current_hp > 0:
+			var pos = officer.get_grid_position()
+			if pos in extraction_positions:
+				units_in_zone.append(officer)
+			else:
+				units_outside_zone.append(officer)
+	
+	# Check if captain would be left behind - captain must always be extracted
+	for unit in units_outside_zone:
+		if unit.officer_type == "captain":
+			_show_captain_required_warning()
+			return
+	
+	# If some units are outside the zone, show warning
+	if units_outside_zone.size() > 0:
+		_show_extraction_warning(units_in_zone, units_outside_zone)
+	else:
+		# All units are in zone, extract normally
+		_end_mission(true)
+
+
+func _show_captain_required_warning() -> void:
+	var dialog = ConfirmDialogScene.instantiate()
+	ui_layer.add_child(dialog)
+	
+	var message = "Your CAPTAIN must be in the extraction zone to initiate extraction.\n\nMove your Captain to the extraction tiles before extracting. The Captain cannot be left behind."
+	
+	dialog.setup("[ EXTRACTION DENIED ]", message, "UNDERSTOOD", "")
+	dialog.show_dialog()
+	
+	# Hide the cancel button for info-only dialog and focus confirm button
+	dialog.no_button.visible = false
+	dialog.yes_button.grab_focus()
+
+
+func _show_extraction_warning(units_in_zone: Array[Node2D], units_outside_zone: Array[Node2D]) -> void:
+	# Create confirmation dialog
+	var dialog = ConfirmDialogScene.instantiate()
+	ui_layer.add_child(dialog)
+	
+	# Build warning message
+	var in_zone_names: Array[String] = []
+	for unit in units_in_zone:
+		in_zone_names.append(unit.officer_key.to_upper())
+	
+	var outside_zone_names: Array[String] = []
+	for unit in units_outside_zone:
+		outside_zone_names.append(unit.officer_key.to_upper())
+	
+	var message = "WARNING: %d unit(s) will be EXTRACTED:\n%s\n\n%d unit(s) will be LEFT BEHIND:\n%s\n\nUnits left behind will be treated as KIA.\n\nProceed with extraction?" % [
+		units_in_zone.size(),
+		", ".join(in_zone_names),
+		units_outside_zone.size(),
+		", ".join(outside_zone_names)
+	]
+	
+	dialog.setup("[ EXTRACTION WARNING ]", message, "EXTRACT", "CANCEL")
+	dialog.show_dialog()
+	
+	# Connect confirmed signal directly to handler (avoids GDScript lambda capture-by-value issue)
+	dialog.confirmed.connect(_on_extraction_warning_confirmed.bind(units_outside_zone))
+	# cancelled signal just closes the dialog via confirm_dialog.gd - no action needed
+
+
+func _on_extraction_warning_confirmed(units_outside_zone: Array[Node2D]) -> void:
+	# Mark units outside zone as dead (iterate over copy to avoid modification issues)
+	var units_to_kill = units_outside_zone.duplicate()
+	for unit in units_to_kill:
+		# Check if unit is still valid (may have been removed by previous call)
+		if is_instance_valid(unit) and unit in deployed_officers:
+			_on_officer_died(unit.officer_key)
+	
+	# Extract with remaining units
 	_end_mission(true)
 
 
 func _on_officer_died(officer_key: String) -> void:
-	# Remove from deployed list
-	for i in range(deployed_officers.size() - 1, -1, -1):
+	# Find the officer and play death animation
+	var dying_officer: Node2D = null
+	var officer_index: int = -1
+	
+	for i in range(deployed_officers.size()):
 		if deployed_officers[i].officer_key == officer_key:
-			var officer = deployed_officers[i]
-			var pos = officer.get_grid_position()
-			tactical_map.set_unit_position_solid(pos, false)
-			deployed_officers.remove_at(i)
-			officer.queue_free()
+			dying_officer = deployed_officers[i]
+			officer_index = i
 			break
+	
+	if dying_officer == null:
+		return
+	
+	# Clear position from map immediately
+	var pos = dying_officer.get_grid_position()
+	tactical_map.set_unit_position_solid(pos, false)
+	
+	# Remove from deployed list before animation (so they can't be selected)
+	if officer_index >= 0:
+		deployed_officers.remove_at(officer_index)
+	
+	# Select another unit if the selected one died
+	if selected_unit and selected_unit.officer_key == officer_key:
+		selected_unit = null
+		if deployed_officers.size() > 0:
+			_select_unit(deployed_officers[0])
+	
+	# Play death animation
+	if dying_officer.has_method("play_death_animation"):
+		await dying_officer.play_death_animation()
+	
+	# Remove node after animation
+	dying_officer.queue_free()
 
 	# Update game state
 	GameState.kill_officer(officer_key)
@@ -598,12 +738,6 @@ func _on_officer_died(officer_key: String) -> void:
 	if deployed_officers.is_empty():
 		_end_mission(false)
 
-	# Select another unit if the selected one died
-	if selected_unit and selected_unit.officer_key == officer_key:
-		selected_unit = null
-		if deployed_officers.size() > 0:
-			_select_unit(deployed_officers[0])
-
 
 func _end_mission(success: bool) -> void:
 	mission_active = false
@@ -611,6 +745,34 @@ func _end_mission(success: bool) -> void:
 
 	# Clear attackable highlights
 	_clear_attackable_highlights()
+
+	# Collect officer stats BEFORE cleanup
+	var officers_status: Array = []
+	for officer in deployed_officers:
+		officers_status.append({
+			"name": officer.officer_key,
+			"alive": officer.current_hp > 0,
+			"hp": officer.current_hp,
+			"max_hp": officer.max_hp,
+		})
+	
+	# Build stats dictionary
+	var mission_stats: Dictionary = {
+		"success": success,
+		"fuel_collected": mission_fuel_collected,
+		"scrap_collected": mission_scrap_collected,
+		"enemies_killed": mission_enemies_killed,
+		"turns_taken": current_turn,
+		"officers_status": officers_status,
+	}
+	
+	# Accumulate stats to GameState for voyage recap (only on success)
+	if success:
+		GameState.add_mission_stats(mission_fuel_collected, mission_scrap_collected, mission_enemies_killed, current_turn)
+
+	# Play beam-up animation on successful extraction
+	if success and deployed_officers.size() > 0:
+		await _play_beam_up_animation()
 
 	# Clear the map
 	for officer in deployed_officers:
@@ -634,7 +796,70 @@ func _end_mission(success: bool) -> void:
 	tactical_hud.visible = false
 	tactical_map.clear_movement_range()
 
-	mission_complete.emit(success)
+	mission_complete.emit(success, mission_stats)
+
+
+## Play beam-up extraction animation - units float up with a light beam effect
+func _play_beam_up_animation() -> void:
+	# Hide HUD during animation
+	tactical_hud.show_combat_message("EXTRACTION IN PROGRESS...", Color(0.4, 0.9, 1.0))
+	
+	# Center camera on the group
+	if deployed_officers.size() > 0:
+		var avg_pos = Vector2.ZERO
+		for officer in deployed_officers:
+			avg_pos += officer.position
+		avg_pos /= deployed_officers.size()
+		combat_camera.position = avg_pos
+	
+	await get_tree().create_timer(0.5).timeout
+	
+	# Create beam effects and animate each officer
+	var beam_tweens: Array[Tween] = []
+	
+	for i in range(deployed_officers.size()):
+		var officer = deployed_officers[i]
+		if officer.current_hp <= 0:
+			continue
+		
+		# Create a vertical beam of light under the officer
+		var beam = Line2D.new()
+		beam.width = 20.0
+		beam.default_color = Color(0.3, 0.9, 1.0, 0.0)
+		beam.add_point(officer.position + Vector2(0, 40))
+		beam.add_point(officer.position + Vector2(0, -200))
+		tactical_map.add_child(beam)
+		
+		# Stagger the beam appearance
+		var delay = i * 0.3
+		
+		var beam_tween = create_tween()
+		beam_tween.tween_interval(delay)
+		
+		# Fade in the beam
+		beam_tween.tween_property(beam, "default_color:a", 0.5, 0.3)
+		
+		# Float the officer upward while fading out
+		beam_tween.parallel().tween_property(officer, "position:y", officer.position.y - 150, 1.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD).set_delay(0.2)
+		beam_tween.parallel().tween_property(officer, "modulate:a", 0.0, 1.0).set_delay(0.4)
+		
+		# Add a subtle white flash to the officer
+		beam_tween.parallel().tween_property(officer, "modulate", Color(2.0, 2.5, 3.0, 1.0), 0.3).set_delay(0.1)
+		
+		# Narrow and fade the beam after officer is gone
+		beam_tween.tween_property(beam, "width", 2.0, 0.4)
+		beam_tween.parallel().tween_property(beam, "default_color:a", 0.0, 0.4)
+		beam_tween.tween_callback(beam.queue_free)
+		
+		beam_tweens.append(beam_tween)
+	
+	# Wait for all animations to complete
+	if beam_tweens.size() > 0:
+		await beam_tweens[-1].finished
+	
+	await get_tree().create_timer(0.3).timeout
+	tactical_hud.hide_combat_message()
+	combat_camera.return_to_tactical()
 
 
 ## Calculate hit chance for a shot from shooter_pos to target_pos
@@ -681,6 +906,20 @@ func _get_base_hit_chance_for_shooter(shooter: Node2D, distance: int) -> float:
 				return 65.0
 			else:
 				return 50.0
+		"sniper":
+			# Sniper has the best long-range accuracy, slightly weaker at close range
+			if distance <= 2:
+				return 85.0
+			elif distance <= 4:
+				return 85.0
+			elif distance <= 6:
+				return 80.0
+			elif distance <= 8:
+				return 75.0
+			elif distance <= 10:
+				return 70.0
+			else:
+				return 65.0
 		"captain":
 			# Captain is balanced
 			if distance <= 4:
@@ -834,12 +1073,16 @@ func _get_line_tiles(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void:
 	var shooter_pos = shooter.get_grid_position()
 	
+	# Disable end turn button during combat animation
+	_set_animating(true)
+	
 	# Check LOS
 	if not has_line_of_sight(shooter_pos, target_pos):
 		print("No line of sight! Blocked by walls.")
 		tactical_hud.show_combat_message("NO LINE OF SIGHT", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
+		_set_animating(false)
 		return
 	
 	# Calculate hit chance (pass shooter for class-specific calculations)
@@ -856,7 +1099,7 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 	# Tutorial: Notify that a unit attacked
 	TutorialManager.notify_trigger("unit_attacked")
 	
-	# PHASE 1: AIMING (0.8s)
+	# PHASE 1: AIMING (1.0s - balanced timing)
 	await _phase_aiming(shooter, shooter_pos, target_pos, hit_chance, is_flanking, damage)
 	
 	# Safety: abort if shooter or target was freed during aiming phase
@@ -864,9 +1107,10 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 		print("Shot aborted: shooter was destroyed during aiming")
 		tactical_hud.hide_combat_message()
 		combat_camera.return_to_tactical()
+		_set_animating(false)
 		return
 	
-	# PHASE 2: FIRING (0.3s)
+	# PHASE 2: FIRING (slower projectile travel)
 	var hit = await _phase_firing(shooter, shooter_pos, target_pos, hit_chance, damage)
 	
 	# Safety: abort if shooter was freed during firing phase
@@ -874,9 +1118,10 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 		print("Shot aborted: shooter was destroyed during firing")
 		tactical_hud.hide_combat_message()
 		combat_camera.return_to_tactical()
+		_set_animating(false)
 		return
 	
-	# PHASE 3: IMPACT (0.7s)
+	# PHASE 3: IMPACT (0.9s - balanced impact reaction)
 	# Target may have been freed - _phase_impact already has a null check
 	var valid_target = target if is_instance_valid(target) else null
 	await _phase_impact(shooter, target_pos, valid_target, hit, damage, is_flanking)
@@ -886,9 +1131,10 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 		print("Shot aborted: shooter was destroyed during impact")
 		tactical_hud.hide_combat_message()
 		combat_camera.return_to_tactical()
+		_set_animating(false)
 		return
 	
-	# PHASE 4: RESOLUTION (0.5s)
+	# PHASE 4: RESOLUTION (0.7s - balanced transition back)
 	await _phase_resolution(shooter)
 
 
@@ -916,7 +1162,8 @@ func _phase_aiming(shooter: Node2D, shooter_pos: Vector2i, target_pos: Vector2i,
 	else:
 		tactical_hud.show_combat_message("AIMING... %d%%" % int(hit_chance), Color(1, 1, 0.2))
 	
-	await get_tree().create_timer(0.8).timeout
+	# Balanced aiming phase timing
+	await get_tree().create_timer(1.0).timeout
 
 
 ## Phase 2: Firing
@@ -927,6 +1174,13 @@ func _phase_firing(shooter: Node2D, _shooter_pos: Vector2i, target_pos: Vector2i
 	# Calculate hit/miss
 	var hit = shooter.shoot_at(target_pos, hit_chance, damage)
 	
+	# Brief pause before firing for better sequencing
+	await get_tree().create_timer(0.15).timeout
+	
+	# Play unique attack animation for the shooter
+	if shooter.has_method("play_attack_animation"):
+		shooter.play_attack_animation()
+	
 	# Fire projectile effect
 	var shooter_world = shooter.position
 	var target_world = Vector2(target_pos.x * 32 + 16, target_pos.y * 32 + 16)
@@ -934,6 +1188,9 @@ func _phase_firing(shooter: Node2D, _shooter_pos: Vector2i, target_pos: Vector2i
 	
 	# Wait for projectile to reach target
 	await projectile.impact_reached
+	
+	# Brief pause after impact before showing results
+	await get_tree().create_timer(0.1).timeout
 	
 	return hit
 
@@ -969,7 +1226,8 @@ func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: 
 		var target_world = Vector2(target_pos.x * 32 + 16, target_pos.y * 32 + 16)
 		_spawn_damage_popup(0, false, target_world)
 	
-	await get_tree().create_timer(0.7).timeout
+	# Balanced impact phase timing
+	await get_tree().create_timer(0.9).timeout
 
 
 ## Phase 4: Resolution
@@ -992,7 +1250,8 @@ func _phase_resolution(shooter: Node2D) -> void:
 			shooter.move_range,
 			shooter == deployed_officers[current_unit_index],
 			shooter.shoot_range,
-			shooter_cover_level
+			shooter_cover_level,
+			shooter.officer_type
 		)
 		# Update movement range display (clear if out of AP)
 		if shooter == selected_unit and shooter == deployed_officers[current_unit_index]:
@@ -1004,11 +1263,19 @@ func _phase_resolution(shooter: Node2D) -> void:
 		# Update attackable enemy highlights (AP spent, enemy may have died)
 		_update_attackable_highlights()
 		
+		# Re-enable end turn button BEFORE checking auto-end turn
+		# so that _check_auto_end_turn can properly trigger _on_end_turn_pressed
+		_set_animating(false)
+		
 		# Check if unit is out of AP and auto-end turn
 		if shooter == deployed_officers[current_unit_index]:
 			_check_auto_end_turn()
+	else:
+		# For non-player shooters (enemies), just re-enable the button
+		_set_animating(false)
 	
-	await get_tree().create_timer(0.5).timeout
+	# Balanced resolution transition
+	await get_tree().create_timer(0.7).timeout
 
 
 ## Spawn a damage popup number
@@ -1079,8 +1346,25 @@ func _on_enemy_movement_finished(_enemy: Node2D) -> void:
 	pass
 
 
+## Calculate resource drop amount based on enemy type
+func _calculate_enemy_resource_drop(enemy_type: String) -> int:
+	match enemy_type:
+		"basic":
+			return randi_range(3, 5)
+		"heavy":
+			return randi_range(8, 12)
+		_:
+			# Default fallback for unknown enemy types
+			return 3
+
+
 func _on_enemy_died(enemy: Node2D) -> void:
 	print("Enemy %d died" % enemy.enemy_id)
+	mission_enemies_killed += 1
+	
+	# Get enemy position before removal
+	var pos = enemy.get_grid_position()
+	var enemy_type = enemy.enemy_type
 	
 	# Remove from enemies list
 	var idx = enemies.find(enemy)
@@ -1088,8 +1372,18 @@ func _on_enemy_died(enemy: Node2D) -> void:
 		enemies.remove_at(idx)
 	
 	# Clear from map
-	var pos = enemy.get_grid_position()
 	tactical_map.set_unit_position_solid(pos, false)
+	
+	# Play death animation before removing
+	if enemy.has_method("play_death_animation"):
+		await enemy.play_death_animation()
+	
+	# Spawn resource drop at enemy's death position
+	var resource_amount = _calculate_enemy_resource_drop(enemy_type)
+	var scrap_pile = ScrapPileScene.instantiate()
+	scrap_pile.scrap_amount = resource_amount
+	scrap_pile.set_grid_position(pos)
+	tactical_map.add_interactable(scrap_pile, pos)
 	
 	# Remove node
 	enemy.queue_free()
@@ -1291,6 +1585,26 @@ func _on_ability_used(ability_type: String) -> void:
 			tactical_map.set_execute_range(selected_unit.get_grid_position(), 4)
 			print("Execute ability - click an enemy within 4 tiles below 50%% HP")
 			tactical_hud.show_combat_message("SELECT ENEMY WITHIN 4 TILES (<50%% HP)", Color(1, 0.2, 0.2))
+		
+		"precision":
+			if selected_unit.officer_type != "sniper":
+				print("Only Sniper can use Precision Shot!")
+				return
+			
+			if not selected_unit.has_ap(1):
+				print("Not enough AP for Precision Shot")
+				tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
+				await get_tree().create_timer(1.0).timeout
+				tactical_hud.hide_combat_message()
+				return
+			
+			# Enter precision targeting mode - show purple range tiles for 8+ tile targets
+			precision_mode = true
+			tactical_map.clear_movement_range()
+			# Show range from 8 to shoot_range (12 for sniper)
+			tactical_map.set_execute_range(selected_unit.get_grid_position(), selected_unit.shoot_range)
+			print("Precision Shot - click an enemy 8+ tiles away for guaranteed 2x damage hit")
+			tactical_hud.show_combat_message("SELECT ENEMY 8+ TILES AWAY", Color(0.6, 0.55, 0.8))
 
 
 ## Check if any officer on overwatch can shoot the enemy
@@ -1329,9 +1643,14 @@ func _check_overwatch_shots(enemy: Node2D, enemy_pos: Vector2i) -> void:
 			damage = int(officer.base_damage * (1.0 + FLANK_DAMAGE_BONUS))
 			print("Flanking overwatch! Base damage: %d -> Flanking damage: %d" % [officer.base_damage, damage])
 		
-		# Take the shot (Overwatch is GUARANTEED HIT)
-		var hit_chance = 100.0  # Overwatch always hits
-		var hit = officer.try_overwatch_shot(enemy_pos, hit_chance)
+		# Take the shot (Overwatch is GUARANTEED HIT - 100% success)
+		var hit_chance = 100.0  # Overwatch always hits - 100% attack success
+		# Pass calculated damage (including flanking bonus) to ensure consistency
+		var hit = officer.try_overwatch_shot(enemy_pos, hit_chance, damage)
+		
+		# Play attack animation for the overwatch shooter
+		if officer.has_method("play_attack_animation"):
+			officer.play_attack_animation()
 		
 		# Fire projectile
 		var officer_world = officer.position
@@ -1339,7 +1658,8 @@ func _check_overwatch_shots(enemy: Node2D, enemy_pos: Vector2i) -> void:
 		projectile.fire(officer_world, enemy_world)
 		await projectile.impact_reached
 		
-		# Overwatch always hits - apply damage
+		# Overwatch always hits - 100% success, always apply damage
+		# hit will always be true, but keeping check for safety
 		if hit:
 			if is_flanking:
 				tactical_hud.show_combat_message("OVERWATCH FLANKING HIT!", Color(1, 0.5, 0.1))
@@ -1365,6 +1685,9 @@ func _try_auto_patch() -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		return
+	
+	# Disable end turn button during patch animation
+	_set_animating(true)
 	
 	var medic_pos = selected_unit.get_grid_position()
 	
@@ -1399,6 +1722,9 @@ func _try_auto_patch() -> void:
 					
 					_select_unit(selected_unit)
 					
+					# Re-enable end turn button after patch animation completes
+					_set_animating(false)
+					
 					# Check if unit is out of AP and auto-end turn
 					_check_auto_end_turn()
 					return
@@ -1407,6 +1733,7 @@ func _try_auto_patch() -> void:
 	tactical_hud.show_combat_message("NO INJURED ALLIES NEARBY", Color(1, 0.5, 0))
 	await get_tree().create_timer(1.0).timeout
 	tactical_hud.hide_combat_message()
+	_set_animating(false)
 
 
 ## Try to place a turret on an adjacent tile (Tech ability)
@@ -1417,6 +1744,9 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 	if not selected_unit or selected_unit.officer_type != "tech":
 		return
 	
+	# Disable end turn button during turret placement animation
+	_set_animating(true)
+	
 	var tech_pos = selected_unit.get_grid_position()
 	var distance = abs(grid_pos.x - tech_pos.x) + abs(grid_pos.y - tech_pos.y)
 	
@@ -1426,6 +1756,7 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		tactical_hud.show_combat_message("MUST BE ADJACENT", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
+		_set_animating(false)
 		return
 	
 	# Must be a walkable, empty tile
@@ -1434,6 +1765,7 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		tactical_hud.show_combat_message("INVALID TILE", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
+		_set_animating(false)
 		return
 	
 	# Check no unit is already there
@@ -1443,6 +1775,7 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		tactical_hud.show_combat_message("TILE OCCUPIED", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
+		_set_animating(false)
 		return
 	
 	# Use the ability (spends AP and starts cooldown)
@@ -1470,10 +1803,14 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		
 		_select_unit(selected_unit)
 		
+		# Re-enable end turn button after turret placement animation completes
+		_set_animating(false)
+		
 		# Check if unit is out of AP and auto-end turn
 		_check_auto_end_turn()
 	else:
 		print("Failed to place turret (no AP or cooldown)")
+		_set_animating(false)
 
 
 ## Try to charge an enemy (Heavy ability)
@@ -1485,6 +1822,9 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 	if not selected_unit or selected_unit.officer_type != "heavy":
 		return
 	
+	# Disable end turn button during charge animation
+	_set_animating(true)
+	
 	var heavy_pos = selected_unit.get_grid_position()
 	var distance = abs(grid_pos.x - heavy_pos.x) + abs(grid_pos.y - heavy_pos.y)
 	
@@ -1494,6 +1834,7 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		tactical_hud.show_combat_message("TARGET OUT OF RANGE (MAX 4)", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
+		_set_animating(false)
 		return
 	
 	# Must be clicking on an enemy
@@ -1508,6 +1849,7 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		tactical_hud.show_combat_message("NO ENEMY THERE", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
+		_set_animating(false)
 		return
 	
 	# Must be visible
@@ -1516,11 +1858,13 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		tactical_hud.show_combat_message("ENEMY NOT VISIBLE", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
+		_set_animating(false)
 		return
 	
 	# Use the ability (spends AP and starts cooldown)
 	if not selected_unit.use_charge():
 		print("Failed to use Charge (no AP or cooldown)")
+		_set_animating(false)
 		return
 	
 	# Find adjacent position to the enemy to move to
@@ -1573,6 +1917,9 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 	_update_enemy_visibility()
 	_update_unit_cover_indicator(selected_unit)
 	_select_unit(selected_unit)
+	
+	# Re-enable end turn button after charge animation completes
+	_set_animating(false)
 	
 	# Check if unit is out of AP and auto-end turn
 	_check_auto_end_turn()
@@ -1673,6 +2020,9 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 	if not selected_unit or selected_unit.officer_type != "captain":
 		return
 	
+	# Disable end turn button during execute animation
+	_set_animating(true)
+	
 	var captain_pos = selected_unit.get_grid_position()
 	var distance = abs(grid_pos.x - captain_pos.x) + abs(grid_pos.y - captain_pos.y)
 	
@@ -1683,6 +2033,7 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)
+		_set_animating(false)
 		return
 	
 	# Check line of sight
@@ -1692,6 +2043,7 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)
+		_set_animating(false)
 		return
 	
 	# Must be clicking on an enemy
@@ -1707,6 +2059,7 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)
+		_set_animating(false)
 		return
 	
 	# Enemy must be below 50% HP
@@ -1717,11 +2070,13 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)
+		_set_animating(false)
 		return
 	
 	# Use the ability (spends AP and starts cooldown)
 	if not selected_unit.use_execute():
 		print("Failed to use Execute (no AP or cooldown)")
+		_set_animating(false)
 		return
 	
 	# Guaranteed kill - deal remaining HP as damage
@@ -1754,6 +2109,118 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 	combat_camera.return_to_tactical()
 	
 	_select_unit(selected_unit)
+	
+	# Re-enable end turn button after execute animation completes
+	_set_animating(false)
+	
+	# Check if unit is out of AP and auto-end turn
+	_check_auto_end_turn()
+
+
+## Try to use Precision Shot on an enemy (Sniper ability)
+func _try_precision_shot(grid_pos: Vector2i) -> void:
+	precision_mode = false
+	tactical_map.clear_execute_range()
+	tactical_hud.hide_combat_message()
+	
+	if not selected_unit or selected_unit.officer_type != "sniper":
+		return
+	
+	# Disable end turn button during precision shot animation
+	_set_animating(true)
+	
+	var sniper_pos = selected_unit.get_grid_position()
+	var distance = abs(grid_pos.x - sniper_pos.x) + abs(grid_pos.y - sniper_pos.y)
+	
+	# Must be at least 8 tiles away
+	if distance < 8:
+		print("Precision Shot requires target 8+ tiles away (distance: %d)" % distance)
+		tactical_hud.show_combat_message("TOO CLOSE (NEED 8+ TILES)", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_select_unit(selected_unit)
+		_set_animating(false)
+		return
+	
+	# Must be within shoot range
+	if distance > selected_unit.shoot_range:
+		print("Precision Shot target out of range (distance: %d, max: %d)" % [distance, selected_unit.shoot_range])
+		tactical_hud.show_combat_message("OUT OF RANGE", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_select_unit(selected_unit)
+		_set_animating(false)
+		return
+	
+	# Check line of sight
+	if not has_line_of_sight(sniper_pos, grid_pos):
+		print("No line of sight for Precision Shot")
+		tactical_hud.show_combat_message("NO LINE OF SIGHT", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_select_unit(selected_unit)
+		_set_animating(false)
+		return
+	
+	# Must be clicking on an enemy
+	var target_enemy: Node2D = null
+	for enemy in enemies:
+		if enemy.get_grid_position() == grid_pos and enemy.current_hp > 0:
+			target_enemy = enemy
+			break
+	
+	if not target_enemy:
+		print("No enemy at that position")
+		tactical_hud.show_combat_message("NO ENEMY THERE", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_select_unit(selected_unit)
+		_set_animating(false)
+		return
+	
+	# Use the ability (spends AP and starts cooldown)
+	if not selected_unit.use_precision_shot():
+		print("Failed to use Precision Shot (no AP or cooldown)")
+		_set_animating(false)
+		return
+	
+	# Precision Shot deals 2x base damage (60 for sniper with 30 base damage)
+	var precision_damage = selected_unit.base_damage * 2
+	selected_unit.face_towards(grid_pos)
+	
+	# Focus camera on action
+	var shooter_world = selected_unit.position
+	var target_world = Vector2(grid_pos.x * 32 + 16, grid_pos.y * 32 + 16)
+	combat_camera.focus_on_action(shooter_world, target_world)
+	await get_tree().create_timer(0.2).timeout
+	
+	# Cinematic precision shot sequence
+	tactical_hud.show_combat_message("TAKING AIM...", Color(0.6, 0.55, 0.8))
+	await get_tree().create_timer(0.6).timeout
+	
+	# Play attack animation
+	if selected_unit.has_method("play_attack_animation"):
+		selected_unit.play_attack_animation()
+	
+	# Fire projectile
+	projectile.fire(shooter_world, target_world)
+	await projectile.impact_reached
+	
+	# Guaranteed hit with 2x damage
+	tactical_hud.show_combat_message("PRECISION HIT!", Color(0.6, 0.55, 0.8))
+	target_enemy.take_damage(precision_damage)
+	_spawn_damage_popup(precision_damage, true, target_enemy.position)
+	
+	await get_tree().create_timer(1.0).timeout
+	tactical_hud.hide_combat_message()
+	
+	# Return camera to tactical view
+	combat_camera.return_to_tactical()
+	
+	_select_unit(selected_unit)
+	
+	# Re-enable end turn button after precision shot animation completes
+	_set_animating(false)
 	
 	# Check if unit is out of AP and auto-end turn
 	_check_auto_end_turn()
@@ -1801,6 +2268,10 @@ func _process_turrets() -> void:
 			await get_tree().create_timer(0.2).timeout  # Wait for camera to zoom in
 			
 			tactical_hud.show_combat_message("TURRET FIRES!", Color(0, 1, 1))
+			
+			# Play turret attack animation
+			if turret.has_method("play_attack_animation"):
+				turret.play_attack_animation()
 			
 			# Fire projectile
 			projectile.fire(turret_world, enemy_world)

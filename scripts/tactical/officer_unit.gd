@@ -13,6 +13,7 @@ const OFFICER_DATA: Dictionary = {
 	"tech": { "color": Color.CYAN, "move_range": 4, "sight_range": 5, "max_hp": 70 },
 	"medic": { "color": Color.MAGENTA, "move_range": 5, "sight_range": 5, "max_hp": 75 },
 	"heavy": { "color": Color.ORANGE_RED, "move_range": 3, "sight_range": 5, "max_hp": 120 },
+	"sniper": { "color": Color(0.35, 0.35, 0.4), "move_range": 4, "sight_range": 7, "max_hp": 70 },
 }
 
 # Sprite textures for different officer types
@@ -22,6 +23,7 @@ const OFFICER_SPRITES = {
 	"tech": preload("res://assets/sprites/characters/officer_tech.png"),
 	"medic": preload("res://assets/sprites/characters/officer_medic.png"),
 	"heavy": preload("res://assets/sprites/characters/officer_heavy.png"),
+	"sniper": preload("res://assets/sprites/characters/officer_sniper.png"),
 }
 
 @onready var sprite: Sprite2D = $Sprite
@@ -35,7 +37,7 @@ const OFFICER_SPRITES = {
 @onready var full_cover_indicator: Node2D = $FullCoverIndicator
 
 var officer_key: String = ""
-var officer_type: String = ""  # scout, tech, medic, captain
+var officer_type: String = ""  # scout, tech, medic, captain, heavy, sniper
 var current_ap: int = 2
 var max_ap: int = 2
 var current_hp: int = 100
@@ -60,6 +62,7 @@ var _move_speed: float = 150.0
 
 # Animation
 var _idle_tween: Tween = null
+var _attack_tween: Tween = null
 
 
 func _ready() -> void:
@@ -113,6 +116,11 @@ func _apply_specialist_bonuses() -> void:
 		"captain":
 			# Captain is balanced - no passive bonuses
 			pass
+		"sniper":
+			# Sniper has extended sight and shoot range for long-range combat
+			sight_range += 2  # 7 base + 2 = 9 total
+			shoot_range += 2  # 10 base + 2 = 12 total
+			base_damage = 30  # Higher than standard 25
 
 
 func _process(delta: float) -> void:
@@ -341,22 +349,23 @@ func toggle_overwatch() -> bool:
 	return true
 
 
-## Perform overwatch shot if enemy moves in LOS (guaranteed hit)
-func try_overwatch_shot(enemy_pos: Vector2i, _hit_chance: float) -> bool:
+## Perform overwatch shot if enemy moves in LOS (guaranteed hit - 100% success)
+func try_overwatch_shot(enemy_pos: Vector2i, _hit_chance: float, damage: int = -1) -> bool:
 	if not overwatch_active:
 		return false
 	
 	# Overwatch shot doesn't cost AP (already paid to activate)
-	# Overwatch is a GUARANTEED HIT - always deals damage
-	var damage = base_damage
+	# Overwatch is a GUARANTEED HIT - 100% attack success, always deals damage
+	var actual_damage = damage if damage > 0 else base_damage
 	
-	shot_fired.emit(enemy_pos, true, damage)
+	# Always emit as a hit with full damage (100% success rate)
+	shot_fired.emit(enemy_pos, true, actual_damage)
 	overwatch_active = false  # Deactivate after shooting
 	
 	if overwatch_indicator:
 		overwatch_indicator.visible = false
 	
-	return true  # Always hits
+	return true  # Always hits - 100% success
 
 
 ## Check if this unit can detect enemies (Scout passive)
@@ -438,6 +447,29 @@ func use_execute() -> bool:
 	return true
 
 
+## Use Precision Shot ability (Sniper) - guaranteed hit at long range (8+ tiles) for 2x damage
+func use_precision_shot() -> bool:
+	if officer_type != "sniper":
+		return false
+	
+	if is_ability_on_cooldown():
+		return false
+	
+	if not use_ap(1):
+		return false
+	
+	_start_cooldown()
+	return true
+
+
+## Check if target is valid for Precision Shot (must be 8+ tiles away)
+func can_precision_shot_target(target_pos: Vector2i) -> bool:
+	if officer_type != "sniper":
+		return false
+	var distance = abs(target_pos.x - grid_position.x) + abs(target_pos.y - grid_position.y)
+	return distance >= 8 and distance <= shoot_range
+
+
 ## Check if unit can use their special ability
 func can_use_ability(ability_type: String) -> bool:
 	if is_ability_on_cooldown():
@@ -454,6 +486,8 @@ func can_use_ability(ability_type: String) -> bool:
 			return officer_type == "heavy" and has_ap(1)
 		"execute":
 			return officer_type == "captain" and has_ap(1)
+		"precision":
+			return officer_type == "sniper" and has_ap(1)
 		_:
 			return false
 
@@ -474,3 +508,155 @@ func update_cover_indicator(cover_level: int) -> void:
 		half_cover_indicator.visible = (cover_level == 1)
 	if full_cover_indicator:
 		full_cover_indicator.visible = (cover_level == 2)
+
+
+#region Attack Animations
+
+## Kill any running attack tween to prevent conflicts
+func _kill_attack_tween() -> void:
+	if _attack_tween and _attack_tween.is_valid():
+		_attack_tween.kill()
+		_attack_tween = null
+
+
+## Play the unique attack animation for this officer type
+func play_attack_animation() -> void:
+	if not sprite:
+		return
+	_kill_attack_tween()
+	_stop_idle_animation()
+	
+	match officer_type:
+		"captain": _play_captain_attack()
+		"scout":   _play_scout_attack()
+		"tech":    _play_tech_attack()
+		"medic":   _play_medic_attack()
+		"heavy":   _play_heavy_attack()
+		"sniper":  _play_sniper_attack()
+		_:         _play_captain_attack()
+
+
+## Captain - Commanding precision: controlled scale pulse, yellow flash, minimal recoil
+func _play_captain_attack() -> void:
+	var recoil_dir = -1.0 if not sprite.flip_h else 1.0
+	_attack_tween = create_tween()
+	# Forward lean
+	_attack_tween.tween_property(sprite, "position:y", -2.0, 0.05).set_ease(Tween.EASE_OUT)
+	# Yellow command flash + scale pulse + slight recoil
+	_attack_tween.tween_property(sprite, "modulate", Color(1.6, 1.4, 0.4, 1.0), 0.04)
+	_attack_tween.parallel().tween_property(sprite, "scale", Vector2(1.08, 1.08), 0.04)
+	_attack_tween.parallel().tween_property(sprite, "position:x", recoil_dir * 2.0, 0.04)
+	# Recover
+	_attack_tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.12)
+	_attack_tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.12)
+	_attack_tween.parallel().tween_property(sprite, "position:x", 0.0, 0.10)
+	_attack_tween.parallel().tween_property(sprite, "position:y", 0.0, 0.10)
+	_attack_tween.tween_callback(_start_idle_animation)
+
+
+## Scout - Quick snap-shot: rotation jolt, fast directional kickback, green muzzle glow
+func _play_scout_attack() -> void:
+	var recoil_dir = -1.0 if not sprite.flip_h else 1.0
+	var rot_dir = -1.0 if not sprite.flip_h else 1.0
+	_attack_tween = create_tween()
+	# Snap rotation + kickback + green flash
+	_attack_tween.tween_property(sprite, "rotation", rot_dir * -0.1, 0.03).set_ease(Tween.EASE_OUT)
+	_attack_tween.parallel().tween_property(sprite, "position:x", recoil_dir * 4.0, 0.03)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(0.6, 1.6, 0.5, 1.0), 0.03)
+	# Quick snap back
+	_attack_tween.tween_property(sprite, "rotation", 0.0, 0.08).set_ease(Tween.EASE_IN_OUT)
+	_attack_tween.parallel().tween_property(sprite, "position:x", 0.0, 0.08)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.10)
+	_attack_tween.parallel().tween_property(sprite, "position:y", 0.0, 0.08)
+	_attack_tween.tween_callback(_start_idle_animation)
+
+
+## Tech - Energy discharge: weapon raise, cyan pulse, scale expansion, slow recovery
+func _play_tech_attack() -> void:
+	var recoil_dir = -1.0 if not sprite.flip_h else 1.0
+	_attack_tween = create_tween()
+	# Weapon raise + cyan charge-up glow
+	_attack_tween.tween_property(sprite, "position:y", -4.0, 0.08).set_ease(Tween.EASE_OUT)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(0.5, 1.6, 1.8, 1.0), 0.08)
+	_attack_tween.parallel().tween_property(sprite, "scale", Vector2(1.12, 1.12), 0.08)
+	# Discharge recoil
+	_attack_tween.tween_property(sprite, "position:x", recoil_dir * 3.0, 0.04)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(0.3, 1.0, 1.2, 1.0), 0.04)
+	# Slow recovery (charging feel)
+	_attack_tween.tween_property(sprite, "position:x", 0.0, 0.18).set_ease(Tween.EASE_IN_OUT)
+	_attack_tween.parallel().tween_property(sprite, "position:y", 0.0, 0.18).set_ease(Tween.EASE_IN_OUT)
+	_attack_tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.18)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.18)
+	_attack_tween.tween_callback(_start_idle_animation)
+
+
+## Medic - Reluctant shot: gentle recoil, magenta tint, quick flinch
+func _play_medic_attack() -> void:
+	var recoil_dir = -1.0 if not sprite.flip_h else 1.0
+	_attack_tween = create_tween()
+	# Flinch upward + magenta tint
+	_attack_tween.tween_property(sprite, "position:y", 1.0, 0.03)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(1.4, 0.6, 1.4, 1.0), 0.03)
+	# Gentle recoil
+	_attack_tween.tween_property(sprite, "position:x", recoil_dir * 2.5, 0.04)
+	_attack_tween.parallel().tween_property(sprite, "position:y", -1.0, 0.04)
+	# Quick return to baseline
+	_attack_tween.tween_property(sprite, "position:x", 0.0, 0.10).set_ease(Tween.EASE_IN_OUT)
+	_attack_tween.parallel().tween_property(sprite, "position:y", 0.0, 0.10).set_ease(Tween.EASE_IN_OUT)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.10)
+	_attack_tween.tween_callback(_start_idle_animation)
+
+
+## Heavy - Heavy ordnance: strong recoil + crouch, orange-red flash, scale squeeze, rotation torque
+func _play_heavy_attack() -> void:
+	var recoil_dir = -1.0 if not sprite.flip_h else 1.0
+	var rot_dir = 1.0 if not sprite.flip_h else -1.0
+	_attack_tween = create_tween()
+	# Strong recoil + crouch + orange-red flash + rotation + scale squeeze
+	_attack_tween.tween_property(sprite, "position:x", recoil_dir * 5.0, 0.04).set_ease(Tween.EASE_OUT)
+	_attack_tween.parallel().tween_property(sprite, "position:y", 2.0, 0.04)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(1.8, 0.5, 0.2, 1.0), 0.04)
+	_attack_tween.parallel().tween_property(sprite, "scale", Vector2(0.92, 0.92), 0.04)
+	_attack_tween.parallel().tween_property(sprite, "rotation", rot_dir * 0.05, 0.04)
+	# Bounce back overshoot
+	_attack_tween.tween_property(sprite, "scale", Vector2(1.05, 1.05), 0.08)
+	_attack_tween.parallel().tween_property(sprite, "position:x", recoil_dir * -1.0, 0.08)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(1.2, 0.8, 0.5, 1.0), 0.08)
+	# Settle to baseline
+	_attack_tween.tween_property(sprite, "position:x", 0.0, 0.14).set_ease(Tween.EASE_IN_OUT)
+	_attack_tween.parallel().tween_property(sprite, "position:y", 0.0, 0.14).set_ease(Tween.EASE_IN_OUT)
+	_attack_tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.14)
+	_attack_tween.parallel().tween_property(sprite, "rotation", 0.0, 0.14)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.14)
+	_attack_tween.tween_callback(_start_idle_animation)
+
+
+## Sniper - Precision shot: deliberate aim, scope glint, controlled recoil, professional
+func _play_sniper_attack() -> void:
+	var recoil_dir = -1.0 if not sprite.flip_h else 1.0
+	_attack_tween = create_tween()
+	# Phase 1: Settle into position - crouch slightly, darken (focusing)
+	_attack_tween.tween_property(sprite, "position:y", 1.5, 0.12).set_ease(Tween.EASE_OUT)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(0.7, 0.7, 0.8, 1.0), 0.12)
+	_attack_tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 0.96), 0.12)
+	# Phase 2: Scope glint - brief bright purple flash (acquiring target)
+	_attack_tween.tween_property(sprite, "modulate", Color(0.9, 0.7, 1.4, 1.0), 0.06)
+	# Phase 3: Hold breath - slight pause, scale tightens
+	_attack_tween.tween_property(sprite, "scale", Vector2(0.98, 0.94), 0.1)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(0.8, 0.6, 1.2, 1.0), 0.1)
+	# Phase 4: FIRE - sharp white-purple muzzle flash, controlled recoil
+	_attack_tween.tween_property(sprite, "modulate", Color(1.8, 1.4, 2.2, 1.0), 0.02)
+	_attack_tween.parallel().tween_property(sprite, "position:x", recoil_dir * 3.0, 0.02)
+	_attack_tween.parallel().tween_property(sprite, "position:y", 2.5, 0.02)
+	# Phase 5: Absorb recoil - professional recovery
+	_attack_tween.tween_property(sprite, "modulate", Color(1.1, 0.9, 1.3, 1.0), 0.06)
+	_attack_tween.parallel().tween_property(sprite, "position:x", recoil_dir * 1.0, 0.06)
+	_attack_tween.parallel().tween_property(sprite, "scale", Vector2(1.02, 1.02), 0.06)
+	# Phase 6: Return to ready - smooth and controlled
+	_attack_tween.tween_property(sprite, "position:x", 0.0, 0.15).set_ease(Tween.EASE_IN_OUT)
+	_attack_tween.parallel().tween_property(sprite, "position:y", 0.0, 0.15).set_ease(Tween.EASE_IN_OUT)
+	_attack_tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.15)
+	_attack_tween.parallel().tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.15)
+	_attack_tween.tween_callback(_start_idle_animation)
+
+#endregion

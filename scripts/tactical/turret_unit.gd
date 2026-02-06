@@ -48,3 +48,22 @@ func update_visual() -> void:
 		var tween = create_tween()
 		tween.tween_property(sprite, "modulate", Color(0.5, 1.0, 1.0, 1.0), 0.2)
 		tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+
+
+## Play turret firing animation - cyan rotation pulse matching turret identity
+func play_attack_animation() -> void:
+	if not sprite:
+		return
+	var tween = create_tween()
+	# Bright cyan flash + quick rotation snap + scale pulse
+	tween.tween_property(sprite, "modulate", Color(0.4, 1.8, 1.8, 1.0), 0.04)
+	tween.parallel().tween_property(sprite, "rotation", -0.12, 0.04).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(sprite, "scale", Vector2(1.15, 1.15), 0.04)
+	# Snap back with slight overshoot
+	tween.tween_property(sprite, "rotation", 0.03, 0.06).set_ease(Tween.EASE_IN_OUT)
+	tween.parallel().tween_property(sprite, "modulate", Color(0.6, 1.2, 1.2, 1.0), 0.06)
+	tween.parallel().tween_property(sprite, "scale", Vector2(0.95, 0.95), 0.06)
+	# Settle to baseline
+	tween.tween_property(sprite, "rotation", 0.0, 0.10).set_ease(Tween.EASE_IN_OUT)
+	tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.10)
+	tween.parallel().tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.10)

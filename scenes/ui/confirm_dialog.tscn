@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://buu00j7vjvlyc"]
 
-[ext_resource type="Script" path="res://scripts/ui/confirm_dialog.gd" id="1_dialog"]
+[ext_resource type="Script" uid="uid://8m24nq50xapp" path="res://scripts/ui/confirm_dialog.gd" id="1_dialog"]
 
-[node name="ConfirmDialog" type="Control"]
+[node name="ConfirmDialog" type="Control" unique_id=1047492231]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -12,7 +12,7 @@ grow_vertical = 2
 mouse_filter = 1
 script = ExtResource("1_dialog")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=204372994]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -20,9 +20,41 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 1
-color = Color(0, 0, 0, 0.75)
+color = Color(0, 0, 0.05, 0.8)
 
-[node name="PanelContainer" type="PanelContainer" parent="."]
+[node name="GlowEffect" type="ColorRect" parent="." unique_id=456103181]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -228.0
+offset_top = -128.0
+offset_right = 228.0
+offset_bottom = 128.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.12)
+
+[node name="BorderOuter" type="ColorRect" parent="." unique_id=1808335345]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -224.0
+offset_top = -130.0
+offset_right = 224.0
+offset_bottom = 133.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.5)
+
+[node name="PanelContainer" type="PanelContainer" parent="." unique_id=1013504109]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -36,58 +68,152 @@ offset_bottom = 120.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="MarginContainer" type="MarginContainer" parent="PanelContainer"]
+[node name="BackgroundGradient" type="ColorRect" parent="PanelContainer" unique_id=2030683388]
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.02, 0.04, 0.08, 0.98)
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer" unique_id=884598536]
 layout_mode = 2
 theme_override_constants/margin_left = 25
 theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 25
 theme_override_constants/margin_bottom = 20
 
-[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer" unique_id=311957839]
 layout_mode = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 14
 
-[node name="TitleLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HeaderContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1409871015]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+mouse_filter = 2
+alignment = 1
+
+[node name="LeftDecor" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=2073038731]
+custom_minimum_size = Vector2(20, 2)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.5)
+
+[node name="TitleLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=175852276]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
 theme_override_font_sizes/font_size = 24
 text = "[ CONFIRM ]"
 horizontal_alignment = 1
 
-[node name="HSeparator" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="RightDecor" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=1013803483]
+custom_minimum_size = Vector2(20, 2)
 layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.5)
 
-[node name="MessageLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HSeparator" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=658928387]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9, 0.9, 0.9, 1)
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.3)
+
+[node name="MessageLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=508691515]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.85, 0.9, 1)
 theme_override_font_sizes/font_size = 16
 text = "Are you sure you want to proceed?
 This action cannot be undone."
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="HSeparator2" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HSeparator2" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=853569923]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.3)
 
-[node name="ButtonContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="ButtonContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=974796545]
 layout_mode = 2
 theme_override_constants/separation = 20
 alignment = 1
 
-[node name="YesButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer"]
+[node name="YesButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer" unique_id=921672860]
 custom_minimum_size = Vector2(140, 45)
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.4, 0.3, 1)
-theme_override_colors/font_hover_color = Color(1, 0.6, 0.5, 1)
-theme_override_colors/font_pressed_color = Color(0.8, 0.2, 0.2, 1)
+theme_override_colors/font_color = Color(1, 0.3, 0.2, 1)
+theme_override_colors/font_pressed_color = Color(0.8, 0.2, 0.1, 1)
+theme_override_colors/font_hover_color = Color(1, 0.5, 0.4, 1)
 theme_override_font_sizes/font_size = 18
 text = "[ YES ]"
 
-[node name="NoButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer"]
+[node name="NoButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer" unique_id=2066202750]
 custom_minimum_size = Vector2(140, 45)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.3, 0.9, 0.3, 1)
-theme_override_colors/font_hover_color = Color(0.5, 1, 0.5, 1)
-theme_override_colors/font_pressed_color = Color(0.2, 0.7, 0.2, 1)
+theme_override_colors/font_color = Color(0.2, 1, 0.5, 1)
+theme_override_colors/font_pressed_color = Color(0.1, 0.8, 0.3, 1)
+theme_override_colors/font_hover_color = Color(0.4, 1, 0.7, 1)
 theme_override_font_sizes/font_size = 18
 text = "[ NO ]"
+
+[node name="CornerTL" type="ColorRect" parent="." unique_id=46972310]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -223.0
+offset_top = -129.0
+offset_right = -215.0
+offset_bottom = -121.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.8)
+
+[node name="CornerTR" type="ColorRect" parent="." unique_id=2075818766]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 214.0
+offset_top = -128.0
+offset_right = 222.0
+offset_bottom = -120.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.8)
+
+[node name="CornerBL" type="ColorRect" parent="." unique_id=596821968]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -223.0
+offset_top = 124.0
+offset_right = -215.0
+offset_bottom = 132.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.8)
+
+[node name="CornerBR" type="ColorRect" parent="." unique_id=2034493112]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 216.0
+offset_top = 124.0
+offset_right = 224.0
+offset_bottom = 132.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.8)

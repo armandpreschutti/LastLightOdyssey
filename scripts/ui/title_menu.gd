@@ -1,35 +1,45 @@
 extends Control
 ## Title Menu - Main menu for Last Light Odyssey
-## Features animated starfield background, typewriter subtitle, and game entry points
+## Features retro sci-fi animated starfield, scanline overlay, typewriter subtitle, and game entry points
 
 signal start_game_pressed
 signal settings_pressed
 
 @onready var title_label: Label = $CenterContainer/VBoxContainer/TitleContainer/TitleLabel
 @onready var subtitle_label: Label = $CenterContainer/VBoxContainer/TitleContainer/SubtitleLabel
-@onready var new_game_button: Button = $CenterContainer/VBoxContainer/ButtonContainer/NewGameButton
-@onready var continue_button: Button = $CenterContainer/VBoxContainer/ButtonContainer/ContinueButton
-@onready var settings_button: Button = $CenterContainer/VBoxContainer/ButtonContainer/SettingsButton
-@onready var quit_button: Button = $CenterContainer/VBoxContainer/ButtonContainer/QuitButton
+@onready var new_game_button: Button = $CenterContainer/VBoxContainer/ButtonPanelWrapper/ButtonPanel/MarginContainer/ButtonContainer/NewGameButton
+@onready var continue_button: Button = $CenterContainer/VBoxContainer/ButtonPanelWrapper/ButtonPanel/MarginContainer/ButtonContainer/ContinueButton
+@onready var settings_button: Button = $CenterContainer/VBoxContainer/ButtonPanelWrapper/ButtonPanel/MarginContainer/ButtonContainer/SettingsButton
+@onready var quit_button: Button = $CenterContainer/VBoxContainer/ButtonPanelWrapper/ButtonPanel/MarginContainer/ButtonContainer/QuitButton
 @onready var starfield: Control = $Starfield
+@onready var scanline_overlay: Control = $ScanlineOverlay
 @onready var version_label: Label = $VersionLabel
 @onready var no_save_message: Label = $NoSaveMessage
 
-# Starfield particles
+#region Starfield particles
 var stars: Array[Dictionary] = []
-const STAR_COUNT: int = 200
-const STAR_SPEED_MIN: float = 20.0
-const STAR_SPEED_MAX: float = 100.0
+const STAR_COUNT: int = 250
+const STAR_SPEED_MIN: float = 15.0
+const STAR_SPEED_MAX: float = 120.0
+#endregion
 
-# Title animation
+#region Title animation
 var _title_tween: Tween = null
 var _glow_tween: Tween = null
 var _typewriter_tween: Tween = null
 var _ready_for_input: bool = false
+#endregion
 
-# Subtitle typewriter
+#region Subtitle typewriter
 const SUBTITLE_TEXT: String = "The final journey of humanity begins"
 var _current_subtitle_char: int = 0
+#endregion
+
+#region Nebula effect
+var _nebula_time: float = 0.0
+var _nebula_particles: Array[Dictionary] = []
+const NEBULA_COUNT: int = 8
+#endregion
 
 
 func _ready() -> void:
@@ -37,11 +47,13 @@ func _ready() -> void:
 	_apply_startup_settings()
 	
 	_generate_stars()
+	_generate_nebula()
 	_setup_buttons()
 	_animate_intro()
 	
-	# Connect starfield drawing
+	# Connect starfield and scanline drawing
 	starfield.draw.connect(_draw_starfield)
+	scanline_overlay.draw.connect(_draw_scanlines)
 
 
 func _apply_startup_settings() -> void:
@@ -84,9 +96,13 @@ func _apply_startup_settings() -> void:
 
 
 func _process(delta: float) -> void:
+	_nebula_time += delta * 0.3
+	
 	# Update starfield
 	for star in stars:
 		star.position.x -= star.speed * delta
+		# Twinkle effect
+		star.twinkle_phase += star.twinkle_speed * delta
 		if star.position.x < -10:
 			star.position.x = get_viewport_rect().size.x + 10
 			star.position.y = randf_range(0, get_viewport_rect().size.y)
@@ -105,10 +121,31 @@ func _generate_stars() -> void:
 				randf_range(0, viewport_size.y)
 			),
 			"speed": randf_range(STAR_SPEED_MIN, STAR_SPEED_MAX),
-			"size": randf_range(1.0, 3.0),
-			"brightness": randf_range(0.3, 1.0)
+			"size": randf_range(0.8, 3.5),
+			"brightness": randf_range(0.2, 1.0),
+			"color_type": randi_range(0, 3),  # 0=white, 1=cyan, 2=blue, 3=orange
+			"twinkle_phase": randf_range(0, TAU),
+			"twinkle_speed": randf_range(1.0, 4.0),
 		}
 		stars.append(star)
+
+
+func _generate_nebula() -> void:
+	var viewport_size = get_viewport_rect().size
+	_nebula_particles.clear()
+	
+	for i in range(NEBULA_COUNT):
+		var nebula = {
+			"position": Vector2(
+				randf_range(0, viewport_size.x),
+				randf_range(0, viewport_size.y)
+			),
+			"radius": randf_range(100, 300),
+			"color_type": randi_range(0, 2),  # 0=cyan, 1=purple, 2=orange
+			"alpha": randf_range(0.02, 0.06),
+			"phase_offset": randf_range(0, TAU),
+		}
+		_nebula_particles.append(nebula)
 
 
 func _setup_buttons() -> void:
@@ -123,7 +160,7 @@ func _setup_buttons() -> void:
 	settings_button.mouse_entered.connect(_on_button_hover.bind(settings_button))
 	quit_button.mouse_entered.connect(_on_button_hover.bind(quit_button))
 	
-	# Check if save exists (placeholder - always disabled for now)
+	# Check if save exists
 	_check_save_exists()
 
 
@@ -204,15 +241,15 @@ func _add_subtitle_char() -> void:
 
 
 func _start_title_glow() -> void:
-	# Create pulsing glow effect on title
+	# Create pulsing glow effect on title - retro sci-fi cyan glow
 	_glow_tween = create_tween()
 	_glow_tween.set_loops()
 	_glow_tween.set_ease(Tween.EASE_IN_OUT)
 	_glow_tween.set_trans(Tween.TRANS_SINE)
 	
-	# Pulse the shadow color alpha for a subtle glow effect
-	var base_color = Color(1, 0.3, 0, 0.3)
-	var glow_color = Color(1, 0.5, 0, 0.6)
+	# Pulse the shadow color alpha for a subtle cyan glow effect
+	var base_color = Color(0.2, 0.6, 1.0, 0.3)
+	var glow_color = Color(0.3, 0.8, 1.0, 0.7)
 	
 	_glow_tween.tween_property(title_label, "theme_override_colors/font_shadow_color", glow_color, 2.0)
 	_glow_tween.tween_property(title_label, "theme_override_colors/font_shadow_color", base_color, 2.0)
@@ -378,8 +415,48 @@ func _on_quit_pressed() -> void:
 	tween.tween_callback(get_tree().quit)
 
 
-## Draw the animated starfield
+## Draw the animated starfield with retro sci-fi colored stars and nebula clouds
 func _draw_starfield() -> void:
+	# Draw nebula clouds first (behind stars)
+	for nebula in _nebula_particles:
+		var breathing = sin(_nebula_time + nebula.phase_offset) * 0.5 + 0.5
+		var base_color: Color
+		match nebula.color_type:
+			0: base_color = Color(0.1, 0.3, 0.5)  # Cyan nebula
+			1: base_color = Color(0.3, 0.1, 0.4)   # Purple nebula
+			_: base_color = Color(0.4, 0.2, 0.05)   # Orange nebula
+		base_color.a = nebula.alpha * (0.6 + 0.4 * breathing)
+		starfield.draw_circle(nebula.position, nebula.radius, base_color)
+	
+	# Draw stars with color variety and twinkle
 	for star in stars:
-		var color = Color(1.0, 0.95, 0.8, star.brightness)
+		var twinkle = (sin(star.twinkle_phase) * 0.3 + 0.7)
+		var alpha = star.brightness * twinkle
+		var color: Color
+		match star.color_type:
+			0: color = Color(0.9, 0.95, 1.0, alpha)       # White
+			1: color = Color(0.4, 0.9, 1.0, alpha)         # Cyan
+			2: color = Color(0.5, 0.6, 1.0, alpha)         # Blue
+			_: color = Color(1.0, 0.7, 0.3, alpha)         # Orange
 		starfield.draw_circle(star.position, star.size, color)
+		
+		# Draw a small glow around brighter stars
+		if star.brightness > 0.7 and star.size > 2.0:
+			var glow_color = color
+			glow_color.a = alpha * 0.15
+			starfield.draw_circle(star.position, star.size * 3.0, glow_color)
+
+
+## Draw CRT-style scanline overlay for retro feel
+func _draw_scanlines() -> void:
+	var viewport_size = get_viewport_rect().size
+	var scanline_color = Color(0.0, 0.0, 0.0, 0.08)
+	var line_spacing: float = 3.0
+	
+	var y: float = 0.0
+	while y < viewport_size.y:
+		scanline_overlay.draw_rect(
+			Rect2(0, y, viewport_size.x, 1.0),
+			scanline_color
+		)
+		y += line_spacing

@@ -6,7 +6,7 @@ signal impact_reached
 
 var _start_pos: Vector2
 var _end_pos: Vector2
-var _duration: float = 0.15  # Faster projectile for snappier feel
+var _duration: float = 0.25  # Balanced projectile speed
 var _elapsed: float = 0.0
 var _active: bool = false
 var _flash_active: bool = false
@@ -34,12 +34,12 @@ func _process(delta: float) -> void:
 			# Beam has reached target - create impact flash
 			_active = false
 			
-			# Impact flash effect - widen beam momentarily
+			# Impact flash effect - widen beam momentarily (balanced timing)
 			var tween = create_tween()
-			tween.tween_property(self, "width", 12.0, 0.05)
-			tween.tween_property(self, "default_color", Color(1.0, 1.0, 0.5, 1.0), 0.05)
-			tween.tween_property(self, "width", 3.0, 0.1)
-			tween.tween_property(self, "default_color", Color(1.0, 0.5, 0.1, 0.0), 0.1)
+			tween.tween_property(self, "width", 12.0, 0.06)
+			tween.tween_property(self, "default_color", Color(1.0, 1.0, 0.5, 1.0), 0.06)
+			tween.tween_property(self, "width", 3.0, 0.12)
+			tween.tween_property(self, "default_color", Color(1.0, 0.5, 0.1, 0.0), 0.12)
 			
 			impact_reached.emit()
 			
@@ -75,6 +75,6 @@ func _create_muzzle_flash() -> void:
 	get_parent().add_child(flash)
 	
 	var tween = create_tween()
-	tween.tween_property(flash, "scale", Vector2(2.0, 2.0), 0.05).from(Vector2(0.5, 0.5))
-	tween.parallel().tween_property(flash, "modulate:a", 0.0, 0.1)
+	tween.tween_property(flash, "scale", Vector2(2.0, 2.0), 0.06).from(Vector2(0.5, 0.5))
+	tween.parallel().tween_property(flash, "modulate:a", 0.0, 0.12)
 	tween.tween_callback(flash.queue_free)

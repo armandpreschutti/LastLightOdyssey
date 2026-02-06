@@ -1,8 +1,15 @@
-[gd_scene load_steps=2 format=3 uid="uid://dp7k2m5qr8vnx"]
+[gd_scene format=3 uid="uid://dp7k2m5qr8vnx"]
 
 [ext_resource type="Script" uid="uid://5cjenw3gw7mt" path="res://scripts/ui/tactical_hud.gd" id="1_hud"]
+[ext_resource type="Texture2D" uid="uid://vo2viufuvim8" path="res://assets/sprites/ui/icons/icon_turn.png" id="2_turn"]
+[ext_resource type="Texture2D" uid="uid://4urc04o06ois" path="res://assets/sprites/ui/icons/icon_cryo.png" id="3_cryo"]
+[ext_resource type="Texture2D" uid="uid://bogrtadpxsc8r" path="res://assets/sprites/ui/icons/icon_fuel.png" id="4_fuel"]
+[ext_resource type="Texture2D" uid="uid://dlq4cvxnvfbg3" path="res://assets/sprites/ui/icons/icon_scrap.png" id="5_scrap"]
+[ext_resource type="Texture2D" uid="uid://cuktrpqwoxamb" path="res://assets/sprites/ui/icons/icon_health.png" id="6_health"]
+[ext_resource type="Texture2D" uid="uid://dr5jrb0ya1m3i" path="res://assets/sprites/ui/icons/icon_ap.png" id="7_ap"]
+[ext_resource type="Texture2D" uid="uid://dcyfquoyeofqk" path="res://assets/sprites/ui/icons/icon_movement.png" id="8_move"]
 
-[node name="TacticalHUD" type="Control"]
+[node name="TacticalHUD" type="Control" unique_id=933333705]
 visible = false
 layout_mode = 3
 anchors_preset = 15
@@ -13,95 +20,192 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_hud")
 
-[node name="TopLeftPanel" type="PanelContainer" parent="."]
+[node name="TopLeftGlow" type="ColorRect" parent="." unique_id=1123447043]
 layout_mode = 1
-anchors_preset = 0
-offset_right = 160.0
-offset_bottom = 50.0
+offset_left = 1.0
+offset_top = 2.0
+offset_right = 169.0
+offset_bottom = 60.0
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.15)
+
+[node name="TopLeftBorder" type="ColorRect" parent="." unique_id=1360476450]
+layout_mode = 1
+offset_left = 3.0
+offset_top = 4.0
+offset_right = 167.0
+offset_bottom = 58.0
+mouse_filter = 2
+color = Color(1, 0.69, 0, 0.6)
+
+[node name="TopLeftPanel" type="PanelContainer" parent="." unique_id=1171109752]
+layout_mode = 1
+offset_left = 5.0
+offset_top = 6.0
+offset_right = 165.0
+offset_bottom = 56.0
 mouse_filter = 1
 
-[node name="PauseButton" type="Button" parent="TopLeftPanel"]
+[node name="Background" type="ColorRect" parent="TopLeftPanel" unique_id=1420841227]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.5, 0.3, 1)
-theme_override_colors/font_hover_color = Color(1, 0.7, 0.5, 1)
-theme_override_colors/font_pressed_color = Color(0.8, 0.3, 0.2, 1)
-theme_override_font_sizes/font_size = 20
-text = "⏸ PAUSE"
+mouse_filter = 2
+color = Color(0.02, 0.04, 0.08, 0.95)
 
-[node name="TopBar" type="PanelContainer" parent="."]
+[node name="PauseButton" type="Button" parent="TopLeftPanel" unique_id=225298005]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
+theme_override_colors/font_pressed_color = Color(0.8, 0.5, 0.1, 1)
+theme_override_colors/font_hover_color = Color(1, 0.85, 0.4, 1)
+theme_override_font_sizes/font_size = 20
+text = "|| PAUSE"
+
+[node name="TopBarGlow" type="ColorRect" parent="." unique_id=2119943299]
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
-offset_left = 170.0
-offset_bottom = 70.0
+offset_left = 1404.0
+offset_top = 6.0
+offset_right = -7.0
+offset_bottom = 84.0
+grow_horizontal = 2
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.1)
+
+[node name="TopBarBorder" type="ColorRect" parent="." unique_id=803373041]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 1406.0
+offset_top = 8.0
+offset_right = -7.0
+offset_bottom = 82.0
+grow_horizontal = 2
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.5)
+
+[node name="TopBar" type="PanelContainer" parent="." unique_id=1967064932]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 1408.0
+offset_top = 10.0
+offset_right = -11.0
+offset_bottom = 80.0
 grow_horizontal = 2
 mouse_filter = 1
 
-[node name="HBox" type="HBoxContainer" parent="TopBar"]
+[node name="Background" type="ColorRect" parent="TopBar" unique_id=1960716984]
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.02, 0.04, 0.08, 0.95)
+
+[node name="HBox" type="HBoxContainer" parent="TopBar" unique_id=2019524215]
 layout_mode = 2
 theme_override_constants/separation = 40
 
-[node name="TurnContainer" type="VBoxContainer" parent="TopBar/HBox"]
+[node name="TurnContainer" type="VBoxContainer" parent="TopBar/HBox" unique_id=125346851]
 layout_mode = 2
 
-[node name="TurnHeader" type="Label" parent="TopBar/HBox/TurnContainer"]
+[node name="TurnHeader" type="Label" parent="TopBar/HBox/TurnContainer" unique_id=189740145]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
 theme_override_font_sizes/font_size = 12
 text = "MISSION PROGRESS"
 
-[node name="TurnLabel" type="Label" parent="TopBar/HBox/TurnContainer"]
+[node name="TurnRow" type="HBoxContainer" parent="TopBar/HBox/TurnContainer" unique_id=811300766]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_constants/separation = 8
+
+[node name="TurnIcon" type="TextureRect" parent="TopBar/HBox/TurnContainer/TurnRow" unique_id=279119653]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+texture = ExtResource("2_turn")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="TurnLabel" type="Label" parent="TopBar/HBox/TurnContainer/TurnRow" unique_id=750411914]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 20
 text = "TURN: 1"
 
-[node name="StabilityContainer" type="VBoxContainer" parent="TopBar/HBox"]
+[node name="StabilityContainer" type="VBoxContainer" parent="TopBar/HBox" unique_id=1235188831]
 custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
-mouse_filter = 1
 
-[node name="StabilityHeader" type="Label" parent="TopBar/HBox/StabilityContainer"]
+[node name="StabilityHeader" type="Label" parent="TopBar/HBox/StabilityContainer" unique_id=51473067]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
 theme_override_font_sizes/font_size = 12
 text = "COLONIST LIFE SUPPORT"
 
-[node name="StabilityLabel" type="Label" parent="TopBar/HBox/StabilityContainer"]
+[node name="StabilityRow" type="HBoxContainer" parent="TopBar/HBox/StabilityContainer" unique_id=847595532]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_constants/separation = 8
+
+[node name="CryoIcon" type="TextureRect" parent="TopBar/HBox/StabilityContainer/StabilityRow" unique_id=1051336586]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+texture = ExtResource("3_cryo")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="StabilityLabel" type="Label" parent="TopBar/HBox/StabilityContainer/StabilityRow" unique_id=1876371962]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
 theme_override_font_sizes/font_size = 16
 text = "CRYO-STABILITY: 100%"
 
-[node name="StabilityBar" type="ProgressBar" parent="TopBar/HBox/StabilityContainer"]
+[node name="StabilityBar" type="ProgressBar" parent="TopBar/HBox/StabilityContainer" unique_id=469118743]
 layout_mode = 2
 mouse_filter = 1
 value = 100.0
 show_percentage = false
 
-[node name="HaulContainer" type="VBoxContainer" parent="TopBar/HBox"]
+[node name="HaulContainer" type="VBoxContainer" parent="TopBar/HBox" unique_id=2091899428]
 layout_mode = 2
-mouse_filter = 1
 
-[node name="HaulHeader" type="Label" parent="TopBar/HBox/HaulContainer"]
+[node name="HaulHeader" type="Label" parent="TopBar/HBox/HaulContainer" unique_id=1822262075]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
 theme_override_font_sizes/font_size = 12
 text = "MISSION HAUL"
 
-[node name="FuelLabel" type="Label" parent="TopBar/HBox/HaulContainer"]
+[node name="FuelRow" type="HBoxContainer" parent="TopBar/HBox/HaulContainer" unique_id=582695351]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="FuelIcon" type="TextureRect" parent="TopBar/HBox/HaulContainer/FuelRow" unique_id=2082332642]
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+texture = ExtResource("4_fuel")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="FuelLabel" type="Label" parent="TopBar/HBox/HaulContainer/FuelRow" unique_id=1367891182]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.4, 0.8, 1, 1)
 theme_override_font_sizes/font_size = 14
-text = "FUEL COLLECTED: +0"
+text = "FUEL: +0"
 
-[node name="ScrapLabel" type="Label" parent="TopBar/HBox/HaulContainer"]
+[node name="ScrapRow" type="HBoxContainer" parent="TopBar/HBox/HaulContainer" unique_id=2045365029]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9, 0.8, 0.3, 1)
-theme_override_font_sizes/font_size = 14
-text = "SCRAP COLLECTED: +0"
+theme_override_constants/separation = 6
 
-[node name="CryoWarning" type="Label" parent="."]
+[node name="ScrapIcon" type="TextureRect" parent="TopBar/HBox/HaulContainer/ScrapRow" unique_id=2109151696]
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+texture = ExtResource("5_scrap")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ScrapLabel" type="Label" parent="TopBar/HBox/HaulContainer/ScrapRow" unique_id=1104225104]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
+theme_override_font_sizes/font_size = 14
+text = "SCRAP: +0"
+
+[node name="CryoWarning" type="Label" parent="." unique_id=165861564]
 visible = false
 layout_mode = 1
 anchors_preset = 5
@@ -116,75 +220,121 @@ theme_override_colors/font_color = Color(1, 0.2, 0.2, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
 theme_override_font_sizes/font_size = 20
-text = "⚠ CRYO-FAILURE: LOSING 10 COLONISTS ⚠"
+text = "!! CRYO-FAILURE: LOSING 10 COLONISTS !!"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="SidePanel" type="PanelContainer" parent="."]
+[node name="SidePanelGlow" type="ColorRect" parent="." unique_id=1812237233]
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -280.0
-offset_top = 85.0
-offset_bottom = 480.0
+offset_left = -279.0
+offset_top = 88.0
+offset_right = -7.0
+offset_bottom = 548.0
+grow_horizontal = 0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.1)
+
+[node name="SidePanelBorder" type="ColorRect" parent="." unique_id=123355792]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -275.0
+offset_top = 90.0
+offset_right = -7.0
+offset_bottom = 569.0
+grow_horizontal = 0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.5)
+
+[node name="SidePanel" type="PanelContainer" parent="." unique_id=1616637872]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -271.0
+offset_top = 92.0
+offset_right = -11.0
+offset_bottom = 565.0
 grow_horizontal = 0
 mouse_filter = 1
 
-[node name="VBox" type="VBoxContainer" parent="SidePanel"]
+[node name="Background" type="ColorRect" parent="SidePanel" unique_id=1067588929]
 layout_mode = 2
-theme_override_constants/separation = 6
+mouse_filter = 2
+color = Color(0.02, 0.04, 0.08, 0.95)
 
-[node name="SelectedHeader" type="Label" parent="SidePanel/VBox"]
+[node name="VBox" type="VBoxContainer" parent="SidePanel" unique_id=1919118714]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_constants/separation = 4
+
+[node name="SelectedHeader" type="Label" parent="SidePanel/VBox" unique_id=821972186]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
 theme_override_font_sizes/font_size = 12
 text = "SELECTED UNIT"
 horizontal_alignment = 1
 
-[node name="SelectedName" type="Label" parent="SidePanel/VBox"]
+[node name="SelectedName" type="Label" parent="SidePanel/VBox" unique_id=144999834]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 22
 text = "CAPTAIN"
 horizontal_alignment = 1
 
-[node name="HSeparator" type="HSeparator" parent="SidePanel/VBox"]
+[node name="HSeparator" type="ColorRect" parent="SidePanel/VBox" unique_id=2145649071]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.3)
 
-[node name="HPContainer" type="HBoxContainer" parent="SidePanel/VBox"]
+[node name="HPContainer" type="HBoxContainer" parent="SidePanel/VBox" unique_id=1093729087]
 layout_mode = 2
-mouse_filter = 1
-theme_override_constants/separation = 10
+theme_override_constants/separation = 8
 
-[node name="HPLabel" type="Label" parent="SidePanel/VBox/HPContainer"]
-custom_minimum_size = Vector2(140, 0)
+[node name="HPIcon" type="TextureRect" parent="SidePanel/VBox/HPContainer" unique_id=1267801242]
+custom_minimum_size = Vector2(20, 20)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.85, 0.85, 1)
+texture = ExtResource("6_health")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HPLabel" type="Label" parent="SidePanel/VBox/HPContainer" unique_id=642637150]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.2, 1, 0.5, 1)
 theme_override_font_sizes/font_size = 14
-text = "HEALTH: 100 / 100"
+text = "HP: 100 / 100"
 
-[node name="HPBar" type="ProgressBar" parent="SidePanel/VBox/HPContainer"]
+[node name="HPBar" type="ProgressBar" parent="SidePanel/VBox/HPContainer" unique_id=1840723550]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 1
-max_value = 100.0
 value = 100.0
 show_percentage = false
 
-[node name="APContainer" type="HBoxContainer" parent="SidePanel/VBox"]
+[node name="APContainer" type="HBoxContainer" parent="SidePanel/VBox" unique_id=1995019068]
 layout_mode = 2
-mouse_filter = 1
-theme_override_constants/separation = 10
+theme_override_constants/separation = 8
 
-[node name="APLabel" type="Label" parent="SidePanel/VBox/APContainer"]
-custom_minimum_size = Vector2(140, 0)
+[node name="APIcon" type="TextureRect" parent="SidePanel/VBox/APContainer" unique_id=1216026702]
+custom_minimum_size = Vector2(20, 20)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.85, 0.85, 1)
+texture = ExtResource("7_ap")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="APLabel" type="Label" parent="SidePanel/VBox/APContainer" unique_id=1496506133]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
 theme_override_font_sizes/font_size = 14
-text = "ACTION POINTS: 2 / 2"
+text = "AP: 2 / 2"
 
-[node name="APBar" type="ProgressBar" parent="SidePanel/VBox/APContainer"]
+[node name="APBar" type="ProgressBar" parent="SidePanel/VBox/APContainer" unique_id=110159418]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 1
@@ -192,24 +342,38 @@ max_value = 2.0
 value = 2.0
 show_percentage = false
 
-[node name="HSeparator2" type="HSeparator" parent="SidePanel/VBox"]
+[node name="HSeparator2" type="ColorRect" parent="SidePanel/VBox" unique_id=1909503501]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.3)
 
-[node name="MoveLabel" type="Label" parent="SidePanel/VBox"]
+[node name="MoveRow" type="HBoxContainer" parent="SidePanel/VBox" unique_id=272998574]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="MoveIcon" type="TextureRect" parent="SidePanel/VBox/MoveRow" unique_id=1040194928]
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+texture = ExtResource("8_move")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="MoveLabel" type="Label" parent="SidePanel/VBox/MoveRow" unique_id=894815964]
 layout_mode = 2
 mouse_filter = 1
 theme_override_colors/font_color = Color(0.4, 0.8, 1, 1)
 theme_override_font_sizes/font_size = 14
-text = "MOVEMENT RANGE: 5 tiles"
+text = "MOVE RANGE: 5 tiles"
 
-[node name="AttackLabel" type="Label" parent="SidePanel/VBox"]
+[node name="AttackLabel" type="Label" parent="SidePanel/VBox" unique_id=1487146111]
 layout_mode = 2
 mouse_filter = 1
-theme_override_colors/font_color = Color(1, 0.5, 0.4, 1)
+theme_override_colors/font_color = Color(1, 0.5, 0.3, 1)
 theme_override_font_sizes/font_size = 14
 text = "ATTACK RANGE: 10 tiles"
 
-[node name="CoverBonusLabel" type="Label" parent="SidePanel/VBox"]
+[node name="CoverBonusLabel" type="Label" parent="SidePanel/VBox" unique_id=204597237]
 visible = false
 layout_mode = 2
 mouse_filter = 1
@@ -217,82 +381,143 @@ theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 14
 text = "COVER BONUS: +15% ACC"
 
-[node name="StatusLabel" type="Label" parent="SidePanel/VBox"]
+[node name="StatusLabel" type="Label" parent="SidePanel/VBox" unique_id=861025183]
 layout_mode = 2
 mouse_filter = 1
-theme_override_colors/font_color = Color(0.2, 1, 0.2, 1)
+theme_override_colors/font_color = Color(0.2, 1, 0.5, 1)
 theme_override_font_sizes/font_size = 14
-text = "STATUS: ▶ READY TO ACT"
+text = "STATUS: >> READY TO ACT"
 
-[node name="HSeparator3" type="HSeparator" parent="SidePanel/VBox"]
+[node name="HSeparator3" type="ColorRect" parent="SidePanel/VBox" unique_id=394936230]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.3)
 
-[node name="AbilityContainer" type="VBoxContainer" parent="SidePanel/VBox"]
+[node name="AbilityContainer" type="VBoxContainer" parent="SidePanel/VBox" unique_id=719903340]
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="AbilityHeader" type="Label" parent="SidePanel/VBox/AbilityContainer"]
+[node name="AbilityHeader" type="Label" parent="SidePanel/VBox/AbilityContainer" unique_id=75367921]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 1, 0.8, 1)
+theme_override_colors/font_color = Color(0.4, 0.9, 0.7, 1)
 theme_override_font_sizes/font_size = 12
 text = "SPECIALIST ABILITY:"
 
-[node name="AbilityButton" type="Button" parent="SidePanel/VBox/AbilityContainer"]
+[node name="AbilityButton" type="Button" parent="SidePanel/VBox/AbilityContainer" unique_id=1914461745]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.5, 1, 0.8, 1)
-theme_override_colors/font_hover_color = Color(0.7, 1, 0.9, 1)
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
+theme_override_colors/font_hover_color = Color(0.7, 1, 1, 1)
 theme_override_font_sizes/font_size = 14
 text = "[ OVERWATCH ] - 1 AP"
 
-[node name="AbilityDesc" type="Label" parent="SidePanel/VBox/AbilityContainer"]
+[node name="AbilityDesc" type="Label" parent="SidePanel/VBox/AbilityContainer" unique_id=1232992288]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 1)
+theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
 theme_override_font_sizes/font_size = 11
 text = "Enter overwatch stance. Automatically shoot the first enemy that moves within line of sight."
 autowrap_mode = 2
 
-[node name="HSeparator4" type="HSeparator" parent="SidePanel/VBox"]
+[node name="HSeparator4" type="ColorRect" parent="SidePanel/VBox" unique_id=1527676893]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.3)
 
-[node name="ButtonContainer" type="VBoxContainer" parent="SidePanel/VBox"]
+[node name="ButtonContainer" type="VBoxContainer" parent="SidePanel/VBox" unique_id=127745626]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="EndTurnButton" type="Button" parent="SidePanel/VBox/ButtonContainer"]
+[node name="EndTurnButton" type="Button" parent="SidePanel/VBox/ButtonContainer" unique_id=258473847]
 layout_mode = 2
 mouse_filter = 1
-theme_override_colors/font_color = Color(1, 0.690196, 0, 1)
+theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
 theme_override_colors/font_hover_color = Color(1, 0.85, 0.4, 1)
 theme_override_font_sizes/font_size = 16
 text = "[ END TURN ]"
 
-[node name="ExtractButton" type="Button" parent="SidePanel/VBox/ButtonContainer"]
+[node name="ExtractButton" type="Button" parent="SidePanel/VBox/ButtonContainer" unique_id=887023]
 visible = false
 layout_mode = 2
 mouse_filter = 1
-theme_override_colors/font_color = Color(0.2, 1, 0.2, 1)
-theme_override_colors/font_hover_color = Color(0.5, 1, 0.5, 1)
+theme_override_colors/font_color = Color(0.2, 1, 0.5, 1)
+theme_override_colors/font_hover_color = Color(0.4, 1, 0.7, 1)
 theme_override_font_sizes/font_size = 16
 text = "[ EXTRACT TEAM ]"
 
-[node name="HSeparator5" type="HSeparator" parent="SidePanel/VBox"]
+[node name="HSeparator5" type="ColorRect" parent="SidePanel/VBox" unique_id=236521038]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.2)
+
+[node name="HelpContainer" type="VBoxContainer" parent="SidePanel/VBox" unique_id=1921871865]
 layout_mode = 2
 
-[node name="HelpContainer" type="VBoxContainer" parent="SidePanel/VBox"]
+[node name="HelpHeader" type="Label" parent="SidePanel/VBox/HelpContainer" unique_id=632824196]
 layout_mode = 2
-
-[node name="HelpHeader" type="Label" parent="SidePanel/VBox/HelpContainer"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 1)
+theme_override_colors/font_color = Color(0.3, 0.4, 0.5, 1)
 theme_override_font_sizes/font_size = 11
 text = "CONTROLS:"
 
-[node name="HelpLabel" type="Label" parent="SidePanel/VBox/HelpContainer"]
+[node name="HelpLabel" type="Label" parent="SidePanel/VBox/HelpContainer" unique_id=343565844]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.4, 0.4, 0.4, 1)
+theme_override_colors/font_color = Color(0.25, 0.35, 0.4, 1)
 theme_override_font_sizes/font_size = 11
-text = "• Click tile to MOVE (1 AP)
-• Click enemy to ATTACK (1 AP)
-• Press ESC or PAUSE button"
+text = "* Click tile to MOVE (1 AP)
+* Click enemy to ATTACK (1 AP)
+* Press ESC or PAUSE button"
 autowrap_mode = 2
+
+[node name="CornerTL" type="ColorRect" parent="." unique_id=1284922390]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -271.0
+offset_top = 92.0
+offset_right = -263.0
+offset_bottom = 100.0
+grow_horizontal = 0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.8)
+
+[node name="CornerTR" type="ColorRect" parent="." unique_id=625267942]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -19.0
+offset_top = 92.0
+offset_right = -11.0
+offset_bottom = 100.0
+grow_horizontal = 0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.8)
+
+[node name="CornerBL" type="ColorRect" parent="." unique_id=1697022628]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -271.0
+offset_top = 544.0
+offset_right = -263.0
+offset_bottom = 552.0
+grow_horizontal = 0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.8)
+
+[node name="CornerBR" type="ColorRect" parent="." unique_id=371090944]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -19.0
+offset_top = 544.0
+offset_right = -11.0
+offset_bottom = 552.0
+grow_horizontal = 0
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.8)
