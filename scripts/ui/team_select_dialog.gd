@@ -15,6 +15,7 @@ const SELECTABLE_OFFICERS: int = 2  # Captain is always included
 
 var officer_buttons: Dictionary = {}  # officer_key -> CheckButton
 var selected_officers: Array[String] = []
+var current_biome_type: int = -1  # BiomeConfig.BiomeType
 
 
 func _ready() -> void:
@@ -23,11 +24,21 @@ func _ready() -> void:
 	visible = false
 
 
-func show_dialog() -> void:
+func show_dialog(biome_type: int = -1) -> void:
+	current_biome_type = biome_type
+	_update_title()
 	_populate_officers()
 	_update_selected_label()
 	deploy_button.disabled = true
 	visible = true
+
+
+func _update_title() -> void:
+	if current_biome_type >= 0:
+		var biome_name = BiomeConfig.get_biome_name(current_biome_type)
+		title_label.text = "SCAVENGE MISSION: %s" % biome_name.to_upper()
+	else:
+		title_label.text = "SCAVENGE MISSION"
 
 
 func _populate_officers() -> void:

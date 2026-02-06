@@ -17,6 +17,7 @@ enum NodeState { LOCKED, AVAILABLE, CURRENT, VISITED }
 
 var node_id: int = -1
 var node_type: int = -1  # EventManager.NodeType
+var biome_type: int = -1  # BiomeConfig.BiomeType (-1 if not scavenge)
 var current_state: NodeState = NodeState.LOCKED
 
 const NODE_SIZE = Vector2(80, 80)
@@ -73,9 +74,10 @@ func _notification(what: int) -> void:
 
 
 ## Initialize the node with data
-func initialize(p_node_id: int, p_node_type: int, p_state: NodeState = NodeState.LOCKED) -> void:
+func initialize(p_node_id: int, p_node_type: int, p_state: NodeState = NodeState.LOCKED, p_biome_type: int = -1) -> void:
 	node_id = p_node_id
 	node_type = p_node_type
+	biome_type = p_biome_type
 	current_state = p_state
 	_update_visual()
 
@@ -181,11 +183,25 @@ func _update_label_text() -> void:
 			EventManager.NodeType.EMPTY_SPACE:
 				label.text = "WAYPOINT"
 			EventManager.NodeType.SCAVENGE_SITE:
-				label.text = "SALVAGE"
+				# Show biome type for scavenge sites
+				label.text = _get_biome_label()
 			EventManager.NodeType.TRADING_OUTPOST:
 				label.text = "OUTPOST"
 			_:
 				label.text = "???"
+
+
+## Get the label text for scavenge sites based on biome
+func _get_biome_label() -> String:
+	match biome_type:
+		BiomeConfig.BiomeType.STATION:
+			return "STATION"
+		BiomeConfig.BiomeType.ASTEROID:
+			return "ASTEROID"
+		BiomeConfig.BiomeType.PLANET:
+			return "PLANET"
+		_:
+			return "SALVAGE"
 
 
 ## Setup pulse animation for available nodes

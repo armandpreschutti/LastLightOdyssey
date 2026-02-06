@@ -19,6 +19,7 @@ enum GamePhase { IDLE, EVENT_DISPLAY, TEAM_SELECT, TACTICAL, TRADING, GAME_OVER,
 var current_phase: GamePhase = GamePhase.IDLE
 var current_event: Dictionary = {}
 var pending_node_type: int = -1  # EventManager.NodeType
+var pending_biome_type: int = -1  # BiomeConfig.BiomeType for scavenge missions
 var star_map_generator: StarMapGenerator = null
 var tutorial_overlay: CanvasLayer = null
 var _first_node_clicked: bool = false
@@ -39,37 +40,26 @@ func _connect_signals() -> void:
 	team_select_dialog.team_selected.connect(_on_team_selected)
 	team_select_dialog.cancelled.connect(_on_team_select_cancelled)
 	tactical_mode.mission_complete.connect(_on_mission_complete)
+	management_hud.quit_to_menu_pressed.connect(_on_quit_to_menu)
 	GameState.game_over.connect(_on_game_over)
 	GameState.game_won.connect(_on_game_won)
 	restart_button.pressed.connect(_on_restart_pressed)
-	management_hud.quit_to_menu_pressed.connect(_on_quit_to_menu_pressed)
 
 
 func _initialize_star_map() -> void:
-	# Check if we have saved star map data to restore
-	if GameState.has_saved_star_map_data():
-		# Restore from saved data
-		star_map_generator = GameState.restore_star_map_generator()
-		print("Main: Restored star map from save data")
-	else:
-		# Generate new node graph
-		star_map_generator = StarMapGenerator.new()
-		star_map_generator.generate()
-		
-		# Store node types in GameState for consistency
-		for node_data in star_map_generator.nodes:
-			GameState.node_types[node_data.id] = node_data.node_type
-		
-		# Save the star map data for future saves
-		GameState.store_star_map_data(star_map_generator)
-		print("Main: Generated new star map")
+	# Generate the node graph
+	star_map_generator = StarMapGenerator.new()
+	var node_graph = star_map_generator.generate()
+	
+	# Store node types and biome types in GameState for consistency
+	for node_data in node_graph:
+		GameState.node_types[node_data.id] = node_data.node_type
+		if node_data.biome_type >= 0:
+			GameState.node_biomes[node_data.id] = node_data.biome_type
 	
 	# Initialize the visual star map
 	star_map.initialize(star_map_generator)
-	
-	# Connect signal only if not already connected (avoid duplicates on restart)
-	if not star_map.node_clicked.is_connected(_on_node_clicked):
-		star_map.node_clicked.connect(_on_node_clicked)
+	star_map.node_clicked.connect(_on_node_clicked)
 
 
 func _initialize_tutorial() -> void:
@@ -112,7 +102,8 @@ func _on_node_clicked(node_id: int) -> void:
 	
 	# Determine node type from the pre-rolled types
 	pending_node_type = star_map.get_node_type(node_id)
-	print("Main: Node type is %d" % pending_node_type)
+	pending_biome_type = star_map.get_node_biome(node_id)
+	print("Main: Node type is %d, biome is %d" % [pending_node_type, pending_biome_type])
 	
 	match pending_node_type:
 		EventManager.NodeType.SCAVENGE_SITE:
@@ -125,7 +116,8 @@ func _on_node_clicked(node_id: int) -> void:
 				# The tutorial overlay will show, then player dismisses it
 				pass
 			
-			team_select_dialog.show_dialog()
+			# Pass biome type to team select dialog for display
+			team_select_dialog.show_dialog(pending_biome_type)
 		EventManager.NodeType.TRADING_OUTPOST:
 			# Show trading interface
 			print("Main: Showing trading outpost")
@@ -175,22 +167,24 @@ func _on_team_selected(officer_keys: Array[String]) -> void:
 	# Tutorial: Notify that team was selected
 	TutorialManager.notify_trigger("team_selected")
 
-	# Start the mission
-	tactical_mode.start_mission(officer_keys)
+	# Start the mission with biome type
+	tactical_mode.start_mission(officer_keys, pending_biome_type)
 
 
 func _on_team_select_cancelled() -> void:
 	# Player cancelled - still consume the jump but skip the mission
 	current_phase = GamePhase.IDLE
+	pending_biome_type = -1
 
 
-func _on_mission_complete(success: bool) -> void:
+func _on_mission_complete(_success: bool) -> void:
 	# Return to management mode
 	tactical_mode.visible = false
 	management_layer.visible = true
 	management_background.visible = true
 
 	current_phase = GamePhase.IDLE
+	pending_biome_type = -1
 	
 	# Tutorial: Notify mission complete
 	TutorialManager.notify_trigger("mission_complete")
@@ -206,9 +200,6 @@ func _on_game_over(reason: String) -> void:
 	management_layer.visible = true
 	management_background.visible = true
 
-	# Delete save file on game over
-	GameState.delete_save()
-
 	game_over_label.text = GameState.get_game_over_text(reason)
 	game_over_panel.visible = true
 
@@ -220,9 +211,6 @@ func _on_game_won(ending_type: String) -> void:
 	management_layer.visible = true
 	management_background.visible = true
 
-	# Delete save file on win
-	GameState.delete_save()
-
 	game_over_label.text = GameState.get_ending_text(ending_type)
 	game_over_panel.visible = true
 
@@ -231,10 +219,16 @@ func _on_trading_complete() -> void:
 	current_phase = GamePhase.IDLE
 
 
+func _on_quit_to_menu() -> void:
+	# Return to title menu
+	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
+
+
 func _on_restart_pressed() -> void:
 	GameState.reset_game()
 	current_phase = GamePhase.IDLE
 	current_event = {}
+	pending_biome_type = -1
 	game_over_panel.visible = false
 	_first_node_clicked = false
 	_first_event_seen = false
@@ -244,8 +238,3 @@ func _on_restart_pressed() -> void:
 	
 	# Restart tutorial if not completed
 	TutorialManager.start_tutorial()
-
-
-func _on_quit_to_menu_pressed() -> void:
-	# Save is done in management_hud before this signal
-	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")

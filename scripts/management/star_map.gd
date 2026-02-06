@@ -152,8 +152,8 @@ func _create_visual_nodes() -> void:
 		# Offset by -35,-35 to center the 70x70 control node on the calculated position
 		node_visual.position = pos - Vector2(35, 35)
 		
-		# Initialize the visual
-		node_visual.initialize(node_data.id, node_data.node_type, _determine_initial_state(node_data.id))
+		# Initialize the visual (include biome type for scavenge sites)
+		node_visual.initialize(node_data.id, node_data.node_type, _determine_initial_state(node_data.id), node_data.biome_type)
 		node_visual.clicked.connect(_on_node_clicked)
 		
 		node_visuals[node_data.id] = node_visual
@@ -330,3 +330,11 @@ func get_fuel_cost(from_node_id: int, to_node_id: int) -> int:
 		if node_data.id == from_node_id:
 			return node_data.connection_fuel_costs.get(to_node_id, 1)
 	return 1  # Default cost
+
+
+## Get biome type for a specific node ID
+func get_node_biome(node_id: int) -> int:
+	for node_data in node_graph:
+		if node_data.id == node_id:
+			return node_data.biome_type
+	return -1  # Not a scavenge site or invalid

@@ -13,6 +13,7 @@ class MapNode:
 	var row: int
 	var connections: Array[int] = []  # IDs of nodes this connects to
 	var node_type: int = -1  # EventManager.NodeType
+	var biome_type: int = -1  # BiomeConfig.BiomeType (-1 if not a scavenge site)
 	var connection_fuel_costs: Dictionary = {}  # Maps connection_id -> fuel_cost
 	
 	func _init(p_id: int, p_column: int, p_row: int) -> void:
@@ -29,6 +30,7 @@ func generate() -> Array[MapNode]:
 	_create_node_structure()
 	_create_connections()
 	_assign_node_types()
+	_assign_biome_types()
 	_calculate_fuel_costs()
 	return nodes
 
@@ -142,6 +144,47 @@ func _roll_node_type() -> int:
 		return EventManager.NodeType.TRADING_OUTPOST
 
 
+## Assign biome types to scavenge site nodes
+func _assign_biome_types() -> void:
+	# Track biome distribution to ensure variety
+	var biome_counts := {
+		BiomeConfig.BiomeType.STATION: 0,
+		BiomeConfig.BiomeType.ASTEROID: 0,
+		BiomeConfig.BiomeType.PLANET: 0,
+	}
+	
+	var scavenge_nodes: Array[MapNode] = []
+	for node in nodes:
+		if node.node_type == EventManager.NodeType.SCAVENGE_SITE:
+			scavenge_nodes.append(node)
+	
+	# Assign biomes with some variety balancing
+	for node in scavenge_nodes:
+		node.biome_type = _roll_biome_type(biome_counts)
+		biome_counts[node.biome_type] += 1
+
+
+## Roll a biome type with slight balancing to ensure variety
+func _roll_biome_type(current_counts: Dictionary) -> int:
+	# Find the least used biome type
+	var min_count = 999
+	var min_biomes: Array[int] = []
+	
+	for biome_type in current_counts.keys():
+		var count = current_counts[biome_type]
+		if count < min_count:
+			min_count = count
+			min_biomes = [biome_type]
+		elif count == min_count:
+			min_biomes.append(biome_type)
+	
+	# 50% chance to pick from least used, 50% random
+	if randf() < 0.5 and min_biomes.size() > 0:
+		return min_biomes[randi() % min_biomes.size()]
+	else:
+		return BiomeConfig.get_random_biome()
+
+
 ## Get a specific node by ID
 func get_node(node_id: int) -> MapNode:
 	if node_id >= 0 and node_id < nodes.size():
@@ -176,3 +219,11 @@ func _calculate_fuel_costs() -> void:
 					fuel_cost += 1  # Diagonal/vertical movement costs more
 				
 				node.connection_fuel_costs[connection_id] = fuel_cost
+
+
+## Get the biome type for a node (returns -1 if not a scavenge site)
+func get_node_biome(node_id: int) -> int:
+	var node = get_node(node_id)
+	if node:
+		return node.biome_type
+	return -1

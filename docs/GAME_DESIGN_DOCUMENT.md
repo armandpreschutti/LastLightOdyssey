@@ -1,5 +1,5 @@
 # Last Light Odyssey - Game Design Document
-**Version 2.1 | Engine: Godot 4.6 | Last Updated: February 5, 2026**
+**Version 2.2 | Engine: Godot 4.6 | Last Updated: February 6, 2026**
 
 > *"The last journey of the human race isn't a hero's quest; it's a survival marathon."*
 
@@ -52,17 +52,16 @@ This layer simulates the grueling trek across the stars.
 A procedurally generated node graph with **20 nodes** leading to New Earth.
 
 **Structure:**
-- 7 columns of nodes
-- Variable nodes per column (2-4)
-- Each node connects to 1-3 nodes in the next column
-- Variable fuel costs per connection (1-3 fuel)
+- 9 columns of nodes with layout: [1, 2, 3, 3, 3, 2, 3, 2, 1] = 20 total nodes
+- Each node connects to 1-2 nodes in the next column (natural flow + branching)
+- Variable fuel costs: base 2 fuel, +1 for diagonal movement
 
 **Node Types:**
 
 | Type | Frequency | Description |
 |------|-----------|-------------|
 | **Empty Space** | 40% | No tactical map, just a random event roll. |
-| **Scavenge Site** | 40% | Triggers Isometric Tactical Mode for resource gathering. |
+| **Scavenge Site** | 40% | Triggers Isometric Tactical Mode for resource gathering. Biome type pre-assigned. |
 | **Trading Outpost** | 20% | Menu-based screen to trade Scrap for Fuel (10→1) or repairs (15→10%). |
 
 ### 2.3 Random Event System
@@ -77,7 +76,7 @@ Upon entering a node, the game rolls **1d10** against the Random Event Table.
 | 2 | Meteor Shower | −30 colonists, −20% integrity | Scout | 0 colonists, −5% integrity |
 | 3 | Disease Outbreak | −80 colonists | Medic | −20 colonists |
 | 4 | System Malfunction | −20 colonists, −15% integrity | Tech | 0 colonists, −5% integrity |
-| 5 | Pirate Ambush | −40 colonists, −25% integrity | Scout | −10 colonists, −10% integrity |
+| 5 | Pirate Ambush | −40 colonists, −25% integrity | Heavy | −10 colonists, −10% integrity |
 | 6 | Supply Cache | +2 fuel, +15 scrap | — | — |
 | 7 | Distress Signal | +50 colonists, −10% integrity | Medic | +50 colonists, 0% integrity |
 | 8 | Radiation Storm | −60 colonists, −5% integrity | Tech | −15 colonists |
@@ -94,7 +93,7 @@ When the ship docks at a Scavenge Site, the game switches to isometric turn-base
 
 ### 3.1 The Away Team
 
-- Players select **3 Officers** to deploy
+- Players select **3 Officers** from a roster of 5 (Captain, Scout, Tech, Medic, Heavy)
 - **Permadeath**: Dead officers are removed permanently
 - Losing a specialist disables their event mitigation options
 
@@ -106,6 +105,7 @@ When the ship docks at a Scavenge Site, the game switches to isometric turn-base
 | **Scout** | +2 sight range, extended enemy detection | **Overwatch** (1 AP): Reaction shot at first enemy that moves in LOS | 80 | 6 | 10 |
 | **Tech** | Can see items through walls | **Breach** (1 AP): Destroy 1 tile of cover or wall | 70 | 4 | 5 |
 | **Medic** | Can see exact enemy HP | **Patch** (2 AP): Heal adjacent ally for 50% max HP | 75 | 5 | 5 |
+| **Heavy** | Armor Plating (−20% damage taken) | **Taunt** (1 AP): Forces enemies within 5 tiles to target this unit for 1 turn | 120 | 3 | 5 |
 
 ### 3.3 Combat System
 
@@ -148,6 +148,7 @@ Final Hit Chance = clamp(Base - DefenderCover + AttackerBonus, 10%, 95%)
 **Class Accuracy Profiles:**
 - **Scout**: Best at long range (65% at 8+ tiles)
 - **Captain**: Balanced (50% at 8+ tiles)
+- **Heavy**: Good close-mid range, weaker at distance (45% at 8+ tiles), +30 base damage
 - **Tech/Medic**: Support-focused, weaker at range (40% at 8+ tiles)
 
 ### 3.4 Cover & Destruction
@@ -171,23 +172,52 @@ Cover only protects from the direction it faces. Attacking from an unprotected a
 
 ### 3.6 Enemy AI
 
-**Behavior Priority:**
-1. If target in range + LOS + has AP → **Shoot**
-2. If target visible + has AP → **Move to tactical position**
-3. Otherwise → **Idle**
+**Smart AI Behavior Priority:**
+1. If flanked (in ineffective cover) → **Reposition to effective cover**
+2. If exposed (no cover) → **Move to cover position**
+3. If target in range + LOS + has AP → **Shoot**
+4. If target visible + has AP → **Move to tactical position**
+5. Otherwise → **Idle**
 
 **Tactical Position Scoring:**
 - Ideal engagement range: 4-7 tiles
-- Bonus for cover positions
+- High bonus for cover that protects from current threats
 - Bonus for maintaining LOS to targets
 - Penalty for being too close or losing LOS
+- Repositions when flanked to find effective cover
+
+**Heavy Taunt Response:**
+- Enemies prioritize taunted Heavy officers within 5 tiles
+- Overrides normal target selection for the turn
 
 **Enemy Types:**
 
-| Type | HP | Damage | Sight | Shoot Range | Spawn Rate |
-|------|-----|--------|-------|-------------|------------|
-| Basic | 50 | 20 | 6 | 8 | 80% |
-| Heavy | 80 | 30 | 5 | 6 | 20% |
+| Type | HP | Damage | AP | Move | Sight | Shoot Range | Base Spawn |
+|------|-----|--------|-----|------|-------|-------------|------------|
+| Basic | 50 | 20 | 2 | 4 | 6 | 8 | 70-80% |
+| Heavy | 80 | 35 | 3 | 3 | 5 | 6 | 20-30% |
+
+*Note: Spawn rates vary by biome (see Section 3.7 Biome System).*
+
+### 3.7 Biome System
+
+Scavenge sites have one of three procedurally-assigned biome types, each with unique map generation, visuals, and enemy distribution.
+
+| Biome | Map Type | Size | Enemies | Heavy % | Loot Focus |
+|-------|----------|------|---------|---------|------------|
+| **Derelict Station** | BSP Rooms & Corridors | 25-30 | 4-6 | 30% | Balanced |
+| **Asteroid Mine** | Cellular Automata Caves | 20-25 | 3-5 | 50% | More Scrap |
+| **Planetary Surface** | Open Field w/ Clusters | 35-40 | 5-8 | 20% | More Fuel |
+
+**Generation Algorithms:**
+- **Station**: Binary Space Partitioning creates interconnected rooms with corridors. Industrial aesthetic with metal floors and walls.
+- **Asteroid**: Cellular automata generates organic cave networks. Rocky browns with tighter spaces and high-value scrap deposits.
+- **Planet**: Open terrain with scattered obstacle clusters and cover. Alien teal/purple aesthetic with bioluminescent elements.
+
+**Biome Assignment:**
+- Biomes are pre-assigned to scavenge nodes during star map generation
+- Variety balancing ensures all three biome types appear across the journey
+- Each biome has distinct visual themes and color palettes
 
 ---
 
@@ -264,7 +294,7 @@ First-time players receive a **9-step guided tutorial** that covers:
 4. **Scavenge Missions** - Team selection and permadeath warning
 5. **Tactical Movement** - Action points and movement
 6. **Combat** - Attacking enemies and cover mechanics
-7. **Abilities** - Specialist unique abilities (Scout, Tech, Medic)
+7. **Abilities** - Specialist unique abilities (Scout, Tech, Medic, Heavy)
 8. **Cryo-Stability** - Time pressure and colonist loss
 9. **Extraction** - Completing missions
 
@@ -277,10 +307,10 @@ Tutorial can be skipped at any time and reset from the Settings menu.
 #### Officer Characters
 The player's controllable units, each with distinct visual identity matching their role.
 
-| Captain | Scout | Tech | Medic |
-|:-------:|:-----:|:----:|:-----:|
-| ![Captain](../assets/sprites/characters/officer_captain.png) | ![Scout](../assets/sprites/characters/officer_scout.png) | ![Tech](../assets/sprites/characters/officer_tech.png) | ![Medic](../assets/sprites/characters/officer_medic.png) |
-| Command leader | Recon specialist | Engineer | Field medic |
+| Captain | Scout | Tech | Medic | Heavy |
+|:-------:|:-----:|:----:|:-----:|:-----:|
+| ![Captain](../assets/sprites/characters/officer_captain.png) | ![Scout](../assets/sprites/characters/officer_scout.png) | ![Tech](../assets/sprites/characters/officer_tech.png) | ![Medic](../assets/sprites/characters/officer_medic.png) | ![Heavy](../assets/sprites/characters/officer_heavy.png) |
+| Command leader | Recon specialist | Engineer | Field medic | Tank/Defender |
 
 #### Enemy Units
 Hostile forces encountered during tactical missions.
@@ -413,39 +443,47 @@ Visual elements for the management layer star map.
 - [x] Jump logic with fuel consumption and drift mode
 
 ### ✅ Phase 2: Star Map & Events (COMPLETE)
-- [x] Procedural star map generator (7 columns, 2-4 nodes each)
+- [x] Procedural star map generator (9 columns, 20 total nodes)
 - [x] Node connection system with variable fuel costs
 - [x] Visual node graph with clickable navigation
 - [x] Node type system (Empty, Scavenge, Trading)
+- [x] Biome type pre-assignment for scavenge sites
 - [x] Random event system with 10 events
-- [x] Specialist mitigation for events
+- [x] Specialist mitigation for events (including Heavy)
 - [x] Event dialog UI
 
 ### ✅ Phase 3: Tactical Framework (COMPLETE)
-- [x] Grid-based tilemap system (20×20)
+- [x] Grid-based tilemap system (variable size per biome)
 - [x] A* pathfinding for movement
 - [x] Point-and-click movement with path visualization
 - [x] Fog of war with per-unit reveal radius
 - [x] Interactable objects (Fuel Crates, Scrap Piles)
 - [x] Auto-pickup system
-- [x] Procedural map generation
+- [x] Procedural map generation with three biome types
+- [x] BSP room generation (Station biome)
+- [x] Cellular automata cave generation (Asteroid biome)
+- [x] Open field generation (Planet biome)
 
 ### ✅ Phase 4: Combat System (COMPLETE)
 - [x] Turn-based unit-by-unit system
 - [x] Action Point management
 - [x] Line-of-sight calculations (Bresenham's algorithm)
 - [x] Cover system with hit chance modifiers
+- [x] Flanking system with directional cover
 - [x] Class-based accuracy profiles
 - [x] Shooting with hit/miss resolution
 - [x] Damage calculation and HP bars
-- [x] Enemy AI with tactical positioning
+- [x] Smart Enemy AI with flanking awareness and repositioning
 - [x] Enemy visibility tied to fog of war
-- [x] Attackable target highlighting
+- [x] Attackable target highlighting with hit chance display
+- [x] Cover indicators on units showing protection level
 
 ### ✅ Phase 5: Specialist Abilities (COMPLETE)
 - [x] Scout: Overwatch (reaction shots)
 - [x] Tech: Breach (destroy cover/walls)
 - [x] Medic: Patch (heal allies)
+- [x] Heavy: Taunt (force enemy targeting)
+- [x] Heavy: Armor Plating passive (20% damage reduction)
 - [x] Ability buttons in HUD
 - [x] AP cost validation
 
@@ -483,6 +521,7 @@ Visual elements for the management layer star map.
 ### ✅ Phase 9: Save/Load System (COMPLETE)
 - [x] Save game state to JSON file (colonists, fuel, integrity, scrap, officers)
 - [x] Save star map layout and node progress
+- [x] Save node types and biome assignments
 - [x] Load game state on continue
 - [x] Continue button on title menu (disabled if no save)
 - [x] New game confirmation dialog when save exists
@@ -553,6 +592,37 @@ Visual elements for the management layer star map.
 #### Additional UI
 - [x] Pause menu with abandon mission option (costs 20 colonists)
 - [x] Reusable confirmation dialog component
+
+#### Heavy Officer Class
+- [x] New officer type: Heavy
+- [x] Armor Plating passive ability (20% damage reduction)
+- [x] Taunt active ability (1 AP, forces enemy targeting for 1 turn)
+- [x] 120 HP, 3 move range, 5 sight range, 30 base damage
+- [x] Heavy sprite and animations
+- [x] Pirate Ambush event mitigation
+
+#### Biome System
+- [x] Three biome types: Station, Asteroid, Planet
+- [x] BSP room generation for Station maps
+- [x] Cellular automata cave generation for Asteroid maps
+- [x] Open field generation with obstacle clusters for Planet maps
+- [x] Biome-specific enemy counts and heavy spawn rates
+- [x] Biome-specific loot distributions
+- [x] Biome pre-assignment to scavenge nodes with variety balancing
+- [x] Distinct visual themes and color palettes per biome
+
+#### Smart Enemy AI
+- [x] Flanking awareness - AI recognizes when cover is ineffective
+- [x] Automatic repositioning when being flanked
+- [x] Prioritizes finding cover that protects from threats
+- [x] Responds to Heavy's Taunt ability
+- [x] Evaluates cover effectiveness based on threat directions
+
+#### Combat System Enhancements
+- [x] Hit chance display on targetable enemies
+- [x] Cover indicators on units (half/full cover status)
+- [x] Flanking damage bonus (+50%)
+- [x] Attacker cover bonus (stable firing position)
 
 ### Immediate Priority (Week 1-2)
 
@@ -644,9 +714,9 @@ Last Light Odyssey/
 │   ├── tactical/       # Combat scenes
 │   └── ui/             # Interface scenes
 ├── scripts/
-│   ├── autoload/       # Global singletons
-│   ├── management/     # Star map logic
-│   ├── tactical/       # Combat logic
+│   ├── autoload/       # Global singletons (GameState, EventManager, TutorialManager)
+│   ├── management/     # Star map logic, node generation
+│   ├── tactical/       # Combat logic, map generation, enemy AI, biome config
 │   └── ui/             # Interface scripts
 └── project.godot       # Godot project file
 ```
@@ -655,6 +725,12 @@ Last Light Odyssey/
 - **GameState**: Global statistics, officer tracking, win/loss logic, save/load system
 - **EventManager**: Random events, node types, event resolution
 - **TutorialManager**: Tutorial state, step progression, persistence
+
+### Key Classes
+- **BiomeConfig**: Biome type definitions, color themes, enemy/loot configurations
+- **MapGenerator**: Procedural map generation (BSP, caves, open fields)
+- **StarMapGenerator**: Star map node graph generation with biome assignment
+- **EnemyAI**: Smart enemy behavior with flanking awareness
 
 ### Design Philosophy
 > *"Start with Gray Boxes."* Don't polish art until the mechanics feel fun. If the game is stressful and addictive with just squares and numbers, it will be a masterpiece once polish is added.

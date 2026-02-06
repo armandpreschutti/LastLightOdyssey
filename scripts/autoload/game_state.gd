@@ -64,6 +64,7 @@ var current_node_index: int = 0
 var nodes_to_new_earth: int = 20
 var visited_nodes: Array[int] = []  # Track which nodes have been visited
 var node_types: Dictionary = {}  # Pre-rolled node types (node_id -> NodeType)
+var node_biomes: Dictionary = {}  # Pre-rolled biome types for scavenge nodes (node_id -> BiomeType)
 var is_in_tactical_mode: bool = false
 var tactical_turn_count: int = 0
 
@@ -81,6 +82,7 @@ func reset_game() -> void:
 	current_node_index = 0
 	visited_nodes.clear()
 	node_types.clear()
+	node_biomes.clear()
 	tactical_turn_count = 0
 	is_in_tactical_mode = false
 
@@ -205,7 +207,7 @@ var saved_star_map_data: Dictionary = {}
 ## Save the current game state to disk
 func save_game() -> bool:
 	var save_data = {
-		"version": 1,
+		"version": 2,
 		"colonist_count": colonist_count,
 		"fuel": fuel,
 		"ship_integrity": ship_integrity,
@@ -213,6 +215,7 @@ func save_game() -> bool:
 		"current_node_index": current_node_index,
 		"visited_nodes": visited_nodes,
 		"node_types": node_types,
+		"node_biomes": node_biomes,
 		"officers": officers,
 		"star_map_data": saved_star_map_data,
 	}
@@ -274,6 +277,12 @@ func load_game() -> bool:
 	for key in loaded_types.keys():
 		node_types[int(key)] = int(loaded_types[key])
 	
+	# Restore node biomes
+	node_biomes.clear()
+	var loaded_biomes = save_data.get("node_biomes", {})
+	for key in loaded_biomes.keys():
+		node_biomes[int(key)] = int(loaded_biomes[key])
+	
 	# Restore officers
 	var loaded_officers = save_data.get("officers", {})
 	for officer_key in loaded_officers.keys():
@@ -317,6 +326,7 @@ func store_star_map_data(generator: StarMapGenerator) -> void:
 			"row": node.row,
 			"connections": node.connections,
 			"node_type": node.node_type,
+			"biome_type": node.biome_type,
 			"connection_fuel_costs": node.connection_fuel_costs,
 		}
 		nodes_data.append(node_data)
@@ -350,6 +360,7 @@ func restore_star_map_generator() -> StarMapGenerator:
 			node.connections.append(int(conn_id))
 		
 		node.node_type = int(node_dict["node_type"])
+		node.biome_type = int(node_dict.get("biome_type", -1))
 		
 		# Restore fuel costs
 		var fuel_costs = node_dict.get("connection_fuel_costs", {})

@@ -23,6 +23,7 @@ var is_paused: bool = false  # Track pause state
 var extraction_positions: Array[Vector2i] = []
 var mission_fuel_collected: int = 0  # Fuel collected during this mission
 var mission_scrap_collected: int = 0  # Scrap collected during this mission
+var current_biome: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION
 
 var FuelCrateScene: PackedScene
 var ScrapPileScene: PackedScene
@@ -97,7 +98,7 @@ func _on_pause_abandon() -> void:
 	_end_mission(false)
 
 
-func start_mission(officer_keys: Array[String]) -> void:
+func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.BiomeType.STATION) -> void:
 	mission_active = true
 	current_turn = 1
 	current_unit_index = 0
@@ -109,10 +110,15 @@ func start_mission(officer_keys: Array[String]) -> void:
 
 	GameState.enter_tactical_mode()
 
-	# Generate map
+	# Generate map with biome type
+	current_biome = biome_type as BiomeConfig.BiomeType
 	var generator = MapGenerator.new()
-	var layout = generator.generate()
-	tactical_map.initialize_map(layout)
+	var layout = generator.generate(current_biome)
+	
+	# Set tactical map dimensions and biome theme
+	var map_dims = generator.get_map_dimensions()
+	tactical_map.set_map_dimensions(map_dims.x, map_dims.y)
+	tactical_map.initialize_map(layout, current_biome)
 
 	extraction_positions = generator.get_extraction_positions()
 
@@ -141,8 +147,11 @@ func start_mission(officer_keys: Array[String]) -> void:
 		loot.set_grid_position(loot_data["position"])
 		tactical_map.add_interactable(loot, loot_data["position"])
 	
-	# Spawn enemies
+	# Spawn enemies with biome-specific distribution
 	var enemy_positions = generator.get_enemy_spawn_positions()
+	var enemy_config = BiomeConfig.get_enemy_config(current_biome)
+	var heavy_chance = enemy_config["heavy_chance"]
+	
 	var enemy_id = 1
 	for enemy_pos in enemy_positions:
 		var enemy = EnemyUnitScene.instantiate()
@@ -150,8 +159,8 @@ func start_mission(officer_keys: Array[String]) -> void:
 		enemy.movement_finished.connect(_on_enemy_movement_finished.bind(enemy))
 		enemy.died.connect(_on_enemy_died.bind(enemy))
 		tactical_map.add_unit(enemy, enemy_pos)
-		# Mix of basic and heavy enemies (20% chance for heavy)
-		var enemy_type = "heavy" if randf() < 0.2 else "basic"
+		# Mix of basic and heavy enemies based on biome config
+		var enemy_type = "heavy" if randf() < heavy_chance else "basic"
 		enemy.initialize(enemy_id, enemy_type)
 		enemy.visible = false  # Start invisible until revealed
 		enemies.append(enemy)
@@ -173,6 +182,8 @@ func start_mission(officer_keys: Array[String]) -> void:
 	if deployed_officers.size() > 0:
 		current_unit_index = 0
 		_select_unit(deployed_officers[current_unit_index])
+		# Center camera on the active unit
+		_center_camera_on_unit(deployed_officers[current_unit_index])
 	else:
 		tactical_map.clear_movement_range()
 	
@@ -369,6 +380,10 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 			tactical_map.set_movement_range(unit_pos, unit.move_range)
 		else:
 			tactical_map.clear_movement_range()
+	
+	# Center camera on unit after movement (only for player units)
+	if unit in deployed_officers:
+		_center_camera_on_unit(unit)
 
 
 func _interact_with(interactable: Node2D) -> void:
@@ -480,12 +495,21 @@ func _on_end_turn_pressed() -> void:
 	# Select the next unit whose turn it is
 	if deployed_officers.size() > 0:
 		_select_unit(deployed_officers[current_unit_index])
+		# Center camera on the active unit
+		_center_camera_on_unit(deployed_officers[current_unit_index])
 
 
 func _is_current_unit_turn() -> bool:
 	if not selected_unit:
 		return false
 	return selected_unit == deployed_officers[current_unit_index]
+
+
+## Center camera on a unit's position (used when turn starts)
+func _center_camera_on_unit(unit: Node2D) -> void:
+	var unit_pos = unit.get_grid_position()
+	var world_pos = tactical_map.grid_to_world(unit_pos)
+	combat_camera.center_on_unit(world_pos)
 
 
 func _check_extraction_available() -> void:
