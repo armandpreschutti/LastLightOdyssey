@@ -6,7 +6,7 @@ signal cancelled
 
 # Updated paths for new styled layout
 @onready var title_label: Label = $PanelContainer/MarginContainer/VBoxContainer/HeaderContainer/TitleLabel
-@onready var officer_container: VBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/OfficerContainer
+@onready var officer_container: VBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/ScrollContainer/OfficerContainer
 @onready var selected_label: Label = $PanelContainer/MarginContainer/VBoxContainer/SelectedLabel
 @onready var deploy_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/DeployButton
 @onready var cancel_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/CancelButton
@@ -62,7 +62,7 @@ func _populate_officers() -> void:
 
 		# Create container for officer entry
 		var vbox = VBoxContainer.new()
-		vbox.add_theme_constant_override("separation", 2)
+		vbox.add_theme_constant_override("separation", 6)
 		
 		# Officer name and checkbox
 		var hbox = HBoxContainer.new()
@@ -83,7 +83,8 @@ func _populate_officers() -> void:
 		desc_label.add_theme_color_override("font_color", Color(0.5, 0.7, 0.8))
 		desc_label.add_theme_font_size_override("font_size", 15)
 		desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		desc_label.custom_minimum_size = Vector2(600, 0)
+		desc_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		desc_label.custom_minimum_size = Vector2(0, 0)
 		vbox.add_child(desc_label)
 		
 		officer_container.add_child(vbox)
@@ -113,7 +114,7 @@ func _get_officer_description(key: String) -> String:
 		"captain":
 			return "Squad leader. Ability: EXECUTE - Guaranteed kill on an enemy within 4 tiles below 50% HP. Never misses (1 AP). 2-turn cooldown."
 		"sniper":
-			return "Long-range marksman. Ability: PRECISION SHOT - Guaranteed hit on enemies 8+ tiles away, deals 2x damage (60). (1 AP). 2-turn cooldown."
+			return "Long-range marksman. Ability: PRECISION SHOT - Guaranteed hit on any visible enemy, deals 2x damage (60). (1 AP). 2-turn cooldown."
 		_:
 			return ""
 

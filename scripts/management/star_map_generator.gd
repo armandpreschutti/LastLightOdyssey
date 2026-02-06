@@ -1,10 +1,10 @@
 class_name StarMapGenerator
 extends RefCounted
 ## Generates a semi-linear node graph for the star map
-## Creates 20 nodes arranged in columns with branching paths
+## Creates 50 nodes arranged in columns with branching paths
 
-const TOTAL_NODES = 20
-const NUM_COLUMNS = 9
+const TOTAL_NODES = 50
+const NUM_COLUMNS = 16
 
 # Node data structure
 class MapNode:
@@ -37,9 +37,9 @@ func generate() -> Array[MapNode]:
 
 ## Create the node structure with semi-linear layout
 func _create_node_structure() -> void:
-	# Column structure: [1, 2, 3, 3, 3, 2, 3, 2, 1]
-	# This creates 20 nodes total with branching paths
-	var column_sizes: Array[int] = [1, 2, 3, 3, 3, 2, 3, 2, 1]
+	# Column structure: [1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 3, 4, 3, 3, 2, 1]
+	# This creates 50 nodes total with branching paths
+	var column_sizes: Array[int] = [1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 3, 4, 3, 3, 2, 1]
 	
 	var node_id = 0
 	for col_idx in range(NUM_COLUMNS):
@@ -51,7 +51,17 @@ func _create_node_structure() -> void:
 
 
 ## Create connections between nodes
+## Only creates connections between adjacent columns (no skipping nodes)
 func _create_connections() -> void:
+	# First, create forward connections (primary path)
+	_create_forward_connections()
+	
+	# Then, create backward connections (secondary paths)
+	_create_backward_connections()
+
+
+## Create forward connections (to next column)
+func _create_forward_connections() -> void:
 	for i in range(nodes.size()):
 		var current_node = nodes[i]
 		var current_col = current_node.column
@@ -87,7 +97,55 @@ func _create_connections() -> void:
 			_create_flow_connections(current_node, next_column_nodes, nodes_in_current_col)
 
 
+## Create backward connections (to previous column only - adjacent nodes)
+func _create_backward_connections() -> void:
+	for i in range(nodes.size()):
+		var current_node = nodes[i]
+		var current_col = current_node.column
+		
+		# Don't add backward connections from start node (node 0) or last node (New Earth)
+		if current_node.id == 0 or current_node.id == TOTAL_NODES - 1:
+			continue
+		
+		# Don't add backward connections from first column
+		if current_col <= 0:
+			continue
+		
+		# Reduced chance to 30% for fewer connections
+		if randf() > 0.30:
+			continue
+		
+		# Only connect to immediately previous column (adjacent nodes only)
+		var target_col = current_col - 1
+		
+		# Find nodes in the previous column
+		var prev_column_nodes: Array[MapNode] = []
+		for node in nodes:
+			if node.column == target_col:
+				prev_column_nodes.append(node)
+		
+		if prev_column_nodes.is_empty():
+			continue
+		
+		# Connect to 1 node in previous column (reduced from 1-2)
+		var nodes_in_prev_col = prev_column_nodes.size()
+		
+		# Use similar flow logic for backward connections
+		var current_row = current_node.row
+		var nodes_in_current_col = _count_nodes_in_column(current_col)
+		
+		# Calculate target row in previous column
+		var ratio = float(current_row) / max(1.0, float(nodes_in_current_col - 1))
+		var target_row = int(ratio * float(nodes_in_prev_col - 1))
+		
+		# Connect to target node (avoid duplicates)
+		var target_id = prev_column_nodes[target_row].id
+		if not target_id in current_node.connections:
+			current_node.connections.append(target_id)
+
+
 ## Create natural flowing connections between nodes
+## Only connects to adjacent column (next column)
 func _create_flow_connections(current_node: MapNode, next_column_nodes: Array[MapNode], nodes_in_current_col: int) -> void:
 	var current_row = current_node.row
 	var nodes_in_next_col = next_column_nodes.size()
@@ -97,10 +155,10 @@ func _create_flow_connections(current_node: MapNode, next_column_nodes: Array[Ma
 	var ratio = float(current_row) / max(1.0, float(nodes_in_current_col - 1))
 	var target_row = int(ratio * float(nodes_in_next_col - 1))
 	
-	# Connect to target and possibly adjacent nodes
+	# Connect to target node
 	current_node.connections.append(next_column_nodes[target_row].id)
 	
-	# Sometimes connect to adjacent nodes for more branching
+	# Reduced connections: 1-2 connections per node (down from 2-3)
 	var num_connections = randi_range(1, 2)
 	
 	if num_connections >= 2:
@@ -125,7 +183,7 @@ func _assign_node_types() -> void:
 	# Node 0 is always the starting node (Empty Space)
 	nodes[0].node_type = EventManager.NodeType.EMPTY_SPACE
 	
-	# Node 19 (last node) is always New Earth (Empty Space - triggers win)
+	# Last node is always New Earth (Empty Space - triggers win)
 	nodes[TOTAL_NODES - 1].node_type = EventManager.NodeType.EMPTY_SPACE
 	
 	# Assign types to remaining nodes with weighted distribution
@@ -202,21 +260,29 @@ func get_nodes_in_column(column: int) -> Array[MapNode]:
 
 
 ## Calculate fuel costs for all connections based on distance
+## All connections are now adjacent (column distance = 1), so base cost is simpler
 func _calculate_fuel_costs() -> void:
 	for node in nodes:
 		for connection_id in node.connections:
 			var target_node = get_node(connection_id)
 			if target_node:
-				# Formula: fuel_cost = 1 + (target_column - source_column)
-				# Since we only connect to next column, this will always be 1 + 1 = 2
-				# But we can make it more interesting by varying based on row distance
 				var column_distance = target_node.column - node.column
 				var row_distance = abs(target_node.row - node.row)
 				
-				# Base cost is column distance, +1 for vertical movement
-				var fuel_cost = 1 + column_distance
+				# Determine if this is a backward connection
+				var is_backward = column_distance < 0
+				
+				# Since all connections are adjacent, base cost is 1
+				# (column distance should always be 1 or -1)
+				var fuel_cost = 1
+				
+				# Add penalty for row distance (diagonal/vertical movement)
 				if row_distance > 0:
-					fuel_cost += 1  # Diagonal/vertical movement costs more
+					fuel_cost += 1
+				
+				# Add penalty for backward connections (going backward is less efficient)
+				if is_backward:
+					fuel_cost += 2  # +2 fuel penalty for backward travel
 				
 				node.connection_fuel_costs[connection_id] = fuel_cost
 
@@ -227,3 +293,8 @@ func get_node_biome(node_id: int) -> int:
 	if node:
 		return node.biome_type
 	return -1
+
+
+## Check if a node is the New Earth node (last node)
+func is_new_earth_node(node_id: int) -> bool:
+	return node_id == TOTAL_NODES - 1

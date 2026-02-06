@@ -63,6 +63,7 @@ var _move_speed: float = 150.0
 # Animation
 var _idle_tween: Tween = null
 var _attack_tween: Tween = null
+var _death_tween: Tween = null
 
 
 func _ready() -> void:
@@ -104,6 +105,8 @@ func _apply_specialist_bonuses() -> void:
 		"scout":
 			# Scout has extended vision for enemy detection
 			sight_range += 2
+			# Scout has reduced attack range
+			shoot_range = 9
 		"tech":
 			# Tech can see through walls to detect items
 			pass  # Handled in tactical controller
@@ -447,7 +450,7 @@ func use_execute() -> bool:
 	return true
 
 
-## Use Precision Shot ability (Sniper) - guaranteed hit at long range (8+ tiles) for 2x damage
+## Use Precision Shot ability (Sniper) - guaranteed hit on any visible enemy for 2x damage
 func use_precision_shot() -> bool:
 	if officer_type != "sniper":
 		return false
@@ -462,12 +465,13 @@ func use_precision_shot() -> bool:
 	return true
 
 
-## Check if target is valid for Precision Shot (must be 8+ tiles away)
+## Check if target is valid for Precision Shot (any visible enemy, no distance/cover restrictions)
 func can_precision_shot_target(target_pos: Vector2i) -> bool:
 	if officer_type != "sniper":
 		return false
-	var distance = abs(target_pos.x - grid_position.x) + abs(target_pos.y - grid_position.y)
-	return distance >= 8 and distance <= shoot_range
+	# Precision Shot can target any visible enemy regardless of distance or cover
+	# Visibility check is handled by the tactical controller
+	return true
 
 
 ## Check if unit can use their special ability
@@ -658,5 +662,205 @@ func _play_sniper_attack() -> void:
 	_attack_tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.15)
 	_attack_tween.parallel().tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.15)
 	_attack_tween.tween_callback(_start_idle_animation)
+
+#endregion
+
+
+#region Death Animations
+
+## Play the death animation for this officer type and return when complete
+func play_death_animation() -> void:
+	if not sprite:
+		return
+	
+	# Stop all other animations
+	_stop_idle_animation()
+	_kill_attack_tween()
+	
+	# Hide UI elements
+	if hp_bar:
+		hp_bar.visible = false
+	if hp_bar_bg:
+		hp_bar_bg.visible = false
+	if ap_indicator:
+		ap_indicator.visible = false
+	if selection_indicator:
+		selection_indicator.visible = false
+	if overwatch_indicator:
+		overwatch_indicator.visible = false
+	if half_cover_indicator:
+		half_cover_indicator.visible = false
+	if full_cover_indicator:
+		full_cover_indicator.visible = false
+	
+	match officer_type:
+		"captain": await _play_captain_death()
+		"scout":   await _play_scout_death()
+		"tech":    await _play_tech_death()
+		"medic":   await _play_medic_death()
+		"heavy":   await _play_heavy_death()
+		"sniper":  await _play_sniper_death()
+		_:         await _play_captain_death()
+
+
+## Captain Death - Dignified fall with yellow flash, controlled collapse
+func _play_captain_death() -> void:
+	_death_tween = create_tween()
+	
+	# Initial hit reaction - yellow flash and stagger
+	_death_tween.tween_property(sprite, "modulate", Color(2.0, 1.8, 0.4, 1.0), 0.05)
+	_death_tween.parallel().tween_property(sprite, "position:y", -6.0, 0.05).set_ease(Tween.EASE_OUT)
+	
+	# Controlled collapse with rotation
+	_death_tween.tween_property(sprite, "position:y", 10.0, 0.25).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	_death_tween.parallel().tween_property(sprite, "rotation", 0.8, 0.25).set_ease(Tween.EASE_IN)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(0.85, 0.65), 0.25)
+	_death_tween.parallel().tween_property(sprite, "modulate", Color(0.9, 0.7, 0.2, 0.8), 0.25)
+	
+	# Fade out and shrink
+	_death_tween.tween_property(sprite, "modulate:a", 0.0, 0.2)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(0.4, 0.3), 0.2)
+	
+	# Fade shadow
+	if shadow:
+		_death_tween.parallel().tween_property(shadow, "modulate:a", 0.0, 0.2)
+	
+	await _death_tween.finished
+
+
+## Scout Death - Quick collapse with green flash, agile fall
+func _play_scout_death() -> void:
+	_death_tween = create_tween()
+	
+	# Initial hit reaction - green flash and jolt
+	_death_tween.tween_property(sprite, "modulate", Color(0.4, 2.0, 0.5, 1.0), 0.05)
+	_death_tween.parallel().tween_property(sprite, "position:y", -8.0, 0.05).set_ease(Tween.EASE_OUT)
+	
+	# Quick collapse with spin
+	_death_tween.tween_property(sprite, "position:y", 12.0, 0.25).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	_death_tween.parallel().tween_property(sprite, "rotation", 1.2, 0.25).set_ease(Tween.EASE_IN)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(0.8, 0.6), 0.25)
+	_death_tween.parallel().tween_property(sprite, "modulate", Color(0.3, 0.8, 0.2, 0.8), 0.25)
+	
+	# Fade out and shrink
+	_death_tween.tween_property(sprite, "modulate:a", 0.0, 0.2)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(0.4, 0.3), 0.2)
+	
+	# Fade shadow
+	if shadow:
+		_death_tween.parallel().tween_property(shadow, "modulate:a", 0.0, 0.2)
+	
+	await _death_tween.finished
+
+
+## Tech Death - Energy discharge fade with cyan flash, tech collapse
+func _play_tech_death() -> void:
+	_death_tween = create_tween()
+	
+	# Initial hit reaction - cyan flash and energy discharge
+	_death_tween.tween_property(sprite, "modulate", Color(0.3, 1.6, 2.0, 1.0), 0.05)
+	_death_tween.parallel().tween_property(sprite, "position:y", -7.0, 0.05).set_ease(Tween.EASE_OUT)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(1.1, 1.1), 0.05)
+	
+	# Energy fade collapse
+	_death_tween.tween_property(sprite, "position:y", 11.0, 0.25).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	_death_tween.parallel().tween_property(sprite, "rotation", 0.9, 0.25).set_ease(Tween.EASE_IN)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(0.8, 0.6), 0.25)
+	_death_tween.parallel().tween_property(sprite, "modulate", Color(0.2, 0.6, 0.9, 0.8), 0.25)
+	
+	# Fade out and shrink
+	_death_tween.tween_property(sprite, "modulate:a", 0.0, 0.2)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(0.4, 0.3), 0.2)
+	
+	# Fade shadow
+	if shadow:
+		_death_tween.parallel().tween_property(shadow, "modulate:a", 0.0, 0.2)
+	
+	await _death_tween.finished
+
+
+## Medic Death - Gentle fall with magenta flash, compassionate collapse
+func _play_medic_death() -> void:
+	_death_tween = create_tween()
+	
+	# Initial hit reaction - magenta flash and gentle stagger
+	_death_tween.tween_property(sprite, "modulate", Color(1.8, 0.5, 1.6, 1.0), 0.05)
+	_death_tween.parallel().tween_property(sprite, "position:y", -6.0, 0.05).set_ease(Tween.EASE_OUT)
+	
+	# Gentle collapse
+	_death_tween.tween_property(sprite, "position:y", 10.0, 0.25).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	_death_tween.parallel().tween_property(sprite, "rotation", 0.7, 0.25).set_ease(Tween.EASE_IN)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(0.85, 0.65), 0.25)
+	_death_tween.parallel().tween_property(sprite, "modulate", Color(0.8, 0.3, 0.7, 0.8), 0.25)
+	
+	# Fade out and shrink
+	_death_tween.tween_property(sprite, "modulate:a", 0.0, 0.2)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(0.4, 0.3), 0.2)
+	
+	# Fade shadow
+	if shadow:
+		_death_tween.parallel().tween_property(shadow, "modulate:a", 0.0, 0.2)
+	
+	await _death_tween.finished
+
+
+## Heavy Death - Slow heavy fall with orange-red flash, dramatic collapse
+func _play_heavy_death() -> void:
+	_death_tween = create_tween()
+	
+	# Initial hit reaction - orange-red flash and stagger back
+	_death_tween.tween_property(sprite, "modulate", Color(2.0, 0.6, 0.2, 1.0), 0.08)
+	_death_tween.parallel().tween_property(sprite, "position:x", 4.0, 0.08).set_ease(Tween.EASE_OUT)
+	_death_tween.parallel().tween_property(sprite, "position:y", -4.0, 0.08)
+	
+	# Stagger forward (losing balance)
+	_death_tween.tween_property(sprite, "position:x", -6.0, 0.15).set_ease(Tween.EASE_IN_OUT)
+	_death_tween.parallel().tween_property(sprite, "rotation", -0.15, 0.15)
+	_death_tween.parallel().tween_property(sprite, "modulate", Color(1.5, 0.4, 0.1, 1.0), 0.15)
+	
+	# Heavy collapse - fall forward with weight
+	_death_tween.tween_property(sprite, "position:y", 16.0, 0.35).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	_death_tween.parallel().tween_property(sprite, "rotation", 1.5, 0.35).set_ease(Tween.EASE_IN)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(1.1, 0.7), 0.35)
+	_death_tween.parallel().tween_property(sprite, "modulate", Color(0.6, 0.2, 0.1, 0.9), 0.35)
+	
+	# Ground impact - slight bounce and settle
+	_death_tween.tween_property(sprite, "position:y", 14.0, 0.1).set_ease(Tween.EASE_OUT)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(1.2, 0.5), 0.1)
+	
+	# Final fade out
+	_death_tween.tween_property(sprite, "modulate:a", 0.0, 0.3)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(0.6, 0.3), 0.3)
+	
+	# Fade shadow
+	if shadow:
+		_death_tween.parallel().tween_property(shadow, "modulate:a", 0.0, 0.3)
+	
+	await _death_tween.finished
+
+
+## Sniper Death - Professional fall with purple flash, controlled collapse
+func _play_sniper_death() -> void:
+	_death_tween = create_tween()
+	
+	# Initial hit reaction - purple flash and controlled stagger
+	_death_tween.tween_property(sprite, "modulate", Color(1.6, 0.8, 2.0, 1.0), 0.05)
+	_death_tween.parallel().tween_property(sprite, "position:y", -7.0, 0.05).set_ease(Tween.EASE_OUT)
+	
+	# Controlled collapse with slight rotation
+	_death_tween.tween_property(sprite, "position:y", 11.0, 0.25).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	_death_tween.parallel().tween_property(sprite, "rotation", 0.9, 0.25).set_ease(Tween.EASE_IN)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(0.85, 0.65), 0.25)
+	_death_tween.parallel().tween_property(sprite, "modulate", Color(0.7, 0.4, 0.9, 0.8), 0.25)
+	
+	# Fade out and shrink
+	_death_tween.tween_property(sprite, "modulate:a", 0.0, 0.2)
+	_death_tween.parallel().tween_property(sprite, "scale", Vector2(0.4, 0.3), 0.2)
+	
+	# Fade shadow
+	if shadow:
+		_death_tween.parallel().tween_property(shadow, "modulate:a", 0.0, 0.2)
+	
+	await _death_tween.finished
 
 #endregion

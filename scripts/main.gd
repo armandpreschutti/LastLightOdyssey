@@ -30,6 +30,7 @@ var star_map_generator: StarMapGenerator = null
 var tutorial_overlay: CanvasLayer = null
 var _first_node_clicked: bool = false
 var _first_event_seen: bool = false
+var _is_jump_animating: bool = false  # Track if jump animation is in progress
 
 
 func _ready() -> void:
@@ -90,6 +91,10 @@ func _on_node_clicked(node_id: int) -> void:
 		print("Main: Not in IDLE phase, ignoring click")
 		return
 	
+	if _is_jump_animating:
+		print("Main: Jump animation in progress, ignoring click")
+		return
+	
 	print("Main: Executing jump to node %d" % node_id)
 	
 	# Tutorial: Notify that a node was clicked (first time only for intro step)
@@ -102,17 +107,35 @@ func _on_node_clicked(node_id: int) -> void:
 	var fuel_cost = star_map.get_fuel_cost(from_node, node_id)
 	print("Main: Jump costs %d fuel" % fuel_cost)
 	
+	# Start ship jump animation, then execute jump when animation completes
+	_execute_jump_with_animation(from_node, node_id, fuel_cost)
+
+
+## Execute jump with ship animation
+func _execute_jump_with_animation(from_node_id: int, to_node_id: int, fuel_cost: int) -> void:
+	# Set flag to prevent multiple clicks during animation
+	_is_jump_animating = true
+	
+	# Start ship jump animation
+	star_map.animate_jump(from_node_id, to_node_id)
+	
+	# Wait for animation to complete
+	await star_map.jump_animation_complete
+	
+	# Clear flag after animation completes
+	_is_jump_animating = false
+	
 	# Execute jump to the selected node with variable fuel cost
-	GameState.jump_to_node(node_id, fuel_cost)
-	star_map.refresh()
+	GameState.jump_to_node(to_node_id, fuel_cost)
+	star_map.refresh()  # This will also center camera on new node
 	
 	# Check if we won
 	if current_phase == GamePhase.GAME_WON or current_phase == GamePhase.GAME_OVER:
 		return
 	
 	# Determine node type from the pre-rolled types
-	pending_node_type = star_map.get_node_type(node_id)
-	pending_biome_type = star_map.get_node_biome(node_id)
+	pending_node_type = star_map.get_node_type(to_node_id)
+	pending_biome_type = star_map.get_node_biome(to_node_id)
 	print("Main: Node type is %d, biome is %d" % [pending_node_type, pending_biome_type])
 	
 	match pending_node_type:
@@ -264,6 +287,7 @@ func _on_restart_pressed() -> void:
 	game_over_panel.visible = false
 	_first_node_clicked = false
 	_first_event_seen = false
+	_is_jump_animating = false
 	
 	# Regenerate the star map
 	_initialize_star_map()

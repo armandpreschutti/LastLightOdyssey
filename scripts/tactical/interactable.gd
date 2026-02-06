@@ -14,13 +14,23 @@ var is_highlighted: bool = false
 
 # Hover tween
 var _hover_tween: Tween = null
-# Idle animation tween
-var _idle_tween: Tween = null
+
+# Idle animation tweens
+var _idle_position_tween: Tween = null
+var _idle_scale_tween: Tween = null
+
+# Store original position for idle animation
+var _original_position: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
 	if highlight:
 		highlight.visible = false
+	
+	# Store original position for idle animation
+	_original_position = position
+	
+	# Start idle animation
 	_start_idle_animation()
 
 
@@ -37,6 +47,9 @@ func can_interact() -> bool:
 
 
 func interact() -> void:
+	# Stop idle animation
+	_stop_idle_animation()
+	
 	# Play collection effect before removing
 	_play_collect_effect()
 	interacted.emit()
@@ -81,48 +94,44 @@ func _stop_hover_effect() -> void:
 
 
 func _start_idle_animation() -> void:
-	# Stop any existing idle animation
-	if _idle_tween:
-		_idle_tween.kill()
+	if _idle_position_tween:
+		_idle_position_tween.kill()
+	if _idle_scale_tween:
+		_idle_scale_tween.kill()
 	
-	# Wait for sprite to be ready
 	if not sprite:
 		return
 	
-	# Store initial sprite properties (use offset to avoid interfering with grid positioning)
-	var initial_offset = sprite.position
-	var initial_rotation = sprite.rotation
-	var initial_scale = sprite.scale
+	# Create position floating animation (up and down)
+	_idle_position_tween = create_tween()
+	_idle_position_tween.set_loops()
+	_idle_position_tween.tween_property(self, "position:y", _original_position.y - 2.0, 1.5)
+	_idle_position_tween.tween_property(self, "position:y", _original_position.y + 2.0, 1.5)
+	_idle_position_tween.tween_property(self, "position:y", _original_position.y, 1.5)
 	
-	# Create continuous idle animation
-	_idle_tween = create_tween()
-	_idle_tween.set_loops()
-	_idle_tween.set_parallel(true)
-	
-	# Gentle vertical bobbing (floating effect) - animate sprite offset, not root position
-	_idle_tween.tween_property(sprite, "position:y", initial_offset.y - 3.0, 1.5)
-	_idle_tween.tween_property(sprite, "position:y", initial_offset.y, 1.5)
-	
-	# Subtle rotation back and forth
-	_idle_tween.tween_property(sprite, "rotation", initial_rotation + 0.05, 2.0)
-	_idle_tween.tween_property(sprite, "rotation", initial_rotation - 0.05, 2.0)
-	_idle_tween.tween_property(sprite, "rotation", initial_rotation, 2.0)
-	
-	# Very subtle scale pulse (breathing effect)
-	_idle_tween.tween_property(sprite, "scale", initial_scale * 1.05, 1.2)
-	_idle_tween.tween_property(sprite, "scale", initial_scale, 1.2)
+	# Create scale pulsing animation (subtle pulse)
+	_idle_scale_tween = create_tween()
+	_idle_scale_tween.set_loops()
+	_idle_scale_tween.tween_property(sprite, "scale", Vector2(0.98, 0.98), 1.5)
+	_idle_scale_tween.tween_property(sprite, "scale", Vector2(1.02, 1.02), 1.5)
+	_idle_scale_tween.tween_property(sprite, "scale", Vector2(1.0, 1.0), 1.5)
 
 
 func _stop_idle_animation() -> void:
-	if _idle_tween:
-		_idle_tween.kill()
-		_idle_tween = null
+	if _idle_position_tween:
+		_idle_position_tween.kill()
+		_idle_position_tween = null
+	if _idle_scale_tween:
+		_idle_scale_tween.kill()
+		_idle_scale_tween = null
+	
+	# Reset to original position and scale
+	if sprite:
+		sprite.scale = Vector2(1.0, 1.0)
+	position = _original_position
 
 
 func _play_collect_effect() -> void:
-	# Stop idle animation during collection
-	_stop_idle_animation()
-	
 	# Scale up and fade out effect
 	var tween = create_tween()
 	tween.set_parallel(true)

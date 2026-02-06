@@ -51,8 +51,8 @@ const MAX_HIT_CHANCE: float = 95.0
 const FLANK_DAMAGE_BONUS: float = 0.50  # 50% bonus damage when flanking
 
 # Cover attack bonuses (attacker in cover gets accuracy buff)
-const FULL_COVER_ATTACK_BONUS: float = 15.0   # +15% hit chance when firing from full cover
-const HALF_COVER_ATTACK_BONUS: float = 10.0   # +10% hit chance when firing from half cover
+const FULL_COVER_ATTACK_BONUS: float = 10.0   # +10% hit chance when firing from full cover
+const HALF_COVER_ATTACK_BONUS: float = 5.0   # +5% hit chance when firing from half cover
 
 
 func _ready() -> void:
@@ -615,6 +615,20 @@ func _on_extract_pressed() -> void:
 	if not mission_active:
 		return
 
+	# Center camera on extraction zone with zoom
+	if extraction_positions.size() > 0:
+		# Calculate center point of all extraction positions
+		var center_sum = Vector2i.ZERO
+		for pos in extraction_positions:
+			center_sum += pos
+		var center_grid = Vector2i(center_sum.x / extraction_positions.size(), center_sum.y / extraction_positions.size())
+		
+		# Convert to world coordinates and center camera with zoom
+		var world_pos = tactical_map.grid_to_world(center_grid)
+		# Use moderate zoom (1.5x) for extraction focus - noticeable but not too extreme
+		var extraction_zoom = Vector2(1.5, 1.5)
+		combat_camera.center_on_position_with_zoom(world_pos, extraction_zoom)
+
 	# Check which units are in the extraction zone
 	var units_in_zone: Array[Node2D] = []
 	var units_outside_zone: Array[Node2D] = []
@@ -885,9 +899,9 @@ func calculate_hit_chance(shooter_pos: Vector2i, target_pos: Vector2i, shooter: 
 func _get_base_hit_chance_for_shooter(shooter: Node2D, distance: int) -> float:
 	# Adjacent shots are highly accurate for all classes
 	if distance == 1:
-		return 95.0
-	elif distance == 2:
 		return 90.0
+	elif distance == 2:
+		return 85.0
 	
 	# Determine shooter type
 	var shooter_type = ""
@@ -899,59 +913,29 @@ func _get_base_hit_chance_for_shooter(shooter: Node2D, distance: int) -> float:
 		"scout":
 			# Scout excels at long range
 			if distance <= 4:
-				return 85.0
+				return 80.0
 			elif distance <= 6:
-				return 75.0
+				return 70.0
 			elif distance <= 8:
-				return 65.0
+				return 60.0
 			else:
-				return 50.0
+				return 45.0
 		"sniper":
 			# Sniper has the best long-range accuracy, slightly weaker at close range
 			if distance <= 2:
-				return 85.0
-			elif distance <= 4:
-				return 85.0
-			elif distance <= 6:
 				return 80.0
-			elif distance <= 8:
+			elif distance <= 4:
+				return 80.0
+			elif distance <= 6:
 				return 75.0
-			elif distance <= 10:
+			elif distance <= 8:
 				return 70.0
-			else:
+			elif distance <= 10:
 				return 65.0
+			else:
+				return 60.0
 		"captain":
 			# Captain is balanced
-			if distance <= 4:
-				return 80.0
-			elif distance <= 6:
-				return 65.0
-			elif distance <= 8:
-				return 50.0
-			else:
-				return 35.0
-		"heavy":
-			# Heavy is decent at close-mid range, weaker at distance
-			if distance <= 4:
-				return 80.0
-			elif distance <= 6:
-				return 65.0
-			elif distance <= 8:
-				return 45.0
-			else:
-				return 30.0
-		"tech", "medic":
-			# Support classes are weaker at range
-			if distance <= 4:
-				return 75.0
-			elif distance <= 6:
-				return 55.0
-			elif distance <= 8:
-				return 40.0
-			else:
-				return 25.0
-		_:
-			# Default (enemies and unknown)
 			if distance <= 4:
 				return 75.0
 			elif distance <= 6:
@@ -960,6 +944,36 @@ func _get_base_hit_chance_for_shooter(shooter: Node2D, distance: int) -> float:
 				return 45.0
 			else:
 				return 30.0
+		"heavy":
+			# Heavy is decent at close-mid range, weaker at distance
+			if distance <= 4:
+				return 75.0
+			elif distance <= 6:
+				return 60.0
+			elif distance <= 8:
+				return 40.0
+			else:
+				return 25.0
+		"tech", "medic":
+			# Support classes are weaker at range
+			if distance <= 4:
+				return 70.0
+			elif distance <= 6:
+				return 50.0
+			elif distance <= 8:
+				return 35.0
+			else:
+				return 20.0
+		_:
+			# Default (enemies and unknown)
+			if distance <= 4:
+				return 70.0
+			elif distance <= 6:
+				return 55.0
+			elif distance <= 8:
+				return 40.0
+			else:
+				return 25.0
 
 
 ## Get cover modifier for a shot (only defender benefits from cover if not flanked)
@@ -1598,13 +1612,12 @@ func _on_ability_used(ability_type: String) -> void:
 				tactical_hud.hide_combat_message()
 				return
 			
-			# Enter precision targeting mode - show purple range tiles for 8+ tile targets
+			# Enter precision targeting mode - can target any visible enemy
 			precision_mode = true
 			tactical_map.clear_movement_range()
-			# Show range from 8 to shoot_range (12 for sniper)
-			tactical_map.set_execute_range(selected_unit.get_grid_position(), selected_unit.shoot_range)
-			print("Precision Shot - click an enemy 8+ tiles away for guaranteed 2x damage hit")
-			tactical_hud.show_combat_message("SELECT ENEMY 8+ TILES AWAY", Color(0.6, 0.55, 0.8))
+			# No range display needed - can target any visible enemy
+			print("Precision Shot - click any visible enemy for guaranteed 2x damage hit")
+			tactical_hud.show_combat_message("SELECT ANY VISIBLE ENEMY", Color(0.6, 0.55, 0.8))
 
 
 ## Check if any officer on overwatch can shoot the enemy
@@ -2129,39 +2142,6 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 	# Disable end turn button during precision shot animation
 	_set_animating(true)
 	
-	var sniper_pos = selected_unit.get_grid_position()
-	var distance = abs(grid_pos.x - sniper_pos.x) + abs(grid_pos.y - sniper_pos.y)
-	
-	# Must be at least 8 tiles away
-	if distance < 8:
-		print("Precision Shot requires target 8+ tiles away (distance: %d)" % distance)
-		tactical_hud.show_combat_message("TOO CLOSE (NEED 8+ TILES)", Color(1, 0.3, 0.3))
-		await get_tree().create_timer(1.0).timeout
-		tactical_hud.hide_combat_message()
-		_select_unit(selected_unit)
-		_set_animating(false)
-		return
-	
-	# Must be within shoot range
-	if distance > selected_unit.shoot_range:
-		print("Precision Shot target out of range (distance: %d, max: %d)" % [distance, selected_unit.shoot_range])
-		tactical_hud.show_combat_message("OUT OF RANGE", Color(1, 0.3, 0.3))
-		await get_tree().create_timer(1.0).timeout
-		tactical_hud.hide_combat_message()
-		_select_unit(selected_unit)
-		_set_animating(false)
-		return
-	
-	# Check line of sight
-	if not has_line_of_sight(sniper_pos, grid_pos):
-		print("No line of sight for Precision Shot")
-		tactical_hud.show_combat_message("NO LINE OF SIGHT", Color(1, 0.3, 0.3))
-		await get_tree().create_timer(1.0).timeout
-		tactical_hud.hide_combat_message()
-		_select_unit(selected_unit)
-		_set_animating(false)
-		return
-	
 	# Must be clicking on an enemy
 	var target_enemy: Node2D = null
 	for enemy in enemies:
@@ -2172,6 +2152,16 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 	if not target_enemy:
 		print("No enemy at that position")
 		tactical_hud.show_combat_message("NO ENEMY THERE", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_select_unit(selected_unit)
+		_set_animating(false)
+		return
+	
+	# Only requirement: enemy must be visible (if player can see the sprite, they can use precision shot)
+	if not _is_enemy_visible(target_enemy):
+		print("Precision Shot requires visible enemy")
+		tactical_hud.show_combat_message("ENEMY NOT VISIBLE", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)

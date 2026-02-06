@@ -62,7 +62,7 @@ var officers: Dictionary = {
 
 # Game progression
 var current_node_index: int = 0
-var nodes_to_new_earth: int = 20
+var nodes_to_new_earth: int = 50
 var visited_nodes: Array[int] = []  # Track which nodes have been visited
 var node_types: Dictionary = {}  # Pre-rolled node types (node_id -> NodeType)
 var node_biomes: Dictionary = {}  # Pre-rolled biome types for scavenge nodes (node_id -> BiomeType)
@@ -139,7 +139,7 @@ func jump_to_node(target_node_index: int, fuel_cost: int = 1) -> void:
 	current_node_index = target_node_index
 	
 	# Check win condition
-	if current_node_index >= nodes_to_new_earth - 1:  # Node 19 is New Earth
+	if current_node_index >= nodes_to_new_earth - 1:  # Last node is New Earth
 		_check_win_condition()
 
 

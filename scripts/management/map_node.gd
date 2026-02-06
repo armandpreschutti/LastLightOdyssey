@@ -19,6 +19,7 @@ var node_id: int = -1
 var node_type: int = -1  # EventManager.NodeType
 var biome_type: int = -1  # BiomeConfig.BiomeType (-1 if not scavenge)
 var current_state: NodeState = NodeState.LOCKED
+var is_new_earth: bool = false  # Flag to identify New Earth node
 
 const NODE_SIZE = Vector2(80, 80)
 
@@ -74,11 +75,12 @@ func _notification(what: int) -> void:
 
 
 ## Initialize the node with data
-func initialize(p_node_id: int, p_node_type: int, p_state: NodeState = NodeState.LOCKED, p_biome_type: int = -1) -> void:
+func initialize(p_node_id: int, p_node_type: int, p_state: NodeState = NodeState.LOCKED, p_biome_type: int = -1, p_is_new_earth: bool = false) -> void:
 	node_id = p_node_id
 	node_type = p_node_type
 	biome_type = p_biome_type
 	current_state = p_state
+	is_new_earth = p_is_new_earth
 	_update_visual()
 
 
@@ -151,7 +153,7 @@ func _update_sprite_texture() -> void:
 	if node_id == 0:
 		# Start node - use Earth
 		sprite.texture = preload("res://assets/sprites/navigation/planet_earth.png")
-	elif node_id == 19:
+	elif _is_new_earth_node():
 		# End node (New Earth) - use a distinct planet
 		sprite.texture = preload("res://assets/sprites/navigation/planet_gas.png")
 	else:
@@ -176,7 +178,7 @@ func _update_label_text() -> void:
 	
 	if node_id == 0:
 		label.text = "EARTH"
-	elif node_id == 19:
+	elif _is_new_earth_node():
 		label.text = "NEW EARTH"
 	else:
 		match node_type:
@@ -236,6 +238,11 @@ func _stop_pulse() -> void:
 ## Check if node is clickable
 func is_clickable() -> bool:
 	return current_state == NodeState.AVAILABLE
+
+
+## Check if this is the New Earth node
+func _is_new_earth_node() -> bool:
+	return is_new_earth
 
 
 func _on_mouse_entered() -> void:

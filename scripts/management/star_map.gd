@@ -1,19 +1,22 @@
 extends Control
 ## Star Map Controller - Displays the node graph and handles navigation
-## Shows all 20 nodes with connections and manages visual states
+## Shows all 50 nodes with connections and manages visual states
 
 signal node_clicked(node_id: int)
+signal jump_animation_complete
 
 @onready var map_content: Control = $MapContent
 @onready var nodes_container: Control = $MapContent/NodesContainer
 @onready var lines_container: Control = $MapContent/LinesContainer
+@onready var ship_container: Control = $MapContent/ShipContainer
 
 var MapNodeScene: PackedScene
 var node_graph: Array[StarMapGenerator.MapNode] = []
 var node_visuals: Dictionary = {}  # node_id -> MapNode visual instance
+var generator: StarMapGenerator = null  # Reference to generator for helper methods
 
-const COLUMN_SPACING = 180.0
-const ROW_SPACING = 120.0
+const COLUMN_SPACING = 180.0  # Horizontal spacing between columns
+const ROW_SPACING = 200.0  # Vertical spacing between rows
 const RANDOMNESS = 25.0  # Maximum random offset for node positions
 
 const LINE_COLOR = Color(1.0, 0.69, 0.0, 0.25)  # Amber, transparent
@@ -34,6 +37,15 @@ const MIN_ZOOM = 0.5
 const MAX_ZOOM = 2.0
 const ZOOM_STEP = 0.1
 var _current_zoom: float = 1.0
+
+# Camera centering variables
+var _camera_tween: Tween = null
+const CAMERA_ANIMATION_DURATION = 0.8  # seconds
+
+# Ship animation variables
+var _ship_sprite: Control = null
+var _ship_tween: Tween = null
+const SHIP_ANIMATION_DURATION = 1.5  # seconds
 
 
 func _ready() -> void:
@@ -84,11 +96,15 @@ func initialize(generator: StarMapGenerator) -> void:
 	# Clear any existing map artifacts from previous voyage
 	_clear_existing_map()
 	
+	self.generator = generator
 	node_graph = generator.nodes
 	_calculate_map_center()
 	_create_visual_nodes()
 	_draw_connection_lines()
 	_update_node_states()
+	
+	# Center camera on first node (node 0) when voyage starts (instant, no animation)
+	center_on_node(0, false)
 
 
 ## Clear all existing visual elements from the map
@@ -101,6 +117,9 @@ func _clear_existing_map() -> void:
 	# Clear all connection lines and labels
 	for child in lines_container.get_children():
 		child.queue_free()
+	
+	# Clean up ship animation
+	_cleanup_ship_animation()
 
 
 ## Calculate the center offset to center the map on screen
@@ -139,7 +158,9 @@ func _create_visual_nodes() -> void:
 		var pos = _calculate_base_node_position(node_data)
 		
 		# Add random offset for organic feel (but not to START or NEW EARTH nodes)
-		if node_data.id != 0 and node_data.id != 19:
+		var is_start_node = node_data.id == 0
+		var is_new_earth = generator != null and generator.is_new_earth_node(node_data.id)
+		if not is_start_node and not is_new_earth:
 			var random_offset = Vector2(
 				rng.randf_range(-RANDOMNESS, RANDOMNESS),
 				rng.randf_range(-RANDOMNESS, RANDOMNESS)
@@ -152,14 +173,16 @@ func _create_visual_nodes() -> void:
 		# Offset by -35,-35 to center the 70x70 control node on the calculated position
 		node_visual.position = pos - Vector2(35, 35)
 		
-		# Initialize the visual (include biome type for scavenge sites)
-		node_visual.initialize(node_data.id, node_data.node_type, _determine_initial_state(node_data.id), node_data.biome_type)
+		# Initialize the visual (include biome type for scavenge sites and New Earth flag)
+		# Reuse is_new_earth variable declared above
+		node_visual.initialize(node_data.id, node_data.node_type, _determine_initial_state(node_data.id), node_data.biome_type, is_new_earth)
 		node_visual.clicked.connect(_on_node_clicked)
 		
 		node_visuals[node_data.id] = node_visual
 
 
 ## Calculate base world position for a node based on its column and row
+## Uses a mix of vertical and circular/spiral layout
 func _calculate_base_node_position(node_data: StarMapGenerator.MapNode) -> Vector2:
 	var column = node_data.column
 	var row = node_data.row
@@ -172,9 +195,25 @@ func _calculate_base_node_position(node_data: StarMapGenerator.MapNode) -> Vecto
 	
 	# Center the nodes vertically within the column
 	var vertical_offset = -(nodes_in_column - 1) * ROW_SPACING / 2.0
+	var base_y = vertical_offset + row * ROW_SPACING
 	
-	var x = column * COLUMN_SPACING
-	var y = vertical_offset + row * ROW_SPACING
+	# Base column-based X position
+	var base_x = column * COLUMN_SPACING
+	
+	# Add circular/spiral component for more organic layout
+	# Spiral radius increases with column
+	var spiral_radius = column * 40.0
+	# Angle based on column position (creates spiral pattern)
+	var angle = column * 0.3
+	
+	# Mix the spiral offset with the base position
+	# Use spiral for Y offset, keep X mostly column-based with slight spiral
+	var spiral_x_offset = spiral_radius * cos(angle) * 0.3  # Subtle X spiral
+	var spiral_y_offset = spiral_radius * sin(angle) * 0.5  # More pronounced Y spiral
+	
+	# Combine base position with spiral offset
+	var x = base_x + spiral_x_offset
+	var y = base_y + spiral_y_offset
 	
 	return Vector2(x, y)
 
@@ -185,12 +224,21 @@ func _draw_connection_lines() -> void:
 	for child in lines_container.get_children():
 		child.queue_free()
 	
+	# Track drawn connections to avoid duplicates
+	var drawn_connections: Dictionary = {}  # "from_id:to_id" -> true
+	
 	# Draw lines for each connection
 	for node_data in node_graph:
 		var from_id = node_data.id
 		var from_pos = node_visuals[from_id].position + Vector2(35, 35)  # Center of node
 		
 		for connection_id in node_data.connections:
+			# Only draw each connection once (avoid duplicates from bidirectional connections)
+			var connection_key = "%d:%d" % [min(from_id, connection_id), max(from_id, connection_id)]
+			if drawn_connections.has(connection_key):
+				continue
+			drawn_connections[connection_key] = true
+			
 			if node_visuals.has(connection_id):
 				var to_pos = node_visuals[connection_id].position + Vector2(35, 35)  # Center of node
 				var fuel_cost = node_data.connection_fuel_costs.get(connection_id, 1)
@@ -314,6 +362,9 @@ func _on_node_clicked(node_id: int) -> void:
 func refresh() -> void:
 	_update_node_states()
 	_draw_connection_lines()  # Redraw lines to show new available connections
+	
+	# Center camera on the current node after jump
+	center_on_node(GameState.current_node_index, true)
 
 
 ## Get the node type for a specific node ID
@@ -338,3 +389,171 @@ func get_node_biome(node_id: int) -> int:
 		if node_data.id == node_id:
 			return node_data.biome_type
 	return -1  # Not a scavenge site or invalid
+
+
+## Center the camera/view on a specific node
+func center_on_node(node_id: int, animated: bool = true) -> void:
+	if not node_visuals.has(node_id):
+		return
+	
+	var node_visual = node_visuals[node_id]
+	# Get the node's center position in map content space
+	var node_center = node_visual.position + Vector2(35, 35)  # Node is 70x70, center is at 35,35
+	
+	# Calculate the target position for map_content to center this node on screen
+	var screen_center = size / 2.0
+	var target_content_pos = screen_center - node_center * _current_zoom
+	
+	if animated:
+		# Stop any existing camera tween
+		if _camera_tween:
+			_camera_tween.kill()
+		
+		# Create new tween for smooth animation
+		_camera_tween = create_tween()
+		_camera_tween.set_ease(Tween.EASE_IN_OUT)
+		_camera_tween.set_trans(Tween.TRANS_CUBIC)
+		_camera_tween.tween_property(map_content, "position", target_content_pos, CAMERA_ANIMATION_DURATION)
+	else:
+		# Instant snap
+		map_content.position = target_content_pos
+
+
+## Animate ship jumping from one node to another
+func animate_jump(from_node_id: int, to_node_id: int) -> void:
+	if not node_visuals.has(from_node_id) or not node_visuals.has(to_node_id):
+		return
+	
+	# Clean up any existing ship animation
+	_cleanup_ship_animation()
+	
+	# Get start and end positions (node centers)
+	var from_node = node_visuals[from_node_id]
+	var to_node = node_visuals[to_node_id]
+	var start_pos = from_node.position + Vector2(35, 35)
+	var end_pos = to_node.position + Vector2(35, 35)
+	
+	# Create ship sprite container
+	_ship_sprite = Control.new()
+	ship_container.add_child(_ship_sprite)
+	_ship_sprite.position = start_pos - Vector2(20, 16)  # Center the ship
+	_ship_sprite.custom_minimum_size = Vector2(40, 32)
+	
+	# Ship design matching event scenes (blocky pixel-art style)
+	var px = 2.0  # Pixel size for retro look (scaled down from event scenes)
+	var ship_color = Color(0.3, 0.35, 0.4)  # Dark gray ship body
+	var detail_color = Color(0.4, 0.9, 1.0, 0.8)  # Cyan accent for windows/glow
+	var engine_color = Color(1.0, 0.69, 0.0, 0.8)  # Amber engine glow
+	
+	# Main hull (24px wide, 6px tall in event scenes, scaled)
+	var hull = ColorRect.new()
+	hull.size = Vector2(24*px, 6*px)
+	hull.color = ship_color
+	hull.position = Vector2(8*px, 13*px)  # Offset to center
+	_ship_sprite.add_child(hull)
+	
+	# Nose (pointed front)
+	var nose1 = ColorRect.new()
+	nose1.size = Vector2(8*px, 4*px)
+	nose1.color = ship_color
+	nose1.position = Vector2(32*px, 14*px)
+	_ship_sprite.add_child(nose1)
+	
+	var nose2 = ColorRect.new()
+	nose2.size = Vector2(4*px, 2*px)
+	nose2.color = ship_color
+	nose2.position = Vector2(40*px, 15*px)
+	_ship_sprite.add_child(nose2)
+	
+	# Top wing
+	var top_wing = ColorRect.new()
+	top_wing.size = Vector2(12*px, 3*px)
+	top_wing.color = ship_color
+	top_wing.position = Vector2(10*px, 5*px)
+	_ship_sprite.add_child(top_wing)
+	
+	# Bottom wing
+	var bottom_wing = ColorRect.new()
+	bottom_wing.size = Vector2(12*px, 3*px)
+	bottom_wing.color = ship_color
+	bottom_wing.position = Vector2(10*px, 24*px)
+	_ship_sprite.add_child(bottom_wing)
+	
+	# Engine glow (rear)
+	var engine1 = ColorRect.new()
+	engine1.size = Vector2(3*px, 4*px)
+	engine1.color = engine_color
+	engine1.position = Vector2(2*px, 14*px)
+	_ship_sprite.add_child(engine1)
+	
+	var engine2 = ColorRect.new()
+	engine2.size = Vector2(3*px, 2*px)
+	engine2.color = Color(1.0, 0.85, 0.3, 0.9)  # Brighter engine core
+	engine2.position = Vector2(-1*px, 15*px)
+	_ship_sprite.add_child(engine2)
+	
+	# Windows (three small windows along the hull)
+	var window1 = ColorRect.new()
+	window1.size = Vector2(2*px, 2*px)
+	window1.color = detail_color
+	window1.position = Vector2(24*px, 15*px)
+	_ship_sprite.add_child(window1)
+	
+	var window2 = ColorRect.new()
+	window2.size = Vector2(2*px, 2*px)
+	window2.color = detail_color
+	window2.position = Vector2(16*px, 15*px)
+	_ship_sprite.add_child(window2)
+	
+	var window3 = ColorRect.new()
+	window3.size = Vector2(2*px, 2*px)
+	window3.color = detail_color
+	window3.position = Vector2(12*px, 15*px)
+	_ship_sprite.add_child(window3)
+	
+	# Add a subtle glow effect behind the ship
+	var glow = ColorRect.new()
+	glow.size = Vector2(48*px, 40*px)
+	glow.color = Color(0.4, 0.6, 1.0, 0.3)  # Blue glow
+	glow.position = Vector2(-4*px, -4*px)
+	_ship_sprite.add_child(glow)
+	glow.z_index = -1
+	
+	# Calculate direction and rotation
+	var direction = (end_pos - start_pos).normalized()
+	var angle = atan2(direction.y, direction.x)
+	_ship_sprite.rotation = angle
+	
+	# Animate ship along the line
+	_ship_tween = create_tween()
+	_ship_tween.set_ease(Tween.EASE_IN_OUT)
+	_ship_tween.set_trans(Tween.TRANS_QUART)
+	
+	# Animate position
+	var target_pos = end_pos - Vector2(16, 16)
+	_ship_tween.tween_property(_ship_sprite, "position", target_pos, SHIP_ANIMATION_DURATION)
+	
+	# Add a subtle scale pulse during animation
+	var original_scale = Vector2(1.0, 1.0)
+	_ship_tween.parallel().tween_property(_ship_sprite, "scale", original_scale * 1.2, SHIP_ANIMATION_DURATION * 0.5)
+	_ship_tween.parallel().tween_property(_ship_sprite, "scale", original_scale, SHIP_ANIMATION_DURATION * 0.5).set_delay(SHIP_ANIMATION_DURATION * 0.5)
+	
+	# Clean up when animation completes and emit signal
+	_ship_tween.tween_callback(_on_ship_animation_complete)
+
+
+## Called when ship animation completes
+func _on_ship_animation_complete() -> void:
+	_cleanup_ship_animation()
+	jump_animation_complete.emit()
+
+
+## Clean up ship animation
+func _cleanup_ship_animation() -> void:
+	if _ship_tween:
+		_ship_tween.kill()
+		_ship_tween = null
+	
+	if _ship_sprite:
+		_ship_sprite.queue_free()
+		_ship_sprite = null

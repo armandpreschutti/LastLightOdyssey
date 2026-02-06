@@ -206,3 +206,19 @@ func center_on_unit(world_pos: Vector2, map_offset: Vector2 = Vector2(300, 200))
 	_manual_zoom = false
 	_panning = false
 	# Keep current zoom - don't modify _target_zoom
+
+
+## Center camera on a world position with zoom (for extraction zone focus)
+func center_on_position_with_zoom(world_pos: Vector2, target_zoom: Vector2, map_offset: Vector2 = Vector2(300, 200)) -> void:
+	# Account for MapContainer offset to center properly
+	var new_target = world_pos + map_offset
+	
+	# Set target position and zoom
+	_target_position = new_target
+	_target_zoom = target_zoom
+	_pre_combat_position = _target_position
+	_pre_combat_zoom = _target_zoom
+	_transitioning = true
+	_combat_transition = false  # Not a combat transition, so allow user zoom/pan
+	_manual_zoom = false
+	_panning = false

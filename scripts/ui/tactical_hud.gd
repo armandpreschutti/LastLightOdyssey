@@ -175,14 +175,14 @@ func _update_cover_bonus_display(cover_level: int) -> void:
 	match cover_level:
 		2:  # Full cover
 			cover_bonus_label.visible = true
-			cover_bonus_label.text = "COVER: +15% ACC"
+			cover_bonus_label.text = "COVER: +10% ACC"
 			cover_bonus_label.add_theme_color_override("font_color", Color(0.4, 0.9, 1.0))
-			cover_bonus_label.tooltip_text = "Firing from full cover provides a stable shooting position.\n+15% accuracy bonus to all attacks."
+			cover_bonus_label.tooltip_text = "Firing from full cover provides a stable shooting position.\n+10% accuracy bonus to all attacks."
 		1:  # Half cover
 			cover_bonus_label.visible = true
-			cover_bonus_label.text = "COVER: +10% ACC"
+			cover_bonus_label.text = "COVER: +5% ACC"
 			cover_bonus_label.add_theme_color_override("font_color", Color(0.6, 0.9, 0.8))
-			cover_bonus_label.tooltip_text = "Firing from half cover provides some stability.\n+10% accuracy bonus to all attacks."
+			cover_bonus_label.tooltip_text = "Firing from half cover provides some stability.\n+5% accuracy bonus to all attacks."
 		_:  # No cover
 			cover_bonus_label.visible = false
 
@@ -276,8 +276,8 @@ func update_ability_buttons(officer_type: String, current_ap: int, cooldown: int
 		"sniper":
 			ability_name = "precision"
 			ability_text = "[ PRECISION SHOT ] - 1 AP"
-			ability_description = "Guaranteed hit on enemies 8+ tiles away. Deals 2x damage (60)."
-			ability_tooltip = "Precision Shot: Costs 1 AP. Guaranteed hit at 8+ tiles for 60 damage."
+			ability_description = "Guaranteed hit on any visible enemy. Deals 2x damage (60)."
+			ability_tooltip = "Precision Shot: Costs 1 AP. Guaranteed hit on any visible enemy for 60 damage."
 			ap_cost = 1
 	
 	# Show ability if officer has one
