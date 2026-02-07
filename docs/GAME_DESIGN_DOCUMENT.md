@@ -1,19 +1,22 @@
 # Game Design Document
 
-## Officer and Enemy Unit Stats
+## Overview
+This document outlines the design and features of the game Last Light Odyssey.
 
-### Officer Data
-| Statistic     | Value |
-|:--------------|------:|
-| Health        |   100 |
-| Attack Power  |    20 |
-| Defense       |    10 |
-| Speed         |     5 |
+## Gameplay Mechanics
+- Descriptions of gameplay mechanics.
 
-### Enemy Data
-| Statistic     | Value |
-|:--------------|------:|
-| Health        |    80 |
-| Attack Power  |    15 |
-| Defense       |     8 |
-| Speed         |     4 |
+## Story
+- Overview of the game story.
+
+## Characters
+- Description of characters and their roles.
+
+## Levels
+- Overview of various levels in the game.
+
+## Art Style
+- Description of the art style.
+
+## Audio
+- Overview of the audio design.
