@@ -272,17 +272,17 @@ func _calculate_fuel_costs() -> void:
 				# Determine if this is a backward connection
 				var is_backward = column_distance < 0
 				
-				# Since all connections are adjacent, base cost is 1
+				# Since all connections are adjacent, base cost is 2 (increased from 1)
 				# (column distance should always be 1 or -1)
-				var fuel_cost = 1
+				var fuel_cost = 2
 				
 				# Add penalty for row distance (diagonal/vertical movement)
 				if row_distance > 0:
-					fuel_cost += 1
+					fuel_cost += 2  # Increased from +1 to +2
 				
 				# Add penalty for backward connections (going backward is less efficient)
 				if is_backward:
-					fuel_cost += 2  # +2 fuel penalty for backward travel
+					fuel_cost += 4  # Increased from +2 to +4 fuel penalty for backward travel
 				
 				node.connection_fuel_costs[connection_id] = fuel_cost
 

@@ -14,7 +14,8 @@ signal trading_complete
 @onready var close_button: Button = $PanelContainer/MarginContainer/VBoxContainer/CloseButton
 @onready var status_label: Label = $PanelContainer/MarginContainer/VBoxContainer/StatusLabel
 
-const SCRAP_PER_FUEL: int = 10
+const SCRAP_PER_FUEL: int = 10  # Scrap cost for fuel trade
+const FUEL_PER_TRADE: int = 5  # Amount of fuel received per trade
 const SCRAP_PER_REPAIR: int = 15
 const REPAIR_AMOUNT: int = 10
 
@@ -47,7 +48,7 @@ func _update_display() -> void:
 	repair_trade_button.disabled = not can_buy_repair
 	
 	# Update button text
-	fuel_trade_button.text = "[ BUY FUEL CELL: %d SCRAP ]" % SCRAP_PER_FUEL
+	fuel_trade_button.text = "[ BUY %d FUEL CELLS: %d SCRAP ]" % [FUEL_PER_TRADE, SCRAP_PER_FUEL]
 	repair_trade_button.text = "[ REPAIR HULL +%d%%: %d SCRAP ]" % [REPAIR_AMOUNT, SCRAP_PER_REPAIR]
 
 
@@ -55,8 +56,8 @@ func _on_fuel_trade_pressed() -> void:
 	AudioManager.play_sfx("ui_click")
 	if GameState.scrap >= SCRAP_PER_FUEL:
 		GameState.scrap -= SCRAP_PER_FUEL
-		GameState.fuel += 1
-		status_label.text = "FUEL PURCHASED: +1"
+		GameState.fuel += FUEL_PER_TRADE
+		status_label.text = "FUEL PURCHASED: +%d" % FUEL_PER_TRADE
 		_update_display()
 
 

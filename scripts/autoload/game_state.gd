@@ -46,8 +46,10 @@ var cryo_stability: int = 100:
 
 const STABILITY_LOSS_PER_TURN: int = 5  # Base stability loss (used for early stages)
 const COLONIST_LOSS_AT_ZERO_STABILITY: int = 10
-const COLONIST_LOSS_DRIFT_MODE: int = 20
+const COLONIST_LOSS_DRIFT_MODE: int = 40  # Increased from 20 to 40 - harsher penalty for insufficient fuel
 const FINAL_STAGE_STABILITY_REDUCTION: int = 2  # Reduce stability loss by 2% in final stages (nodes 35+)
+const SHIP_INTEGRITY_LOSS_PER_JUMP: int = 1  # Ship takes minor damage from each jump
+const STABILITY_LOSS_PER_JUMP: int = 2  # Stability decreases slightly with each jump
 
 # Officer Roster (Section 3.2 of GDD)
 enum OfficerType { SCOUT, TECH, MEDIC }
@@ -131,6 +133,12 @@ func jump_to_node(target_node_index: int, fuel_cost: int = 1) -> void:
 		fuel = 0
 		# Drift Mode: lose colonists due to life-support rationing (per fuel deficit)
 		colonist_count -= COLONIST_LOSS_DRIFT_MODE * fuel_deficit
+		# Additional penalty: ship integrity loss during drift mode
+		ship_integrity -= SHIP_INTEGRITY_LOSS_PER_JUMP * fuel_deficit
+	
+	# Harsh navigation penalties: ship takes damage and stability decreases with each jump
+	ship_integrity -= SHIP_INTEGRITY_LOSS_PER_JUMP
+	cryo_stability -= STABILITY_LOSS_PER_JUMP
 	
 	# Mark current node as visited before moving
 	if current_node_index >= 0 and not visited_nodes.has(current_node_index):

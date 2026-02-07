@@ -7,8 +7,8 @@ extends Node2D
 
 var grid_position: Vector2i = Vector2i.ZERO
 var turns_remaining: int = 3
-var shoot_range: int = 6
-var base_damage: int = 15
+var shoot_range: int = 10  # Increased from 6 to 10 for better coverage
+var base_damage: int = 45  # Increased from 15 to 45 (3x damage)
 
 
 func initialize() -> void:
