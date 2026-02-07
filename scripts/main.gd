@@ -14,11 +14,13 @@ extends Node
 @onready var game_over_label: Label = $DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer/HeaderContainer/GameOverLabel
 @onready var restart_button: Button = $DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer/RestartButton
 @onready var team_select_dialog: Control = $DialogLayer/TeamSelectDialog
+@onready var mission_scene_dialog: Control = $DialogLayer/MissionSceneDialog
 @onready var tactical_mode: Node2D = $TacticalMode
 @onready var management_layer: CanvasLayer = $ManagementLayer
-@onready var management_background: ColorRect = $ManagementBackground
+@onready var management_background: Control = $BackgroundLayer/Background
 
 var _pending_ending_type: String = ""  # Store ending type for the win sequence
+var _pending_officer_keys: Array[String] = []  # Store selected officers for mission start
 
 enum GamePhase { IDLE, EVENT_DISPLAY, TEAM_SELECT, TACTICAL, TRADING, GAME_OVER, GAME_WON }
 
@@ -39,6 +41,7 @@ func _ready() -> void:
 	_initialize_tutorial()
 	game_over_panel.visible = false
 	tactical_mode.visible = false
+	AudioManager.play_music("management")
 
 
 func _connect_signals() -> void:
@@ -47,6 +50,7 @@ func _connect_signals() -> void:
 	trading_dialog.trading_complete.connect(_on_trading_complete)
 	team_select_dialog.team_selected.connect(_on_team_selected)
 	team_select_dialog.cancelled.connect(_on_team_select_cancelled)
+	mission_scene_dialog.scene_dismissed.connect(_on_mission_scene_dismissed)
 	tactical_mode.mission_complete.connect(_on_mission_complete)
 	mission_recap.recap_dismissed.connect(_on_recap_dismissed)
 	new_earth_scene.scene_dismissed.connect(_on_new_earth_scene_dismissed)
@@ -196,7 +200,25 @@ func _on_event_choice_made(use_specialist: bool) -> void:
 
 
 func _on_team_selected(officer_keys: Array[String]) -> void:
+	# Store officer keys for mission start after scene
+	_pending_officer_keys = officer_keys
+	
+	# Show mission scene dialog first
+	current_phase = GamePhase.EVENT_DISPLAY  # Use EVENT_DISPLAY phase for scene display
+	mission_scene_dialog.show_scene(pending_biome_type)
+
+
+func _on_team_select_cancelled() -> void:
+	# Player cancelled - still consume the jump but skip the mission
+	current_phase = GamePhase.IDLE
+	pending_biome_type = -1
+	_pending_officer_keys.clear()
+
+
+func _on_mission_scene_dismissed() -> void:
+	# After mission scene is dismissed, start the tactical mission
 	current_phase = GamePhase.TACTICAL
+	AudioManager.play_music("combat")
 
 	# Hide management UI, show tactical
 	management_layer.visible = false
@@ -206,14 +228,9 @@ func _on_team_selected(officer_keys: Array[String]) -> void:
 	# Tutorial: Notify that team was selected
 	TutorialManager.notify_trigger("team_selected")
 
-	# Start the mission with biome type
-	tactical_mode.start_mission(officer_keys, pending_biome_type)
-
-
-func _on_team_select_cancelled() -> void:
-	# Player cancelled - still consume the jump but skip the mission
-	current_phase = GamePhase.IDLE
-	pending_biome_type = -1
+	# Start the mission with biome type and stored officer keys
+	tactical_mode.start_mission(_pending_officer_keys, pending_biome_type)
+	_pending_officer_keys.clear()
 
 
 func _on_mission_complete(_success: bool, stats: Dictionary) -> void:
@@ -221,6 +238,7 @@ func _on_mission_complete(_success: bool, stats: Dictionary) -> void:
 	tactical_mode.visible = false
 	management_layer.visible = true
 	management_background.visible = true
+	AudioManager.play_music("management")
 	
 	# Show mission recap screen before returning to management
 	mission_recap.show_recap(stats)
@@ -243,6 +261,8 @@ func _on_game_over(reason: String) -> void:
 	tactical_mode.visible = false
 	management_layer.visible = true
 	management_background.visible = true
+	AudioManager.stop_music(1.5)
+	AudioManager.play_sfx("alarm_game_over")
 
 	game_over_label.text = GameState.get_game_over_text(reason)
 	game_over_panel.visible = true
@@ -255,6 +275,7 @@ func _on_game_won(ending_type: String) -> void:
 	tactical_mode.visible = false
 	management_layer.visible = false
 	management_background.visible = true
+	AudioManager.play_sfx("alarm_victory")
 
 	# Show New Earth arrival scene first
 	new_earth_scene.show_scene(ending_type)
@@ -275,6 +296,7 @@ func _on_trading_complete() -> void:
 
 
 func _on_quit_to_menu() -> void:
+	AudioManager.stop_music(0.5)
 	# Return to title menu
 	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
 
@@ -288,6 +310,11 @@ func _on_restart_pressed() -> void:
 	_first_node_clicked = false
 	_first_event_seen = false
 	_is_jump_animating = false
+	
+	# Clean up tactical UI to prevent artifacts from persisting
+	tactical_mode.visible = false
+	if tactical_mode.has_method("_cleanup_tactical_ui"):
+		tactical_mode._cleanup_tactical_ui()
 	
 	# Regenerate the star map
 	_initialize_star_map()

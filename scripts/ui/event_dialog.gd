@@ -30,6 +30,7 @@ func _ready() -> void:
 
 func show_event(event: Dictionary) -> void:
 	current_event = event
+	AudioManager.play_sfx("ui_dialog_open")
 
 	title_label.text = "[ %s ]" % event.get("name", "UNKNOWN EVENT").to_upper()
 	description_label.text = event.get("description", "")
@@ -161,11 +162,13 @@ func _build_losses_text(event: Dictionary, mitigated: bool) -> String:
 
 
 func _on_accept_pressed() -> void:
+	AudioManager.play_sfx("ui_click")
 	visible = false
 	event_choice_made.emit(false)
 
 
 func _on_mitigate_pressed() -> void:
+	AudioManager.play_sfx("ui_click")
 	visible = false
 	event_choice_made.emit(true)
 

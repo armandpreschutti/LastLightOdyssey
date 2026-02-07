@@ -10,6 +10,7 @@ signal turn_ended(turn_number: int)
 @onready var projectile: Line2D = $MapContainer/EffectsLayer/Projectile
 @onready var damage_popup_container: Node2D = $MapContainer/EffectsLayer/DamagePopupContainer
 @onready var ui_layer: CanvasLayer = $UILayer
+@onready var biome_background: Control = $BackgroundLayer/Background
 
 var deployed_officers: Array[Node2D] = []
 var enemies: Array[Node2D] = []
@@ -29,6 +30,7 @@ var mission_fuel_collected: int = 0  # Fuel collected during this mission
 var mission_scrap_collected: int = 0  # Scrap collected during this mission
 var mission_enemies_killed: int = 0  # Enemies killed during this mission
 var current_biome: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION
+var is_scavenger_mission: bool = false  # Track if this is a scavenger mission
 
 var FuelCrateScene: PackedScene
 var ScrapPileScene: PackedScene
@@ -46,7 +48,7 @@ var active_turrets: Array[Node2D] = []
 const BASE_HIT_CHANCE: float = 70.0
 const RANGE_PENALTY_START: int = 5
 const RANGE_PENALTY_PER_TILE: float = 5.0
-const MIN_HIT_CHANCE: float = 10.0
+const MIN_HIT_CHANCE: float = 20.0  # Increased from 10% to 20% for more forgiving minimum
 const MAX_HIT_CHANCE: float = 95.0
 const FLANK_DAMAGE_BONUS: float = 0.50  # 50% bonus damage when flanking
 
@@ -73,6 +75,13 @@ func _ready() -> void:
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") and mission_active and not is_paused:
+		# Cancel precision mode if active
+		if precision_mode:
+			precision_mode = false
+			tactical_hud.hide_combat_message()
+			_update_precision_mode_highlights()
+			_update_attackable_highlights()
+			return
 		_show_pause_menu()
 		get_viewport().set_input_as_handled()
 
@@ -106,12 +115,25 @@ func _on_pause_abandon() -> void:
 	get_tree().paused = false
 	current_pause_menu = null
 	
+	# Play beam-up animation on all surviving units before ending mission
+	if deployed_officers.size() > 0:
+		# Check if there are any surviving units
+		var has_survivors = false
+		for officer in deployed_officers:
+			if officer.current_hp > 0:
+				has_survivors = true
+				break
+		
+		if has_survivors:
+			await _play_beam_up_animation()
+	
 	# End mission as failure (colonist cost already applied by pause menu)
 	_end_mission(false)
 
 
 func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.BiomeType.STATION) -> void:
-	mission_active = true
+	# Don't set mission_active yet - wait until after beam down animation
+	mission_active = false
 	current_turn = 1
 	current_unit_index = 0
 	mission_fuel_collected = 0
@@ -121,10 +143,19 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	enemies.clear()
 	selected_target = Vector2i(-1, -1)
 
+	# Check if this is a scavenger mission
+	var current_node_type = GameState.node_types.get(GameState.current_node_index, -1)
+	is_scavenger_mission = (current_node_type == EventManager.NodeType.SCAVENGE_SITE)
+
 	GameState.enter_tactical_mode()
 
 	# Generate map with biome type
 	current_biome = biome_type as BiomeConfig.BiomeType
+	
+	# Update background pattern based on biome
+	if biome_background:
+		biome_background.set_biome(current_biome)
+	
 	var generator = MapGenerator.new()
 	var layout = generator.generate(current_biome)
 	
@@ -135,18 +166,29 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 
 	extraction_positions = generator.get_extraction_positions()
 
-	# Spawn officers
+	# Spawn officers - start invisible and positioned above spawn points for beam down animation
 	var spawn_positions = generator.get_spawn_positions()
 	for i in range(mini(officer_keys.size(), spawn_positions.size())):
 		var officer = OfficerUnitScene.instantiate()
-		officer.set_grid_position(spawn_positions[i])
 		officer.movement_finished.connect(_on_unit_movement_finished.bind(officer))
 		officer.died.connect(_on_officer_died)
+		
+		# Get world position for spawn point
+		var world_pos = tactical_map.grid_to_world(spawn_positions[i])
+		
+		# Add to map first (this sets position to grid position)
 		tactical_map.add_unit(officer, spawn_positions[i])
+		officer.set_grid_position(spawn_positions[i])
 		officer.initialize(officer_keys[i])  # Must be after add_unit so @onready vars are set
+		
+		# NOW position officer above spawn point and make invisible for beam down animation
+		# (after add_unit which sets the position)
+		officer.position = Vector2(world_pos.x, world_pos.y - 150)
+		officer.modulate.a = 0.0
+		
 		deployed_officers.append(officer)
 
-		# Reveal around spawn
+		# Reveal around spawn (will be visible after beam down)
 		tactical_map.reveal_around(spawn_positions[i], officer.sight_range)
 
 	# Spawn loot
@@ -160,9 +202,10 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		loot.set_grid_position(loot_data["position"])
 		tactical_map.add_interactable(loot, loot_data["position"])
 	
-	# Spawn enemies with biome-specific distribution
-	var enemy_positions = generator.get_enemy_spawn_positions()
-	var enemy_config = BiomeConfig.get_enemy_config(current_biome)
+	# Spawn enemies with difficulty-based scaling
+	var difficulty = GameState.get_mission_difficulty()
+	var enemy_positions = generator.get_enemy_spawn_positions(difficulty)
+	var enemy_config = BiomeConfig.get_enemy_config(current_biome, difficulty)
 	var heavy_chance = enemy_config["heavy_chance"]
 	
 	var enemy_id = 1
@@ -172,8 +215,8 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		enemy.movement_finished.connect(_on_enemy_movement_finished.bind(enemy))
 		enemy.died.connect(_on_enemy_died.bind(enemy))
 		tactical_map.add_unit(enemy, enemy_pos)
-		# Mix of basic and heavy enemies based on biome config
-		var enemy_type = "heavy" if randf() < heavy_chance else "basic"
+		# Select enemy type based on difficulty thresholds
+		var enemy_type = _select_enemy_type(difficulty, heavy_chance)
 		enemy.initialize(enemy_id, enemy_type)
 		enemy.visible = false  # Start invisible until revealed
 		enemies.append(enemy)
@@ -191,6 +234,16 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	tactical_hud.set_extract_visible(false)
 	tactical_hud.visible = true
 
+	# Play beam down animation for scavenger missions
+	print("Tactical: is_scavenger_mission = ", is_scavenger_mission, ", deployed_officers.size() = ", deployed_officers.size())
+	if is_scavenger_mission and deployed_officers.size() > 0:
+		print("Tactical: Playing beam down animation")
+		await _play_beam_down_animation()
+		print("Tactical: Beam down animation complete")
+	
+	# Now activate the mission and start the turn
+	mission_active = true
+
 	# Select first officer (start of turn order)
 	if deployed_officers.size() > 0:
 		current_unit_index = 0
@@ -202,6 +255,27 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	
 	# Update haul display
 	tactical_hud.update_haul(mission_fuel_collected, mission_scrap_collected)
+
+
+## Select enemy type based on difficulty thresholds
+## Priority: Elite (2.0+) > Sniper (1.5+) > Heavy (scaled chance) > Basic
+func _select_enemy_type(difficulty: float, heavy_chance: float) -> String:
+	# Elite enemies unlock at difficulty 2.0+ (node ~33+)
+	if difficulty >= 2.0:
+		if randf() < 0.12:  # 12% chance for elite
+			return "elite"
+	
+	# Sniper enemies unlock at difficulty 1.5+ (node ~17+)
+	if difficulty >= 1.5:
+		if randf() < 0.10:  # 10% chance for sniper
+			return "sniper"
+	
+	# Heavy enemies use scaled chance from biome config
+	if randf() < heavy_chance:
+		return "heavy"
+	
+	# Default to basic
+	return "basic"
 
 
 func _on_tile_clicked(grid_pos: Vector2i) -> void:
@@ -281,6 +355,11 @@ func _on_tile_clicked(grid_pos: Vector2i) -> void:
 
 
 func _select_unit(unit: Node2D) -> void:
+	# Cancel precision mode when selecting a unit
+	if precision_mode:
+		precision_mode = false
+		tactical_hud.hide_combat_message()
+		_update_precision_mode_highlights()
 	if selected_unit:
 		selected_unit.set_selected(false)
 		tactical_map.clear_movement_range()
@@ -388,6 +467,10 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 
 	# Check extraction availability
 	_check_extraction_available()
+	
+	# Check for sniper overwatch (if officer moved within sniper overwatch range)
+	if unit in deployed_officers:
+		await _check_sniper_overwatch(unit, pos)
 	
 	# Update HUD with new cover level after movement
 	if selected_unit == unit and unit in deployed_officers:
@@ -517,6 +600,11 @@ func _check_auto_end_turn() -> void:
 
 
 func _on_end_turn_pressed() -> void:
+	# Cancel precision mode when ending turn
+	if precision_mode:
+		precision_mode = false
+		tactical_hud.hide_combat_message()
+		_update_precision_mode_highlights()
 	if not mission_active:
 		return
 	
@@ -608,13 +696,45 @@ func _check_extraction_available() -> void:
 				any_on_extraction = true
 				break  # At least one unit is in extraction zone
 
-	tactical_hud.set_extract_visible(any_on_extraction and any_alive)
+	# Show extract button if:
+	# 1. Normal extraction: at least one unit is in extraction zone and at least one unit is alive
+	# 2. Scavenger mission with all enemies killed: all enemies are dead and at least one unit is alive
+	var all_enemies_dead = enemies.is_empty()
+	var can_extract_after_kill = is_scavenger_mission and all_enemies_dead and any_alive
+	
+	tactical_hud.set_extract_visible((any_on_extraction and any_alive) or can_extract_after_kill)
 
 
 func _on_extract_pressed() -> void:
 	if not mission_active:
 		return
 
+	# Check if all enemies are dead in a scavenger mission - if so, extract all units from anywhere
+	var all_enemies_dead = enemies.is_empty()
+	if is_scavenger_mission and all_enemies_dead:
+		# Center camera on all units for beam-up animation
+		var any_alive = false
+		var avg_pos = Vector2.ZERO
+		var alive_count = 0
+		
+		for officer in deployed_officers:
+			if officer.current_hp > 0:
+				any_alive = true
+				var world_pos = tactical_map.grid_to_world(officer.get_grid_position())
+				avg_pos += world_pos
+				alive_count += 1
+		
+		if any_alive:
+			# Center camera on average position of all units
+			if alive_count > 0:
+				avg_pos /= alive_count
+				combat_camera.center_on_position_with_zoom(avg_pos, Vector2(1.5, 1.5))
+			
+			# Extract all surviving units directly (beam-up animation will play in _end_mission)
+			_end_mission(true)
+		return
+
+	# Normal extraction logic (requires units to be in extraction zone)
 	# Center camera on extraction zone with zoom
 	if extraction_positions.size() > 0:
 		# Calculate center point of all extraction positions
@@ -739,6 +859,7 @@ func _on_officer_died(officer_key: String) -> void:
 			_select_unit(deployed_officers[0])
 	
 	# Play death animation
+	AudioManager.play_sfx("combat_death")
 	if dying_officer.has_method("play_death_animation"):
 		await dying_officer.play_death_animation()
 	
@@ -807,14 +928,27 @@ func _end_mission(success: bool) -> void:
 
 	selected_unit = null
 	selected_target = Vector2i(-1, -1)
-	tactical_hud.visible = false
+	_cleanup_tactical_ui()  # Ensure all UI elements are properly hidden
 	tactical_map.clear_movement_range()
 
 	mission_complete.emit(success, mission_stats)
 
 
+## Clean up all tactical UI elements
+func _cleanup_tactical_ui() -> void:
+	tactical_hud.visible = false
+	tactical_hud.hide_combat_message()
+	# Clear any pending pause menu
+	if current_pause_menu != null:
+		current_pause_menu.queue_free()
+		current_pause_menu = null
+		is_paused = false
+		get_tree().paused = false
+
+
 ## Play beam-up extraction animation - units float up with a light beam effect
 func _play_beam_up_animation() -> void:
+	AudioManager.play_sfx("move_extraction")
 	# Hide HUD during animation
 	tactical_hud.show_combat_message("EXTRACTION IN PROGRESS...", Color(0.4, 0.9, 1.0))
 	
@@ -876,6 +1010,88 @@ func _play_beam_up_animation() -> void:
 	combat_camera.return_to_tactical()
 
 
+## Play beam-down insertion animation - units descend from above with a light beam effect
+func _play_beam_down_animation() -> void:
+	AudioManager.play_sfx("move_extraction")
+	# Show message during animation
+	tactical_hud.show_combat_message("BEAMING DOWN...", Color(0.4, 0.9, 1.0))
+	
+	# Center camera on the spawn area
+	if deployed_officers.size() > 0:
+		var avg_pos = Vector2.ZERO
+		for officer in deployed_officers:
+			avg_pos += officer.position
+		avg_pos /= deployed_officers.size()
+		combat_camera.position = avg_pos
+	
+	await get_tree().create_timer(0.5).timeout
+	
+	# Create beam effects and animate each officer descending
+	var beam_tweens: Array[Tween] = []
+	
+	for i in range(deployed_officers.size()):
+		var officer = deployed_officers[i]
+		
+		# Get the target landing position (current position is already above, so get grid position and convert)
+		var grid_pos = officer.get_grid_position()
+		var target_world_pos = tactical_map.grid_to_world(grid_pos)
+		var start_y = officer.position.y  # Current position (above)
+		
+		# Make sure officer is invisible
+		officer.modulate.a = 0.0
+		officer.modulate = Color(1.0, 1.0, 1.0, 0.0)  # Reset color
+		
+		# Create a vertical beam of light from above
+		var beam = Line2D.new()
+		beam.width = 2.0  # Start narrow
+		beam.default_color = Color(0.3, 0.9, 1.0, 0.0)
+		beam.add_point(Vector2(target_world_pos.x, start_y - 50))  # Beam starts from above officer
+		beam.add_point(Vector2(target_world_pos.x, start_y + 40))   # Beam extends down to officer
+		tactical_map.add_child(beam)
+		
+		# Stagger the beam appearance
+		var delay = i * 0.3
+		
+		var beam_tween = create_tween()
+		beam_tween.tween_interval(delay)
+		
+		# Widen and fade in the beam
+		beam_tween.parallel().tween_property(beam, "width", 20.0, 0.3)
+		beam_tween.parallel().tween_property(beam, "default_color:a", 0.5, 0.3)
+		
+		# Descend the officer while fading in
+		beam_tween.parallel().tween_property(officer, "position:y", target_world_pos.y, 1.2).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD).set_delay(0.2)
+		beam_tween.parallel().tween_property(officer, "modulate:a", 1.0, 1.0).set_delay(0.2)
+		
+		# Update beam end point as officer descends
+		beam_tween.parallel().tween_method(
+			func(y: float):
+			beam.set_point_position(1, Vector2(target_world_pos.x, y + 40))
+			,
+			start_y,
+			target_world_pos.y,
+			1.2
+		).set_delay(0.2)
+		
+		# Add a subtle white flash as they materialize
+		beam_tween.parallel().tween_property(officer, "modulate", Color(2.0, 2.5, 3.0, 1.0), 0.3).set_delay(0.5)
+		beam_tween.parallel().tween_property(officer, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.3).set_delay(0.8)
+		
+		# Narrow and fade the beam after officer lands
+		beam_tween.tween_property(beam, "width", 2.0, 0.4)
+		beam_tween.parallel().tween_property(beam, "default_color:a", 0.0, 0.4)
+		beam_tween.tween_callback(beam.queue_free)
+		
+		beam_tweens.append(beam_tween)
+	
+	# Wait for all animations to complete
+	if beam_tweens.size() > 0:
+		await beam_tweens[-1].finished
+	
+	await get_tree().create_timer(0.3).timeout
+	tactical_hud.hide_combat_message()
+
+
 ## Calculate hit chance for a shot from shooter_pos to target_pos
 func calculate_hit_chance(shooter_pos: Vector2i, target_pos: Vector2i, shooter: Node2D = null) -> float:
 	var distance = abs(target_pos.x - shooter_pos.x) + abs(target_pos.y - shooter_pos.y)
@@ -899,9 +1115,9 @@ func calculate_hit_chance(shooter_pos: Vector2i, target_pos: Vector2i, shooter: 
 func _get_base_hit_chance_for_shooter(shooter: Node2D, distance: int) -> float:
 	# Adjacent shots are highly accurate for all classes
 	if distance == 1:
-		return 90.0
+		return 95.0  # Increased from 90% to 95% for point-blank shots
 	elif distance == 2:
-		return 85.0
+		return 90.0  # Increased from 85% to 90%
 	
 	# Determine shooter type
 	var shooter_type = ""
@@ -913,67 +1129,67 @@ func _get_base_hit_chance_for_shooter(shooter: Node2D, distance: int) -> float:
 		"scout":
 			# Scout excels at long range
 			if distance <= 4:
-				return 80.0
+				return 85.0  # Increased from 80%
 			elif distance <= 6:
-				return 70.0
+				return 75.0  # Increased from 70%
 			elif distance <= 8:
-				return 60.0
+				return 65.0  # Increased from 60%
 			else:
-				return 45.0
+				return 50.0  # Increased from 45%
 		"sniper":
 			# Sniper has the best long-range accuracy, slightly weaker at close range
 			if distance <= 2:
-				return 80.0
+				return 85.0  # Increased from 80%
 			elif distance <= 4:
-				return 80.0
+				return 85.0  # Increased from 80%
 			elif distance <= 6:
-				return 75.0
+				return 80.0  # Increased from 75%
 			elif distance <= 8:
-				return 70.0
+				return 75.0  # Increased from 70%
 			elif distance <= 10:
-				return 65.0
+				return 70.0  # Increased from 65%
 			else:
-				return 60.0
+				return 65.0  # Increased from 60%
 		"captain":
 			# Captain is balanced
 			if distance <= 4:
-				return 75.0
+				return 80.0  # Increased from 75%
 			elif distance <= 6:
-				return 60.0
+				return 65.0  # Increased from 60%
 			elif distance <= 8:
-				return 45.0
+				return 50.0  # Increased from 45%
 			else:
-				return 30.0
+				return 35.0  # Increased from 30%
 		"heavy":
 			# Heavy is decent at close-mid range, weaker at distance
 			if distance <= 4:
-				return 75.0
+				return 80.0  # Increased from 75%
 			elif distance <= 6:
-				return 60.0
+				return 65.0  # Increased from 60%
 			elif distance <= 8:
-				return 40.0
+				return 45.0  # Increased from 40%
 			else:
-				return 25.0
+				return 30.0  # Increased from 25%
 		"tech", "medic":
 			# Support classes are weaker at range
 			if distance <= 4:
-				return 70.0
+				return 75.0  # Increased from 70%
 			elif distance <= 6:
-				return 50.0
+				return 55.0  # Increased from 50%
 			elif distance <= 8:
-				return 35.0
+				return 40.0  # Increased from 35%
 			else:
-				return 20.0
+				return 25.0  # Increased from 20%
 		_:
 			# Default (enemies and unknown)
 			if distance <= 4:
-				return 70.0
+				return 75.0  # Increased from 70%
 			elif distance <= 6:
-				return 55.0
+				return 60.0  # Increased from 55%
 			elif distance <= 8:
-				return 40.0
+				return 45.0  # Increased from 40%
 			else:
-				return 25.0
+				return 30.0  # Increased from 25%
 
 
 ## Get cover modifier for a shot (only defender benefits from cover if not flanked)
@@ -1184,6 +1400,7 @@ func _phase_aiming(shooter: Node2D, shooter_pos: Vector2i, target_pos: Vector2i,
 func _phase_firing(shooter: Node2D, _shooter_pos: Vector2i, target_pos: Vector2i, hit_chance: float, damage: int) -> bool:
 	# Display firing message
 	tactical_hud.show_combat_message("FIRING...", Color(1, 0.5, 0))
+	AudioManager.play_sfx("combat_fire")
 	
 	# Calculate hit/miss
 	var hit = shooter.shoot_at(target_pos, hit_chance, damage)
@@ -1220,6 +1437,7 @@ func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: 
 		
 		# Apply damage (check validity in case target was freed during earlier phases)
 		if is_instance_valid(target):
+			AudioManager.play_sfx("combat_hit")
 			target.take_damage(damage)
 			if is_flanking:
 				print("Flanking Hit! Dealt %d damage (includes +%d%% bonus)" % [damage, int(FLANK_DAMAGE_BONUS * 100)])
@@ -1234,6 +1452,7 @@ func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: 
 			_spawn_damage_popup(damage, true, target_world, false, is_flanking)
 	else:
 		tactical_hud.show_combat_message("MISS!", Color(0.6, 0.6, 0.6))
+		AudioManager.play_sfx("combat_miss")
 		print("Miss! (Hit chance was calculated)")
 		
 		# Show miss popup
@@ -1367,6 +1586,10 @@ func _calculate_enemy_resource_drop(enemy_type: String) -> int:
 			return randi_range(3, 5)
 		"heavy":
 			return randi_range(8, 12)
+		"sniper":
+			return randi_range(6, 9)  # Medium-high value
+		"elite":
+			return randi_range(12, 18)  # Highest value
 		_:
 			# Default fallback for unknown enemy types
 			return 3
@@ -1374,6 +1597,7 @@ func _calculate_enemy_resource_drop(enemy_type: String) -> int:
 
 func _on_enemy_died(enemy: Node2D) -> void:
 	print("Enemy %d died" % enemy.enemy_id)
+	AudioManager.play_sfx("combat_death")
 	mission_enemies_killed += 1
 	
 	# Get enemy position before removal
@@ -1405,7 +1629,8 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	# Check if all enemies defeated
 	if enemies.is_empty():
 		print("All enemies defeated!")
-		# Could show a message or auto-complete mission
+		# Check if extraction should become available (for scavenger missions)
+		_check_extraction_available()
 
 
 ## Check if an enemy is visible to any player unit
@@ -1432,6 +1657,9 @@ func _is_enemy_visible(enemy: Node2D) -> bool:
 
 ## Update enemy visibility based on revealed tiles
 func _update_enemy_visibility() -> void:
+	# Update precision mode highlights if active (enemies may have become visible)
+	if precision_mode:
+		_update_precision_mode_highlights()
 	for enemy in enemies:
 		if enemy.current_hp <= 0:
 			continue
@@ -1448,6 +1676,10 @@ func _update_attackable_highlights() -> void:
 	for enemy in enemies:
 		if enemy.current_hp > 0:
 			enemy.set_targetable(false)
+	
+	# If precision mode is active, don't set targetable here (precision mode handles it)
+	if precision_mode:
+		return
 	
 	# If no unit selected or selected unit can't attack, don't highlight anything
 	if not selected_unit or selected_unit not in deployed_officers:
@@ -1493,6 +1725,14 @@ func _clear_attackable_highlights() -> void:
 	for enemy in enemies:
 		if enemy.current_hp > 0:
 			enemy.set_targetable(false)
+			enemy.set_precision_mode(false)
+
+
+## Update enemy highlights for precision mode (show all visible enemies)
+func _update_precision_mode_highlights() -> void:
+	for enemy in enemies:
+		if enemy.current_hp > 0:
+			enemy.set_precision_mode(precision_mode)
 
 
 func _on_ability_used(ability_type: String) -> void:
@@ -1618,6 +1858,8 @@ func _on_ability_used(ability_type: String) -> void:
 			# No range display needed - can target any visible enemy
 			print("Precision Shot - click any visible enemy for guaranteed 2x damage hit")
 			tactical_hud.show_combat_message("SELECT ANY VISIBLE ENEMY", Color(0.6, 0.55, 0.8))
+			# Update enemy highlights for precision mode
+			_update_precision_mode_highlights()
 
 
 ## Check if any officer on overwatch can shoot the enemy
@@ -1646,6 +1888,7 @@ func _check_overwatch_shots(enemy: Node2D, enemy_pos: Vector2i) -> void:
 		
 		# Overwatch triggered!
 		print("Overwatch triggered by %s on Enemy %d!" % [officer.officer_key, enemy.enemy_id])
+		AudioManager.play_sfx("combat_overwatch")
 		tactical_hud.show_combat_message("OVERWATCH TRIGGERED!", Color(1, 1, 0.2))
 		await get_tree().create_timer(0.8).timeout
 		
@@ -1688,6 +1931,74 @@ func _check_overwatch_shots(enemy: Node2D, enemy_pos: Vector2i) -> void:
 		break
 
 
+## Check if any sniper enemies can trigger overwatch on officer movement
+func _check_sniper_overwatch(officer: Node2D, officer_pos: Vector2i) -> void:
+	# Check each sniper enemy for overwatch
+	for enemy in enemies:
+		if enemy.current_hp <= 0:
+			continue
+		
+		# Only sniper enemies have automatic overwatch
+		if enemy.enemy_type != "sniper":
+			continue
+		
+		if enemy.overwatch_range <= 0:
+			continue
+		
+		var enemy_pos = enemy.get_grid_position()
+		var distance = abs(officer_pos.x - enemy_pos.x) + abs(officer_pos.y - enemy_pos.y)
+		
+		# Check if officer is within overwatch range (5 tiles for sniper)
+		if distance > enemy.overwatch_range:
+			continue
+		
+		# Check if officer is visible to sniper
+		if not _is_officer_visible_to_enemy(officer, enemy):
+			continue
+		
+		# Check line of sight
+		if not has_line_of_sight(enemy_pos, officer_pos):
+			continue
+		
+		# Sniper overwatch triggered!
+		print("Sniper overwatch triggered on %s!" % officer.officer_key)
+		AudioManager.play_sfx("combat_overwatch")
+		tactical_hud.show_combat_message("SNIPER OVERWATCH!", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(0.8).timeout
+		
+		# Calculate damage and hit chance
+		var hit_chance = calculate_hit_chance(enemy_pos, officer_pos, enemy)
+		var damage = enemy.base_damage
+		
+		# Check for flanking
+		var is_flanking = is_flanking_attack(enemy_pos, officer_pos)
+		if is_flanking:
+			damage = int(enemy.base_damage * (1.0 + FLANK_DAMAGE_BONUS))
+		
+		# Take the shot (execute_shot handles all the animation and damage)
+		await execute_shot(enemy, officer_pos, officer)
+		
+		await get_tree().create_timer(0.5).timeout
+		tactical_hud.hide_combat_message()
+		
+		# Only one sniper overwatch per movement
+		break
+
+
+## Check if an officer is visible to an enemy
+func _is_officer_visible_to_enemy(officer: Node2D, enemy: Node2D) -> bool:
+	var officer_pos = officer.get_grid_position()
+	var enemy_pos = enemy.get_grid_position()
+	
+	# Check if officer tile is revealed (enemies can see revealed tiles)
+	if not tactical_map.is_tile_revealed(officer_pos):
+		return false
+	
+	# Check if officer is within enemy sight range
+	var distance = abs(officer_pos.x - enemy_pos.x) + abs(officer_pos.y - enemy_pos.y)
+	return distance <= enemy.sight_range
+
+
 func _try_auto_patch() -> void:
 	if not selected_unit or selected_unit.officer_type != "medic":
 		return
@@ -1714,6 +2025,7 @@ func _try_auto_patch() -> void:
 			if officer.get_grid_position() == check_pos and officer.current_hp < officer.max_hp:
 				# Found injured adjacent ally
 				if selected_unit.use_patch(officer):
+					AudioManager.play_sfx("combat_heal")
 					# Focus camera on healing action
 					var medic_world = selected_unit.position
 					var target_world = officer.position
@@ -1793,6 +2105,7 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 	
 	# Use the ability (spends AP and starts cooldown)
 	if selected_unit.use_turret():
+		AudioManager.play_sfx("combat_turret_fire")
 		var turret = TurretUnitScene.instantiate()
 		turret.set_grid_position(grid_pos)
 		turret.position = Vector2(grid_pos.x * 32 + 16, grid_pos.y * 32 + 16)
@@ -1880,6 +2193,7 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		_set_animating(false)
 		return
 	
+	AudioManager.play_sfx("combat_charge")
 	# Find adjacent position to the enemy to move to
 	var charge_destination = _find_charge_destination(heavy_pos, grid_pos)
 	
@@ -2092,6 +2406,7 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		_set_animating(false)
 		return
 	
+	AudioManager.play_sfx("combat_execute")
 	# Guaranteed kill - deal remaining HP as damage
 	var execute_damage = target_enemy.current_hp
 	selected_unit.face_towards(grid_pos)
@@ -2135,6 +2450,8 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 	precision_mode = false
 	tactical_map.clear_execute_range()
 	tactical_hud.hide_combat_message()
+	# Update enemy highlights when exiting precision mode
+	_update_precision_mode_highlights()
 	
 	if not selected_unit or selected_unit.officer_type != "sniper":
 		return
@@ -2218,6 +2535,10 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 
 ## Process all active turrets (auto-fire at nearest enemy)
 func _process_turrets() -> void:
+	# Don't process turrets if mission is not active
+	if not mission_active:
+		return
+	
 	var turrets_to_remove: Array[Node2D] = []
 	
 	for turret in active_turrets:
@@ -2250,6 +2571,7 @@ func _process_turrets() -> void:
 		if nearest_enemy:
 			var enemy_pos = nearest_enemy.get_grid_position()
 			print("Turret at %s fires at enemy at %s!" % [turret_pos, enemy_pos])
+			AudioManager.play_sfx("combat_turret_fire")
 			
 			# Focus camera on turret attack
 			var turret_world = turret.position
@@ -2284,7 +2606,12 @@ func _process_turrets() -> void:
 	# Remove expired turrets
 	for turret in turrets_to_remove:
 		active_turrets.erase(turret)
-		tactical_hud.show_combat_message("TURRET EXPIRED", Color(0.5, 0.5, 0.5))
-		turret.queue_free()
-		await get_tree().create_timer(0.5).timeout
-		tactical_hud.hide_combat_message()
+		# Only show expiration message if mission is still active
+		if mission_active:
+			tactical_hud.show_combat_message("TURRET EXPIRED", Color(0.5, 0.5, 0.5))
+			turret.queue_free()
+			await get_tree().create_timer(0.5).timeout
+			tactical_hud.hide_combat_message()
+		else:
+			# Mission ended, just remove the turret silently
+			turret.queue_free()

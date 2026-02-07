@@ -30,6 +30,7 @@ func show_trading() -> void:
 	_update_display()
 	status_label.text = ""
 	visible = true
+	AudioManager.play_sfx("ui_dialog_open")
 
 
 func _update_display() -> void:
@@ -51,6 +52,7 @@ func _update_display() -> void:
 
 
 func _on_fuel_trade_pressed() -> void:
+	AudioManager.play_sfx("ui_click")
 	if GameState.scrap >= SCRAP_PER_FUEL:
 		GameState.scrap -= SCRAP_PER_FUEL
 		GameState.fuel += 1
@@ -59,6 +61,7 @@ func _on_fuel_trade_pressed() -> void:
 
 
 func _on_repair_trade_pressed() -> void:
+	AudioManager.play_sfx("ui_click")
 	if GameState.scrap >= SCRAP_PER_REPAIR and GameState.ship_integrity < 100:
 		GameState.scrap -= SCRAP_PER_REPAIR
 		GameState.repair_ship(REPAIR_AMOUNT)
@@ -67,5 +70,6 @@ func _on_repair_trade_pressed() -> void:
 
 
 func _on_close_pressed() -> void:
+	AudioManager.play_sfx("ui_dialog_close")
 	visible = false
 	trading_complete.emit()

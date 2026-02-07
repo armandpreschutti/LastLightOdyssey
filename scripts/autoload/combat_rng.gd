@@ -10,10 +10,10 @@ extends Node
 
 #region Configuration
 ## Bonus hit chance added per consecutive miss (e.g., 0.10 = +10% per miss)
-const MISS_STREAK_BONUS: float = 0.05
+const MISS_STREAK_BONUS: float = 0.08  # Increased from 5% to 8% per miss for more forgiveness
 
 ## Maximum bonus from miss streaks (caps the protection)
-const MAX_MISS_STREAK_BONUS: float = 0.20
+const MAX_MISS_STREAK_BONUS: float = 0.30  # Increased from 20% to 30% max bonus
 
 ## Whether to apply bad luck protection to player units
 const PROTECT_PLAYER: bool = true

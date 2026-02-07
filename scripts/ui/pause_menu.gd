@@ -35,11 +35,13 @@ func _input(event: InputEvent) -> void:
 
 
 func _on_resume_pressed() -> void:
+	AudioManager.play_sfx("ui_dialog_close")
 	resume_pressed.emit()
 	queue_free()
 
 
 func _on_abandon_pressed() -> void:
+	AudioManager.play_sfx("ui_click")
 	# Apply colonist penalty
 	GameState.colonist_count -= ABANDON_COLONIST_COST
 	
@@ -54,6 +56,7 @@ func _on_abandon_pressed() -> void:
 func show_menu() -> void:
 	visible = true
 	resume_button.grab_focus()
+	AudioManager.play_sfx("ui_dialog_open")
 	
 	# Update the cost label with all penalties
 	_update_cost_label()

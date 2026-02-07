@@ -170,14 +170,9 @@ func _apply_display_settings() -> void:
 
 
 func _apply_audio_settings() -> void:
-	# TODO: Implement actual audio bus control in Phase 9
-	# For now, just store the values for future use
-	
-	# Example of how it would work with audio buses:
-	# var master_db = linear_to_db(_pending_master / 100.0)
-	# AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), master_db)
-	# AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), _pending_master <= 0)
-	pass
+	AudioManager.set_bus_volume("Master", _pending_master)
+	AudioManager.set_bus_volume("SFX", _pending_sfx)
+	AudioManager.set_bus_volume("Music", _pending_music)
 
 
 func _on_fullscreen_toggled(toggled: bool) -> void:
@@ -228,6 +223,7 @@ func _on_reset_tutorial_pressed() -> void:
 
 
 func _on_apply_pressed() -> void:
+	AudioManager.play_sfx("ui_click")
 	print("SettingsMenu: Apply pressed!")
 	print("SettingsMenu: Fullscreen = %s, Resolution = %d" % [_pending_fullscreen, _pending_resolution])
 	_save_settings()
@@ -253,6 +249,7 @@ func _on_apply_pressed() -> void:
 
 
 func _on_back_pressed() -> void:
+	AudioManager.play_sfx("ui_click")
 	# Fade out and remove
 	var tween = create_tween()
 	tween.tween_property(self, "modulate:a", 0.0, 0.2)

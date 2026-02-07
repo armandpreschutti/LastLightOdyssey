@@ -741,9 +741,9 @@ func get_extraction_positions() -> Array[Vector2i]:
 	return positions
 
 
-func get_enemy_spawn_positions() -> Array[Vector2i]:
+func get_enemy_spawn_positions(difficulty_multiplier: float = 1.0) -> Array[Vector2i]:
 	var positions: Array[Vector2i] = []
-	var enemy_config = BiomeConfig.get_enemy_config(_biome_type)
+	var enemy_config = BiomeConfig.get_enemy_config(_biome_type, difficulty_multiplier)
 	var num_enemies = randi_range(enemy_config["min_enemies"], enemy_config["max_enemies"])
 	
 	# Enemies spawn in opposite area from players (left side of map, middle area)

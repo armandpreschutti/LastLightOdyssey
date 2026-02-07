@@ -6,7 +6,7 @@ extends Camera2D
 signal camera_transition_complete
 
 @export var zoom_tactical: Vector2 = Vector2(1.0, 1.0)  # Default tactical view
-@export var transition_speed: float = 3.0  # Camera movement speed
+@export var transition_speed: float = 2.0  # Camera movement speed (slower for smoother movement)
 
 ## Scroll wheel zoom settings
 @export var zoom_min: Vector2 = Vector2(0.4, 0.4)  # Maximum zoom out (wider view)
@@ -42,12 +42,13 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if _transitioning:
-		# Smoothly move to target position
-		position = position.lerp(_target_position, transition_speed * delta)
-		zoom = zoom.lerp(_target_zoom, transition_speed * delta)
+		# Smoothly move to target position using smoother interpolation
+		var t = clamp(transition_speed * delta, 0.0, 1.0)
+		position = position.lerp(_target_position, t)
+		zoom = zoom.lerp(_target_zoom, t)
 		
-		# Check if we've reached the target
-		if position.distance_to(_target_position) < 1.0 and zoom.distance_to(_target_zoom) < 0.01:
+		# Check if we've reached the target (with slightly larger threshold for smoother stopping)
+		if position.distance_to(_target_position) < 2.0 and zoom.distance_to(_target_zoom) < 0.02:
 			position = _target_position
 			zoom = _target_zoom
 			_transitioning = false

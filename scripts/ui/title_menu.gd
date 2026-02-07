@@ -50,6 +50,7 @@ func _ready() -> void:
 	_generate_nebula()
 	_setup_buttons()
 	_animate_intro()
+	AudioManager.play_music("title")
 	
 	# Connect starfield and scanline drawing
 	starfield.draw.connect(_draw_starfield)
@@ -270,6 +271,7 @@ func _on_button_hover(button: Button) -> void:
 	if button.disabled:
 		return
 	
+	AudioManager.play_sfx("ui_hover")
 	# Subtle scale pulse on hover
 	button.pivot_offset = button.size / 2
 	var tween = create_tween()
@@ -281,6 +283,7 @@ func _on_new_game_pressed() -> void:
 	if not _ready_for_input:
 		return
 	
+	AudioManager.play_sfx("ui_click")
 	# Check if save exists - show confirmation dialog if so
 	if GameState.has_save_file():
 		_show_new_game_confirmation()
@@ -323,6 +326,8 @@ func _proceed_with_new_game() -> void:
 		_glow_tween.kill()
 	
 	# Fade out and transition to game
+	AudioManager.stop_music(0.8)
+	AudioManager.play_sfx("ui_transition")
 	var tween = create_tween()
 	tween.set_ease(Tween.EASE_IN)
 	tween.set_trans(Tween.TRANS_CUBIC)
@@ -342,6 +347,7 @@ func _on_continue_pressed() -> void:
 	if not _ready_for_input:
 		return
 	
+	AudioManager.play_sfx("ui_click")
 	if continue_button.disabled:
 		# Show "no save found" message
 		_show_no_save_message()
@@ -360,6 +366,8 @@ func _proceed_with_continue() -> void:
 		_glow_tween.kill()
 	
 	# Fade out and transition to game (loaded state)
+	AudioManager.stop_music(0.8)
+	AudioManager.play_sfx("ui_transition")
 	var tween = create_tween()
 	tween.set_ease(Tween.EASE_IN)
 	tween.set_trans(Tween.TRANS_CUBIC)
@@ -389,6 +397,7 @@ func _on_settings_pressed() -> void:
 	if not _ready_for_input:
 		return
 	
+	AudioManager.play_sfx("ui_click")
 	# Load and show settings menu
 	var settings_scene = load("res://scenes/ui/settings_menu.tscn")
 	var settings_instance = settings_scene.instantiate()
@@ -405,6 +414,7 @@ func _on_quit_pressed() -> void:
 	if not _ready_for_input:
 		return
 	
+	AudioManager.play_sfx("ui_click")
 	# Stop glow effect
 	if _glow_tween:
 		_glow_tween.kill()

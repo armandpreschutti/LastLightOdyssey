@@ -221,8 +221,32 @@ static func get_map_size(biome_type: BiomeType) -> Vector2i:
 	return Vector2i(size, size)
 
 
-static func get_enemy_config(biome_type: BiomeType) -> Dictionary:
-	return ENEMY_CONFIG.get(biome_type, ENEMY_CONFIG[BiomeType.STATION])
+static func get_enemy_config(biome_type: BiomeType, difficulty_multiplier: float = 1.0) -> Dictionary:
+	var base_config = ENEMY_CONFIG.get(biome_type, ENEMY_CONFIG[BiomeType.STATION]).duplicate()
+	
+	# Scale enemy counts based on difficulty
+	var scaled_min = int(base_config["min_enemies"] * difficulty_multiplier)
+	var scaled_max = int(base_config["max_enemies"] * difficulty_multiplier)
+	
+	# Cap maximum at reasonable limit (15 enemies max)
+	scaled_min = mini(scaled_min, base_config["min_enemies"] * 2)  # Cap at 2x base
+	scaled_max = mini(scaled_max, 15)  # Hard cap at 15 enemies
+	
+	# Ensure minimum is at least base value
+	scaled_min = maxi(scaled_min, base_config["min_enemies"])
+	scaled_max = maxi(scaled_max, base_config["max_enemies"])
+	
+	base_config["min_enemies"] = scaled_min
+	base_config["max_enemies"] = scaled_max
+	
+	# Adjust heavy_chance to increase with difficulty
+	# Base chance + (difficulty - 1.0) * 0.3
+	# This means later missions have more heavy enemies
+	var base_heavy_chance = base_config["heavy_chance"]
+	var scaled_heavy_chance = base_heavy_chance + (difficulty_multiplier - 1.0) * 0.3
+	base_config["heavy_chance"] = clampf(scaled_heavy_chance, 0.0, 1.0)
+	
+	return base_config
 
 
 static func get_loot_config(biome_type: BiomeType) -> Dictionary:

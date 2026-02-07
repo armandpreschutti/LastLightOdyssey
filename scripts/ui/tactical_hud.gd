@@ -320,3 +320,4 @@ func hide_combat_message() -> void:
 	var combat_msg = get_node_or_null("../../UILayer/CombatMessageContainer/CombatMessage")
 	if combat_msg:
 		combat_msg.visible = false
+		combat_msg.text = ""  # Clear the message text

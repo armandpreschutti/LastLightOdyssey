@@ -424,6 +424,7 @@ func animate_jump(from_node_id: int, to_node_id: int) -> void:
 	if not node_visuals.has(from_node_id) or not node_visuals.has(to_node_id):
 		return
 	
+	AudioManager.play_sfx("move_jump")
 	# Clean up any existing ship animation
 	_cleanup_ship_animation()
 	

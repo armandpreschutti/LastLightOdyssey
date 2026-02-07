@@ -44,9 +44,10 @@ var cryo_stability: int = 100:
 		cryo_stability = clampi(value, 0, 100)
 		stability_changed.emit(cryo_stability)
 
-const STABILITY_LOSS_PER_TURN: int = 5
+const STABILITY_LOSS_PER_TURN: int = 5  # Base stability loss (used for early stages)
 const COLONIST_LOSS_AT_ZERO_STABILITY: int = 10
 const COLONIST_LOSS_DRIFT_MODE: int = 20
+const FINAL_STAGE_STABILITY_REDUCTION: int = 2  # Reduce stability loss by 2% in final stages (nodes 35+)
 
 # Officer Roster (Section 3.2 of GDD)
 enum OfficerType { SCOUT, TECH, MEDIC }
@@ -143,9 +144,21 @@ func jump_to_node(target_node_index: int, fuel_cost: int = 1) -> void:
 		_check_win_condition()
 
 
+## Get stability loss per turn based on current node index
+## Reduces stability loss in final stages to give more turns
+func get_stability_loss_per_turn() -> int:
+	const FINAL_STAGE_START: int = 35  # Nodes 35+ get reduced stability loss
+	
+	if current_node_index >= FINAL_STAGE_START:
+		return STABILITY_LOSS_PER_TURN - FINAL_STAGE_STABILITY_REDUCTION
+	else:
+		return STABILITY_LOSS_PER_TURN
+
+
 func process_tactical_turn() -> void:
 	tactical_turn_count += 1
-	cryo_stability -= STABILITY_LOSS_PER_TURN
+	var stability_loss = get_stability_loss_per_turn()
+	cryo_stability -= stability_loss
 
 	if cryo_stability <= 0:
 		colonist_count -= COLONIST_LOSS_AT_ZERO_STABILITY
@@ -374,6 +387,37 @@ func store_star_map_data(generator: StarMapGenerator) -> void:
 ## Check if we have saved star map data
 func has_saved_star_map_data() -> bool:
 	return saved_star_map_data.has("nodes") and saved_star_map_data["nodes"].size() > 0
+
+
+## Get mission difficulty multiplier based on current node index
+## Returns a multiplier (1.0 = base difficulty, increases as player progresses)
+## Formula: 1.0 + (current_node_index / nodes_to_new_earth) * difficulty_scale_factor
+## This gives: 1.0x at start (node 0), ~2.5x at end (node 49)
+## Reduced scaling in final stages (nodes 35+) to decrease difficulty
+func get_mission_difficulty() -> float:
+	const DIFFICULTY_SCALE_FACTOR: float = 1.5
+	const FINAL_STAGE_START: int = 35  # Nodes 35+ get reduced scaling
+	const FINAL_STAGE_SCALE_REDUCTION: float = 0.4  # Reduce scaling by 40% in final stages
+	
+	var progress_ratio: float = float(current_node_index) / float(nodes_to_new_earth)
+	
+	# Reduce difficulty scaling in final stages
+	if current_node_index >= FINAL_STAGE_START:
+		# Calculate what the difficulty would be at node 35
+		var final_stage_progress: float = float(FINAL_STAGE_START) / float(nodes_to_new_earth)
+		var base_difficulty_at_35: float = 1.0 + (final_stage_progress * DIFFICULTY_SCALE_FACTOR)
+		
+		# Calculate remaining progress after node 35
+		var remaining_progress: float = progress_ratio - final_stage_progress
+		var remaining_scale_factor: float = DIFFICULTY_SCALE_FACTOR * (1.0 - FINAL_STAGE_SCALE_REDUCTION)
+		
+		# Apply reduced scaling for final stages
+		var difficulty: float = base_difficulty_at_35 + (remaining_progress * remaining_scale_factor)
+		return difficulty
+	else:
+		# Normal scaling for early/mid stages
+		var difficulty: float = 1.0 + (progress_ratio * DIFFICULTY_SCALE_FACTOR)
+		return difficulty
 
 
 ## Recreate a StarMapGenerator from saved data

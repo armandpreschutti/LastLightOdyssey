@@ -8,21 +8,26 @@
 [ext_resource type="PackedScene" uid="uid://c5h7k8nan0p1q" path="res://scenes/ui/trading_dialog.tscn" id="4_trading"]
 [ext_resource type="PackedScene" uid="uid://dm8lan5qv3p6r" path="res://scenes/tactical/tactical_mode.tscn" id="5_tactical"]
 [ext_resource type="PackedScene" path="res://scenes/ui/event_scene_dialog.tscn" id="6_event_scene"]
+[ext_resource type="PackedScene" path="res://scenes/ui/mission_scene_dialog.tscn" id="6_mission_scene"]
 [ext_resource type="PackedScene" path="res://scenes/ui/mission_recap.tscn" id="7_recap"]
 [ext_resource type="PackedScene" path="res://scenes/ui/new_earth_scene_dialog.tscn" id="8_new_earth"]
 [ext_resource type="PackedScene" path="res://scenes/ui/voyage_recap.tscn" id="9_voyage_recap"]
+[ext_resource type="Script" path="res://scripts/tactical/biome_background.gd" id="10_background"]
 
 [node name="Main" type="Node" unique_id=588289983]
 script = ExtResource("1_main")
 
-[node name="ManagementBackground" type="ColorRect" parent="." unique_id=436759780]
+[node name="BackgroundLayer" type="CanvasLayer" parent="." unique_id=436759780]
+layer = -10
+
+[node name="Background" type="Control" parent="BackgroundLayer" unique_id=436759781]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.02, 0.02, 0.08, 1)
+script = ExtResource("10_background")
 
 [node name="ManagementLayer" type="CanvasLayer" parent="." unique_id=467690676]
 
@@ -147,6 +152,9 @@ offset_bottom = -20.0
 layer = 10
 
 [node name="EventSceneDialog" parent="DialogLayer" unique_id=1316561818 instance=ExtResource("6_event_scene")]
+visible = false
+
+[node name="MissionSceneDialog" parent="DialogLayer" unique_id=1316561819 instance=ExtResource("6_mission_scene")]
 visible = false
 
 [node name="EventDialog" parent="DialogLayer" unique_id=939277613 instance=ExtResource("3_event")]

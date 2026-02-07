@@ -5,22 +5,26 @@
 [ext_resource type="PackedScene" uid="uid://dp7k2m5qr8vnx" path="res://scenes/ui/tactical_hud.tscn" id="3_hud"]
 [ext_resource type="Script" path="res://scripts/tactical/combat_camera.gd" id="4_camera"]
 [ext_resource type="Script" path="res://scripts/tactical/projectile.gd" id="5_projectile"]
+[ext_resource type="Script" path="res://scripts/tactical/biome_background.gd" id="6_background"]
 
 [node name="TacticalMode" type="Node2D"]
 script = ExtResource("1_controller")
 
-[node name="CombatCamera" type="Camera2D" parent="."]
-position = Vector2(640, 360)
-script = ExtResource("4_camera")
+[node name="BackgroundLayer" type="CanvasLayer" parent="."]
+layer = -10
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="Control" parent="BackgroundLayer"]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.0509804, 0.0509804, 0.0509804, 1)
+script = ExtResource("6_background")
+
+[node name="CombatCamera" type="Camera2D" parent="."]
+position = Vector2(640, 360)
+script = ExtResource("4_camera")
 
 [node name="MapContainer" type="Node2D" parent="."]
 position = Vector2(300, 200)
