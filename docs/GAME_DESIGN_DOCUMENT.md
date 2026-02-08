@@ -1,5 +1,5 @@
 # Last Light Odyssey - Game Design Document
-**Version 3.1 | Engine: Godot 4.6 | Last Updated: January 2025**
+**Version 3.2 | Engine: Godot 4.6 | Last Updated: February 2026**
 
 > *"The last journey of the human race isn't a hero's quest; it's a survival marathon."*
 
@@ -43,7 +43,7 @@ This layer simulates the grueling trek across the stars.
 | Statistic | Starting Value | Description |
 |-----------|----------------|-------------|
 | **Colonists** | 1,000 | The player's "health" and final score. Humanity's last survivors. |
-| **Fuel** | 10 | The clock. Each jump consumes fuel. At 0, ship enters "Drift Mode" (−40 colonists per fuel deficit). |
+| **Fuel** | 10 | The clock. Each jump consumes fuel. At 0, ship enters "Drift Mode" (−50 colonists per fuel deficit). |
 | **Ship Integrity** | 100% | Damaged by space hazards. At 0%, the ship is destroyed. Game Over. |
 | **Scrap** | 0 | Currency found on tactical maps. Used for repairs and trading. |
 
@@ -56,7 +56,7 @@ A procedurally generated node graph with **50 nodes** leading to New Earth.
 - Each node connects to 1-3 nodes in adjacent columns (forward connections primary, backward connections at 30% chance)
 - Variable fuel costs: base 2 fuel, +2 for row distance (diagonal/vertical movement), +4 for backward travel
 - Fuel costs are calculated per connection and saved with the star map
-- If insufficient fuel for a jump, ship enters "Drift Mode" and loses 40 colonists per fuel deficit
+- If insufficient fuel for a jump, ship enters "Drift Mode" and loses 50 colonists per fuel deficit
 - **Navigation Penalties**: Each jump causes −1% ship integrity and −2% cryo-stability (harsh but necessary for tension)
 
 **Node Types:**
@@ -65,7 +65,7 @@ A procedurally generated node graph with **50 nodes** leading to New Earth.
 |------|-----------|-------------|
 | **Empty Space** | 40% | No tactical map, just a random event roll. |
 | **Scavenge Site** | 40% | Triggers Isometric Tactical Mode for resource gathering. Biome type pre-assigned. |
-| **Trading Outpost** | 20% | Menu-based screen to trade Scrap for Fuel (10→1) or repairs (15→10%). |
+| **Trading Outpost** | 20% | Menu-based screen to trade Scrap for Fuel (10→5) or repairs (15→10%). |
 
 ### 2.3 Random Event System
 
@@ -73,20 +73,22 @@ Upon entering a node, the game rolls **1d10** against the Random Event Table.
 
 **Current Events:**
 
-| Roll | Event | Base Loss | Specialist | Mitigated Loss |
-|------|-------|-----------|------------|----------------|
-| 1 | Solar Flare | −50 colonists, −10% integrity | Tech | −10 colonists, 0% integrity |
-| 2 | Meteor Shower | −30 colonists, −20% integrity | Scout | 0 colonists, −5% integrity |
-| 3 | Disease Outbreak | −80 colonists | Medic | −20 colonists |
-| 4 | System Malfunction | −20 colonists, −15% integrity | Tech | 0 colonists, −5% integrity |
-| 5 | Pirate Ambush | −40 colonists, −25% integrity | Heavy | −10 colonists, −10% integrity |
-| 6 | Supply Cache | +2 fuel, +15 scrap | — | — |
-| 7 | Distress Signal | +50 colonists, −10% integrity | Medic | +50 colonists, 0% integrity |
-| 8 | Radiation Storm | −60 colonists, −5% integrity | Tech | −15 colonists |
-| 9 | Cryo Pod Failure | −100 colonists | Medic | −30 colonists |
-| 10 | Clear Skies | No effect | — | — |
+| Roll | Event | Base Loss | Specialist | Mitigated Loss | Mitigation Cost |
+|------|-------|-----------|------------|----------------|-----------------|
+| 1 | Solar Flare | −70 colonists, −15% integrity | Tech | 0 colonists, −5% integrity | 18 scrap |
+| 2 | Meteor Shower | −50 colonists, −25% integrity | Scout | 0 colonists, −10% integrity | 22 scrap |
+| 3 | Disease Outbreak | −100 colonists | Medic | 0 colonists | 30 scrap |
+| 4 | System Malfunction | −40 colonists, −20% integrity | Tech | 0 colonists, −10% integrity | 15 scrap |
+| 5 | Pirate Ambush | −60 colonists, −30% integrity | Heavy | 0 colonists, −15% integrity | 28 scrap |
+| 6 | Supply Cache | +2 fuel, +10 scrap | — | — | — |
+| 7 | Distress Signal | −15% integrity, +35 scrap | Medic | 0% integrity, +35 scrap | 18 scrap |
+| 8 | Radiation Storm | −80 colonists, −10% integrity | Tech | 0 colonists, −5% integrity | 25 scrap |
+| 9 | Cryo Pod Failure | −100 colonists | Medic | 0 colonists | 35 scrap |
+| 10 | Clear Skies | No effect | — | — | — |
 
-**Resolution:** Events display narrative text. If the required specialist is alive, a "Mitigate" option becomes available.
+**Mitigation Cost Scaling:** Base scrap cost scales with progress: `base_cost × (1.0 + progress_ratio × 1.5)`, with 40% reduction for nodes 35+.
+
+**Resolution:** Events display narrative text. If the required specialist is alive and the player has enough scrap, a "Mitigate" option becomes available.
 
 ---
 
@@ -109,7 +111,7 @@ When the ship docks at a Scavenge Site, the game switches to isometric turn-base
 | **Tech** | Can see items through walls | **Turret** (1 AP): Deploy auto-firing sentry on adjacent tile. Lasts 3 turns, auto-shoots nearest enemy each turn (15 DMG, 6 tile range). 2-turn cooldown. | 70 | 4 | 5 |
 | **Medic** | Can see exact enemy HP | **Patch** (2 AP): Heal adjacent ally for 50% max HP. 2-turn cooldown. | 75 | 5 | 5 |
 | **Heavy** | Armor Plating (−20% damage taken), +35 base damage | **Charge** (1 AP): Rush enemy within 4 tiles. Instant-kills basic enemies; deals 2x base damage to heavy enemies. 2-turn cooldown. | 120 | 3 | 5 |
-| **Sniper** | +2 sight range (base 7 + 2 = 9), +2 shoot range, +30 base damage | **Precision Shot** (1 AP): Guaranteed hit on enemy 8+ tiles away. Deals 2x base damage (60). 2-turn cooldown. | 70 | 4 | 9 |
+| **Sniper** | +2 sight range (base 7 + 2 = 9), +2 shoot range, +30 base damage | **Precision Shot** (1 AP): Guaranteed hit on any visible enemy. Deals 2x base damage (60). 2-turn cooldown. | 70 | 4 | 9 |
 
 ### 3.3 Combat System
 
@@ -146,7 +148,7 @@ Flanking Bonus:
   - Attacking from unprotected angle: +50% DAMAGE
   - Cover only protects from the direction it faces
 
-Final Hit Chance = clamp(Base - DefenderCover + AttackerBonus, 10%, 95%)
+Final Hit Chance = clamp(Base - DefenderCover + AttackerBonus, 20%, 95%)
 ```
 
 **Class Accuracy Profiles:**
@@ -205,8 +207,8 @@ Captains can **finish off weakened enemies** with precision:
 #### Precision Shot System (Sniper Ability)
 Snipers can **deliver devastating long-range shots** with perfect accuracy:
 
-- **Range**: 8-12 tiles (Manhattan distance) - requires minimum 8 tiles distance
-- **Requirement**: Target must be 8+ tiles away and within line of sight
+- **Range**: Any visible enemy (no distance restriction)
+- **Requirement**: Target must be visible (within revealed fog of war)
 - **Effect**: Guaranteed hit dealing 2x base damage (60 damage from 30 base damage)
 - **Accuracy**: Never misses (bypasses all cover and hit chance calculations)
 - **Cooldown**: 2-turn cooldown after use
@@ -248,8 +250,11 @@ Snipers can **deliver devastating long-range shots** with perfect accuracy:
 | Heavy | 80 | 35 | 3 | 3 | 5 | 6 | 0 | 20-30% |
 | Sniper | 40 | 30 | 2 | 5 | 10 | 12 | 5 | Rare (difficulty-based) |
 | Elite | 100 | 40 | 3 | 4 | 7 | 9 | 0 | Rare (difficulty-based) |
+| Boss | 250* | 70* | 4 | 3 | 8 | 9 | 0 | Biome-specific |
 
-*Note: Spawn rates vary by biome (see Section 3.7 Biome System). Sniper and Elite enemies appear more frequently as mission difficulty increases.*
+*\*Boss HP and damage scale with `difficulty_multiplier`. Each biome has a unique boss variant (Station, Asteroid, Planet).*
+
+*Note: Spawn rates vary by biome (see Section 3.8 Biome System). Sniper and Elite enemies appear more frequently as mission difficulty increases.*
 
 ### 3.8 Biome System
 
@@ -257,9 +262,9 @@ Scavenge sites have one of three procedurally-assigned biome types, each with un
 
 | Biome | Map Type | Size | Enemies | Heavy % | Loot Focus |
 |-------|----------|------|---------|---------|------------|
-| **Derelict Station** | BSP Rooms & Corridors | 25-30 | 4-6 | 30% | Balanced |
-| **Asteroid Mine** | Cellular Automata Caves | 20-25 | 3-5 | 50% | More Scrap |
-| **Planetary Surface** | Open Field w/ Clusters | 35-40 | 5-8 | 20% | More Fuel |
+| **Derelict Station** | BSP Rooms & Corridors | 17-20 | 4-6 | 30% | Balanced |
+| **Asteroid Mine** | Cellular Automata Caves | 14-17 | 3-5 | 50% | More Scrap |
+| **Planetary Surface** | Open Field w/ Clusters | 24-27 | 5-8 | 20% | More Fuel |
 
 **Generation Algorithms:**
 - **Station**: Binary Space Partitioning creates interconnected rooms with corridors. Industrial aesthetic with metal floors and walls.
@@ -526,13 +531,13 @@ Tutorial can be skipped at any time and reset from the Settings menu.
 
 ---
 
-### Sprite Assets
+### Sprite Assets (52 PNG files)
 
 **Status: COMPLETE** - All unit sprites, interactable objects, UI icons, and navigation assets are implemented and in use.
 
-**Note:** Tactical maps are procedurally generated and rendered using biome-specific color themes. Environment and terrain tiles are drawn programmatically rather than using sprite files.
+**Note:** Tactical maps are procedurally generated and rendered using biome-specific color themes. All terrain, floors, walls, cover, and extraction zones are drawn programmatically via `_draw()` rather than using sprite files.
 
-#### Officer Characters
+#### Officer Characters (6 sprites)
 The player's controllable units, each with distinct visual identity matching their role.
 
 | Captain | Scout | Tech | Medic | Heavy | Sniper |
@@ -540,15 +545,27 @@ The player's controllable units, each with distinct visual identity matching the
 | ![Captain](../assets/sprites/characters/officer_captain.png) | ![Scout](../assets/sprites/characters/officer_scout.png) | ![Tech](../assets/sprites/characters/officer_tech.png) | ![Medic](../assets/sprites/characters/officer_medic.png) | ![Heavy](../assets/sprites/characters/officer_heavy.png) | ![Sniper](../assets/sprites/characters/officer_sniper.png) |
 | Command leader | Recon specialist | Engineer | Field medic | Tank/Defender | Long-range marksman |
 
-#### Enemy Units
-Hostile forces encountered during tactical missions.
+#### Enemy Units — Station Biome (5 sprites)
+Default enemy sprites used in Station biome missions.
 
-| Basic Enemy | Heavy Enemy | Sniper Enemy | Elite Enemy |
-|:-----------:|:-----------:|:------------:|:----------:|
-| ![Basic](../assets/sprites/characters/enemy_basic.png) | ![Heavy](../assets/sprites/characters/enemy_heavy.png) | ![Sniper](../assets/sprites/characters/enemy_sniper.png) | ![Elite](../assets/sprites/characters/enemy_elite.png) |
-| Standard threat (70-80% spawn) | Armored threat (20-30% spawn) | Long-range threat (difficulty-based) | Elite threat (difficulty-based) |
+| Basic | Heavy | Sniper | Elite | Boss |
+|:-----:|:-----:|:------:|:-----:|:----:|
+| ![Basic](../assets/sprites/characters/enemy_basic.png) | ![Heavy](../assets/sprites/characters/enemy_heavy.png) | ![Sniper](../assets/sprites/characters/enemy_sniper.png) | ![Elite](../assets/sprites/characters/enemy_elite.png) | ![Boss](../assets/sprites/characters/enemy_boss_station.png) |
+| 70-80% spawn | 20-30% spawn | Difficulty-based | Difficulty-based | Biome boss |
 
-#### Unit Indicators
+#### Enemy Units — Asteroid Biome (5 sprites)
+
+| Basic | Heavy | Sniper | Elite | Boss |
+|:-----:|:-----:|:------:|:-----:|:----:|
+| ![Basic](../assets/sprites/characters/enemy_basic_asteroid.png) | ![Heavy](../assets/sprites/characters/enemy_heavy_asteroid.png) | ![Sniper](../assets/sprites/characters/enemy_sniper_asteroid.png) | ![Elite](../assets/sprites/characters/enemy_elite_asteroid.png) | ![Boss](../assets/sprites/characters/enemy_boss_asteroid.png) |
+
+#### Enemy Units — Planet Biome (5 sprites)
+
+| Basic | Heavy | Sniper | Elite | Boss |
+|:-----:|:-----:|:------:|:-----:|:----:|
+| ![Basic](../assets/sprites/characters/enemy_basic_planet.png) | ![Heavy](../assets/sprites/characters/enemy_heavy_planet.png) | ![Sniper](../assets/sprites/characters/enemy_sniper_planet.png) | ![Elite](../assets/sprites/characters/enemy_elite_planet.png) | ![Boss](../assets/sprites/characters/enemy_boss_planet.png) |
+
+#### Unit Indicators (3 sprites)
 Visual feedback elements for unit states.
 
 | Selection Ring | Shadow | Turret |
@@ -558,7 +575,7 @@ Visual feedback elements for unit states.
 
 ---
 
-#### Interactable Objects
+#### Interactable Objects (11 sprites)
 Items and cover objects found on tactical maps.
 
 **Standard Loot:**
@@ -567,62 +584,42 @@ Items and cover objects found on tactical maps.
 | ![Fuel](../assets/sprites/objects/crate_fuel.png) | ![Scrap](../assets/sprites/objects/scrap_pile.png) | ![Cover](../assets/sprites/objects/crate_cover.png) | ![Destroyed](../assets/sprites/objects/crate_cover_destroyed.png) |
 | +1 Fuel | +5 Scrap | Half cover (−25%) | Rubble (0% cover) |
 
-**Objective Interactables:**
-These objects are spawned based on mission objectives and provide progress toward completing objectives:
+**Objective Interactables (7 sprites):**
 
-**Station Biome:**
-- **Security Terminal**: Hack security systems objective (binary)
-- **Data Log**: Retrieve data logs objective (progress, multiple spawn)
-- **Power Core**: Repair power core objective (binary)
-
-**Asteroid Biome:**
-- **Mining Equipment**: Used for clear passages, activate mining, and extract minerals objectives
-
-**Planet Biome:**
-- **Sample Collector**: Collect alien samples objective (progress, multiple spawn)
-- **Beacon**: Activate beacons objective (progress, multiple spawn)
-- **Nest**: Clear hostile nests objective (binary, cleared by moving to nest tile or killing enemies)
+| Security Terminal | Data Log | Power Core | Mining Equipment | Sample Collector | Beacon | Nest |
+|:-----------------:|:--------:|:----------:|:----------------:|:----------------:|:------:|:----:|
+| ![Terminal](../assets/sprites/objects/security_terminal.png) | ![Log](../assets/sprites/objects/data_log.png) | ![Core](../assets/sprites/objects/power_core.png) | ![Mining](../assets/sprites/objects/mining_equipment.png) | ![Sample](../assets/sprites/objects/sample_collector.png) | ![Beacon](../assets/sprites/objects/beacon.png) | ![Nest](../assets/sprites/objects/nest.png) |
+| Station: hack security | Station: retrieve logs | Station: repair core | Asteroid: all objectives | Planet: collect samples | Planet: activate beacons | Planet: clear nests |
 
 ---
 
-#### Procedural Map Rendering
-
-Tactical maps are procedurally generated and rendered using biome-specific color themes. The game uses programmatic drawing rather than sprite tiles for floors, walls, cover, and extraction zones. Each biome (Station, Asteroid, Planet) has distinct color palettes and visual styles defined in `BiomeConfig`.
-
-**Biome Visual Themes:**
-- **Station**: Dark industrial metal with cyan/teal accent lighting
-- **Asteroid**: Rocky browns with blue mineral accents
-- **Planet**: Alien purple/magenta crystal formations with bioluminescent elements
-
----
-
-#### Star Map Navigation Icons
+#### Star Map Navigation Icons (5 sprites)
 Visual elements for the management layer star map.
 
 | Asteroid Field | Trading Station | Earth (Goal) | Gas Planet | Red Planet |
 |:--------------:|:---------------:|:------------:|:----------:|:----------:|
 | ![Asteroid](../assets/sprites/navigation/asteroid.png) | ![Station](../assets/sprites/navigation/station_trading.png) | ![Earth](../assets/sprites/navigation/planet_earth.png) | ![Gas](../assets/sprites/navigation/planet_gas.png) | ![Red](../assets/sprites/navigation/planet_red.png) |
-| Empty Space node | Trading Outpost | New Earth (Win) | Scavenge Site | Scavenge Site |
+| Scavenge Site | Trading Outpost | New Earth (Win) | Empty Space variant | Empty Space variant |
 
 ---
 
-#### UI Icons
-Interface icons used throughout the game for resource displays, actions, and settings.
+#### UI Icons (12 sprites)
+Interface icons used throughout the game for resource displays, combat info, and settings.
 
 **Resource Icons**
 | Colonists | Fuel | Hull | Scrap | Cryo Stability |
 |:---------:|:----:|:----:|:-----:|:--------------:|
 | ![Colonists](../assets/sprites/ui/icons/icon_colonists.png) | ![Fuel](../assets/sprites/ui/icons/icon_fuel.png) | ![Hull](../assets/sprites/ui/icons/icon_hull.png) | ![Scrap](../assets/sprites/ui/icons/icon_scrap.png) | ![Cryo](../assets/sprites/ui/icons/icon_cryo.png) |
 
-**Combat Icons**
-| Health | Action Points | Movement | Attack | Cover |
-|:------:|:-------------:|:--------:|:------:|:-----:|
-| ![Health](../assets/sprites/ui/icons/icon_health.png) | ![AP](../assets/sprites/ui/icons/icon_ap.png) | ![Movement](../assets/sprites/ui/icons/icon_movement.png) | ![Attack](../assets/sprites/ui/icons/icon_attack.png) | ![Cover](../assets/sprites/ui/icons/icon_cover.png) |
+**Combat & HUD Icons**
+| Health | Action Points | Movement | Turn | Enemies |
+|:------:|:-------------:|:--------:|:----:|:-------:|
+| ![Health](../assets/sprites/ui/icons/icon_health.png) | ![AP](../assets/sprites/ui/icons/icon_ap.png) | ![Movement](../assets/sprites/ui/icons/icon_movement.png) | ![Turn](../assets/sprites/ui/icons/icon_turn.png) | ![Enemies](../assets/sprites/ui/icons/icon_enemies.png) |
 
 **System Icons**
-| Turn | Enemies | Display | Audio | Tutorial |
-|:----:|:-------:|:-------:|:-----:|:--------:|
-| ![Turn](../assets/sprites/ui/icons/icon_turn.png) | ![Enemies](../assets/sprites/ui/icons/icon_enemies.png) | ![Display](../assets/sprites/ui/icons/icon_display.png) | ![Audio](../assets/sprites/ui/icons/icon_audio.png) | ![Tutorial](../assets/sprites/ui/icons/icon_tutorial.png) |
+| Display | Audio |
+|:-------:|:-----:|
+| ![Display](../assets/sprites/ui/icons/icon_display.png) | ![Audio](../assets/sprites/ui/icons/icon_audio.png) |
 
 ---
 
@@ -655,7 +652,7 @@ Interface icons used throughout the game for resource displays, actions, and set
 - [x] Jump logic with fuel consumption and drift mode
 
 ### ✅ Phase 2: Star Map & Events (COMPLETE)
-- [x] Procedural star map generator (9 columns, 20 total nodes)
+- [x] Procedural star map generator (16 columns, 50 total nodes)
 - [x] Node connection system with variable fuel costs
 - [x] Visual node graph with clickable navigation
 - [x] Node type system (Empty, Scavenge, Trading)
@@ -774,7 +771,7 @@ Interface icons used throughout the game for resource displays, actions, and set
 - [x] Mission difficulty scaling system (1.0x to ~2.5x based on progress)
 - [x] Final stage balancing (reduced stability loss and difficulty scaling in nodes 35+)
 - [x] Navigation penalties (ship integrity and stability loss per jump)
-- [x] Drift mode penalty tuning (40 colonists per fuel deficit)
+- [x] Drift mode penalty tuning (50 colonists per fuel deficit)
 - [x] Fuel cost system refinement (base 2, +2 row distance, +4 backward)
 - [ ] Fine-tuning event damage/impact balance
 - [ ] Resource economy refinement (fuel costs, scrap drops, objective rewards)
@@ -808,7 +805,7 @@ Interface icons used throughout the game for resource displays, actions, and set
 
 #### Settings Menu
 - [x] Display settings (fullscreen toggle, resolution: 720p/900p/1080p)
-- [x] Audio volume sliders (Master, SFX, Music) - UI ready for Phase 10
+- [x] Audio volume sliders (Master, SFX, Music)
 - [x] Reset Tutorial button with visual feedback
 - [x] Settings persistence to user://settings.cfg
 - [x] Apply button with confirmation feedback
@@ -823,7 +820,7 @@ Interface icons used throughout the game for resource displays, actions, and set
 - [x] Reset tutorial from settings
 
 #### Trading System Enhancement
-- [x] Buy fuel: 10 scrap → 1 fuel
+- [x] Buy fuel: 10 scrap → 5 fuel
 - [x] Repair hull: 15 scrap → 10% integrity
 - [x] Status feedback on transactions
 - [x] Button availability based on resources
@@ -845,7 +842,7 @@ Interface icons used throughout the game for resource displays, actions, and set
 - [x] New officer type: Sniper
 - [x] Extended sight range (+2) and shoot range (+2) for long-range combat
 - [x] Increased base damage (30 vs standard 25)
-- [x] Precision Shot active ability (1 AP, guaranteed hit at 8+ tiles for 2x damage)
+- [x] Precision Shot active ability (1 AP, guaranteed hit on any visible enemy for 2x damage)
 - [x] 70 HP, 4 move range, 9 sight range, 12 shoot range
 - [x] Best long-range accuracy profile (65% at 10+ tiles)
 - [x] Sniper sprite with hood and targeting monocle
@@ -874,7 +871,7 @@ Interface icons used throughout the game for resource displays, actions, and set
 
 #### Navigation & Balance Improvements
 - [x] Increased star map to 50 nodes (16 columns) for longer journey
-- [x] Increased drift mode penalty to 40 colonists per fuel deficit (harsher consequences)
+- [x] Increased drift mode penalty to 50 colonists per fuel deficit (harsher consequences)
 - [x] Navigation penalties: −1% ship integrity and −2% stability per jump
 - [x] Updated fuel costs: base 2, +2 for row distance, +4 for backward travel
 - [x] Final stage stability reduction (3% per turn instead of 5% in nodes 35+)
@@ -915,16 +912,6 @@ Interface icons used throughout the game for resource displays, actions, and set
 - [x] Audio bus system (Master, Music, SFX) with independent volume control
 - [x] Volume persistence to settings.cfg
 - [x] Music crossfading with 1-second fade duration
-
-#### Mission Objectives System
-- [x] Mission objective system with binary and progress objective types
-- [x] Biome-specific objective definitions (9 objectives across 3 biomes)
-- [x] Objective interactable objects (Security Terminal, Data Log, Power Core, Mining Equipment, Sample Collector, Beacon, Nest)
-- [x] Objectives Panel UI component in tactical HUD
-- [x] Objective completion tracking and progress display
-- [x] Bonus reward system with deterministic rewards
-- [x] Objective preview in team selection dialog with potential rewards
-- [x] Objective completion notifications
 
 #### Pathfinding Visualization
 - [x] Visual pathfinding path line with neon blue glow effect
@@ -1006,14 +993,15 @@ Interface icons used throughout the game for resource displays, actions, and set
 ```
 Last Light Odyssey/
 ├── assets/
-│   ├── audio/          # Sound effects and music (TODO)
+│   ├── audio/          # Sound effects and music
+│   │   ├── music/      # Ambient music tracks (title, management, combat)
+│   │   └── sfx/        # Sound effects (UI, combat, movement, alarms)
 │   ├── fonts/          # Custom fonts
 │   └── sprites/        # All game graphics
-│       ├── characters/ # Officer and enemy sprites
-│       ├── environment/# Tiles, cover, fog
-│       ├── navigation/ # Star map elements
-│       ├── objects/    # Interactables
-│       └── terrain/    # Ground tiles
+│       ├── characters/ # Officer and enemy sprites (biome variants, bosses)
+│       ├── navigation/ # Star map node icons
+│       ├── objects/    # Interactable objects and loot
+│       └── ui/icons/   # Resource, combat, and system icons
 ├── docs/
 │   └── GAME_DESIGN_DOCUMENT.md  # This file
 ├── resources/
@@ -1024,7 +1012,7 @@ Last Light Odyssey/
 │   ├── tactical/       # Combat scenes
 │   └── ui/             # Interface scenes
 ├── scripts/
-│   ├── autoload/       # Global singletons (GameState, EventManager, TutorialManager)
+│   ├── autoload/       # Global singletons (GameState, EventManager, TutorialManager, CombatRNG, AudioManager)
 │   ├── management/     # Star map logic, node generation
 │   ├── tactical/       # Combat logic, map generation, enemy AI, biome config
 │   └── ui/             # Interface scripts

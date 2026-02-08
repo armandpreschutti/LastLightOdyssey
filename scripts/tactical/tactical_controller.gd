@@ -2108,7 +2108,7 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	
 	# Update objectives based on enemy kills (only if objective matches)
 	_update_objective_progress("clear_passages", 1)  # Enemies killed count as clearing passages for asteroid
-	_update_objective_progress("clear_nests", 1)  # Enemies killed count as clearing nests for planet
+	# Note: clear_nests objective is completed by interacting with nest structures, not by killing enemies
 	
 	# Get enemy position before removal
 	var pos = enemy.get_grid_position()

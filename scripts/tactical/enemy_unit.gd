@@ -116,11 +116,17 @@ func initialize(id: int, type: String = "basic", biome: BiomeConfig.BiomeType = 
 			sprite.scale = Vector2(1.0, 1.0)  # 64x64 sprite fits perfectly in 2x2 tiles (64x64 pixels = 2x2 tiles)
 			# Adjust HP bar position for larger boss sprite
 			if hp_bar_bg:
-				hp_bar_bg.position = Vector2(0, 28)  # Lower for boss
-				hp_bar_bg.size = Vector2(28, 4)  # Wider for boss
+				hp_bar_bg.position = Vector2(0, 0)  # Reset position, use offsets
+				hp_bar_bg.offset_left = -13.5
+				hp_bar_bg.offset_top = 28.0
+				hp_bar_bg.offset_right = 13.5
+				hp_bar_bg.offset_bottom = 32.0
 			if hp_bar:
-				hp_bar.position = Vector2(-13, 29)  # Lower for boss
-				hp_bar.size = Vector2(26, 2)  # Wider for boss
+				hp_bar.position = Vector2(0, 0)  # Reset position, use offsets
+				hp_bar.offset_left = -13.0
+				hp_bar.offset_top = 29.0
+				hp_bar.offset_right = 13.0
+				hp_bar.offset_bottom = 31.0
 			# Add boss indicator (glowing aura)
 			if alert_indicator:
 				alert_indicator.position = Vector2(0, -40)  # Higher for boss
@@ -128,13 +134,19 @@ func initialize(id: int, type: String = "basic", biome: BiomeConfig.BiomeType = 
 				alert_indicator.color = Color(1.0, 0.8, 0.2, 1.0)  # Gold/yellow for boss
 		else:
 			sprite.scale = Vector2(1.0, 1.0)
-			# Reset HP bar to normal position
+			# Reset HP bar to normal position and size
 			if hp_bar_bg:
-				hp_bar_bg.position = Vector2(0, 14)
-				hp_bar_bg.size = Vector2(28, 4)
+				hp_bar_bg.position = Vector2(0, 0)  # Reset position, use offsets
+				hp_bar_bg.offset_left = -13.5
+				hp_bar_bg.offset_top = 14.0
+				hp_bar_bg.offset_right = 13.5
+				hp_bar_bg.offset_bottom = 18.0
 			if hp_bar:
-				hp_bar.position = Vector2(-13, 15)
-				hp_bar.size = Vector2(26, 2)
+				hp_bar.position = Vector2(0, 0)  # Reset position, use offsets
+				hp_bar.offset_left = -13.0
+				hp_bar.offset_top = 15.0
+				hp_bar.offset_right = 13.0
+				hp_bar.offset_bottom = 17.0
 	
 	# Apply type-based stats (with difficulty scaling for bosses)
 	var data = ENEMY_DATA.get(type, ENEMY_DATA["basic"])
