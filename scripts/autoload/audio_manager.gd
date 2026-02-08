@@ -61,12 +61,10 @@ func _ready() -> void:
 	
 	# Verify bus layout is loaded
 	var bus_count = AudioServer.bus_count
-	print("AudioManager: Bus count: %d" % bus_count)
 	for i in range(bus_count):
 		var bus_name = AudioServer.get_bus_name(i)
 		var bus_vol = AudioServer.get_bus_volume_db(i)
 		var bus_mute = AudioServer.is_bus_mute(i)
-		print("AudioManager: Bus %d: %s (volume: %.2f dB, mute: %s)" % [i, bus_name, bus_vol, bus_mute])
 	
 	# Create music players
 	_music_player_1 = AudioStreamPlayer.new()
@@ -94,7 +92,6 @@ func _ready() -> void:
 	_load_volume_settings()
 	
 	var music_bus_idx = AudioServer.get_bus_index("Music")
-	print("AudioManager: Initialized with %d buses, Music bus index: %d" % [bus_count, music_bus_idx])
 
 
 func _setup_audio_buses() -> void:
@@ -122,20 +119,14 @@ func _setup_audio_buses() -> void:
 		AudioServer.set_bus_name(sfx_idx, "SFX")
 		AudioServer.set_bus_send(sfx_idx, "Master")
 	
-	print("AudioManager: Audio buses setup complete - Master: %d, Music: %d, SFX: %d" % [master_idx, music_idx, sfx_idx])
 	
 	# Verify buses aren't muted and have reasonable volume
 	if music_idx >= 0:
 		if AudioServer.is_bus_mute(music_idx):
-			print("AudioManager: WARNING - Music bus is muted! Unmuting...")
 			AudioServer.set_bus_mute(music_idx, false)
-		var vol = AudioServer.get_bus_volume_db(music_idx)
-		if vol <= -80.0:
-			print("AudioManager: WARNING - Music bus volume is at minimum (-80 dB)")
 	
 	if master_idx >= 0:
 		if AudioServer.is_bus_mute(master_idx):
-			print("AudioManager: WARNING - Master bus is muted! Unmuting...")
 			AudioServer.set_bus_mute(master_idx, false)
 
 
@@ -183,7 +174,6 @@ func play_music(track_key: String) -> void:
 		return
 	
 	var path = _music_paths[track_key]
-	print("AudioManager: Attempting to play music: %s from path: %s" % [track_key, path])
 	
 	# Check if file exists
 	if not ResourceLoader.exists(path):
@@ -195,11 +185,9 @@ func play_music(track_key: String) -> void:
 		push_error("AudioManager: Failed to load music track: %s" % path)
 		return
 	
-	print("AudioManager: Loaded stream type: %s" % stream.get_class())
 	
 	# If same track is already playing, do nothing
 	if _current_music_player.stream == stream and _current_music_player.playing:
-		print("AudioManager: Track already playing, skipping")
 		return
 	
 	# Swap players
@@ -211,7 +199,6 @@ func play_music(track_key: String) -> void:
 	if stream is AudioStreamWAV:
 		var wav = stream as AudioStreamWAV
 		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
-		print("AudioManager: Set loop mode to LOOP_FORWARD")
 	
 	# Stop current player if playing
 	if _current_music_player.playing:
@@ -225,7 +212,6 @@ func play_music(track_key: String) -> void:
 	
 	var music_bus_vol = AudioServer.get_bus_volume_db(music_bus_index)
 	var master_bus_vol = AudioServer.get_bus_volume_db(0)
-	print("AudioManager: Music bus index: %d, volume: %.2f dB, Master volume: %.2f dB" % [music_bus_index, music_bus_vol, master_bus_vol])
 	
 	# Ensure player is in scene tree
 	if not _current_music_player.is_inside_tree():
@@ -251,8 +237,6 @@ func play_music(track_key: String) -> void:
 	# Play the music - use call_deferred to ensure everything is ready
 	call_deferred("_play_music_deferred", track_key)
 	
-	print("AudioManager: Playing music track: %s" % track_key)
-	print("AudioManager: Stream loaded: %s, Bus: %s, Volume: %.2f dB" % [_current_music_player.stream != null, _current_music_player.bus, _current_music_player.volume_db])
 	
 	# Crossfade: fade in new, fade out old (only if there's something to fade out)
 	if _next_music_player.playing:
@@ -320,10 +304,10 @@ func _play_music_deferred(track_key: String) -> void:
 		return
 	
 	_current_music_player.play()
-	print("AudioManager: Deferred play executed for track: %s" % track_key)
 	
-	# Verify it's actually playing after a short delay
-	call_deferred("_verify_music_playing", track_key)
+	# Verify it's actually playing after a short delay (give play() time to start)
+	# Use timer callback instead of await since this is called via call_deferred
+	get_tree().create_timer(0.1).timeout.connect(func(): _verify_music_playing(track_key))
 
 
 func _verify_music_playing(track_key: String) -> void:
@@ -332,21 +316,6 @@ func _verify_music_playing(track_key: String) -> void:
 		push_error("AudioManager: Music player failed to start playing track: %s" % track_key)
 		var music_bus_idx = AudioServer.get_bus_index("Music")
 		var master_bus_idx = AudioServer.get_bus_index("Master")
-		print("AudioManager: Debug - Stream: %s, Bus: %s, Volume: %.2f, Music bus volume: %.2f, Master bus volume: %.2f" % [
-			_current_music_player.stream != null,
-			_current_music_player.bus,
-			_current_music_player.volume_db,
-			AudioServer.get_bus_volume_db(music_bus_idx) if music_bus_idx >= 0 else -999.0,
-			AudioServer.get_bus_volume_db(master_bus_idx) if master_bus_idx >= 0 else -999.0
-		])
-		print("AudioManager: Debug - Music bus muted: %s, Master bus muted: %s" % [
-			AudioServer.is_bus_mute(music_bus_idx) if music_bus_idx >= 0 else "N/A",
-			AudioServer.is_bus_mute(master_bus_idx) if master_bus_idx >= 0 else "N/A"
-		])
-		print("AudioManager: Debug - Player in tree: %s, Stream valid: %s" % [
-			_current_music_player.is_inside_tree(),
-			_current_music_player.stream != null
-		])
 		
 		# Try to diagnose the issue
 		if _current_music_player.stream == null:
@@ -359,8 +328,6 @@ func _verify_music_playing(track_key: String) -> void:
 			push_error("AudioManager: Master bus is muted!")
 		if music_bus_idx >= 0 and AudioServer.get_bus_volume_db(music_bus_idx) <= -80.0:
 			push_error("AudioManager: Music bus volume is too low!")
-	else:
-		print("AudioManager: Music track '%s' is playing successfully" % track_key)
 
 
 func set_bus_volume(bus: String, percent: float) -> void:

@@ -22,7 +22,6 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 	# Also track all visible officers for flanking calculations
 	var visible_officers: Array[Node2D] = []
 	
-	print("  Enemy at %s checking for targets (sight: %d, shoot: %d, AP: %d)" % [enemy_pos, enemy.sight_range, enemy.shoot_range, enemy.current_ap])
 	
 	for officer in officers:
 		if officer.current_hp <= 0:
@@ -31,7 +30,6 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 		var officer_pos = officer.get_grid_position()
 		var distance = abs(officer_pos.x - enemy_pos.x) + abs(officer_pos.y - enemy_pos.y)
 		
-		print("    Officer at %s, distance: %d" % [officer_pos, distance])
 		
 		# Check if officer is visible (in sight range)
 		if distance <= enemy.sight_range:
@@ -39,24 +37,20 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 			
 			# Check if this officer is a Heavy with taunt active and within taunt range
 			if officer.has_method("has_taunt_active") and officer.has_taunt_active() and distance <= TAUNT_RANGE:
-				print("    -> TAUNTED by Heavy! Must prioritize this target!")
 				taunted_heavy = officer
 				taunted_heavy_distance = distance
 			
 			if distance < nearest_distance:
 				nearest_distance = distance
 				nearest_officer = officer
-				print("    -> Target acquired!")
 	
 	# If a taunted Heavy is within range, prioritize them
 	if taunted_heavy:
 		nearest_officer = taunted_heavy
 		nearest_distance = taunted_heavy_distance
-		print("  -> Forced to target taunted Heavy!")
 	
 	# No officer detected - idle
 	if not nearest_officer:
-		print("  -> No targets in sight range")
 		result["action"] = "idle"
 		return result
 	
@@ -67,16 +61,18 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 	var is_effectively_covered = _is_cover_effective_against_threats(enemy_pos, visible_officers, tactical_map)
 	var is_being_flanked = has_adjacent_cover and not is_effectively_covered
 	var can_shoot = nearest_distance <= enemy.shoot_range and enemy.has_ap(1) and _has_line_of_sight(enemy_pos, target_pos, tactical_map)
-	
-	print("  -> Has cover: %s, Effective cover: %s, Flanked: %s, Can shoot: %s" % [has_adjacent_cover, is_effectively_covered, is_being_flanked, can_shoot])
-	
+
+	# Pre-compute reachable positions once (BFS is expensive) for all movement queries
+	var reachable: Array[Vector2i] = []
+	if enemy.has_ap(1):
+		reachable = _get_reachable_positions(enemy_pos, enemy.move_range, tactical_map)
+
 	# PRIORITY 1: If flanked (in useless cover) and can reach better cover, reposition!
 	if is_being_flanked and enemy.has_ap(1):
-		var better_cover_pos = _find_cover_against_threats(enemy_pos, visible_officers, enemy.move_range, tactical_map)
+		var better_cover_pos = _find_cover_against_threats(enemy_pos, visible_officers, enemy.move_range, tactical_map, reachable)
 		if better_cover_pos != enemy_pos:
 			var path = tactical_map.find_path(enemy_pos, better_cover_pos)
 			if path and path.size() > 1:
-				print("  -> FLANKED! Repositioning to better cover at %s" % better_cover_pos)
 				result["action"] = "move"
 				result["path"] = path
 				result["target_pos"] = better_cover_pos
@@ -84,11 +80,10 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 	
 	# PRIORITY 2: If exposed (no cover at all) and can reach cover, move to cover first
 	if not has_adjacent_cover and enemy.has_ap(1):
-		var cover_pos = _find_cover_against_threats(enemy_pos, visible_officers, enemy.move_range, tactical_map)
+		var cover_pos = _find_cover_against_threats(enemy_pos, visible_officers, enemy.move_range, tactical_map, reachable)
 		if cover_pos != enemy_pos:
 			var path = tactical_map.find_path(enemy_pos, cover_pos)
 			if path and path.size() > 1:
-				print("  -> EXPOSED! Moving to cover at %s" % cover_pos)
 				result["action"] = "move"
 				result["path"] = path
 				result["target_pos"] = cover_pos
@@ -96,7 +91,6 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 	
 	# PRIORITY 3: If can shoot (either in effective cover or no better option), shoot
 	if can_shoot:
-		print("  -> Shooting at target!")
 		result["action"] = "shoot"
 		result["target"] = nearest_officer
 		result["target_pos"] = target_pos
@@ -104,26 +98,19 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 	
 	# PRIORITY 4: Can't shoot - try to move to a better tactical position
 	if enemy.has_ap(1):
-		print("  -> Attempting to find tactical position (move_range: %d)" % enemy.move_range)
 		
-		var move_destination = _find_tactical_position(enemy_pos, target_pos, visible_officers, enemy.move_range, nearest_distance, tactical_map)
+		var move_destination = _find_tactical_position(enemy_pos, target_pos, visible_officers, enemy.move_range, nearest_distance, tactical_map, reachable)
 		
 		if move_destination != enemy_pos:
 			var path = tactical_map.find_path(enemy_pos, move_destination)
 			
 			if path and path.size() > 1:
-				print("  -> Path found! Moving to grid %s (path length: %d)" % [move_destination, path.size()])
 				result["action"] = "move"
 				result["path"] = path
 				result["target_pos"] = move_destination
 				return result
-			else:
-				print("  -> No valid path found to tactical position")
-		else:
-			print("  -> No better position found, staying put")
 	
 	# Can't do anything useful
-	print("  -> Idle (no AP or no actions available)")
 	result["action"] = "idle"
 	return result
 
@@ -168,8 +155,8 @@ static func _is_cover_effective_against_threats(defender_pos: Vector2i, threats:
 
 
 ## Find a position with cover that protects against the given threats
-static func _find_cover_against_threats(from: Vector2i, threats: Array[Node2D], max_range: int, tactical_map: Node2D) -> Vector2i:
-	var reachable = _get_reachable_positions(from, max_range, tactical_map)
+static func _find_cover_against_threats(from: Vector2i, threats: Array[Node2D], max_range: int, tactical_map: Node2D, precomputed_reachable: Array[Vector2i] = []) -> Vector2i:
+	var reachable = precomputed_reachable if precomputed_reachable.size() > 0 else _get_reachable_positions(from, max_range, tactical_map)
 	var best_pos = from
 	var best_score = -999.0
 	
@@ -289,22 +276,21 @@ static func _get_line_tiles(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 
 
 ## Find a tactical position to move to (considers cover effectiveness, range, and threats)
-static func _find_tactical_position(from: Vector2i, target_pos: Vector2i, threats: Array[Node2D], max_range: int, current_distance: int, tactical_map: Node2D) -> Vector2i:
+static func _find_tactical_position(from: Vector2i, target_pos: Vector2i, threats: Array[Node2D], max_range: int, current_distance: int, tactical_map: Node2D, precomputed_reachable: Array[Vector2i] = []) -> Vector2i:
 	var best_position = from
 	var best_score = -999.0
-	
+
 	# Ideal engagement range (stay at medium range if possible)
 	const IDEAL_MIN_RANGE = 4
 	const IDEAL_MAX_RANGE = 7
-	
+
 	# Check if currently has effective cover against threats
 	var has_effective_cover = _is_cover_effective_against_threats(from, threats, tactical_map)
 	var is_exposed = not has_effective_cover
+
+	# Use pre-computed reachable positions if available, otherwise compute via BFS
+	var checked_positions = precomputed_reachable if precomputed_reachable.size() > 0 else _get_reachable_positions(from, max_range, tactical_map)
 	
-	# Check all tiles within movement range using BFS
-	var checked_positions = _get_reachable_positions(from, max_range, tactical_map)
-	
-	print("    Evaluating %d reachable positions (exposed/flanked: %s)" % [checked_positions.size(), is_exposed])
 	
 	for pos in checked_positions:
 		if pos == from:
@@ -356,7 +342,6 @@ static func _find_tactical_position(from: Vector2i, target_pos: Vector2i, threat
 		for pos in checked_positions:
 			if _is_cover_effective_against_threats(pos, threats, tactical_map):
 				best_position = pos
-				print("    Fallback: Moving to effective cover at %s" % pos)
 				break
 		
 		# Try any cover if no effective cover
@@ -364,16 +349,13 @@ static func _find_tactical_position(from: Vector2i, target_pos: Vector2i, threat
 			for pos in checked_positions:
 				if tactical_map.has_adjacent_cover(pos):
 					best_position = pos
-					print("    Fallback: Moving to any cover at %s" % pos)
 					break
 		
 		# If still no cover, just move closer
 		if best_position == from:
 			best_position = _get_closest_position_to_target(from, target_pos, checked_positions)
-			print("    Fallback: Moving closer to target at %s" % best_position)
 	
 	var final_cover_status = "effective cover" if _is_cover_effective_against_threats(best_position, threats, tactical_map) else ("any cover" if tactical_map.has_adjacent_cover(best_position) else "no cover")
-	print("    Best tactical position: %s (score: %.1f, %s)" % [best_position, best_score, final_cover_status])
 	return best_position
 
 

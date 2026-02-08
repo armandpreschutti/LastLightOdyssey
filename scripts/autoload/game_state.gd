@@ -79,6 +79,9 @@ var total_enemies_killed: int = 0
 var total_missions_completed: int = 0
 var total_tactical_turns: int = 0
 
+# Colonist loss milestone tracking
+var shown_milestones: Array[int] = []
+
 
 func _ready() -> void:
 	pass
@@ -103,6 +106,9 @@ func reset_game() -> void:
 	total_enemies_killed = 0
 	total_missions_completed = 0
 	total_tactical_turns = 0
+	
+	# Reset milestone tracking
+	shown_milestones.clear()
 
 	for officer_key in officers:
 		officers[officer_key]["alive"] = true
@@ -187,14 +193,22 @@ func kill_officer(officer_key: String) -> void:
 		officers[officer_key]["alive"] = false
 		officer_died.emit(officer_key)
 
-		if officer_key == "captain":
-			_trigger_game_over("captain_died")
-
 
 func is_officer_alive(officer_key: String) -> bool:
 	if officers.has(officer_key):
 		return officers[officer_key]["alive"]
 	return false
+
+
+## Check if a colonist loss milestone has been shown
+func has_shown_milestone(threshold: int) -> bool:
+	return shown_milestones.has(threshold)
+
+
+## Mark a colonist loss milestone as shown
+func mark_milestone_shown(threshold: int) -> void:
+	if not shown_milestones.has(threshold):
+		shown_milestones.append(threshold)
 
 
 func damage_ship(amount: int) -> void:
@@ -269,6 +283,8 @@ func save_game() -> bool:
 		"total_enemies_killed": total_enemies_killed,
 		"total_missions_completed": total_missions_completed,
 		"total_tactical_turns": total_tactical_turns,
+		# Milestone tracking
+		"shown_milestones": shown_milestones,
 	}
 	
 	var file = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -280,7 +296,6 @@ func save_game() -> bool:
 	file.store_string(json_string)
 	file.close()
 	
-	print("Game saved successfully!")
 	return true
 
 
@@ -351,12 +366,17 @@ func load_game() -> bool:
 	total_missions_completed = int(save_data.get("total_missions_completed", 0))
 	total_tactical_turns = int(save_data.get("total_tactical_turns", 0))
 	
+	# Restore milestone tracking
+	shown_milestones.clear()
+	var loaded_milestones = save_data.get("shown_milestones", [])
+	for milestone in loaded_milestones:
+		shown_milestones.append(int(milestone))
+	
 	# Reset tactical state
 	cryo_stability = 100
 	tactical_turn_count = 0
 	is_in_tactical_mode = false
 	
-	print("Game loaded successfully!")
 	return true
 
 
@@ -369,7 +389,6 @@ func has_save_file() -> bool:
 func delete_save() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(SAVE_PATH)
-		print("Save file deleted!")
 
 
 ## Store star map data for saving

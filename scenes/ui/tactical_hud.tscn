@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://dp7k2m5qr8vnx"]
 
 [ext_resource type="Script" uid="uid://5cjenw3gw7mt" path="res://scripts/ui/tactical_hud.gd" id="1_hud"]
+[ext_resource type="PackedScene" uid="uid://b8k3m2n4p5q6r" path="res://scenes/ui/objectives_panel.tscn" id="9_objectives"]
 [ext_resource type="Texture2D" uid="uid://vo2viufuvim8" path="res://assets/sprites/ui/icons/icon_turn.png" id="2_turn"]
 [ext_resource type="Texture2D" uid="uid://4urc04o06ois" path="res://assets/sprites/ui/icons/icon_cryo.png" id="3_cryo"]
 [ext_resource type="Texture2D" uid="uid://bogrtadpxsc8r" path="res://assets/sprites/ui/icons/icon_fuel.png" id="4_fuel"]
@@ -521,3 +522,5 @@ offset_bottom = 552.0
 grow_horizontal = 0
 mouse_filter = 2
 color = Color(0.4, 0.9, 1, 0.8)
+
+[node name="ObjectivesPanel" parent="." instance=ExtResource("9_objectives") unique_id=999888777]

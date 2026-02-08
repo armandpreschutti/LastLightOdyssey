@@ -12,7 +12,11 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/mission_recap.tscn" id="7_recap"]
 [ext_resource type="PackedScene" path="res://scenes/ui/new_earth_scene_dialog.tscn" id="8_new_earth"]
 [ext_resource type="PackedScene" path="res://scenes/ui/voyage_recap.tscn" id="9_voyage_recap"]
-[ext_resource type="Script" path="res://scripts/tactical/biome_background.gd" id="10_background"]
+[ext_resource type="PackedScene" path="res://scenes/ui/voyage_intro_scene_dialog.tscn" id="10_voyage_intro"]
+[ext_resource type="PackedScene" path="res://scenes/ui/colonist_loss_scene_dialog.tscn" id="11_colonist_loss"]
+[ext_resource type="PackedScene" path="res://scenes/ui/game_over_scene_dialog.tscn" id="12_game_over_scene"]
+[ext_resource type="PackedScene" path="res://scenes/ui/game_over_recap.tscn" id="13_game_over_recap"]
+[ext_resource type="Script" path="res://scripts/tactical/biome_background.gd" id="11_background"]
 
 [node name="Main" type="Node" unique_id=588289983]
 script = ExtResource("1_main")
@@ -27,7 +31,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-script = ExtResource("10_background")
+script = ExtResource("11_background")
 
 [node name="ManagementLayer" type="CanvasLayer" parent="." unique_id=467690676]
 
@@ -175,191 +179,17 @@ visible = false
 [node name="VoyageRecap" parent="DialogLayer" unique_id=568586236 instance=ExtResource("9_voyage_recap")]
 visible = false
 
-[node name="GameOverPanel" type="Control" parent="DialogLayer" unique_id=600841004]
+[node name="VoyageIntroSceneDialog" parent="DialogLayer" unique_id=1316561820 instance=ExtResource("10_voyage_intro")]
 visible = false
-layout_mode = 3
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
 
-[node name="ColorRect" type="ColorRect" parent="DialogLayer/GameOverPanel" unique_id=830853877]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(0, 0, 0.05, 0.85)
+[node name="ColonistLossSceneDialog" parent="DialogLayer" unique_id=1316561821 instance=ExtResource("11_colonist_loss")]
+visible = false
 
-[node name="GlowEffect" type="ColorRect" parent="DialogLayer/GameOverPanel" unique_id=1603458117]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -308.0
-offset_top = -158.0
-offset_right = 308.0
-offset_bottom = 158.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(1, 0.3, 0.2, 0.15)
+[node name="GameOverSceneDialog" parent="DialogLayer" unique_id=1316561822 instance=ExtResource("12_game_over_scene")]
+visible = false
 
-[node name="BorderOuter" type="ColorRect" parent="DialogLayer/GameOverPanel" unique_id=97271261]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -304.0
-offset_top = -154.0
-offset_right = 304.0
-offset_bottom = 154.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(1, 0.3, 0.2, 0.6)
-
-[node name="PanelContainer" type="PanelContainer" parent="DialogLayer/GameOverPanel" unique_id=1667268322]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -300.0
-offset_top = -150.0
-offset_right = 300.0
-offset_bottom = 150.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="BackgroundGradient" type="ColorRect" parent="DialogLayer/GameOverPanel/PanelContainer" unique_id=595503827]
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.03, 0.02, 0.05, 0.98)
-
-[node name="MarginContainer" type="MarginContainer" parent="DialogLayer/GameOverPanel/PanelContainer" unique_id=766491755]
-layout_mode = 2
-theme_override_constants/margin_left = 30
-theme_override_constants/margin_top = 30
-theme_override_constants/margin_right = 30
-theme_override_constants/margin_bottom = 30
-
-[node name="VBoxContainer" type="VBoxContainer" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer" unique_id=536367539]
-layout_mode = 2
-theme_override_constants/separation = 20
-
-[node name="HeaderContainer" type="HBoxContainer" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer" unique_id=43178947]
-layout_mode = 2
-mouse_filter = 2
-alignment = 1
-
-[node name="LeftDecor" type="ColorRect" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=1334344964]
-custom_minimum_size = Vector2(40, 2)
-layout_mode = 2
-size_flags_vertical = 4
-mouse_filter = 2
-color = Color(1, 0.3, 0.2, 0.5)
-
-[node name="GameOverLabel" type="Label" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=794628916]
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.3, 0.2, 1)
-theme_override_font_sizes/font_size = 28
-text = "[ GAME OVER ]"
-horizontal_alignment = 1
-autowrap_mode = 2
-
-[node name="RightDecor" type="ColorRect" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=1367484955]
-custom_minimum_size = Vector2(40, 2)
-layout_mode = 2
-size_flags_vertical = 4
-mouse_filter = 2
-color = Color(1, 0.3, 0.2, 0.5)
-
-[node name="HSeparator" type="ColorRect" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer" unique_id=1553207437]
-custom_minimum_size = Vector2(0, 1)
-layout_mode = 2
-mouse_filter = 2
-color = Color(1, 0.3, 0.2, 0.3)
-
-[node name="RestartButton" type="Button" parent="DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer" unique_id=36964410]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
-theme_override_colors/font_hover_color = Color(0.7, 1, 1, 1)
-theme_override_font_sizes/font_size = 20
-text = "[ RESTART ]"
-
-[node name="CornerTL" type="ColorRect" parent="DialogLayer/GameOverPanel" unique_id=1379616265]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -300.0
-offset_top = -150.0
-offset_right = -292.0
-offset_bottom = -142.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(1, 0.3, 0.2, 0.8)
-
-[node name="CornerTR" type="ColorRect" parent="DialogLayer/GameOverPanel" unique_id=2094652331]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = 292.0
-offset_top = -150.0
-offset_right = 300.0
-offset_bottom = -142.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(1, 0.3, 0.2, 0.8)
-
-[node name="CornerBL" type="ColorRect" parent="DialogLayer/GameOverPanel" unique_id=1444555127]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -300.0
-offset_top = 142.0
-offset_right = -292.0
-offset_bottom = 150.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(1, 0.3, 0.2, 0.8)
-
-[node name="CornerBR" type="ColorRect" parent="DialogLayer/GameOverPanel" unique_id=19097730]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = 292.0
-offset_top = 142.0
-offset_right = 300.0
-offset_bottom = 150.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(1, 0.3, 0.2, 0.8)
+[node name="GameOverRecap" parent="DialogLayer" unique_id=1316561823 instance=ExtResource("13_game_over_recap")]
+visible = false
 
 [node name="TacticalMode" parent="." unique_id=45556294 instance=ExtResource("5_tactical")]
 visible = false

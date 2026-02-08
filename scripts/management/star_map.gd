@@ -347,15 +347,9 @@ func _update_node_states() -> void:
 
 ## Handle node click
 func _on_node_clicked(node_id: int) -> void:
-	print("StarMap: Node %d clicked" % node_id)
-	print("StarMap: Current node: %d" % GameState.current_node_index)
-	print("StarMap: Is reachable: %s" % _is_node_reachable(node_id))
 	
 	if _is_node_reachable(node_id):
-		print("StarMap: Emitting node_clicked signal for node %d" % node_id)
 		node_clicked.emit(node_id)
-	else:
-		print("StarMap: Node %d is not reachable!" % node_id)
 
 
 ## Refresh the map after a jump

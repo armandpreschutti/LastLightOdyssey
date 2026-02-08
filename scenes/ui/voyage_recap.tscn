@@ -215,13 +215,29 @@ layout_mode = 2
 mouse_filter = 2
 color = Color(0.4, 0.9, 1.0, 0.3)
 
-[node name="ContinueButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer"]
-custom_minimum_size = Vector2(250, 45)
+[node name="ButtonContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 4
+theme_override_constants/separation = 20
+
+[node name="MainMenuButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer"]
+custom_minimum_size = Vector2(200, 45)
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.4, 0.9, 1.0, 1)
 theme_override_colors/font_hover_color = Color(0.7, 1.0, 1.0, 1)
 theme_override_colors/font_pressed_color = Color(0.2, 0.6, 0.8, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 20
-text = "[ CONTINUE ]"
+text = "[ MAIN MENU ]"
+
+[node name="RestartButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer"]
+custom_minimum_size = Vector2(200, 45)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.4, 0.9, 1.0, 1)
+theme_override_colors/font_hover_color = Color(0.7, 1.0, 1.0, 1)
+theme_override_colors/font_pressed_color = Color(0.2, 0.6, 0.8, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 20
+text = "[ RESTART ]"

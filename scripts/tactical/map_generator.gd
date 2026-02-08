@@ -215,8 +215,12 @@ func _carve_corridor(layout: Dictionary, from: Vector2i, to: Vector2i, width: in
 
 func _add_cover_to_rooms(layout: Dictionary, density: float) -> void:
 	var cover_count = int(map_width * map_height * density)
+	var placed = 0
+	var attempts = 0
+	var max_attempts = cover_count * 20
 	
-	for _i in range(cover_count):
+	while placed < cover_count and attempts < max_attempts:
+		attempts += 1
 		var pos = Vector2i(randi_range(2, map_width - 3), randi_range(2, map_height - 3))
 		
 		# Only place on floor tiles, not near edges
@@ -227,9 +231,15 @@ func _add_cover_to_rooms(layout: Dictionary, density: float) -> void:
 				if layout.get(pos + dir, TileType.WALL) == TileType.FLOOR:
 					floor_neighbors += 1
 			
-			# Only place if not in a tight corridor
+			# Only place if not in a tight corridor AND doesn't block connectivity
 			if floor_neighbors >= 3:
+				# Temporarily place cover to test connectivity
 				layout[pos] = TileType.HALF_COVER
+				if _check_map_connectivity(layout):
+					placed += 1
+				else:
+					# Revert if it blocks connectivity
+					layout[pos] = TileType.FLOOR
 
 #endregion
 
@@ -382,7 +392,6 @@ func _expand_cave(layout: Dictionary) -> void:
 
 func _carve_emergency_cave(layout: Dictionary) -> void:
 	# Carve out a basic cave system when cellular automata fails completely
-	print("Emergency cave carving activated - cellular automata produced no floor tiles")
 	
 	# Create a winding path from top-right to bottom-left
 	var current = Vector2i(map_width - 4, 4)
@@ -461,8 +470,13 @@ func _add_cave_cover(layout: Dictionary, density: float) -> void:
 					floor_neighbors += 1
 			
 			if floor_neighbors >= 3:
+				# Temporarily place cover to test connectivity
 				layout[pos] = TileType.HALF_COVER
-				placed += 1
+				if _check_map_connectivity(layout):
+					placed += 1
+				else:
+					# Revert if it blocks connectivity
+					layout[pos] = TileType.FLOOR
 
 
 func _identify_cave_regions(layout: Dictionary) -> void:
@@ -589,9 +603,14 @@ func _add_scattered_cover(layout: Dictionary, density: float) -> void:
 				break
 		
 		if not too_close:
+			# Temporarily place cover to test connectivity
 			layout[pos] = TileType.HALF_COVER
-			cover_positions.append(pos)
-			placed += 1
+			if _check_map_connectivity(layout):
+				cover_positions.append(pos)
+				placed += 1
+			else:
+				# Revert if it blocks connectivity
+				layout[pos] = TileType.FLOOR
 
 
 func _create_open_spawn_regions() -> void:
@@ -625,6 +644,63 @@ func _add_extraction_zone(layout: Dictionary) -> void:
 			var pos = Vector2i(x, y)
 			# Clear any walls/cover for extraction
 			layout[pos] = TileType.EXTRACTION
+
+#endregion
+
+#region Connectivity Check
+
+## Check if the map remains connected after placing a cover
+## Returns true if all floor tiles are reachable from each other
+func _check_map_connectivity(layout: Dictionary) -> bool:
+	# Find all walkable tiles (FLOOR and EXTRACTION)
+	var walkable_tiles: Array[Vector2i] = []
+	for x in range(1, map_width - 1):
+		for y in range(1, map_height - 1):
+			var pos = Vector2i(x, y)
+			var tile_type = layout.get(pos, TileType.WALL)
+			if tile_type == TileType.FLOOR or tile_type == TileType.EXTRACTION:
+				walkable_tiles.append(pos)
+	
+	# If no walkable tiles, consider it connected (edge case)
+	if walkable_tiles.is_empty():
+		return true
+	
+	# Use flood-fill from the first walkable tile to see how many we can reach
+	var start_pos = walkable_tiles[0]
+	var visited: Dictionary = {}
+	var reachable_count = _flood_fill_walkable(layout, start_pos, visited)
+	
+	# Map is connected if we can reach all walkable tiles
+	return reachable_count == walkable_tiles.size()
+
+
+## Flood-fill to count reachable walkable tiles (FLOOR and EXTRACTION)
+func _flood_fill_walkable(layout: Dictionary, start: Vector2i, visited: Dictionary) -> int:
+	var count = 0
+	var queue: Array[Vector2i] = [start]
+	visited[start] = true
+	
+	while queue.size() > 0:
+		var pos = queue.pop_front()
+		count += 1
+		
+		# Check all 4 cardinal directions
+		for dir in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var neighbor = pos + dir
+			
+			# Skip if out of bounds or already visited
+			if neighbor.x < 1 or neighbor.x >= map_width - 1 or \
+			   neighbor.y < 1 or neighbor.y >= map_height - 1 or \
+			   visited.has(neighbor):
+				continue
+			
+			# Check if neighbor is walkable (FLOOR or EXTRACTION, not WALL or HALF_COVER)
+			var tile_type = layout.get(neighbor, TileType.WALL)
+			if tile_type == TileType.FLOOR or tile_type == TileType.EXTRACTION:
+				visited[neighbor] = true
+				queue.append(neighbor)
+	
+	return count
 
 #endregion
 

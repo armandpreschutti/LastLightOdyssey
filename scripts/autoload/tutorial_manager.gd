@@ -104,10 +104,8 @@ func _save_tutorial_state() -> void:
 ## Start the tutorial (called when new game begins)
 func start_tutorial() -> void:
 	if tutorial_completed_flag:
-		print("TutorialManager: Tutorial already completed, skipping")
 		return
 	
-	print("TutorialManager: Starting tutorial")
 	is_tutorial_active = true
 	current_step_index = 0
 	_trigger_current_step()
@@ -119,7 +117,6 @@ func reset_tutorial() -> void:
 	current_step_index = 0
 	is_tutorial_active = false
 	_save_tutorial_state()
-	print("TutorialManager: Tutorial reset")
 
 
 ## Skip the entire tutorial
@@ -127,7 +124,6 @@ func skip_tutorial() -> void:
 	if not is_tutorial_active:
 		return
 	
-	print("TutorialManager: Tutorial skipped")
 	is_tutorial_active = false
 	tutorial_completed_flag = true
 	_save_tutorial_state()
@@ -156,7 +152,6 @@ func notify_trigger(trigger_name: String) -> void:
 	if current_step.is_empty():
 		return
 	
-	print("TutorialManager: Received trigger '%s', expecting '%s'" % [trigger_name, current_step.get("trigger", "")])
 	
 	if current_step.get("trigger", "") == trigger_name:
 		advance_step()
@@ -214,12 +209,10 @@ func _trigger_current_step() -> void:
 	if step.is_empty():
 		return
 	
-	print("TutorialManager: Triggering step '%s'" % step.get("id", "unknown"))
 	tutorial_step_triggered.emit(step.get("id", ""), step)
 
 
 func _complete_tutorial() -> void:
-	print("TutorialManager: Tutorial completed!")
 	is_tutorial_active = false
 	tutorial_completed_flag = true
 	_save_tutorial_state()

@@ -67,6 +67,7 @@ var _death_tween: Tween = null
 
 
 func _ready() -> void:
+	set_process(false)
 	selection_indicator.visible = false
 	if overwatch_indicator:
 		overwatch_indicator.visible = false
@@ -138,6 +139,7 @@ func _process(delta: float) -> void:
 
 			if _move_path.is_empty():
 				_moving = false
+				set_process(false)
 				movement_finished.emit()
 
 
@@ -157,7 +159,8 @@ func move_along_path(path: PackedVector2Array) -> void:
 	
 	_move_path = centered_path
 	_moving = true
-	
+	set_process(true)
+
 	# Stop idle animation while moving
 	_stop_idle_animation()
 

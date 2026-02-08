@@ -45,7 +45,6 @@ func _ready() -> void:
 
 
 func _connect_signals() -> void:
-	print("SettingsMenu: Connecting signals...")
 	
 	# Verify all nodes exist
 	if not fullscreen_toggle:
@@ -82,13 +81,11 @@ func _connect_signals() -> void:
 		push_error("SettingsMenu: apply_button is null!")
 	else:
 		apply_button.pressed.connect(_on_apply_pressed)
-		print("SettingsMenu: Apply button connected successfully")
 		
 	if not back_button:
 		push_error("SettingsMenu: back_button is null!")
 	else:
 		back_button.pressed.connect(_on_back_pressed)
-		print("SettingsMenu: Back button connected successfully")
 
 
 func _load_settings() -> void:
@@ -151,8 +148,6 @@ func _update_volume_labels() -> void:
 func _apply_display_settings() -> void:
 	# Check if running in editor - display settings have limitations there
 	if OS.has_feature("editor"):
-		print("SettingsMenu: Running in editor - display settings saved but window changes may not apply fully")
-		print("SettingsMenu: Settings will apply correctly when running exported build")
 		return
 	
 	# Apply fullscreen
@@ -199,7 +194,6 @@ func _on_music_changed(value: float) -> void:
 
 
 func _on_reset_tutorial_pressed() -> void:
-	print("SettingsMenu: Reset Tutorial pressed!")
 	var config = ConfigFile.new()
 	config.load(CONFIG_PATH)
 	config.set_value("tutorial", "completed", false)
@@ -208,7 +202,6 @@ func _on_reset_tutorial_pressed() -> void:
 	# Notify TutorialManager (it's an autoload, not a singleton)
 	if TutorialManager:
 		TutorialManager.reset_tutorial()
-		print("SettingsMenu: TutorialManager.reset_tutorial() called")
 	
 	# Visual feedback
 	reset_tutorial_button.text = "[ TUTORIAL RESET! ]"
@@ -224,8 +217,6 @@ func _on_reset_tutorial_pressed() -> void:
 
 func _on_apply_pressed() -> void:
 	AudioManager.play_sfx("ui_click")
-	print("SettingsMenu: Apply pressed!")
-	print("SettingsMenu: Fullscreen = %s, Resolution = %d" % [_pending_fullscreen, _pending_resolution])
 	_save_settings()
 	_apply_display_settings()
 	_apply_audio_settings()

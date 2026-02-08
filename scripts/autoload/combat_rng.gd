@@ -44,11 +44,7 @@ func roll_attack(hit_chance: float, is_player: bool, unit_id: int) -> bool:
 		var bonus = minf(miss_streak * MISS_STREAK_BONUS, MAX_MISS_STREAK_BONUS)
 		effective_chance = minf(base_chance + bonus, 0.95)  # Cap at 95% even with bonus
 		
-		if miss_streak > 0:
-			print("[CombatRNG] Unit %d: Base %.0f%% + %.0f%% streak bonus = %.0f%% effective" % [
-				unit_id, hit_chance, bonus * 100, effective_chance * 100
-			])
-	
+
 	# Roll the dice
 	var roll = randf()
 	var hit = roll <= effective_chance
@@ -61,7 +57,6 @@ func roll_attack(hit_chance: float, is_player: bool, unit_id: int) -> bool:
 		else:
 			# Increment streak on miss
 			streak_dict[unit_id] = streak_dict.get(unit_id, 0) + 1
-			print("[CombatRNG] Unit %d missed! Streak now: %d" % [unit_id, streak_dict[unit_id]])
 	
 	return hit
 
@@ -76,7 +71,6 @@ func reset_unit_streak(is_player: bool, unit_id: int) -> void:
 func reset_all_streaks() -> void:
 	_player_miss_streaks.clear()
 	_enemy_miss_streaks.clear()
-	print("[CombatRNG] All miss streaks reset")
 
 
 ## Get current miss streak for a unit (for UI/debugging)

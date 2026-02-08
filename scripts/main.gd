@@ -10,17 +10,22 @@ extends Node
 @onready var mission_recap: Control = $DialogLayer/MissionRecap
 @onready var new_earth_scene: Control = $DialogLayer/NewEarthSceneDialog
 @onready var voyage_recap: Control = $DialogLayer/VoyageRecap
-@onready var game_over_panel: Control = $DialogLayer/GameOverPanel
-@onready var game_over_label: Label = $DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer/HeaderContainer/GameOverLabel
-@onready var restart_button: Button = $DialogLayer/GameOverPanel/PanelContainer/MarginContainer/VBoxContainer/RestartButton
+@onready var voyage_intro_scene_dialog: Control = $DialogLayer/VoyageIntroSceneDialog
+@onready var game_over_scene_dialog: Control = $DialogLayer/GameOverSceneDialog
+@onready var game_over_recap: Control = $DialogLayer/GameOverRecap
 @onready var team_select_dialog: Control = $DialogLayer/TeamSelectDialog
 @onready var mission_scene_dialog: Control = $DialogLayer/MissionSceneDialog
+@onready var colonist_loss_scene_dialog: Control = $DialogLayer/ColonistLossSceneDialog
 @onready var tactical_mode: Node2D = $TacticalMode
 @onready var management_layer: CanvasLayer = $ManagementLayer
 @onready var management_background: Control = $BackgroundLayer/Background
 
 var _pending_ending_type: String = ""  # Store ending type for the win sequence
 var _pending_officer_keys: Array[String] = []  # Store selected officers for mission start
+var _pending_node_after_colonist_loss: int = -1
+var _pending_biome_after_colonist_loss: int = -1
+var _pending_mission_recap_stats: Dictionary = {}
+var _pending_game_over_reason: String = ""  # Store game over reason for the sequence
 
 enum GamePhase { IDLE, EVENT_DISPLAY, TEAM_SELECT, TACTICAL, TRADING, GAME_OVER, GAME_WON }
 
@@ -39,9 +44,11 @@ func _ready() -> void:
 	_connect_signals()
 	_initialize_star_map()
 	_initialize_tutorial()
-	game_over_panel.visible = false
 	tactical_mode.visible = false
 	AudioManager.play_music("management")
+	
+	# Show voyage intro scene when starting a new voyage
+	_show_voyage_intro()
 
 
 func _connect_signals() -> void:
@@ -54,11 +61,16 @@ func _connect_signals() -> void:
 	tactical_mode.mission_complete.connect(_on_mission_complete)
 	mission_recap.recap_dismissed.connect(_on_recap_dismissed)
 	new_earth_scene.scene_dismissed.connect(_on_new_earth_scene_dismissed)
-	voyage_recap.recap_dismissed.connect(_on_voyage_recap_dismissed)
+	voyage_intro_scene_dialog.scene_dismissed.connect(_on_voyage_intro_scene_dismissed)
+	colonist_loss_scene_dialog.scene_dismissed.connect(_on_colonist_loss_scene_dismissed)
+	game_over_scene_dialog.scene_dismissed.connect(_on_game_over_scene_dismissed)
+	game_over_recap.main_menu_pressed.connect(_on_main_menu_pressed)
+	game_over_recap.restart_pressed.connect(_on_restart_pressed)
+	voyage_recap.main_menu_pressed.connect(_on_main_menu_pressed)
+	voyage_recap.restart_pressed.connect(_on_restart_pressed)
 	management_hud.quit_to_menu_pressed.connect(_on_quit_to_menu)
 	GameState.game_over.connect(_on_game_over)
 	GameState.game_won.connect(_on_game_won)
-	restart_button.pressed.connect(_on_restart_pressed)
 
 
 func _initialize_star_map() -> void:
@@ -88,18 +100,13 @@ func _initialize_tutorial() -> void:
 
 
 func _on_node_clicked(node_id: int) -> void:
-	print("Main: Node clicked signal received for node %d" % node_id)
-	print("Main: Current phase: %d" % current_phase)
 	
 	if current_phase != GamePhase.IDLE:
-		print("Main: Not in IDLE phase, ignoring click")
 		return
 	
 	if _is_jump_animating:
-		print("Main: Jump animation in progress, ignoring click")
 		return
 	
-	print("Main: Executing jump to node %d" % node_id)
 	
 	# Tutorial: Notify that a node was clicked (first time only for intro step)
 	if not _first_node_clicked:
@@ -109,7 +116,6 @@ func _on_node_clicked(node_id: int) -> void:
 	# Get fuel cost for this jump
 	var from_node = GameState.current_node_index
 	var fuel_cost = star_map.get_fuel_cost(from_node, node_id)
-	print("Main: Jump costs %d fuel" % fuel_cost)
 	
 	# Start ship jump animation, then execute jump when animation completes
 	_execute_jump_with_animation(from_node, node_id, fuel_cost)
@@ -137,32 +143,38 @@ func _execute_jump_with_animation(from_node_id: int, to_node_id: int, fuel_cost:
 	if current_phase == GamePhase.GAME_WON or current_phase == GamePhase.GAME_OVER:
 		return
 	
+	# Check for colonist loss milestones BEFORE showing other scenes
+	var threshold = _check_colonist_loss_milestones()
+	if threshold >= 0:
+		# Store pending node info to process after colonist loss scene
+		_pending_node_after_colonist_loss = star_map.get_node_type(to_node_id)
+		_pending_biome_after_colonist_loss = star_map.get_node_biome(to_node_id)
+		
+		# Show colonist loss scene first
+		current_phase = GamePhase.EVENT_DISPLAY
+		colonist_loss_scene_dialog.show_scene(threshold)
+		return
+	
+	# No colonist loss milestone, proceed with normal node logic
+	_process_node_after_jump(to_node_id)
+
+
+func _process_node_after_jump(node_id: int) -> void:
 	# Determine node type from the pre-rolled types
-	pending_node_type = star_map.get_node_type(to_node_id)
-	pending_biome_type = star_map.get_node_biome(to_node_id)
-	print("Main: Node type is %d, biome is %d" % [pending_node_type, pending_biome_type])
+	pending_node_type = star_map.get_node_type(node_id)
+	pending_biome_type = star_map.get_node_biome(node_id)
 	
 	match pending_node_type:
 		EventManager.NodeType.SCAVENGE_SITE:
-			# Show team selection for tactical mission
-			print("Main: Showing team selection dialog")
-			current_phase = GamePhase.TEAM_SELECT
-			
-			# Tutorial: Trigger scavenge intro before showing dialog
-			if TutorialManager.is_at_step("scavenge_intro"):
-				# The tutorial overlay will show, then player dismisses it
-				pass
-			
-			# Pass biome type to team select dialog for display
-			team_select_dialog.show_dialog(pending_biome_type)
+			# Show mission scene first, then team selection
+			current_phase = GamePhase.EVENT_DISPLAY
+			mission_scene_dialog.show_scene(pending_biome_type)
 		EventManager.NodeType.TRADING_OUTPOST:
 			# Show trading interface
-			print("Main: Showing trading outpost")
 			current_phase = GamePhase.TRADING
 			trading_dialog.show_trading()
 		_:
 			# Empty space - roll random event
-			print("Main: Triggering random event")
 			_trigger_random_event()
 
 
@@ -200,12 +212,24 @@ func _on_event_choice_made(use_specialist: bool) -> void:
 
 
 func _on_team_selected(officer_keys: Array[String]) -> void:
-	# Store officer keys for mission start after scene
+	# Store officer keys for mission start
 	_pending_officer_keys = officer_keys
 	
-	# Show mission scene dialog first
-	current_phase = GamePhase.EVENT_DISPLAY  # Use EVENT_DISPLAY phase for scene display
-	mission_scene_dialog.show_scene(pending_biome_type)
+	# Go directly to tactical mission (scene was already shown before team select)
+	current_phase = GamePhase.TACTICAL
+	AudioManager.play_music("combat")
+	
+	# Hide management UI, show tactical
+	management_layer.visible = false
+	management_background.visible = false
+	tactical_mode.visible = true
+	
+	# Tutorial: Notify that team was selected
+	TutorialManager.notify_trigger("team_selected")
+	
+	# Start the mission with biome type and stored officer keys
+	tactical_mode.start_mission(_pending_officer_keys, pending_biome_type)
+	_pending_officer_keys.clear()
 
 
 func _on_team_select_cancelled() -> void:
@@ -216,21 +240,29 @@ func _on_team_select_cancelled() -> void:
 
 
 func _on_mission_scene_dismissed() -> void:
-	# After mission scene is dismissed, start the tactical mission
-	current_phase = GamePhase.TACTICAL
-	AudioManager.play_music("combat")
-
-	# Hide management UI, show tactical
-	management_layer.visible = false
-	management_background.visible = false
-	tactical_mode.visible = true
-	
-	# Tutorial: Notify that team was selected
-	TutorialManager.notify_trigger("team_selected")
-
-	# Start the mission with biome type and stored officer keys
-	tactical_mode.start_mission(_pending_officer_keys, pending_biome_type)
-	_pending_officer_keys.clear()
+	# After mission scene is dismissed, check if we need to show team select
+	# If we have pending officers, we're in the old flow (shouldn't happen now)
+	# Otherwise, show team select dialog
+	if _pending_officer_keys.size() > 0:
+		# Old flow - start tactical mission directly (shouldn't happen with new flow)
+		current_phase = GamePhase.TACTICAL
+		AudioManager.play_music("combat")
+		
+		# Hide management UI, show tactical
+		management_layer.visible = false
+		management_background.visible = false
+		tactical_mode.visible = true
+		
+		# Tutorial: Notify that team was selected
+		TutorialManager.notify_trigger("team_selected")
+		
+		# Start the mission with biome type and stored officer keys
+		tactical_mode.start_mission(_pending_officer_keys, pending_biome_type)
+		_pending_officer_keys.clear()
+	else:
+		# New flow - show team select dialog after scene
+		current_phase = GamePhase.TEAM_SELECT
+		team_select_dialog.show_dialog(pending_biome_type)
 
 
 func _on_mission_complete(_success: bool, stats: Dictionary) -> void:
@@ -240,8 +272,18 @@ func _on_mission_complete(_success: bool, stats: Dictionary) -> void:
 	management_background.visible = true
 	AudioManager.play_music("management")
 	
-	# Show mission recap screen before returning to management
-	mission_recap.show_recap(stats)
+	# Check for colonist loss milestones BEFORE showing mission recap
+	var threshold = _check_colonist_loss_milestones()
+	if threshold >= 0:
+		# Store mission recap stats to show after colonist loss scene
+		_pending_mission_recap_stats = stats
+		
+		# Show colonist loss scene first
+		current_phase = GamePhase.EVENT_DISPLAY
+		colonist_loss_scene_dialog.show_scene(threshold)
+	else:
+		# No colonist loss milestone, show mission recap directly
+		mission_recap.show_recap(stats)
 
 
 func _on_recap_dismissed() -> void:
@@ -257,6 +299,7 @@ func _on_recap_dismissed() -> void:
 
 func _on_game_over(reason: String) -> void:
 	current_phase = GamePhase.GAME_OVER
+	_pending_game_over_reason = reason
 	event_dialog.hide_dialog()
 	tactical_mode.visible = false
 	management_layer.visible = true
@@ -264,8 +307,8 @@ func _on_game_over(reason: String) -> void:
 	AudioManager.stop_music(1.5)
 	AudioManager.play_sfx("alarm_game_over")
 
-	game_over_label.text = GameState.get_game_over_text(reason)
-	game_over_panel.visible = true
+	# Show game over scene dialog first
+	game_over_scene_dialog.show_scene(reason)
 
 
 func _on_game_won(ending_type: String) -> void:
@@ -286,16 +329,95 @@ func _on_new_earth_scene_dismissed() -> void:
 	voyage_recap.show_recap(_pending_ending_type)
 
 
-func _on_voyage_recap_dismissed() -> void:
-	# After voyage recap, return to title menu
-	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
+func _on_game_over_scene_dismissed() -> void:
+	# After game over scene, show the recap
+	game_over_recap.show_recap(_pending_game_over_reason)
+
+
+func _show_voyage_intro() -> void:
+	# Show voyage intro scene when starting a new voyage
+	current_phase = GamePhase.EVENT_DISPLAY  # Use EVENT_DISPLAY phase to block interaction
+	voyage_intro_scene_dialog.show_scene()
+
+
+func _on_voyage_intro_scene_dismissed() -> void:
+	# After voyage intro is dismissed, allow normal gameplay
+	current_phase = GamePhase.IDLE
 
 
 func _on_trading_complete() -> void:
 	current_phase = GamePhase.IDLE
 
 
+## Get the colonist loss threshold that the current colonist count has crossed
+## Returns threshold (750, 500, 250, 100, 0) or -1 if none crossed
+func _get_colonist_loss_threshold() -> int:
+	var thresholds = [0, 100, 250, 500, 750]  # Check in descending order
+	var current_count = GameState.colonist_count
+	
+	for threshold in thresholds:
+		# Check if we've crossed this threshold (current count <= threshold)
+		if current_count <= threshold:
+			# Check if we haven't shown this milestone yet
+			if not GameState.has_shown_milestone(threshold):
+				return threshold
+	
+	return -1
+
+
+## Check if colonist loss milestone should be shown
+## Returns threshold that was crossed (or -1 if none)
+func _check_colonist_loss_milestones() -> int:
+	return _get_colonist_loss_threshold()
+
+
+## Handle colonist loss scene dismissal
+func _on_colonist_loss_scene_dismissed() -> void:
+	# Mark the milestone as shown
+	var threshold = _get_colonist_loss_threshold()
+	if threshold >= 0:
+		GameState.mark_milestone_shown(threshold)
+	
+	# Check if we have pending node logic to process
+	if _pending_node_after_colonist_loss >= 0:
+		var node_type = _pending_node_after_colonist_loss
+		var biome_type = _pending_biome_after_colonist_loss
+		
+		# Clear pending state
+		_pending_node_after_colonist_loss = -1
+		_pending_biome_after_colonist_loss = -1
+		
+		# Process the pending node
+		pending_node_type = node_type
+		pending_biome_type = biome_type
+		
+		match node_type:
+			EventManager.NodeType.SCAVENGE_SITE:
+				# Show mission scene first, then team selection
+				current_phase = GamePhase.EVENT_DISPLAY
+				mission_scene_dialog.show_scene(biome_type)
+			EventManager.NodeType.TRADING_OUTPOST:
+				current_phase = GamePhase.TRADING
+				trading_dialog.show_trading()
+			_:
+				_trigger_random_event()
+	# Check if we have pending mission recap to show
+	elif _pending_mission_recap_stats.size() > 0:
+		var stats = _pending_mission_recap_stats
+		_pending_mission_recap_stats = {}
+		mission_recap.show_recap(stats)
+	else:
+		# No pending logic, return to idle
+		current_phase = GamePhase.IDLE
+
+
 func _on_quit_to_menu() -> void:
+	AudioManager.stop_music(0.5)
+	# Return to title menu
+	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
+
+
+func _on_main_menu_pressed() -> void:
 	AudioManager.stop_music(0.5)
 	# Return to title menu
 	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
@@ -306,7 +428,7 @@ func _on_restart_pressed() -> void:
 	current_phase = GamePhase.IDLE
 	current_event = {}
 	pending_biome_type = -1
-	game_over_panel.visible = false
+	_pending_game_over_reason = ""
 	_first_node_clicked = false
 	_first_event_seen = false
 	_is_jump_animating = false
@@ -321,3 +443,6 @@ func _on_restart_pressed() -> void:
 	
 	# Restart tutorial if not completed
 	TutorialManager.start_tutorial()
+	
+	# Show voyage intro scene again
+	_show_voyage_intro()

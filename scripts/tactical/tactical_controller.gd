@@ -31,9 +31,17 @@ var mission_scrap_collected: int = 0  # Scrap collected during this mission
 var mission_enemies_killed: int = 0  # Enemies killed during this mission
 var current_biome: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION
 var is_scavenger_mission: bool = false  # Track if this is a scavenger mission
+var mission_objectives: Array[MissionObjective] = []  # Current mission objectives
 
 var FuelCrateScene: PackedScene
 var ScrapPileScene: PackedScene
+var MiningEquipmentScene: PackedScene
+var SecurityTerminalScene: PackedScene
+var DataLogScene: PackedScene
+var PowerCoreScene: PackedScene
+var SampleCollectorScene: PackedScene
+var BeaconScene: PackedScene
+var NestScene: PackedScene
 var OfficerUnitScene: PackedScene
 var EnemyUnitScene: PackedScene
 var TurretUnitScene: PackedScene
@@ -60,6 +68,13 @@ const HALF_COVER_ATTACK_BONUS: float = 5.0   # +5% hit chance when firing from h
 func _ready() -> void:
 	FuelCrateScene = load("res://scenes/tactical/fuel_crate.tscn")
 	ScrapPileScene = load("res://scenes/tactical/scrap_pile.tscn")
+	MiningEquipmentScene = load("res://scenes/tactical/mining_equipment.tscn")
+	SecurityTerminalScene = load("res://scenes/tactical/security_terminal.tscn")
+	DataLogScene = load("res://scenes/tactical/data_log.tscn")
+	PowerCoreScene = load("res://scenes/tactical/power_core.tscn")
+	SampleCollectorScene = load("res://scenes/tactical/sample_collector.tscn")
+	BeaconScene = load("res://scenes/tactical/beacon.tscn")
+	NestScene = load("res://scenes/tactical/nest.tscn")
 	OfficerUnitScene = load("res://scenes/tactical/officer_unit.tscn")
 	EnemyUnitScene = load("res://scenes/tactical/enemy_unit.tscn")
 	TurretUnitScene = load("res://scenes/tactical/turret_unit.tscn")
@@ -152,6 +167,13 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	# Generate map with biome type
 	current_biome = biome_type as BiomeConfig.BiomeType
 	
+	# Initialize mission objectives based on biome (only for scavenger missions)
+	mission_objectives.clear()
+	if is_scavenger_mission:
+		mission_objectives = MissionObjective.ObjectiveManager.get_objectives_for_biome(current_biome)
+		# Initialize objectives panel in HUD
+		tactical_hud.initialize_objectives(mission_objectives)
+	
 	# Update background pattern based on biome
 	if biome_background:
 		biome_background.set_biome(current_biome)
@@ -202,6 +224,147 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		loot.set_grid_position(loot_data["position"])
 		tactical_map.add_interactable(loot, loot_data["position"])
 	
+	# Spawn mining equipment for asteroid biome missions with mining-related objectives
+	if current_biome == BiomeConfig.BiomeType.ASTEROID and is_scavenger_mission:
+		# Check if mission has mining-related objectives
+		var has_activate_mining = false
+		var has_extract_minerals = false
+		var extract_minerals_max = 2
+		
+		for obj in mission_objectives:
+			if obj.id == "activate_mining":
+				has_activate_mining = true
+			elif obj.id == "extract_minerals":
+				has_extract_minerals = true
+				extract_minerals_max = obj.max_progress
+		
+		# Spawn mining equipment based on objectives
+		if has_activate_mining or has_extract_minerals:
+			map_dims = generator.get_map_dimensions()
+			var num_to_spawn = 1
+			
+			# For extract_minerals, spawn multiple units (one per required mineral)
+			if has_extract_minerals:
+				num_to_spawn = extract_minerals_max
+			# For activate_mining, spawn 1 unit
+			elif has_activate_mining:
+				num_to_spawn = 1
+			
+			# Track positions we've already used to avoid duplicates
+			var used_positions: Array[Vector2i] = []
+			
+			# Spawn mining equipment units
+			for i in range(num_to_spawn):
+				var mining_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
+				if mining_pos != Vector2i(-1, -1):
+					used_positions.append(mining_pos)
+					var mining_equipment = MiningEquipmentScene.instantiate()
+					mining_equipment.set_grid_position(mining_pos)
+					tactical_map.add_interactable(mining_equipment, mining_pos)
+	
+	# Spawn objective interactables for STATION biome missions
+	if current_biome == BiomeConfig.BiomeType.STATION and is_scavenger_mission:
+		# Check if mission has station-related objectives
+		var has_hack_security = false
+		var has_retrieve_logs = false
+		var retrieve_logs_max = 3
+		var has_repair_core = false
+		
+		for obj in mission_objectives:
+			if obj.id == "hack_security":
+				has_hack_security = true
+			elif obj.id == "retrieve_logs":
+				has_retrieve_logs = true
+				retrieve_logs_max = obj.max_progress
+			elif obj.id == "repair_core":
+				has_repair_core = true
+		
+		# Spawn objective interactables based on objectives
+		if has_hack_security or has_retrieve_logs or has_repair_core:
+			map_dims = generator.get_map_dimensions()
+			var used_positions: Array[Vector2i] = []
+			
+			# Spawn security terminal (binary objective - 1 unit)
+			if has_hack_security:
+				var terminal_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
+				if terminal_pos != Vector2i(-1, -1):
+					used_positions.append(terminal_pos)
+					var security_terminal = SecurityTerminalScene.instantiate()
+					security_terminal.set_grid_position(terminal_pos)
+					tactical_map.add_interactable(security_terminal, terminal_pos)
+			
+			# Spawn data logs (progress objective - multiple units)
+			if has_retrieve_logs:
+				for i in range(retrieve_logs_max):
+					var log_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
+					if log_pos != Vector2i(-1, -1):
+						used_positions.append(log_pos)
+						var data_log = DataLogScene.instantiate()
+						data_log.set_grid_position(log_pos)
+						tactical_map.add_interactable(data_log, log_pos)
+			
+			# Spawn power core (binary objective - 1 unit)
+			if has_repair_core:
+				var core_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
+				if core_pos != Vector2i(-1, -1):
+					used_positions.append(core_pos)
+					var power_core = PowerCoreScene.instantiate()
+					power_core.set_grid_position(core_pos)
+					tactical_map.add_interactable(power_core, core_pos)
+	
+	# Spawn objective interactables for PLANET biome missions
+	if current_biome == BiomeConfig.BiomeType.PLANET and is_scavenger_mission:
+		# Check if mission has planet-related objectives
+		var has_collect_samples = false
+		var collect_samples_max = 5
+		var has_activate_beacons = false
+		var activate_beacons_max = 3
+		var has_clear_nests = false
+		
+		for obj in mission_objectives:
+			if obj.id == "collect_samples":
+				has_collect_samples = true
+				collect_samples_max = obj.max_progress
+			elif obj.id == "activate_beacons":
+				has_activate_beacons = true
+				activate_beacons_max = obj.max_progress
+			elif obj.id == "clear_nests":
+				has_clear_nests = true
+		
+		# Spawn objective interactables based on objectives
+		if has_collect_samples or has_activate_beacons or has_clear_nests:
+			map_dims = generator.get_map_dimensions()
+			var used_positions: Array[Vector2i] = []
+			
+			# Spawn sample collectors (progress objective - multiple units)
+			if has_collect_samples:
+				for i in range(collect_samples_max):
+					var sample_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
+					if sample_pos != Vector2i(-1, -1):
+						used_positions.append(sample_pos)
+						var sample_collector = SampleCollectorScene.instantiate()
+						sample_collector.set_grid_position(sample_pos)
+						tactical_map.add_interactable(sample_collector, sample_pos)
+			
+			# Spawn beacons (progress objective - multiple units)
+			if has_activate_beacons:
+				for i in range(activate_beacons_max):
+					var beacon_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
+					if beacon_pos != Vector2i(-1, -1):
+						used_positions.append(beacon_pos)
+						var beacon = BeaconScene.instantiate()
+						beacon.set_grid_position(beacon_pos)
+						tactical_map.add_interactable(beacon, beacon_pos)
+			
+			# Spawn nests (binary objective - 1 unit)
+			if has_clear_nests:
+				var nest_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
+				if nest_pos != Vector2i(-1, -1):
+					used_positions.append(nest_pos)
+					var nest = NestScene.instantiate()
+					nest.set_grid_position(nest_pos)
+					tactical_map.add_interactable(nest, nest_pos)
+	
 	# Spawn enemies with difficulty-based scaling
 	var difficulty = GameState.get_mission_difficulty()
 	var enemy_positions = generator.get_enemy_spawn_positions(difficulty)
@@ -235,11 +398,8 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	tactical_hud.visible = true
 
 	# Play beam down animation for scavenger missions
-	print("Tactical: is_scavenger_mission = ", is_scavenger_mission, ", deployed_officers.size() = ", deployed_officers.size())
 	if is_scavenger_mission and deployed_officers.size() > 0:
-		print("Tactical: Playing beam down animation")
 		await _play_beam_down_animation()
-		print("Tactical: Beam down animation complete")
 	
 	# Now activate the mission and start the turn
 	mission_active = true
@@ -282,6 +442,10 @@ func _on_tile_clicked(grid_pos: Vector2i) -> void:
 	if not mission_active:
 		return
 	
+	# Prevent input during animations (including enemy overwatch)
+	if is_animating:
+		return
+	
 	# Check if it's the current unit's turn
 	if not _is_current_unit_turn():
 		return
@@ -316,19 +480,12 @@ func _on_tile_clicked(grid_pos: Vector2i) -> void:
 	if enemy_at_pos and selected_unit and selected_unit in deployed_officers:
 		# Try to shoot the enemy (only if visible and alive)
 		if enemy_at_pos.current_hp <= 0:
-			print("Cannot shoot: Enemy is already dead")
 			return
 		
 		if not _is_enemy_visible(enemy_at_pos):
-			print("Cannot shoot: Enemy not visible")
 			return
 		
 		if not selected_unit.can_shoot_at(grid_pos):
-			var distance = abs(grid_pos.x - selected_unit.get_grid_position().x) + abs(grid_pos.y - selected_unit.get_grid_position().y)
-			if distance > selected_unit.shoot_range:
-				print("Cannot shoot: Out of range (distance: %d, max: %d)" % [distance, selected_unit.shoot_range])
-			elif not selected_unit.has_ap(1):
-				print("Cannot shoot: Not enough AP (current: %d)" % selected_unit.current_ap)
 			return
 		
 		await execute_shot(selected_unit, grid_pos, enemy_at_pos)
@@ -460,10 +617,23 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 	# Update enemy visibility (also updates attackable highlights)
 	_update_enemy_visibility()
 	
+	# Check for nest objective completion (PLANET biome - must move to nest square)
+	if current_biome == BiomeConfig.BiomeType.PLANET and is_scavenger_mission and unit in deployed_officers:
+		var nest_interactable = tactical_map.get_interactable_at(pos)
+		if nest_interactable and nest_interactable.has_method("get_objective_id"):
+			var objective_id = nest_interactable.get_objective_id()
+			if objective_id == "clear_nests":
+				# Complete objective when player moves to nest square
+				_complete_objective("clear_nests")
+				# Remove the nest after objective is completed
+				nest_interactable.queue_free()
+	
 	# Auto-pickup: Check if there's an interactable at this position
 	var interactable = tactical_map.get_interactable_at(pos)
 	if interactable:
-		_auto_pickup(interactable)
+		# Skip auto-pickup for nests (handled above)
+		if not (interactable.has_method("get_objective_id") and interactable.get_objective_id() == "clear_nests"):
+			_auto_pickup(interactable)
 
 	# Check extraction availability
 	_check_extraction_available()
@@ -546,7 +716,69 @@ func _auto_pickup(interactable: Node2D) -> void:
 
 
 func _pickup_item(interactable: Node2D) -> void:
-	# Track what was collected by type
+	# Check if this is an objective interactable (like mining equipment)
+	if interactable.has_method("get_objective_id"):
+		var objective_id = interactable.get_objective_id()
+		
+		# ASTEROID objectives
+		if objective_id == "activate_mining":
+			# Handle both activate_mining (binary) and extract_minerals (progress) objectives
+			# Complete activate_mining if that's the current objective
+			_complete_objective("activate_mining")
+			# Progress extract_minerals if that's the current objective
+			_update_objective_progress("extract_minerals", 1)
+			# Interact with the item (will mark it as activated but not remove it)
+			interactable.interact()
+			return
+		
+		# STATION objectives
+		if objective_id == "hack_security":
+			# Binary objective - complete it
+			_complete_objective("hack_security")
+			# Interact with the item (will mark it as activated but not remove it)
+			interactable.interact()
+			return
+		
+		if objective_id == "retrieve_logs":
+			# Progress objective - update progress
+			_update_objective_progress("retrieve_logs", 1)
+			# Interact with the item (will remove it)
+			interactable.interact()
+			return
+		
+		if objective_id == "repair_core":
+			# Binary objective - complete it
+			_complete_objective("repair_core")
+			# Interact with the item (will mark it as activated but not remove it)
+			interactable.interact()
+			return
+		
+		# PLANET objectives
+		if objective_id == "collect_samples":
+			# Progress objective - update progress
+			_update_objective_progress("collect_samples", 1)
+			# Interact with the item (will remove it)
+			interactable.interact()
+			return
+		
+		if objective_id == "activate_beacons":
+			# Progress objective - update progress
+			_update_objective_progress("activate_beacons", 1)
+			# Interact with the item (will mark it as activated but not remove it)
+			interactable.interact()
+			return
+		
+		if objective_id == "clear_nests":
+			# For PLANET biome, nest objective is completed by moving to the nest square, not by interaction
+			# This code path should not be reached for nests (they're handled in movement_finished)
+			# But keep it as a fallback in case interaction happens
+			_complete_objective("clear_nests")
+			# Interact with the item (will remove it)
+			interactable.interact()
+			return
+	
+	# Track what was collected by type (normal loot)
+	# NOTE: Fuel and scrap do NOT count toward objectives - only objective-specific interactables do
 	if interactable.has_method("get_item_type"):
 		var item_type = interactable.get_item_type()
 		if item_type == "fuel":
@@ -595,7 +827,6 @@ func _check_auto_end_turn() -> void:
 	
 	# If unit has no AP remaining, automatically end their turn
 	if not current_unit.has_ap():
-		print("Unit %s out of AP, auto-ending turn" % current_unit.officer_key)
 		_on_end_turn_pressed()
 
 
@@ -891,6 +1122,32 @@ func _end_mission(success: bool) -> void:
 			"max_hp": officer.max_hp,
 		})
 	
+	# Check objective completion and apply bonus rewards
+	var bonus_fuel = 0
+	var bonus_scrap = 0
+	var objectives_data: Array = []
+	if is_scavenger_mission and not mission_objectives.is_empty():
+		var objective = mission_objectives[0]  # Single objective
+		if objective.completed:
+			var bonuses = MissionObjective.ObjectiveManager.get_bonus_rewards(objective)
+			bonus_fuel = bonuses.get("fuel", 0)
+			bonus_scrap = bonuses.get("scrap", 0)
+			# Apply bonuses to mission collection
+			mission_fuel_collected += bonus_fuel
+			mission_scrap_collected += bonus_scrap
+		
+		# Build objectives data array for recap
+		for obj in mission_objectives:
+			var obj_type_str = "BINARY" if obj.type == MissionObjective.ObjectiveType.BINARY else "PROGRESS"
+			objectives_data.append({
+				"id": obj.id,
+				"description": obj.description,
+				"completed": obj.completed,
+				"progress": obj.progress,
+				"max_progress": obj.max_progress,
+				"type": obj_type_str
+			})
+	
 	# Build stats dictionary
 	var mission_stats: Dictionary = {
 		"success": success,
@@ -899,6 +1156,11 @@ func _end_mission(success: bool) -> void:
 		"enemies_killed": mission_enemies_killed,
 		"turns_taken": current_turn,
 		"officers_status": officers_status,
+		"objective_completed": is_scavenger_mission and not mission_objectives.is_empty() and mission_objectives[0].completed,
+		"bonus_fuel": bonus_fuel,
+		"bonus_scrap": bonus_scrap,
+		"objectives": objectives_data,
+		"biome_type": current_biome,
 	}
 	
 	# Accumulate stats to GameState for voyage recap (only on success)
@@ -1308,7 +1570,6 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 	
 	# Check LOS
 	if not has_line_of_sight(shooter_pos, target_pos):
-		print("No line of sight! Blocked by walls.")
 		tactical_hud.show_combat_message("NO LINE OF SIGHT", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -1324,7 +1585,6 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 	var damage = base_damage
 	if is_flanking:
 		damage = int(base_damage * (1.0 + FLANK_DAMAGE_BONUS))
-		print("Flanking attack! Base damage: %d -> Flanking damage: %d (+%d%%)" % [base_damage, damage, int(FLANK_DAMAGE_BONUS * 100)])
 	
 	# Tutorial: Notify that a unit attacked
 	TutorialManager.notify_trigger("unit_attacked")
@@ -1334,7 +1594,6 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 	
 	# Safety: abort if shooter or target was freed during aiming phase
 	if not is_instance_valid(shooter):
-		print("Shot aborted: shooter was destroyed during aiming")
 		tactical_hud.hide_combat_message()
 		combat_camera.return_to_tactical()
 		_set_animating(false)
@@ -1345,7 +1604,6 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 	
 	# Safety: abort if shooter was freed during firing phase
 	if not is_instance_valid(shooter):
-		print("Shot aborted: shooter was destroyed during firing")
 		tactical_hud.hide_combat_message()
 		combat_camera.return_to_tactical()
 		_set_animating(false)
@@ -1358,7 +1616,6 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 	
 	# Safety: abort if shooter was freed during impact phase
 	if not is_instance_valid(shooter):
-		print("Shot aborted: shooter was destroyed during impact")
 		tactical_hud.hide_combat_message()
 		combat_camera.return_to_tactical()
 		_set_animating(false)
@@ -1369,7 +1626,7 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 
 
 ## Phase 1: Aiming
-func _phase_aiming(shooter: Node2D, shooter_pos: Vector2i, target_pos: Vector2i, hit_chance: float, is_flanking: bool = false, damage: int = 0) -> void:
+func _phase_aiming(shooter: Node2D, shooter_pos: Vector2i, target_pos: Vector2i, hit_chance: float, is_flanking: bool = false, _damage: int = 0) -> void:
 	# Focus camera on action
 	var shooter_world = shooter.position
 	var target_world = Vector2(target_pos.x * 32 + 16, target_pos.y * 32 + 16)
@@ -1379,7 +1636,7 @@ func _phase_aiming(shooter: Node2D, shooter_pos: Vector2i, target_pos: Vector2i,
 	shooter.face_towards(target_pos)
 	
 	# Check for cover bonus to display
-	var attacker_cover_bonus = _get_attacker_cover_bonus(shooter_pos)
+	var _attacker_cover_bonus = _get_attacker_cover_bonus(shooter_pos)
 	var cover_level = tactical_map.get_adjacent_cover_level(shooter_pos)
 	
 	# Display aiming message with flanking indicator, damage preview, and cover bonus
@@ -1439,11 +1696,7 @@ func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: 
 		if is_instance_valid(target):
 			AudioManager.play_sfx("combat_hit")
 			target.take_damage(damage)
-			if is_flanking:
-				print("Flanking Hit! Dealt %d damage (includes +%d%% bonus)" % [damage, int(FLANK_DAMAGE_BONUS * 100)])
-			else:
-				print("Hit! Dealt %d damage" % damage)
-			
+
 			# Show damage popup (flanking hits use special color via is_crit parameter)
 			_spawn_damage_popup(damage, true, target.position, false, is_flanking)
 		else:
@@ -1453,7 +1706,6 @@ func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: 
 	else:
 		tactical_hud.show_combat_message("MISS!", Color(0.6, 0.6, 0.6))
 		AudioManager.play_sfx("combat_miss")
-		print("Miss! (Hit chance was calculated)")
 		
 		# Show miss popup
 		var target_world = Vector2(target_pos.x * 32 + 16, target_pos.y * 32 + 16)
@@ -1521,7 +1773,6 @@ func _spawn_damage_popup(damage: int, is_hit: bool, world_pos: Vector2, is_heal:
 
 ## Execute AI turn for all enemies
 func _execute_enemy_turn() -> void:
-	print("=== ENEMY TURN ===")
 	
 	for enemy in enemies:
 		if enemy.current_hp <= 0:
@@ -1529,21 +1780,18 @@ func _execute_enemy_turn() -> void:
 		
 		# Enemies always act (they can see and move even if players can't see them)
 		# The AI itself will handle whether they can detect players
-		print("Enemy %d taking action" % enemy.enemy_id)
 		
 		# Enemy takes their action
 		var decision = EnemyAI.decide_action(enemy, deployed_officers, tactical_map)
 		
 		match decision["action"]:
 			"shoot":
-				print("Enemy %d shooting at officer at %s" % [enemy.enemy_id, decision["target_pos"]])
 				await execute_shot(enemy, decision["target_pos"], decision["target"])
 				await get_tree().create_timer(0.3).timeout  # Small delay for visual feedback
 			
 			"move":
 				var old_pos = enemy.get_grid_position()
 				var new_pos = decision["target_pos"]
-				print("Enemy %d moving from %s to %s (path length: %d)" % [enemy.enemy_id, old_pos, new_pos, decision["path"].size()])
 				
 				# Clear old position
 				tactical_map.set_unit_position_solid(old_pos, false)
@@ -1568,10 +1816,8 @@ func _execute_enemy_turn() -> void:
 				await get_tree().create_timer(0.2).timeout  # Small delay
 			
 			"idle":
-				print("Enemy %d idle (no targets in range, AP: %d)" % [enemy.enemy_id, enemy.current_ap])
 				await get_tree().create_timer(0.1).timeout  # Small delay
 	
-	print("=== ENEMY TURN END ===")
 
 
 func _on_enemy_movement_finished(_enemy: Node2D) -> void:
@@ -1596,9 +1842,12 @@ func _calculate_enemy_resource_drop(enemy_type: String) -> int:
 
 
 func _on_enemy_died(enemy: Node2D) -> void:
-	print("Enemy %d died" % enemy.enemy_id)
 	AudioManager.play_sfx("combat_death")
 	mission_enemies_killed += 1
+	
+	# Update objectives based on enemy kills (only if objective matches)
+	_update_objective_progress("clear_passages", 1)  # Enemies killed count as clearing passages for asteroid
+	_update_objective_progress("clear_nests", 1)  # Enemies killed count as clearing nests for planet
 	
 	# Get enemy position before removal
 	var pos = enemy.get_grid_position()
@@ -1628,7 +1877,6 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	
 	# Check if all enemies defeated
 	if enemies.is_empty():
-		print("All enemies defeated!")
 		# Check if extraction should become available (for scavenger missions)
 		_check_extraction_available()
 
@@ -1740,7 +1988,6 @@ func _on_ability_used(ability_type: String) -> void:
 		return
 	
 	if selected_unit != deployed_officers[current_unit_index]:
-		print("Not this unit's turn!")
 		tactical_hud.show_combat_message("NOT YOUR TURN", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -1748,7 +1995,6 @@ func _on_ability_used(ability_type: String) -> void:
 	
 	# Check cooldown first
 	if selected_unit.is_ability_on_cooldown():
-		print("Ability on cooldown! %d turns remaining" % selected_unit.get_ability_cooldown())
 		tactical_hud.show_combat_message("COOLDOWN: %d TURNS" % selected_unit.get_ability_cooldown(), Color(1, 0.5, 0))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -1757,12 +2003,10 @@ func _on_ability_used(ability_type: String) -> void:
 	match ability_type:
 		"overwatch":
 			if selected_unit.officer_type != "scout":
-				print("Only Scouts can use Overwatch!")
 				return
 			
 			if selected_unit.toggle_overwatch():
 				var status = "ACTIVATED" if selected_unit.overwatch_active else "DEACTIVATED"
-				print("Overwatch %s" % status)
 				tactical_hud.show_combat_message("OVERWATCH %s" % status, Color(0.2, 1, 0.2) if selected_unit.overwatch_active else Color(1, 0.5, 0))
 				await get_tree().create_timer(1.0).timeout
 				tactical_hud.hide_combat_message()
@@ -1772,18 +2016,15 @@ func _on_ability_used(ability_type: String) -> void:
 				# Check if unit is out of AP and auto-end turn
 				_check_auto_end_turn()
 			else:
-				print("Not enough AP for Overwatch")
 				tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
 				await get_tree().create_timer(1.0).timeout
 				tactical_hud.hide_combat_message()
 		
 		"turret":
 			if selected_unit.officer_type != "tech":
-				print("Only Tech can use Turret!")
 				return
 			
 			if not selected_unit.has_ap(1):
-				print("Not enough AP for Turret")
 				tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
 				await get_tree().create_timer(1.0).timeout
 				tactical_hud.hide_combat_message()
@@ -1791,12 +2032,10 @@ func _on_ability_used(ability_type: String) -> void:
 			
 			# Enter turret placement mode
 			turret_mode = true
-			print("Turret ability - click an adjacent walkable tile to place turret")
 			tactical_hud.show_combat_message("SELECT ADJACENT TILE FOR TURRET", Color(0, 1, 1))
 		
 		"patch":
 			if selected_unit.officer_type != "medic":
-				print("Only Medics can use Patch!")
 				return
 			
 			# Try to auto-heal adjacent ally
@@ -1804,11 +2043,9 @@ func _on_ability_used(ability_type: String) -> void:
 		
 		"charge":
 			if selected_unit.officer_type != "heavy":
-				print("Only Heavy can use Charge!")
 				return
 			
 			if not selected_unit.has_ap(1):
-				print("Not enough AP for Charge")
 				tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
 				await get_tree().create_timer(1.0).timeout
 				tactical_hud.hide_combat_message()
@@ -1818,16 +2055,13 @@ func _on_ability_used(ability_type: String) -> void:
 			charge_mode = true
 			tactical_map.clear_movement_range()
 			tactical_map.set_execute_range(selected_unit.get_grid_position(), 4)  # Reuse execute range (red tiles)
-			print("Charge ability - click an enemy within 4 tiles to rush them")
 			tactical_hud.show_combat_message("SELECT ENEMY TO CHARGE (4 TILES)", Color(1, 0.5, 0.1))
 		
 		"execute":
 			if selected_unit.officer_type != "captain":
-				print("Only Captain can use Execute!")
 				return
 			
 			if not selected_unit.has_ap(1):
-				print("Not enough AP for Execute")
 				tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
 				await get_tree().create_timer(1.0).timeout
 				tactical_hud.hide_combat_message()
@@ -1837,16 +2071,13 @@ func _on_ability_used(ability_type: String) -> void:
 			execute_mode = true
 			tactical_map.clear_movement_range()
 			tactical_map.set_execute_range(selected_unit.get_grid_position(), 4)
-			print("Execute ability - click an enemy within 4 tiles below 50%% HP")
 			tactical_hud.show_combat_message("SELECT ENEMY WITHIN 4 TILES (<50%% HP)", Color(1, 0.2, 0.2))
 		
 		"precision":
 			if selected_unit.officer_type != "sniper":
-				print("Only Sniper can use Precision Shot!")
 				return
 			
 			if not selected_unit.has_ap(1):
-				print("Not enough AP for Precision Shot")
 				tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
 				await get_tree().create_timer(1.0).timeout
 				tactical_hud.hide_combat_message()
@@ -1856,7 +2087,6 @@ func _on_ability_used(ability_type: String) -> void:
 			precision_mode = true
 			tactical_map.clear_movement_range()
 			# No range display needed - can target any visible enemy
-			print("Precision Shot - click any visible enemy for guaranteed 2x damage hit")
 			tactical_hud.show_combat_message("SELECT ANY VISIBLE ENEMY", Color(0.6, 0.55, 0.8))
 			# Update enemy highlights for precision mode
 			_update_precision_mode_highlights()
@@ -1887,7 +2117,6 @@ func _check_overwatch_shots(enemy: Node2D, enemy_pos: Vector2i) -> void:
 			continue
 		
 		# Overwatch triggered!
-		print("Overwatch triggered by %s on Enemy %d!" % [officer.officer_key, enemy.enemy_id])
 		AudioManager.play_sfx("combat_overwatch")
 		tactical_hud.show_combat_message("OVERWATCH TRIGGERED!", Color(1, 1, 0.2))
 		await get_tree().create_timer(0.8).timeout
@@ -1897,7 +2126,6 @@ func _check_overwatch_shots(enemy: Node2D, enemy_pos: Vector2i) -> void:
 		var damage = officer.base_damage
 		if is_flanking:
 			damage = int(officer.base_damage * (1.0 + FLANK_DAMAGE_BONUS))
-			print("Flanking overwatch! Base damage: %d -> Flanking damage: %d" % [officer.base_damage, damage])
 		
 		# Take the shot (Overwatch is GUARANTEED HIT - 100% success)
 		var hit_chance = 100.0  # Overwatch always hits - 100% attack success
@@ -1961,19 +2189,18 @@ func _check_sniper_overwatch(officer: Node2D, officer_pos: Vector2i) -> void:
 			continue
 		
 		# Sniper overwatch triggered!
-		print("Sniper overwatch triggered on %s!" % officer.officer_key)
 		AudioManager.play_sfx("combat_overwatch")
 		tactical_hud.show_combat_message("SNIPER OVERWATCH!", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(0.8).timeout
 		
 		# Calculate damage and hit chance
-		var hit_chance = calculate_hit_chance(enemy_pos, officer_pos, enemy)
-		var damage = enemy.base_damage
+		var _hit_chance = calculate_hit_chance(enemy_pos, officer_pos, enemy)
+		var _damage = enemy.base_damage
 		
 		# Check for flanking
 		var is_flanking = is_flanking_attack(enemy_pos, officer_pos)
 		if is_flanking:
-			damage = int(enemy.base_damage * (1.0 + FLANK_DAMAGE_BONUS))
+			_damage = int(enemy.base_damage * (1.0 + FLANK_DAMAGE_BONUS))
 		
 		# Take the shot (execute_shot handles all the animation and damage)
 		await execute_shot(enemy, officer_pos, officer)
@@ -2004,7 +2231,6 @@ func _try_auto_patch() -> void:
 		return
 	
 	if not selected_unit.has_ap(2):
-		print("Not enough AP for Patch (needs 2)")
 		tactical_hud.show_combat_message("NOT ENOUGH AP (NEEDS 2)", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -2033,7 +2259,6 @@ func _try_auto_patch() -> void:
 					await get_tree().create_timer(0.2).timeout  # Wait for camera to zoom in
 					
 					var heal_amount = int(officer.max_hp * 0.5)
-					print("Healed %s for %d HP!" % [officer.officer_key, heal_amount])
 					tactical_hud.show_combat_message("HEALED %s (+%d HP)" % [officer.officer_key.to_upper(), heal_amount], Color(0.2, 1, 0.2))
 					
 					# Show heal popup
@@ -2054,7 +2279,6 @@ func _try_auto_patch() -> void:
 					_check_auto_end_turn()
 					return
 	
-	print("No injured allies adjacent to heal!")
 	tactical_hud.show_combat_message("NO INJURED ALLIES NEARBY", Color(1, 0.5, 0))
 	await get_tree().create_timer(1.0).timeout
 	tactical_hud.hide_combat_message()
@@ -2077,7 +2301,6 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 	
 	# Must be adjacent
 	if distance != 1:
-		print("Turret must be placed on adjacent tile (distance: %d)" % distance)
 		tactical_hud.show_combat_message("MUST BE ADJACENT", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -2086,7 +2309,6 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 	
 	# Must be a walkable, empty tile
 	if not tactical_map.is_tile_walkable(grid_pos):
-		print("Cannot place turret on non-walkable tile")
 		tactical_hud.show_combat_message("INVALID TILE", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -2096,7 +2318,6 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 	# Check no unit is already there
 	var unit_at = tactical_map.get_unit_at(grid_pos)
 	if unit_at:
-		print("Cannot place turret on occupied tile")
 		tactical_hud.show_combat_message("TILE OCCUPIED", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -2119,7 +2340,6 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		combat_camera.focus_on_action(tech_world, turret_world)
 		await get_tree().create_timer(0.2).timeout  # Wait for camera to zoom in
 		
-		print("Turret placed at %s! Will auto-fire for 3 turns." % grid_pos)
 		tactical_hud.show_combat_message("TURRET DEPLOYED!", Color(0, 1, 1))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -2135,7 +2355,6 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		# Check if unit is out of AP and auto-end turn
 		_check_auto_end_turn()
 	else:
-		print("Failed to place turret (no AP or cooldown)")
 		_set_animating(false)
 
 
@@ -2156,7 +2375,6 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 	
 	# Must be within 4 tiles
 	if distance > 4 or distance < 1:
-		print("Charge target must be within 4 tiles (distance: %d)" % distance)
 		tactical_hud.show_combat_message("TARGET OUT OF RANGE (MAX 4)", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -2171,7 +2389,6 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 			break
 	
 	if not target_enemy:
-		print("No enemy at that position")
 		tactical_hud.show_combat_message("NO ENEMY THERE", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -2180,7 +2397,6 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 	
 	# Must be visible
 	if not _is_enemy_visible(target_enemy):
-		print("Cannot charge: Enemy not visible")
 		tactical_hud.show_combat_message("ENEMY NOT VISIBLE", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -2189,7 +2405,6 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 	
 	# Use the ability (spends AP and starts cooldown)
 	if not selected_unit.use_charge():
-		print("Failed to use Charge (no AP or cooldown)")
 		_set_animating(false)
 		return
 	
@@ -2199,7 +2414,7 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 	
 	if charge_destination == heavy_pos:
 		# Can't find path, but still deal damage at range
-		print("No path for charge, attacking from current position")
+		pass
 	else:
 		# Move heavy to adjacent tile of enemy
 		tactical_map.set_unit_position_solid(heavy_pos, false)
@@ -2224,11 +2439,9 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		# Instant kill basic enemies
 		charge_damage = target_enemy.current_hp
 		is_instant_kill = true
-		print("CHARGE instant-kills basic enemy!")
 	else:
 		# Heavy damage to heavy enemies (2x base damage)
 		charge_damage = selected_unit.base_damage * 2
-		print("CHARGE deals %d damage to heavy enemy!" % charge_damage)
 	
 	# Face the enemy
 	selected_unit.face_towards(grid_pos)
@@ -2355,7 +2568,6 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 	
 	# Must be within 4 tiles
 	if distance < 1 or distance > 4:
-		print("Execute target must be within 4 tiles (distance: %d)" % distance)
 		tactical_hud.show_combat_message("OUT OF RANGE (MAX 4 TILES)", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -2365,7 +2577,6 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 	
 	# Check line of sight
 	if not has_line_of_sight(captain_pos, grid_pos):
-		print("No line of sight for Execute")
 		tactical_hud.show_combat_message("NO LINE OF SIGHT", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -2381,7 +2592,6 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 			break
 	
 	if not target_enemy:
-		print("No enemy at that position")
 		tactical_hud.show_combat_message("NO ENEMY THERE", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -2392,7 +2602,6 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 	# Enemy must be below 50% HP
 	var hp_percent = float(target_enemy.current_hp) / float(target_enemy.max_hp)
 	if hp_percent > 0.5:
-		print("Execute requires enemy below 50%% HP (currently %.0f%%)" % (hp_percent * 100))
 		tactical_hud.show_combat_message("ENEMY HP TOO HIGH (NEED <50%%)", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -2402,7 +2611,6 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 	
 	# Use the ability (spends AP and starts cooldown)
 	if not selected_unit.use_execute():
-		print("Failed to use Execute (no AP or cooldown)")
 		_set_animating(false)
 		return
 	
@@ -2467,7 +2675,6 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 			break
 	
 	if not target_enemy:
-		print("No enemy at that position")
 		tactical_hud.show_combat_message("NO ENEMY THERE", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -2477,7 +2684,6 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 	
 	# Only requirement: enemy must be visible (if player can see the sprite, they can use precision shot)
 	if not _is_enemy_visible(target_enemy):
-		print("Precision Shot requires visible enemy")
 		tactical_hud.show_combat_message("ENEMY NOT VISIBLE", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -2487,7 +2693,6 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 	
 	# Use the ability (spends AP and starts cooldown)
 	if not selected_unit.use_precision_shot():
-		print("Failed to use Precision Shot (no AP or cooldown)")
 		_set_animating(false)
 		return
 	
@@ -2533,6 +2738,121 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 	_check_auto_end_turn()
 
 
+## Update objective progress by ID (only if it matches current mission objective)
+func _update_objective_progress(objective_id: String, progress_amount: int = 1) -> void:
+	if not is_scavenger_mission or mission_objectives.is_empty():
+		return
+	
+	# Get the single mission objective
+	var objective = mission_objectives[0]
+	
+	# Only update if the ID matches the current mission's objective
+	if objective.id == objective_id and not objective.completed:
+		var was_completed = objective.completed
+		objective.add_progress(progress_amount)
+		tactical_hud.update_objective(objective_id)
+		
+		# Show notification if objective just completed (non-blocking)
+		if not was_completed and objective.completed:
+			_show_objective_complete_notification(objective)
+
+
+## Complete a binary objective (only if it matches current mission objective)
+func _complete_objective(objective_id: String) -> void:
+	if not is_scavenger_mission or mission_objectives.is_empty():
+		return
+	
+	# Get the single mission objective
+	var objective = mission_objectives[0]
+	
+	# Only complete if the ID matches the current mission's objective
+	if objective.id == objective_id and not objective.completed:
+		objective.set_completed()
+		tactical_hud.update_objective(objective_id)
+		
+		# Show notification with bonus reward (non-blocking)
+		_show_objective_complete_notification(objective)
+
+
+## Find a valid position for mining equipment (middle area of map, avoiding edges and occupied tiles)
+func _find_valid_mining_equipment_position(map_dims: Vector2i, used_positions: Array[Vector2i] = []) -> Vector2i:
+	# Try to find a position in the middle area of the map
+	# Avoid edges (3 tiles from each edge) and extraction zone (bottom-left)
+	var min_x = 3
+	var max_x = map_dims.x - 4
+	var min_y = 3
+	var max_y = map_dims.y - 4
+	
+	# Try random positions first
+	for _attempt in range(100):
+		var pos = Vector2i(randi_range(min_x, max_x), randi_range(min_y, max_y))
+		
+		# Skip if already used
+		if pos in used_positions:
+			continue
+		
+		# Check if tile is walkable (floor tile)
+		if not tactical_map.is_tile_walkable(pos):
+			continue
+		
+		# Check if there's already an interactable at this position
+		var existing_interactable = tactical_map.get_interactable_at(pos)
+		if existing_interactable != null:
+			continue
+		
+		# Check if there's a unit at this position
+		var unit_at_pos = tactical_map.get_unit_at(pos)
+		if unit_at_pos != null:
+			continue
+		
+		# Valid position found
+		return pos
+	
+	# Fallback: search exhaustively
+	for x in range(min_x, max_x + 1):
+		for y in range(min_y, max_y + 1):
+			var pos = Vector2i(x, y)
+			
+			# Skip if already used
+			if pos in used_positions:
+				continue
+			
+			# Check if tile is walkable
+			if not tactical_map.is_tile_walkable(pos):
+				continue
+			
+			# Check for existing interactable
+			var existing_interactable = tactical_map.get_interactable_at(pos)
+			if existing_interactable != null:
+				continue
+			
+			# Check for unit
+			var unit_at_pos = tactical_map.get_unit_at(pos)
+			if unit_at_pos != null:
+				continue
+			
+			# Valid position found
+			return pos
+	
+	return Vector2i(-1, -1)  # No valid position found
+
+
+## Show objective completion notification with bonus reward info
+func _show_objective_complete_notification(objective: MissionObjective) -> void:
+	var bonuses = MissionObjective.ObjectiveManager.get_bonus_rewards(objective)
+	var bonus_text = ""
+	if bonuses.get("fuel", 0) > 0:
+		bonus_text = "+%d FUEL" % bonuses.get("fuel", 0)
+	elif bonuses.get("scrap", 0) > 0:
+		bonus_text = "+%d SCRAP" % bonuses.get("scrap", 0)
+	
+	if bonus_text != "":
+		tactical_hud.show_combat_message("OBJECTIVE COMPLETE! %s" % bonus_text, Color(0.2, 1.0, 0.3))
+		# Auto-hide after delay (non-blocking)
+		var timer = get_tree().create_timer(2.0)
+		timer.timeout.connect(func(): tactical_hud.hide_combat_message())
+
+
 ## Process all active turrets (auto-fire at nearest enemy)
 func _process_turrets() -> void:
 	# Don't process turrets if mission is not active
@@ -2545,7 +2865,6 @@ func _process_turrets() -> void:
 		# Tick down turn timer
 		if not turret.tick_turn():
 			# Turret expired
-			print("Turret at %s expired!" % turret.get_grid_position())
 			turrets_to_remove.append(turret)
 			continue
 		
@@ -2569,8 +2888,7 @@ func _process_turrets() -> void:
 					nearest_enemy = enemy
 		
 		if nearest_enemy:
-			var enemy_pos = nearest_enemy.get_grid_position()
-			print("Turret at %s fires at enemy at %s!" % [turret_pos, enemy_pos])
+			var _enemy_pos = nearest_enemy.get_grid_position()
 			AudioManager.play_sfx("combat_turret_fire")
 			
 			# Focus camera on turret attack

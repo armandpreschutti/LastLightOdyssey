@@ -321,3 +321,26 @@ func hide_combat_message() -> void:
 	if combat_msg:
 		combat_msg.visible = false
 		combat_msg.text = ""  # Clear the message text
+
+
+## Initialize objectives panel with mission objectives
+
+## Initialize objectives panel with mission objectives
+func initialize_objectives(objectives: Array[MissionObjective]) -> void:
+	var panel = get_node_or_null("ObjectivesPanel")
+	if panel and panel.has_method("initialize"):
+		panel.initialize(objectives)
+
+
+## Update a specific objective
+func update_objective(objective_id: String) -> void:
+	var panel = get_node_or_null("ObjectivesPanel")
+	if panel and panel.has_method("update_objective"):
+		panel.update_objective(objective_id)
+
+
+## Update all objectives
+func update_all_objectives() -> void:
+	var panel = get_node_or_null("ObjectivesPanel")
+	if panel and panel.has_method("update_all"):
+		panel.update_all()

@@ -1,5 +1,5 @@
 # Last Light Odyssey - Game Design Document
-**Version 3.0 | Engine: Godot 4.6 | Last Updated: February 6, 2026**
+**Version 3.1 | Engine: Godot 4.6 | Last Updated: January 2025**
 
 > *"The last journey of the human race isn't a hero's quest; it's a survival marathon."*
 
@@ -105,11 +105,11 @@ When the ship docks at a Scavenge Site, the game switches to isometric turn-base
 | Role | Passive Ability | Active Ability | HP | Move | Sight |
 |------|-----------------|----------------|-----|------|-------|
 | **Captain** | — | **Execute** (1 AP): Guaranteed kill on enemy within 4 tiles below 50% HP. Never misses. 2-turn cooldown. | 100 | 5 | 6 |
-| **Scout** | +2 sight range, extended enemy detection | **Overwatch** (1 AP): Reaction shot at first enemy that moves in LOS. Guaranteed hit. 2-turn cooldown. | 80 | 6 | 10 |
+| **Scout** | +2 sight range (base 8 + 2 = 10), extended enemy detection | **Overwatch** (1 AP): Reaction shot at first enemy that moves in LOS. Guaranteed hit. 2-turn cooldown. | 80 | 6 | 10 |
 | **Tech** | Can see items through walls | **Turret** (1 AP): Deploy auto-firing sentry on adjacent tile. Lasts 3 turns, auto-shoots nearest enemy each turn (15 DMG, 6 tile range). 2-turn cooldown. | 70 | 4 | 5 |
 | **Medic** | Can see exact enemy HP | **Patch** (2 AP): Heal adjacent ally for 50% max HP. 2-turn cooldown. | 75 | 5 | 5 |
 | **Heavy** | Armor Plating (−20% damage taken), +35 base damage | **Charge** (1 AP): Rush enemy within 4 tiles. Instant-kills basic enemies; deals 2x base damage to heavy enemies. 2-turn cooldown. | 120 | 3 | 5 |
-| **Sniper** | +2 sight range, +2 shoot range, +30 base damage | **Precision Shot** (1 AP): Guaranteed hit on enemy 8+ tiles away. Deals 2x base damage (60). 2-turn cooldown. | 70 | 4 | 9 |
+| **Sniper** | +2 sight range (base 7 + 2 = 9), +2 shoot range, +30 base damage | **Precision Shot** (1 AP): Guaranteed hit on enemy 8+ tiles away. Deals 2x base damage (60). 2-turn cooldown. | 70 | 4 | 9 |
 
 ### 3.3 Combat System
 
@@ -327,7 +327,7 @@ Players can pause during tactical missions and choose to **Abandon Mission**:
 ## 5. Win/Loss Logic
 
 ### Win Condition
-Reach the **"New Earth"** node (node 19) with **Colonists > 0**.
+Reach the **"New Earth"** node (node 49, the final node) with **Colonists > 0**.
 
 ### Ending Tiers
 
@@ -365,11 +365,108 @@ Upon reaching New Earth, players are shown a comprehensive **Voyage Recap** scre
 - **Low-fidelity 2D sprites** with gritty color palette
 - Dark grays, industrial oranges, neon blues
 - Isometric tactical view (32×32 tile grid)
+- **Procedural map rendering** with biome-specific color themes (no sprite tiles for terrain)
+- Programmatic drawing for floors, walls, cover, and extraction zones
+
+### Visual Rendering System
+
+**Tactical Map Rendering:**
+- Maps are procedurally generated and rendered using Godot's `_draw()` system
+- Each tile (32×32 pixels) is drawn programmatically with biome-specific colors
+- Visual variation achieved through position-based hash functions for deterministic "randomness"
+- Fog of war system with biome-specific dark fog colors
+- Real-time tile highlighting for movement range (blue), execute range (red), and hover (yellow)
+
+**Biome Visual Themes:**
+- **Station**: Dark industrial metal floors (blue-gray), lighter metal walls with cyan/teal accent lighting, orange-brown cargo crates, green extraction zones with landing pad grid patterns
+- **Asteroid**: Rocky brown floors and walls, blue mineral accents, organic rock formations for cover, blue-tinted extraction zones
+- **Planet**: Alien green grass floors, purple/magenta crystal wall formations with bioluminescent glows, teal mushroom and crystal cover objects, teal extraction zones with alien energy patterns
+
+**Visual Details:**
+- Floor tiles include subtle panel lines, blood splatters (Station), rock crevices (Asteroid), and grass blade marks (Planet)
+- Wall tiles feature autotiling with connection-based rendering, highlights/shadows for depth, and biome-specific decorations (rivets, pipes, terminals for Station; crystal formations for Planet)
+- Cover objects are drawn as 3D-style isometric crates/barriers with shadows and highlights
+- Extraction zones have distinct biome-specific designs with corner markers and pulsing center lights
+
+**Background Patterns:**
+- Full-screen repeating background patterns (128×128 tile patterns) drawn behind tactical maps
+- **Station**: Industrial grid with cyan accent lines and panel corner highlights
+- **Asteroid**: Rocky texture with irregular crack lines and blue mineral veins with glow effects
+- **Planet**: Organic growth patterns with curved lines, bioluminescent spots, and alien plant tendrils
+- Patterns provide atmospheric context without interfering with gameplay visibility
+
+### Visual Effects & Animations
+
+**Unit Animations:**
+- **Idle Animation**: Subtle vertical sway for all units (officers and enemies)
+- **Damage Flash**: White flash → red tint → knockback recoil → return to normal
+- **Death Animation**: Fade out with rotation and scale effects
+- **Attack Animation**: Brief recoil and flash for shooting units
+- **Movement**: Smooth pathfinding-based movement with tween interpolation
+
+**Combat Visual Effects:**
+- **Projectile Trails**: Line2D projectiles with color-coded paths (blue for officers, red for enemies)
+- **Damage Popups**: Floating damage numbers with color coding (green for healing, red for damage)
+- **Screen Shake**: Subtle camera shake on heavy melee attacks (Charge ability)
+- **Combat Camera**: Cinematic zoom-in during attacks, focuses on action, returns to tactical view
+- **Ability Visuals**:
+  - **Charge**: Windup → lunge → impact flash → return
+  - **Execute**: Cinematic camera focus with execution sequence
+  - **Precision Shot**: "TAKING AIM..." message with camera focus
+  - **Turret**: Cyan rotation pulse and scale animation on fire
+  - **Overwatch**: Reaction shot with camera focus
+
+**Mission Transitions:**
+- **Beam Down**: Officers descend from above with light beam effects, materialize with white flash
+- **Beam Up**: Officers float upward with extraction beam, fade out with white flash
+- Smooth camera transitions between management and tactical layers
+
+**Visual Feedback Systems:**
+- **Selection Ring**: Green pulsing ring around active officer
+- **HP Bars**: Color-coded (green >50%, yellow 25-50%, red <25%) with smooth scaling
+- **AP Indicators**: Gold dots for available AP, dark gray for used
+- **Cover Indicators**: Visual half/full cover indicators on units
+- **Hit Chance Display**: Percentage shown on targetable enemies
+- **Target Highlighting**: Red outline on enemies that can be attacked
+- **Movement Range**: Blue overlay on reachable tiles
+- **Execute Range**: Red overlay for Captain's Execute ability range
+
+**Camera System:**
+- **Tactical View**: Default zoom (1.0x) with smooth camera centering on unit selection
+- **Combat Zoom**: Automatic zoom to maximum (3.0x) during attack sequences
+- **Manual Controls**: 
+  - Scroll wheel zoom (0.4x to 3.0x range)
+  - Middle mouse button pan/drag
+  - Smooth interpolation for all camera movements
+- **Camera Focus**: Automatically centers on units at turn start, focuses on combat actions
+
+**Interactable Object Effects:**
+- **Hover Effect**: Brightness pulse when mouse hovers over items
+- **Idle Animation**: Subtle floating/bobbing motion
+- **Collection Effect**: Fade out with scale animation when picked up
+
+**Star Map Visuals (Management Layer):**
+- **Node Sprites**: Planet variations (Earth, Red, Gas) for Empty Space nodes, Asteroid sprite for Scavenge Sites, Trading Station sprite for Trading Outposts
+- **Node States**: Color-coded labels and glows (Amber for available, Green for current, Gray for visited, Dark gray for locked)
+- **Pulse Animation**: Available nodes pulse with amber glow effect (looping fade in/out)
+- **Connection Lines**: Amber lines connecting nodes (transparent for locked, brighter for available paths)
+- **Ship Animation**: Animated ship sprite travels along connection lines when jumping between nodes (1.5 second smooth tween)
+- **Camera System**: Pan with right/middle mouse drag, zoom with scroll wheel (0.5x to 2.0x), smooth camera centering on current node
+- **Visual Feedback**: Hover effects on clickable nodes, fuel cost display on hover
+
+**Title Screen & UI Transitions:**
+- **Animated Starfield**: 200 parallax stars with depth-based movement speed
+- **Typewriter Effect**: Subtitle text animates character-by-character
+- **Title Glow**: Pulsing glow effect on main title
+- **Button Animations**: Scale-up on hover, smooth transitions
+- **Fade Transitions**: Smooth fade between scenes (management ↔ tactical)
 
 ### UI Philosophy
 - **Diegetic/Retro**: 1980s monochrome CRT terminal aesthetic
 - Amber text on dark backgrounds
 - Minimal, functional displays
+- Resource icons for quick visual recognition
+- Color-coded status indicators (HP bars, AP dots, stability warnings)
 
 ### Tutorial System
 First-time players receive a **9-step guided tutorial** that covers:
@@ -390,7 +487,9 @@ Tutorial can be skipped at any time and reset from the Settings menu.
 
 ### Sprite Assets
 
-**Status: COMPLETE** - All unit sprites, environment tiles, UI icons, and visual assets are implemented and in use.
+**Status: COMPLETE** - All unit sprites, interactable objects, UI icons, and navigation assets are implemented and in use.
+
+**Note:** Tactical maps are procedurally generated and rendered using biome-specific color themes. Environment and terrain tiles are drawn programmatically rather than using sprite files.
 
 #### Officer Characters
 The player's controllable units, each with distinct visual identity matching their role.
@@ -428,78 +527,14 @@ Items and cover objects found on tactical maps.
 
 ---
 
-#### Environment Tiles
+#### Procedural Map Rendering
 
-**Floor Tiles**
-| Panel | Grating | Cables | Damaged | Vent |
-|:-----:|:-------:|:------:|:-------:|:----:|
-| ![Panel](../assets/sprites/environment/floor_panel.png) | ![Grating](../assets/sprites/environment/floor_grating.png) | ![Cables](../assets/sprites/environment/floor_cables.png) | ![Damaged](../assets/sprites/environment/floor_damaged.png) | ![Vent](../assets/sprites/environment/floor_vent.png) |
+Tactical maps are procedurally generated and rendered using biome-specific color themes. The game uses programmatic drawing rather than sprite tiles for floors, walls, cover, and extraction zones. Each biome (Station, Asteroid, Planet) has distinct color palettes and visual styles defined in `BiomeConfig`.
 
-**Wall Tiles**
-| Solid Wall | Reinforced | Pipes | Terminal |
-|:----------:|:----------:|:-----:|:--------:|
-| ![Solid](../assets/sprites/environment/wall_solid.png) | ![Reinforced](../assets/sprites/environment/wall_reinforced.png) | ![Pipes](../assets/sprites/environment/wall_pipes.png) | ![Terminal](../assets/sprites/environment/wall_terminal.png) |
-
-**Fog of War**
-| Fog (Unexplored) | Fog Edge |
-|:----------------:|:--------:|
-| ![Fog](../assets/sprites/environment/fog.png) | ![Fog Edge](../assets/sprites/environment/fog_edge.png) |
-
-**Overlays & Indicators**
-| Grid Overlay | Movement Range | Attack Range | Hover |
-|:------------:|:--------------:|:------------:|:-----:|
-| ![Grid](../assets/sprites/environment/overlay_grid.png) | ![Movement](../assets/sprites/environment/overlay_movement.png) | ![Attack](../assets/sprites/environment/overlay_attack.png) | ![Hover](../assets/sprites/environment/overlay_hover.png) |
-
-**Special Tiles**
-| Extraction Zone | Half Cover | Space Background | Tileset Atlas |
-|:---------------:|:----------:|:----------------:|:-------------:|
-| ![Extraction](../assets/sprites/environment/extraction.png) | ![Half Cover](../assets/sprites/environment/half_cover.png) | ![Space](../assets/sprites/environment/space_background.png) | ![Atlas](../assets/sprites/environment/tileset_atlas.png) |
-
----
-
-#### Terrain Tiles (Procedural Map Generation)
-
-Additional tile variants used for procedural tactical map generation.
-
-**Floor Variants**
-| Metal 1 | Metal 2 | Metal Rusty | Concrete 1 | Concrete 2 | Dirt | Tiles |
-|:-------:|:-------:|:-----------:|:----------:|:----------:|:----:|:-----:|
-| ![Metal1](../assets/sprites/terrain/floor_metal_1.png) | ![Metal2](../assets/sprites/terrain/floor_metal_2.png) | ![Rusty](../assets/sprites/terrain/floor_metal_rusty.png) | ![Concrete1](../assets/sprites/terrain/floor_concrete_1.png) | ![Concrete2](../assets/sprites/terrain/floor_concrete_2.png) | ![Dirt](../assets/sprites/terrain/floor_dirt_1.png) | ![Tiles](../assets/sprites/terrain/floor_tiles.png) |
-
-**Wall Variants**
-| Metal | Concrete | Border | Debris |
-|:-----:|:--------:|:------:|:------:|
-| ![WallMetal](../assets/sprites/terrain/wall_metal_1.png) | ![WallConcrete](../assets/sprites/terrain/wall_concrete_1.png) | ![Border](../assets/sprites/terrain/wall_border.png) | ![Debris](../assets/sprites/terrain/wall_debris_1.png) |
-
-**Cover Variants**
-| Crate Cover | Barrier Cover |
-|:-----------:|:-------------:|
-| ![CrateCover](../assets/sprites/terrain/cover_crate_1.png) | ![BarrierCover](../assets/sprites/terrain/cover_barrier_1.png) |
-
-**Decorations & Details**
-| Floor Grime | Cracks | Debris | Wires | Blood |
-|:-----------:|:------:|:------:|:-----:|:-----:|
-| ![Grime](../assets/sprites/terrain/floor_grime.png) | ![Cracks](../assets/sprites/terrain/decor_cracks.png) | ![Debris](../assets/sprites/terrain/decor_debris.png) | ![Wires](../assets/sprites/terrain/decor_wires.png) | ![Blood](../assets/sprites/terrain/decor_blood.png) |
-
-**Fog of War (Terrain)**
-| Fog Full | Fog Edge |
-|:--------:|:--------:|
-| ![FogFull](../assets/sprites/terrain/fog_full.png) | ![FogEdge](../assets/sprites/terrain/fog_edge.png) |
-
-**Tile Highlights**
-| Grid Overlay | Movement | Attack | Hover |
-|:------------:|:--------:|:------:|:-----:|
-| ![Grid](../assets/sprites/terrain/grid_overlay.png) | ![Move](../assets/sprites/terrain/highlight_movement.png) | ![Attack](../assets/sprites/terrain/highlight_attack.png) | ![Hover](../assets/sprites/terrain/highlight_hover.png) |
-
-**Extraction Zone (Terrain)**
-| Extraction Tile | Extraction Glow |
-|:---------------:|:---------------:|
-| ![Extract](../assets/sprites/terrain/extraction_1.png) | ![Glow](../assets/sprites/terrain/extraction_glow.png) |
-
-**Ambient Effects**
-| Dust Particles | Smoke | Vignette |
-|:--------------:|:-----:|:--------:|
-| ![Dust](../assets/sprites/terrain/ambient_dust.png) | ![Smoke](../assets/sprites/terrain/ambient_smoke.png) | ![Vignette](../assets/sprites/terrain/vignette.png) |
+**Biome Visual Themes:**
+- **Station**: Dark industrial metal with cyan/teal accent lighting
+- **Asteroid**: Rocky browns with blue mineral accents
+- **Planet**: Alien purple/magenta crystal formations with bioluminescent elements
 
 ---
 

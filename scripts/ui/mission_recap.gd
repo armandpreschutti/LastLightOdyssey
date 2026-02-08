@@ -14,6 +14,9 @@ signal recap_dismissed
 @onready var turns_label: Label = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/TurnsRow/TurnsLabel
 @onready var officers_container: VBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/OfficersContainer
 @onready var continue_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ContinueButton
+@onready var objectives_header: Label = $PanelContainer/MarginContainer/VBoxContainer/ObjectivesHeader
+@onready var objectives_border: ColorRect = $PanelContainer/MarginContainer/VBoxContainer/ObjectivesBorder
+@onready var objectives_container: VBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/ObjectivesContainer
 
 # Icon rows for animation
 @onready var fuel_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/FuelRow
@@ -22,6 +25,7 @@ signal recap_dismissed
 @onready var turns_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/TurnsRow
 
 var _stat_tween: Tween = null
+var _objective_labels: Array[Label] = []
 
 
 func _ready() -> void:
@@ -36,6 +40,7 @@ func show_recap(stats: Dictionary) -> void:
 	var enemies_killed: int = stats.get("enemies_killed", 0)
 	var turns_taken: int = stats.get("turns_taken", 0)
 	var officers_status: Array = stats.get("officers_status", [])
+	var objectives: Array = stats.get("objectives", [])
 	
 	# Set outcome
 	if success:
@@ -51,11 +56,56 @@ func show_recap(stats: Dictionary) -> void:
 	for child in officers_container.get_children():
 		child.queue_free()
 	
+	# Clear old objective labels
+	_objective_labels.clear()
+	for child in objectives_container.get_children():
+		child.queue_free()
+	
 	# Set stats (initially hidden for animation)
 	fuel_label.text = "FUEL COLLECTED: +%d" % fuel_collected
 	scrap_label.text = "SCRAP COLLECTED: +%d" % scrap_collected
 	enemies_label.text = "HOSTILES ELIMINATED: %d" % enemies_killed
 	turns_label.text = "TURNS SURVIVED: %d" % turns_taken
+	
+	# Show/hide objectives section based on whether objectives exist
+	var has_objectives = objectives.size() > 0
+	objectives_header.visible = has_objectives
+	objectives_border.visible = has_objectives
+	objectives_container.visible = has_objectives
+	
+	# Add objective rows
+	if has_objectives:
+		for obj_data in objectives:
+			var obj_label = Label.new()
+			obj_label.add_theme_font_size_override("font_size", 16)
+			
+			var description = obj_data.get("description", "Unknown objective")
+			var completed = obj_data.get("completed", false)
+			var progress = obj_data.get("progress", 0)
+			var max_progress = obj_data.get("max_progress", 1)
+			var obj_type = obj_data.get("type", "BINARY")
+			
+			# Format objective text based on type and completion
+			if obj_type == "PROGRESS":
+				if completed:
+					obj_label.text = "  ✓ %s (%d/%d) - COMPLETE" % [description, progress, max_progress]
+					obj_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))  # Green
+				elif progress > 0:
+					obj_label.text = "  %s (%d/%d)" % [description, progress, max_progress]
+					obj_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2))  # Yellow
+				else:
+					obj_label.text = "  %s (0/%d) - INCOMPLETE" % [description, max_progress]
+					obj_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))  # Gray
+			else:  # BINARY
+				if completed:
+					obj_label.text = "  ✓ %s - COMPLETE" % description
+					obj_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))  # Green
+				else:
+					obj_label.text = "  %s - INCOMPLETE" % description
+					obj_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))  # Gray
+			
+			objectives_container.add_child(obj_label)
+			_objective_labels.append(obj_label)
 	
 	# Add officer status rows
 	for officer_data in officers_status:
@@ -93,6 +143,13 @@ func _animate_recap_in() -> void:
 	enemies_row.modulate.a = 0.0
 	turns_row.modulate.a = 0.0
 	
+	# Fade objectives section if visible
+	if objectives_header.visible:
+		objectives_header.modulate.a = 0.0
+		objectives_border.modulate.a = 0.0
+		for label in _objective_labels:
+			label.modulate.a = 0.0
+	
 	for child in officers_container.get_children():
 		child.modulate.a = 0.0
 	
@@ -113,6 +170,17 @@ func _animate_recap_in() -> void:
 	_stat_tween.tween_interval(0.15)
 	_stat_tween.tween_property(turns_row, "modulate:a", 1.0, 0.3)
 	_stat_tween.tween_interval(0.3)
+	
+	# Reveal objectives section if visible
+	if objectives_header.visible:
+		_stat_tween.tween_property(objectives_border, "modulate:a", 1.0, 0.3)
+		_stat_tween.tween_interval(0.1)
+		_stat_tween.tween_property(objectives_header, "modulate:a", 1.0, 0.3)
+		_stat_tween.tween_interval(0.1)
+		for label in _objective_labels:
+			_stat_tween.tween_property(label, "modulate:a", 1.0, 0.25)
+			_stat_tween.tween_interval(0.1)
+		_stat_tween.tween_interval(0.2)
 	
 	# Reveal officer statuses
 	for child in officers_container.get_children():
@@ -154,6 +222,11 @@ func _input(event: InputEvent) -> void:
 			scrap_row.modulate.a = 1.0
 			enemies_row.modulate.a = 1.0
 			turns_row.modulate.a = 1.0
+			if objectives_header.visible:
+				objectives_header.modulate.a = 1.0
+				objectives_border.modulate.a = 1.0
+				for label in _objective_labels:
+					label.modulate.a = 1.0
 			for child in officers_container.get_children():
 				child.modulate.a = 1.0
 			continue_button.modulate.a = 1.0

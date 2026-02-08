@@ -2,7 +2,8 @@ extends Control
 ## Voyage Recap Screen - Shows comprehensive summary of the entire voyage
 ## Displayed after reaching New Earth, showing final state and cumulative stats
 
-signal recap_dismissed
+signal main_menu_pressed
+signal restart_pressed
 
 @onready var background: ColorRect = $Background
 @onready var title_label: Label = $PanelContainer/MarginContainer/VBoxContainer/TitleLabel
@@ -24,7 +25,8 @@ signal recap_dismissed
 @onready var total_turns_label: Label = $PanelContainer/MarginContainer/VBoxContainer/CumulativeContainer/TotalTurnsLabel
 @onready var nodes_visited_label: Label = $PanelContainer/MarginContainer/VBoxContainer/CumulativeContainer/NodesVisitedLabel
 
-@onready var continue_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ContinueButton
+@onready var main_menu_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/MainMenuButton
+@onready var restart_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/RestartButton
 
 var _stat_tween: Tween = null
 var _ending_type: String = ""
@@ -32,7 +34,8 @@ var _ending_type: String = ""
 
 func _ready() -> void:
 	visible = false
-	continue_button.pressed.connect(_on_continue_pressed)
+	main_menu_button.pressed.connect(_on_main_menu_pressed)
+	restart_button.pressed.connect(_on_restart_pressed)
 
 
 func show_recap(ending_type: String) -> void:
@@ -110,8 +113,10 @@ func _animate_recap_in() -> void:
 	# Start with everything hidden
 	modulate.a = 0.0
 	visible = true
-	continue_button.modulate.a = 0.0
-	continue_button.disabled = true
+	main_menu_button.modulate.a = 0.0
+	main_menu_button.disabled = true
+	restart_button.modulate.a = 0.0
+	restart_button.disabled = true
 	
 	# Hide all stat labels initially
 	ending_label.modulate.a = 0.0
@@ -175,23 +180,37 @@ func _animate_recap_in() -> void:
 	_stat_tween.tween_property(nodes_visited_label, "modulate:a", 1.0, 0.25)
 	_stat_tween.tween_interval(0.3)
 	
-	# Show continue button
-	_stat_tween.tween_property(continue_button, "modulate:a", 1.0, 0.3)
-	_stat_tween.tween_callback(func(): continue_button.disabled = false)
+	# Show buttons
+	_stat_tween.tween_property(main_menu_button, "modulate:a", 1.0, 0.3)
+	_stat_tween.tween_property(restart_button, "modulate:a", 1.0, 0.3)
+	_stat_tween.tween_callback(func(): 
+		main_menu_button.disabled = false
+		restart_button.disabled = false
+	)
 
 
-func _on_continue_pressed() -> void:
+func _on_main_menu_pressed() -> void:
 	if _stat_tween and _stat_tween.is_running():
 		_stat_tween.kill()
 	
 	var tween = create_tween()
 	tween.tween_property(self, "modulate:a", 0.0, 0.3)
-	tween.tween_callback(_dismiss)
+	tween.tween_callback(func(): 
+		visible = false
+		main_menu_pressed.emit()
+	)
 
 
-func _dismiss() -> void:
-	visible = false
-	recap_dismissed.emit()
+func _on_restart_pressed() -> void:
+	if _stat_tween and _stat_tween.is_running():
+		_stat_tween.kill()
+	
+	var tween = create_tween()
+	tween.tween_property(self, "modulate:a", 0.0, 0.3)
+	tween.tween_callback(func(): 
+		visible = false
+		restart_pressed.emit()
+	)
 
 
 func _input(event: InputEvent) -> void:
@@ -199,11 +218,9 @@ func _input(event: InputEvent) -> void:
 		return
 	
 	if event is InputEventKey and event.pressed and event.keycode == KEY_SPACE:
-		if continue_button.disabled:
+		if main_menu_button.disabled:
 			# Skip animation
 			_skip_animation()
-		else:
-			_on_continue_pressed()
 
 
 func _skip_animation() -> void:
@@ -227,5 +244,7 @@ func _skip_animation() -> void:
 	for child in officers_container.get_children():
 		child.modulate.a = 1.0
 	
-	continue_button.modulate.a = 1.0
-	continue_button.disabled = false
+	main_menu_button.modulate.a = 1.0
+	main_menu_button.disabled = false
+	restart_button.modulate.a = 1.0
+	restart_button.disabled = false

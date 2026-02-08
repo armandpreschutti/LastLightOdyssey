@@ -1297,7 +1297,6 @@ func breach_tile(pos: Vector2i) -> void:
 	# Walls and cover become floor
 	if current_type == TileType.WALL or current_type == TileType.HALF_COVER:
 		set_tile_type(pos, TileType.FLOOR)
-		print("Breached tile at %s (was: %s)" % [pos, current_type])
 
 
 ## Check if a position has adjacent cover (for cover indicator)

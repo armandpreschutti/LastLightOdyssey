@@ -62,7 +62,6 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			if current_state == NodeState.AVAILABLE or current_state == NodeState.CURRENT:
-				print("MapNode: Clicked on node %d" % node_id)
 				clicked.emit(node_id)
 				accept_event()
 

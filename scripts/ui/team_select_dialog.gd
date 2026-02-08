@@ -6,13 +6,16 @@ signal cancelled
 
 # Updated paths for new styled layout
 @onready var title_label: Label = $PanelContainer/MarginContainer/VBoxContainer/HeaderContainer/TitleLabel
+@onready var desc_label: Label = $PanelContainer/MarginContainer/VBoxContainer/DescLabel
+@onready var objective_label: Label = $PanelContainer/MarginContainer/VBoxContainer/ObjectiveLabel
+@onready var captain_label: Label = $PanelContainer/MarginContainer/VBoxContainer/CaptainLabel
+@onready var scroll_container: ScrollContainer = $PanelContainer/MarginContainer/VBoxContainer/ScrollContainer
 @onready var officer_container: VBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/ScrollContainer/OfficerContainer
 @onready var selected_label: Label = $PanelContainer/MarginContainer/VBoxContainer/SelectedLabel
 @onready var deploy_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/DeployButton
 @onready var cancel_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/CancelButton
 
 const MAX_TEAM_SIZE: int = 3
-const SELECTABLE_OFFICERS: int = 2  # Captain is always included
 
 var officer_buttons: Dictionary = {}  # officer_key -> CheckButton
 var selected_officers: Array[String] = []
@@ -23,11 +26,16 @@ func _ready() -> void:
 	deploy_button.pressed.connect(_on_deploy_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
 	visible = false
+	# Enable mouse input for scroll wheel support
+	if scroll_container:
+		scroll_container.mouse_filter = Control.MOUSE_FILTER_PASS
 
 
 func show_dialog(biome_type: int = -1) -> void:
 	current_biome_type = biome_type
 	_update_title()
+	_update_description()
+	_update_objective()
 	_populate_officers()
 	_update_selected_label()
 	deploy_button.disabled = true
@@ -43,21 +51,104 @@ func _update_title() -> void:
 		title_label.text = "[ SELECT AWAY TEAM ]"
 
 
+func _update_description() -> void:
+	# Update description to reflect new selection system
+	if desc_label:
+		desc_label.text = "Select %d officers for deployment. All officers are available, including the Captain." % MAX_TEAM_SIZE
+	
+	# Hide or update the captain label since captain is now selectable
+	if captain_label:
+		captain_label.visible = false
+
+
+func _update_objective() -> void:
+	# Update mission objective display based on biome type
+	if objective_label:
+		if current_biome_type >= 0:
+			# Get mission objective for this biome
+			var biome = current_biome_type as BiomeConfig.BiomeType
+			var objectives = MissionObjective.ObjectiveManager.get_objectives_for_biome(biome)
+			
+			if not objectives.is_empty():
+				var objective = objectives[0]
+				var objective_text = _build_objective_description(biome, objective)
+				
+				objective_label.text = objective_text
+				objective_label.visible = true
+			else:
+				objective_label.visible = false
+		else:
+			objective_label.visible = false
+
+
+func _build_objective_description(biome: BiomeConfig.BiomeType, objective: MissionObjective) -> String:
+	# Build a detailed description of the mission and optional objective
+	var biome_name = BiomeConfig.get_biome_name(biome)
+	var mission_desc = ""
+	var objective_desc = ""
+	var reward_info = ""
+	
+	# Get biome description
+	match biome:
+		BiomeConfig.BiomeType.STATION:
+			mission_desc = "Scavenge a derelict space station for resources. Eliminate all hostiles to extract."
+		BiomeConfig.BiomeType.ASTEROID:
+			mission_desc = "Scavenge an abandoned mining operation. Eliminate all hostiles to extract."
+		BiomeConfig.BiomeType.PLANET:
+			mission_desc = "Scavenge the alien planetary surface. Eliminate all hostiles to extract."
+		_:
+			mission_desc = "Scavenge this location for resources. Eliminate all hostiles to extract."
+	
+	# Get bonus reward info
+	var bonuses = MissionObjective.ObjectiveManager.get_bonus_rewards(objective)
+	var reward_text = ""
+	if bonuses.get("fuel", 0) > 0:
+		reward_text = "Completing this objective grants +%d FUEL bonus." % bonuses.get("fuel", 0)
+	elif bonuses.get("scrap", 0) > 0:
+		reward_text = "Completing this objective grants +%d SCRAP bonus." % bonuses.get("scrap", 0)
+	
+	# Build detailed objective description
+	match objective.id:
+		"hack_security":
+			objective_desc = "OPTIONAL: Hack security systems by interacting with security terminals found throughout the station. %s" % reward_text
+		"retrieve_logs":
+			var progress_text = " (%d/%d required)" % [objective.progress, objective.max_progress] if objective.type == MissionObjective.ObjectiveType.PROGRESS else ""
+			objective_desc = "OPTIONAL: Retrieve data logs by collecting data log devices scattered throughout the station%s. %s" % [progress_text, reward_text]
+		"repair_core":
+			objective_desc = "OPTIONAL: Repair the power core by interacting with power core units found in the station. %s" % reward_text
+		"clear_passages":
+			var progress_text = " (%d/%d required)" % [objective.progress, objective.max_progress] if objective.type == MissionObjective.ObjectiveType.PROGRESS else ""
+			objective_desc = "OPTIONAL: Clear cave passages by eliminating enemies blocking the tunnels%s. %s" % [progress_text, reward_text]
+		"activate_mining":
+			objective_desc = "OPTIONAL: Activate mining equipment by interacting with mining units found in the asteroid. %s" % reward_text
+		"extract_minerals":
+			var progress_text = " (%d/%d required)" % [objective.progress, objective.max_progress] if objective.type == MissionObjective.ObjectiveType.PROGRESS else ""
+			objective_desc = "OPTIONAL: Extract rare minerals by interacting with mining equipment%s. %s" % [progress_text, reward_text]
+		"collect_samples":
+			var progress_text = " (%d/%d required)" % [objective.progress, objective.max_progress] if objective.type == MissionObjective.ObjectiveType.PROGRESS else ""
+			objective_desc = "OPTIONAL: Collect alien samples by interacting with sample collection points found on the surface%s. %s" % [progress_text, reward_text]
+		"activate_beacons":
+			var progress_text = " (%d/%d required)" % [objective.progress, objective.max_progress] if objective.type == MissionObjective.ObjectiveType.PROGRESS else ""
+			objective_desc = "OPTIONAL: Activate beacons by interacting with beacon units scattered across the planet%s. %s" % [progress_text, reward_text]
+		"clear_nests":
+			objective_desc = "OPTIONAL: Clear hostile nests by interacting with nest structures found on the alien surface. %s" % reward_text
+		_:
+			objective_desc = "OPTIONAL: %s. %s" % [objective.description, reward_text]
+	
+	# Combine into full description
+	var full_text = "%s\n\n%s" % [mission_desc, objective_desc]
+	return full_text
+
+
 func _populate_officers() -> void:
 	# Clear existing buttons
 	for child in officer_container.get_children():
 		child.queue_free()
 	officer_buttons.clear()
 	selected_officers.clear()
-	
-	# Captain is always included (not shown in list)
-	selected_officers.append("captain")
 
-	# Create button for each alive officer (except captain who's always deployed)
+	# Create button for each alive officer (including captain)
 	for officer_key in GameState.officers:
-		if officer_key == "captain":
-			continue  # Skip captain - shown at top instead
-			
 		if not GameState.is_officer_alive(officer_key):
 			continue
 
@@ -133,13 +224,7 @@ func _get_officer_color(key: String) -> Color:
 
 func _on_officer_toggled(pressed: bool, officer_key: String) -> void:
 	if pressed:
-		# Count only non-captain selections
-		var non_captain_count = 0
-		for key in selected_officers:
-			if key != "captain":
-				non_captain_count += 1
-		
-		if non_captain_count < SELECTABLE_OFFICERS:
+		if selected_officers.size() < MAX_TEAM_SIZE:
 			selected_officers.append(officer_key)
 		else:
 			# Can't select more, uncheck
@@ -149,17 +234,11 @@ func _on_officer_toggled(pressed: bool, officer_key: String) -> void:
 		selected_officers.erase(officer_key)
 
 	_update_selected_label()
-	# Need captain + 2 others = 3 total
 	deploy_button.disabled = selected_officers.size() < MAX_TEAM_SIZE
 
 
 func _update_selected_label() -> void:
-	# Count non-captain selections
-	var non_captain_count = 0
-	for key in selected_officers:
-		if key != "captain":
-			non_captain_count += 1
-	selected_label.text = "SELECTED: %d / %d" % [non_captain_count, SELECTABLE_OFFICERS]
+	selected_label.text = "SELECTED: %d / %d" % [selected_officers.size(), MAX_TEAM_SIZE]
 
 
 func _on_deploy_pressed() -> void:
