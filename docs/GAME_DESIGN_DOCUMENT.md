@@ -593,6 +593,58 @@ Items and cover objects found on tactical maps.
 
 ---
 
+#### Procedural Environment Art (No Sprite Files)
+
+All tactical map visuals — floors, walls, cover objects, extraction zones, fog of war, and tile highlights — are rendered programmatically via Godot's `_draw()` system using biome-specific color themes defined in `BiomeConfig`. No sprite files are used for environment rendering.
+
+**Station Biome — Dark Industrial Metal**
+
+| Element | Visual | Colors |
+|---------|--------|--------|
+| **Floors** | Dark blue-gray metal panels with subtle panel lines and blood splatters | Base `(0.10, 0.11, 0.14)`, variation `(0.12, 0.13, 0.17)` |
+| **Walls** | Lighter industrial metal with autotiled connections, rivets, pipes, and terminal decorations | Base `(0.28, 0.32, 0.40)`, highlight `(0.45, 0.50, 0.58)` |
+| **Cover** | Orange-brown cargo crates and green supply crates with 3D isometric shading | Main `(0.65, 0.45, 0.25)`, green `(0.35, 0.55, 0.30)` |
+| **Extraction** | Green safety zone with landing pad grid pattern and corner markers | Zone `(0.06, 0.18, 0.10)`, markers `(0.3, 0.95, 0.5)` |
+| **Accents** | Bright cyan/teal glow lights on walls and panels | Glow `(0.3, 0.9, 1.0)` |
+| **Fog** | Dark blue-black unexplored area | `(0.01, 0.02, 0.04)` |
+
+**Asteroid Biome — Rocky Caves**
+
+| Element | Visual | Colors |
+|---------|--------|--------|
+| **Floors** | Dark rocky brown with rock crevices and mineral deposits | Base `(0.15, 0.12, 0.10)`, variation `(0.20, 0.16, 0.12)` |
+| **Walls** | Organic brown rock formations (cellular automata generated) | Base `(0.28, 0.22, 0.18)`, highlight `(0.38, 0.32, 0.26)` |
+| **Cover** | Natural rock formations with brown shading | Main `(0.35, 0.28, 0.22)`, highlight `(0.45, 0.38, 0.32)` |
+| **Extraction** | Blue-tinted safe zone with blue markers | Zone `(0.10, 0.15, 0.25)`, markers `(0.4, 0.6, 0.9)` |
+| **Fog** | Dark blue-tinted fog | `(0.02, 0.02, 0.04)` |
+
+**Planet Biome — Alien World**
+
+| Element | Visual | Colors |
+|---------|--------|--------|
+| **Floors** | Dark green alien grass with blade marks and vegetation | Base `(0.12, 0.18, 0.10)`, variation `(0.15, 0.22, 0.12)` |
+| **Walls** | Purple/magenta crystal formations with bioluminescent glows | Base `(0.45, 0.28, 0.50)`, crystal `(0.70, 0.40, 0.75)`, glow `(0.80, 0.50, 0.90)` |
+| **Cover** | Teal mushroom caps, purple crystals, and orange bioluminescent mushrooms | Teal `(0.35, 0.55, 0.58)`, crystal `(0.55, 0.35, 0.60)`, orange `(0.85, 0.55, 0.20)` |
+| **Extraction** | Teal alien energy zone with cyan markers | Zone `(0.15, 0.30, 0.28)`, markers `(0.4, 0.95, 0.85)` |
+| **Accents** | Bioluminescent orange/yellow/pink spores and tendrils | Orange `(0.95, 0.60, 0.15)`, yellow `(1.0, 0.85, 0.30)`, pink `(0.95, 0.45, 0.65)` |
+| **Fog** | Dark purple-tinted fog | `(0.08, 0.05, 0.10)` |
+
+**Shared Tile Overlays (Programmatic)**
+
+| Overlay | Purpose | Color |
+|---------|---------|-------|
+| **Movement range** | Blue highlight on reachable tiles | `(0.2, 0.5, 0.9, 0.35)` |
+| **Attack range** | Red highlight on targetable enemies | `(0.9, 0.2, 0.2, 0.35)` |
+| **Hover** | Yellow highlight on moused-over tiles | `(0.9, 0.8, 0.2, 0.35)` |
+| **Pathfinding line** | Neon blue glowing path with arrowhead | Blue glow with additive blending |
+
+**Background Patterns (128x128 repeating)**
+- **Station**: Industrial grid with cyan accent lines and panel corner highlights
+- **Asteroid**: Rocky texture with irregular crack lines and blue mineral veins with glow effects
+- **Planet**: Organic growth patterns with curved lines, bioluminescent spots, and alien plant tendrils
+
+---
+
 #### Star Map Navigation Icons (5 sprites)
 Visual elements for the management layer star map.
 
