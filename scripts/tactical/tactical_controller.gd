@@ -82,6 +82,7 @@ func _ready() -> void:
 	ConfirmDialogScene = load("res://scenes/ui/confirm_dialog.tscn")
 
 	tactical_map.tile_clicked.connect(_on_tile_clicked)
+	tactical_map.tile_hovered.connect(_on_tile_hovered)
 	tactical_hud.end_turn_pressed.connect(_on_end_turn_pressed)
 	tactical_hud.extract_pressed.connect(_on_extract_pressed)
 	tactical_hud.ability_used.connect(_on_ability_used)
@@ -213,16 +214,23 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		# Reveal around spawn (will be visible after beam down)
 		tactical_map.reveal_around(spawn_positions[i], officer.sight_range)
 
-	# Spawn loot
+	# Spawn loot (only if no mission resource exists at that position)
 	var loot_positions = generator.get_loot_positions()
 	for loot_data in loot_positions:
+		var loot_pos = loot_data["position"]
+		
+		# Check if there's already a mission resource at this position
+		var existing = tactical_map.get_interactable_at(loot_pos)
+		if existing != null and _is_mission_resource(existing):
+			# Skip spawning regular loot if mission resource exists (mission resources take priority)
+			continue
+		
 		var loot: Node2D
 		if loot_data["type"] == "fuel":
 			loot = FuelCrateScene.instantiate()
 		else:
 			loot = ScrapPileScene.instantiate()
-		loot.set_grid_position(loot_data["position"])
-		tactical_map.add_interactable(loot, loot_data["position"])
+		_safe_add_interactable(loot, loot_pos)
 	
 	# Spawn mining equipment for asteroid biome missions with mining-related objectives
 	if current_biome == BiomeConfig.BiomeType.ASTEROID and is_scavenger_mission:
@@ -367,10 +375,41 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	
 	# Spawn enemies with difficulty-based scaling
 	var difficulty = GameState.get_mission_difficulty()
-	var enemy_positions = generator.get_enemy_spawn_positions(difficulty)
 	var enemy_config = BiomeConfig.get_enemy_config(current_biome, difficulty)
 	var heavy_chance = enemy_config["heavy_chance"]
 	
+	# Always spawn a boss enemy in every mission
+	var boss_spawned = false
+	var boss_pos = _find_valid_boss_spawn_position(generator)
+	if boss_pos != Vector2i(-1, -1):
+		var boss = EnemyUnitScene.instantiate()
+		boss.set_grid_position(boss_pos)
+		boss.movement_finished.connect(_on_enemy_movement_finished.bind(boss))
+		boss.died.connect(_on_enemy_died.bind(boss))
+		tactical_map.add_unit(boss, boss_pos)
+		boss.initialize(0, "boss", current_biome, difficulty)
+		boss.visible = false  # Start invisible until revealed
+		enemies.append(boss)
+		boss_spawned = true
+	else:
+		# Fallback: if no valid 2x2 position found, try spawning boss at a regular enemy position
+		push_warning("Could not find valid 2x2 boss spawn position, attempting fallback")
+		var fallback_positions = generator.get_enemy_spawn_positions(difficulty)
+		if fallback_positions.size() > 0:
+			# Use the first enemy spawn position as fallback
+			boss_pos = fallback_positions[0]
+			var boss = EnemyUnitScene.instantiate()
+			boss.set_grid_position(boss_pos)
+			boss.movement_finished.connect(_on_enemy_movement_finished.bind(boss))
+			boss.died.connect(_on_enemy_died.bind(boss))
+			tactical_map.add_unit(boss, boss_pos)
+			boss.initialize(0, "boss", current_biome, difficulty)
+			boss.visible = false  # Start invisible until revealed
+			enemies.append(boss)
+			boss_spawned = true
+	
+	# Spawn regular enemies
+	var enemy_positions = generator.get_enemy_spawn_positions(difficulty)
 	var enemy_id = 1
 	for enemy_pos in enemy_positions:
 		var enemy = EnemyUnitScene.instantiate()
@@ -380,7 +419,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		tactical_map.add_unit(enemy, enemy_pos)
 		# Select enemy type based on difficulty thresholds
 		var enemy_type = _select_enemy_type(difficulty, heavy_chance)
-		enemy.initialize(enemy_id, enemy_type)
+		enemy.initialize(enemy_id, enemy_type, current_biome)
 		enemy.visible = false  # Start invisible until revealed
 		enemies.append(enemy)
 		enemy_id += 1
@@ -396,6 +435,10 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	tactical_hud.update_stability(GameState.cryo_stability)
 	tactical_hud.set_extract_visible(false)
 	tactical_hud.visible = true
+
+	# Center and zoom camera on spawn positions (where units will land) immediately (before fade in and beam down animations)
+	if spawn_positions.size() > 0:
+		_center_camera_on_spawn_positions(spawn_positions)
 
 	# Play beam down animation for scavenger missions
 	if is_scavenger_mission and deployed_officers.size() > 0:
@@ -415,6 +458,59 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	
 	# Update haul display
 	tactical_hud.update_haul(mission_fuel_collected, mission_scrap_collected)
+	
+	# Tutorial: Trigger tactical_movement after first turn begins
+	if TutorialManager.is_active() and TutorialManager.is_at_step("tactical_movement"):
+		# Wait a frame for UI to be fully set up, then queue the step
+		await get_tree().process_frame
+		TutorialManager.queue_step(TutorialManager.current_step_index)
+
+
+## Calculate boss spawn chance based on difficulty
+## Scales from 0% at difficulty 1.0 to ~20% at difficulty 2.5+
+func _calculate_boss_spawn_chance(difficulty: float) -> float:
+	if difficulty < 1.2:
+		return 0.0  # No bosses in early game
+	# Scale: 0% at 1.2, increasing to 20% at 2.5+
+	var normalized = (difficulty - 1.2) / (2.5 - 1.2)  # Normalize to 0-1 range
+	return clampf(normalized * 0.20, 0.0, 0.20)
+
+
+## Find a valid 2x2 spawn position for boss
+func _find_valid_boss_spawn_position(generator: MapGenerator) -> Vector2i:
+	var map_dims = generator.get_map_dimensions()
+	var layout = generator.get_layout()
+	var map_width = map_dims.x
+	var map_height = map_dims.y
+	
+	# Try to find a valid 2x2 position (all 4 tiles must be floor, not near edges)
+	var attempts = 0
+	var max_attempts = 100
+	
+	while attempts < max_attempts:
+		attempts += 1
+		# Pick a random position, but avoid edges (need space for 2x2)
+		var x = randi_range(2, map_width - 4)
+		var y = randi_range(2, map_height - 4)
+		var pos = Vector2i(x, y)
+		
+		# Check if all 4 tiles are valid floor tiles
+		var valid = true
+		for dx in range(2):
+			for dy in range(2):
+				var check_pos = pos + Vector2i(dx, dy)
+				var tile_type = layout.get(check_pos, MapGenerator.TileType.WALL)
+				if tile_type != MapGenerator.TileType.FLOOR:
+					valid = false
+					break
+			if not valid:
+				break
+		
+		if valid:
+			return pos
+	
+	# Failed to find valid position
+	return Vector2i(-1, -1)
 
 
 ## Select enemy type based on difficulty thresholds
@@ -436,6 +532,41 @@ func _select_enemy_type(difficulty: float, heavy_chance: float) -> String:
 	
 	# Default to basic
 	return "basic"
+
+
+func _on_tile_hovered(grid_pos: Vector2i) -> void:
+	# Handle tooltip (only during scavenger missions)
+	if mission_active and is_scavenger_mission:
+		# Check if there's a unit at the hovered position
+		if grid_pos == Vector2i(-1, -1):
+			tactical_hud.hide_unit_tooltip()
+		else:
+			var unit = tactical_map.get_unit_at(grid_pos)
+			if unit:
+				tactical_hud.show_unit_tooltip(unit)
+			else:
+				tactical_hud.hide_unit_tooltip()
+	else:
+		tactical_hud.hide_unit_tooltip()
+	
+	# Update pathfinding path (works for all missions)
+	if not mission_active:
+		tactical_map.clear_pathfinding_path()
+		return
+	
+	if grid_pos == Vector2i(-1, -1):
+		tactical_map.clear_pathfinding_path()
+		return
+	
+	# Update pathfinding path if there's a selected unit and it's their turn
+	if selected_unit and selected_unit == deployed_officers[current_unit_index]:
+		# Check if hovered tile is within movement range
+		if tactical_map.movement_range_tiles.get(grid_pos, false):
+			tactical_map.update_pathfinding_path(selected_unit.get_grid_position(), grid_pos)
+		else:
+			tactical_map.clear_pathfinding_path()
+	else:
+		tactical_map.clear_pathfinding_path()
 
 
 func _on_tile_clicked(grid_pos: Vector2i) -> void:
@@ -599,7 +730,8 @@ func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
 		var unit_pos = unit.get_grid_position()
 		tactical_map.set_movement_range(unit_pos, unit.move_range)
 	else:
-		tactical_map.clear_movement_range()
+		# Preserve pathfinding path during movement animation
+		tactical_map.clear_movement_range(true)
 
 
 func _on_unit_movement_finished(unit: Node2D) -> void:
@@ -831,6 +963,7 @@ func _check_auto_end_turn() -> void:
 
 
 func _on_end_turn_pressed() -> void:
+	AudioManager.play_sfx("ui_end_turn")
 	# Cancel precision mode when ending turn
 	if precision_mode:
 		precision_mode = false
@@ -882,6 +1015,7 @@ func _on_end_turn_pressed() -> void:
 		
 		# Show cryo failure warning if stability is 0
 		if GameState.cryo_stability <= 0:
+			AudioManager.play_sfx("alarm_cryo")
 			tactical_hud.show_cryo_warning()
 		
 		turn_ended.emit(current_turn)
@@ -913,6 +1047,52 @@ func _center_camera_on_unit(unit: Node2D) -> void:
 	var unit_pos = unit.get_grid_position()
 	var world_pos = tactical_map.grid_to_world(unit_pos)
 	combat_camera.center_on_unit(world_pos)
+
+
+## Center and zoom camera on spawn positions (where units will land)
+func _center_camera_on_spawn_positions(spawn_positions: Array[Vector2i]) -> void:
+	if spawn_positions.size() == 0:
+		return
+	
+	# Calculate average position of all spawn positions in world space
+	var avg_pos = Vector2.ZERO
+	for spawn_pos in spawn_positions:
+		var world_pos = tactical_map.grid_to_world(spawn_pos)
+		avg_pos += world_pos
+	
+	avg_pos /= spawn_positions.size()
+	
+	# Account for MapContainer offset (300, 200) to center properly
+	var map_offset = Vector2(300, 200)
+	var camera_pos = avg_pos + map_offset
+	
+	# Snap camera to position with zoom (no animation) - use combat zoom zoomed out by 15%
+	# zoom_max is Vector2(3.0, 3.0), so 15% zoomed out = 3.0 * 0.85 = 2.55
+	var combat_zoom = Vector2(3.0, 3.0)  # zoom_max from combat_camera
+	var zoomed_out = combat_zoom * 0.85  # Zoom out by 15%
+	combat_camera.snap_to_position(camera_pos, false, zoomed_out)
+
+
+## Center and zoom camera on all player units (called at mission start, before animations)
+func _center_camera_on_all_units() -> void:
+	if deployed_officers.size() == 0:
+		return
+	
+	# Calculate average position of all player units in world space
+	var avg_pos = Vector2.ZERO
+	for officer in deployed_officers:
+		var unit_pos = officer.get_grid_position()
+		var world_pos = tactical_map.grid_to_world(unit_pos)
+		avg_pos += world_pos
+	
+	avg_pos /= deployed_officers.size()
+	
+	# Account for MapContainer offset (300, 200) to center properly
+	var map_offset = Vector2(300, 200)
+	var camera_pos = avg_pos + map_offset
+	
+	# Snap camera to position with zoom (no animation) - use a zoomed in view
+	combat_camera.snap_to_position(camera_pos, true)  # true = use combat zoom
 
 
 func _check_extraction_available() -> void:
@@ -1125,27 +1305,46 @@ func _end_mission(success: bool) -> void:
 	# Check objective completion and apply bonus rewards
 	var bonus_fuel = 0
 	var bonus_scrap = 0
+	var bonus_colonists = 0
+	var bonus_hull_repair = 0
 	var objectives_data: Array = []
 	if is_scavenger_mission and not mission_objectives.is_empty():
-		var objective = mission_objectives[0]  # Single objective
-		if objective.completed:
-			var bonuses = MissionObjective.ObjectiveManager.get_bonus_rewards(objective)
-			bonus_fuel = bonuses.get("fuel", 0)
-			bonus_scrap = bonuses.get("scrap", 0)
-			# Apply bonuses to mission collection
-			mission_fuel_collected += bonus_fuel
-			mission_scrap_collected += bonus_scrap
+		# Check all objectives for completion (not just the first one)
+		for objective in mission_objectives:
+			if objective.completed:
+				var bonuses = MissionObjective.ObjectiveManager.get_bonus_rewards(objective)
+				bonus_fuel += bonuses.get("fuel", 0)
+				bonus_scrap += bonuses.get("scrap", 0)
+				bonus_colonists += bonuses.get("colonists", 0)
+				bonus_hull_repair += bonuses.get("hull_repair", 0)
 		
-		# Build objectives data array for recap
+		# Apply bonuses to mission collection (accumulated from all completed objectives)
+		# This ensures bonuses are included in the totals passed to add_mission_stats
+		mission_fuel_collected += bonus_fuel
+		mission_scrap_collected += bonus_scrap
+		
+		# Apply bonus rewards directly to GameState
+		if bonus_fuel > 0:
+			GameState.fuel += bonus_fuel
+		if bonus_scrap > 0:
+			GameState.scrap += bonus_scrap
+		if bonus_colonists > 0:
+			GameState.colonist_count += bonus_colonists
+		if bonus_hull_repair > 0:
+			GameState.repair_ship(bonus_hull_repair)
+		
+		# Build objectives data array for recap (include reward info)
 		for obj in mission_objectives:
 			var obj_type_str = "BINARY" if obj.type == MissionObjective.ObjectiveType.BINARY else "PROGRESS"
+			var potential_rewards = MissionObjective.ObjectiveManager.get_potential_rewards(obj)
 			objectives_data.append({
 				"id": obj.id,
 				"description": obj.description,
 				"completed": obj.completed,
 				"progress": obj.progress,
 				"max_progress": obj.max_progress,
-				"type": obj_type_str
+				"type": obj_type_str,
+				"potential_rewards": potential_rewards
 			})
 	
 	# Build stats dictionary
@@ -1159,6 +1358,8 @@ func _end_mission(success: bool) -> void:
 		"objective_completed": is_scavenger_mission and not mission_objectives.is_empty() and mission_objectives[0].completed,
 		"bonus_fuel": bonus_fuel,
 		"bonus_scrap": bonus_scrap,
+		"bonus_colonists": bonus_colonists,
+		"bonus_hull_repair": bonus_hull_repair,
 		"objectives": objectives_data,
 		"biome_type": current_biome,
 	}
@@ -1214,13 +1415,22 @@ func _play_beam_up_animation() -> void:
 	# Hide HUD during animation
 	tactical_hud.show_combat_message("EXTRACTION IN PROGRESS...", Color(0.4, 0.9, 1.0))
 	
-	# Center camera on the group
+	# Center camera on the group (animate from current position)
 	if deployed_officers.size() > 0:
 		var avg_pos = Vector2.ZERO
+		var alive_count = 0
 		for officer in deployed_officers:
-			avg_pos += officer.position
-		avg_pos /= deployed_officers.size()
-		combat_camera.position = avg_pos
+			if officer.current_hp > 0:
+				# Convert grid position to world coordinates (same as extraction logic)
+				var world_pos = tactical_map.grid_to_world(officer.get_grid_position())
+				avg_pos += world_pos
+				alive_count += 1
+		if alive_count > 0:
+			avg_pos /= alive_count
+			# Use center_on_position_with_zoom to animate smoothly from current position
+			# Zoom in more for extraction animation (2.0x for closer view)
+			var extraction_zoom = Vector2(2.0, 2.0)
+			combat_camera.center_on_position_with_zoom(avg_pos, extraction_zoom)
 	
 	await get_tree().create_timer(0.5).timeout
 	
@@ -1278,13 +1488,8 @@ func _play_beam_down_animation() -> void:
 	# Show message during animation
 	tactical_hud.show_combat_message("BEAMING DOWN...", Color(0.4, 0.9, 1.0))
 	
-	# Center camera on the spawn area
-	if deployed_officers.size() > 0:
-		var avg_pos = Vector2.ZERO
-		for officer in deployed_officers:
-			avg_pos += officer.position
-		avg_pos /= deployed_officers.size()
-		combat_camera.position = avg_pos
+	# Camera should already be centered on spawn positions from start_mission
+	# No need to reposition here - it's already in the right place
 	
 	await get_tree().create_timer(0.5).timeout
 	
@@ -1602,6 +1807,15 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 	# PHASE 2: FIRING (slower projectile travel)
 	var hit = await _phase_firing(shooter, shooter_pos, target_pos, hit_chance, damage)
 	
+	# Check for critical hit AFTER hit confirmation (only for player units and only if hit)
+	var is_critical = false
+	if hit and shooter in deployed_officers and "critical_hit_chance" in shooter:
+		var crit_roll = randf() * 100.0
+		if crit_roll <= shooter.critical_hit_chance:
+			is_critical = true
+			# Apply 2.5x damage multiplier (stacks with flanking)
+			damage = int(damage * 2.5)
+	
 	# Safety: abort if shooter was freed during firing phase
 	if not is_instance_valid(shooter):
 		tactical_hud.hide_combat_message()
@@ -1612,7 +1826,7 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 	# PHASE 3: IMPACT (0.9s - balanced impact reaction)
 	# Target may have been freed - _phase_impact already has a null check
 	var valid_target = target if is_instance_valid(target) else null
-	await _phase_impact(shooter, target_pos, valid_target, hit, damage, is_flanking)
+	await _phase_impact(shooter, target_pos, valid_target, hit, damage, is_flanking, is_critical)
 	
 	# Safety: abort if shooter was freed during impact phase
 	if not is_instance_valid(shooter):
@@ -1684,25 +1898,41 @@ func _phase_firing(shooter: Node2D, _shooter_pos: Vector2i, target_pos: Vector2i
 
 
 ## Phase 3: Impact
-func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: bool, damage: int, is_flanking: bool = false) -> void:
-	# Display hit/miss message with flanking indicator
+func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: bool, damage: int, is_flanking: bool = false, is_critical: bool = false) -> void:
+	# Display hit/miss message with flanking and critical indicators
 	if hit:
-		if is_flanking:
+		if is_critical and is_flanking:
+			tactical_hud.show_combat_message("CRITICAL FLANKING HIT!", Color(1, 0.8, 0.0))  # Gold for critical + flanking
+		elif is_critical:
+			tactical_hud.show_combat_message("CRITICAL HIT!", Color(1, 0.9, 0.2))  # Gold-yellow for critical
+		elif is_flanking:
 			tactical_hud.show_combat_message("FLANKING HIT!", Color(1, 0.5, 0.1))
 		else:
 			tactical_hud.show_combat_message("HIT!", Color(1, 0.2, 0.2))
 		
 		# Apply damage (check validity in case target was freed during earlier phases)
 		if is_instance_valid(target):
-			AudioManager.play_sfx("combat_hit")
+			if is_critical:
+				# Play critical hit sound (will warn if combat_crit doesn't exist, but continue)
+				AudioManager.play_sfx("combat_crit")
+				# Screen shake effect for critical hits (more intense than regular hits)
+				var camera_offset = combat_camera.offset
+				var shake_tween = create_tween()
+				shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(6, 3), 0.04)
+				shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(-6, -3), 0.04)
+				shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(4, -2), 0.04)
+				shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(-3, 2), 0.04)
+				shake_tween.tween_property(combat_camera, "offset", camera_offset, 0.06)
+			else:
+				AudioManager.play_sfx("combat_hit")
 			target.take_damage(damage)
 
-			# Show damage popup (flanking hits use special color via is_crit parameter)
-			_spawn_damage_popup(damage, true, target.position, false, is_flanking)
+			# Show damage popup (pass critical flag)
+			_spawn_damage_popup(damage, true, target.position, false, is_flanking, is_critical)
 		else:
 			# Target was freed - show popup at grid position instead
 			var target_world = Vector2(target_pos.x * 32 + 16, target_pos.y * 32 + 16)
-			_spawn_damage_popup(damage, true, target_world, false, is_flanking)
+			_spawn_damage_popup(damage, true, target_world, false, is_flanking, is_critical)
 	else:
 		tactical_hud.show_combat_message("MISS!", Color(0.6, 0.6, 0.6))
 		AudioManager.play_sfx("combat_miss")
@@ -1764,11 +1994,11 @@ func _phase_resolution(shooter: Node2D) -> void:
 
 
 ## Spawn a damage popup number
-func _spawn_damage_popup(damage: int, is_hit: bool, world_pos: Vector2, is_heal: bool = false, is_flank: bool = false) -> void:
+func _spawn_damage_popup(damage: int, is_hit: bool, world_pos: Vector2, is_heal: bool = false, is_flank: bool = false, is_critical: bool = false) -> void:
 	var popup = Label.new()
 	popup.script = load("res://scripts/tactical/damage_popup.gd")
 	damage_popup_container.add_child(popup)
-	popup.initialize(damage, is_hit, world_pos, is_heal, is_flank)
+	popup.initialize(damage, is_hit, world_pos, is_heal, is_flank, is_critical)
 
 
 ## Execute AI turn for all enemies
@@ -1836,9 +2066,40 @@ func _calculate_enemy_resource_drop(enemy_type: String) -> int:
 			return randi_range(6, 9)  # Medium-high value
 		"elite":
 			return randi_range(12, 18)  # Highest value
+		"boss":
+			return randi_range(20, 30)  # Boss base value (will be multiplied by 2-3x)
 		_:
 			# Default fallback for unknown enemy types
 			return 3
+
+
+## Check if an interactable is a mission resource (has objective_id)
+func _is_mission_resource(interactable: Node2D) -> bool:
+	if interactable == null:
+		return false
+	return interactable.has_method("get_objective_id")
+
+
+## Safely add an interactable, ensuring only one resource per tile
+## Mission resources take priority - if a mission resource exists, don't add the new one
+## If a regular resource exists, remove it and add the new one
+func _safe_add_interactable(interactable: Node2D, grid_pos: Vector2i) -> bool:
+	# Check if there's already an interactable at this position
+	var existing = tactical_map.get_interactable_at(grid_pos)
+	
+	if existing != null:
+		# If existing is a mission resource, don't add the new one (mission resources take priority)
+		if _is_mission_resource(existing):
+			interactable.queue_free()  # Clean up the new interactable we won't use
+			return false
+		
+		# If existing is a regular resource, remove it and add the new one
+		existing.queue_free()
+	
+	# Add the new interactable
+	interactable.set_grid_position(grid_pos)
+	tactical_map.add_interactable(interactable, grid_pos)
+	return true
 
 
 func _on_enemy_died(enemy: Node2D) -> void:
@@ -1858,8 +2119,15 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	if idx >= 0:
 		enemies.remove_at(idx)
 	
-	# Clear from map
-	tactical_map.set_unit_position_solid(pos, false)
+	# Clear from map (handle multi-tile units like bosses)
+	if enemy.get("unit_size") != null and enemy.unit_size == Vector2i(2, 2):
+		# Clear all 4 tiles for 2x2 boss
+		for dx in range(2):
+			for dy in range(2):
+				var occupied_pos = pos + Vector2i(dx, dy)
+				tactical_map.set_unit_position_solid(occupied_pos, false)
+	else:
+		tactical_map.set_unit_position_solid(pos, false)
 	
 	# Play death animation before removing
 	if enemy.has_method("play_death_animation"):
@@ -1867,10 +2135,47 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	
 	# Spawn resource drop at enemy's death position
 	var resource_amount = _calculate_enemy_resource_drop(enemy_type)
-	var scrap_pile = ScrapPileScene.instantiate()
-	scrap_pile.scrap_amount = resource_amount
-	scrap_pile.set_grid_position(pos)
-	tactical_map.add_interactable(scrap_pile, pos)
+	
+	# Bosses drop bonus loot (2-3x normal)
+	if enemy_type == "boss":
+		resource_amount = resource_amount * randi_range(2, 3)
+		# Bosses drop both fuel and scrap, but at different positions within 2x2 area
+		# Try to drop fuel at center first, then scrap at a different corner
+		var fuel_amount = randi_range(2, 4)
+		var boss_center_pos = pos + Vector2i(1, 1)  # Center of 2x2 area
+		
+		# Try to drop fuel at center
+		var fuel_crate = FuelCrateScene.instantiate()
+		fuel_crate.fuel_amount = fuel_amount
+		var fuel_dropped = _safe_add_interactable(fuel_crate, boss_center_pos)
+		
+		# Try to drop scrap at a different position within the 2x2 area
+		# Try corners of the 2x2 area: (0,0), (1,0), (0,1)
+		var scrap_positions = [
+			pos + Vector2i(0, 0),  # Top-left
+			pos + Vector2i(1, 0),   # Top-right
+			pos + Vector2i(0, 1)    # Bottom-left
+		]
+		
+		var scrap_dropped = false
+		for scrap_pos in scrap_positions:
+			var scrap_pile = ScrapPileScene.instantiate()
+			scrap_pile.scrap_amount = resource_amount
+			if _safe_add_interactable(scrap_pile, scrap_pos):
+				scrap_dropped = true
+				break
+		
+		# If scrap couldn't be dropped at any corner and fuel wasn't dropped at center,
+		# try dropping scrap at center (only if center is free)
+		if not scrap_dropped and not fuel_dropped:
+			var scrap_pile = ScrapPileScene.instantiate()
+			scrap_pile.scrap_amount = resource_amount
+			_safe_add_interactable(scrap_pile, boss_center_pos)
+	else:
+		# Regular enemies drop at their position
+		var scrap_pile = ScrapPileScene.instantiate()
+		scrap_pile.scrap_amount = resource_amount
+		_safe_add_interactable(scrap_pile, pos)
 	
 	# Remove node
 	enemy.queue_free()
@@ -2379,6 +2684,10 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
 	# Must be clicking on an enemy
@@ -2393,6 +2702,10 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
 	# Must be visible
@@ -2401,11 +2714,19 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
 	# Use the ability (spends AP and starts cooldown)
 	if not selected_unit.use_charge():
 		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
 	AudioManager.play_sfx("combat_charge")
@@ -2526,9 +2847,12 @@ func _perform_charge_melee_attack(attacker: Node2D, target: Node2D, damage: int,
 	# Impact flash on attacker
 	var impact_tween = create_tween()
 	impact_tween.tween_property(attacker_sprite, "modulate", Color(2.0, 1.5, 0.5, 1.0), 0.03)  # Bright flash
+	await impact_tween.finished
 	
 	# Deal damage and spawn popup
+	var enemy_hp_before = target.current_hp
 	target.take_damage(damage)
+	var enemy_died = target.current_hp <= 0 and enemy_hp_before > 0
 	_spawn_damage_popup(damage, true, target.position, false, true)  # Use flank style for charge hits
 	
 	# Screen shake effect (subtle)
@@ -2538,8 +2862,16 @@ func _perform_charge_melee_attack(attacker: Node2D, target: Node2D, damage: int,
 	shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(-4, -2), 0.03)
 	shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(2, -1), 0.03)
 	shake_tween.tween_property(combat_camera, "offset", camera_offset, 0.05)
+	await shake_tween.finished
 	
-	await get_tree().create_timer(0.15).timeout
+	# Wait for enemy damage flash animation to complete (takes ~0.38 seconds total)
+	await get_tree().create_timer(0.4).timeout
+	
+	# If enemy died, wait for death animation to complete
+	# Note: _on_enemy_died will handle playing the animation, but we need to wait for it
+	# Since signal handlers run asynchronously, we wait for the animation directly
+	if enemy_died and is_instance_valid(target) and target.has_method("play_death_animation"):
+		await target.play_death_animation()
 	
 	# Phase 4: Return to original position
 	var return_tween = create_tween()
@@ -2547,8 +2879,15 @@ func _perform_charge_melee_attack(attacker: Node2D, target: Node2D, damage: int,
 	return_tween.parallel().tween_property(attacker_sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.15)
 	await return_tween.finished
 	
-	# Return camera to tactical view (like normal attacks)
+	# Explicitly ensure sprite position is reset (fixes stuck animation bug)
+	# This ensures the sprite is always in the correct position even if tween had precision issues
+	if is_instance_valid(attacker_sprite):
+		attacker_sprite.position = original_pos
+		attacker_sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)
+	
+	# Return camera to tactical view and wait for it to complete
 	combat_camera.return_to_tactical()
+	await combat_camera.camera_transition_complete
 
 
 ## Try to execute an enemy (Captain ability)
@@ -2711,13 +3050,14 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 	await get_tree().create_timer(0.6).timeout
 	
 	# Play attack animation
+	AudioManager.play_sfx("combat_precision")
 	if selected_unit.has_method("play_attack_animation"):
 		selected_unit.play_attack_animation()
-	
+
 	# Fire projectile
 	projectile.fire(shooter_world, target_world)
 	await projectile.impact_reached
-	
+
 	# Guaranteed hit with 2x damage
 	tactical_hud.show_combat_message("PRECISION HIT!", Color(0.6, 0.55, 0.8))
 	target_enemy.take_damage(precision_damage)
@@ -2840,16 +3180,22 @@ func _find_valid_mining_equipment_position(map_dims: Vector2i, used_positions: A
 ## Show objective completion notification with bonus reward info
 func _show_objective_complete_notification(objective: MissionObjective) -> void:
 	var bonuses = MissionObjective.ObjectiveManager.get_bonus_rewards(objective)
-	var bonus_text = ""
-	if bonuses.get("fuel", 0) > 0:
-		bonus_text = "+%d FUEL" % bonuses.get("fuel", 0)
-	elif bonuses.get("scrap", 0) > 0:
-		bonus_text = "+%d SCRAP" % bonuses.get("scrap", 0)
+	var reward_parts: Array[String] = []
 	
-	if bonus_text != "":
+	if bonuses.get("fuel", 0) > 0:
+		reward_parts.append("+%d FUEL" % bonuses.get("fuel", 0))
+	if bonuses.get("scrap", 0) > 0:
+		reward_parts.append("+%d SCRAP" % bonuses.get("scrap", 0))
+	if bonuses.get("colonists", 0) > 0:
+		reward_parts.append("+%d COLONISTS" % bonuses.get("colonists", 0))
+	if bonuses.get("hull_repair", 0) > 0:
+		reward_parts.append("+%d%% HULL" % bonuses.get("hull_repair", 0))
+	
+	if reward_parts.size() > 0:
+		var bonus_text = " ".join(reward_parts)
 		tactical_hud.show_combat_message("OBJECTIVE COMPLETE! %s" % bonus_text, Color(0.2, 1.0, 0.3))
 		# Auto-hide after delay (non-blocking)
-		var timer = get_tree().create_timer(2.0)
+		var timer = get_tree().create_timer(3.0)  # Slightly longer for multiple rewards
 		timer.timeout.connect(func(): tactical_hud.hide_combat_message())
 
 

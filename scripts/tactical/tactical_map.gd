@@ -2,7 +2,13 @@ extends Node2D
 ## Tactical Map - Grid management, fog of war, and pathfinding
 ## Supports biome-specific visual themes
 
+# warning-ignore: INTEGER_DIVISION
+# warning-ignore: INCOMPATIBLE_TERNARY
+# warning-ignore: SHADOWED_VARIABLE_BASE_CLASS
+# warning-ignore: UNUSED_VARIABLE
+
 signal tile_clicked(grid_pos: Vector2i)
+signal tile_hovered(grid_pos: Vector2i)
 
 const TILE_SIZE: int = 32
 const DEFAULT_MAP_SIZE: int = 20
@@ -21,6 +27,8 @@ var current_biome: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION
 const COLOR_MOVEMENT_RANGE := Color(0.3, 0.6, 0.9, 0.35)  # Brighter blue movement highlight
 const COLOR_EXECUTE_RANGE := Color(0.9, 0.2, 0.2, 0.35)  # Red execute range highlight
 const COLOR_HOVER := Color(1.0, 0.9, 0.4, 0.4)     # Brighter yellow hover
+const COLOR_PATHFINDING_LINE := Color(0.2, 0.8, 1.0, 1.0)  # Glowing neon blue pathfinding line
+const COLOR_PATHFINDING_GLOW := Color(0.2, 0.8, 1.0, 0.4)  # Glow effect for neon blue
 
 @onready var units_container: Node2D = $Units
 @onready var interactables_container: Node2D = $Interactables
@@ -31,6 +39,8 @@ var revealed_tiles: Dictionary = {}  # Vector2i -> bool
 var movement_range_tiles: Dictionary = {}  # Vector2i -> bool (tiles within movement range)
 var execute_range_tiles: Dictionary = {}  # Vector2i -> bool (tiles within execute range)
 var hovered_tile: Vector2i = Vector2i(-1, -1)  # Currently hovered tile
+var pathfinding_path: PackedVector2Array = PackedVector2Array()  # Current pathfinding path
+var pathfinding_source: Vector2i = Vector2i(-1, -1)  # Source position for pathfinding (or -1, -1 if no source)
 
 
 func _ready() -> void:
@@ -183,6 +193,44 @@ func _draw() -> void:
 				# Hover effect
 				if pos == hovered_tile:
 					draw_rect(rect, COLOR_HOVER)
+	
+	# Draw pathfinding path line (draw after tiles but before units)
+	if pathfinding_path.size() > 1:
+		# AStarGrid2D.get_point_path() returns world positions at tile corners
+		# We need to center them for better visual alignment with units
+		var centered_points: PackedVector2Array = []
+		const TILE_HALF = TILE_SIZE / 2.0
+		
+		for corner_pos in pathfinding_path:
+			# Convert corner position to center position
+			centered_points.append(corner_pos + Vector2(TILE_HALF, TILE_HALF))
+		
+		# Draw solid continuous line with glow effect
+		# Draw glow effect first (larger, more transparent line behind)
+		draw_polyline(centered_points, COLOR_PATHFINDING_GLOW, 8.0, true)
+		# Draw main neon blue line on top
+		draw_polyline(centered_points, COLOR_PATHFINDING_LINE, 4.0, true)
+		
+		# Draw one large arrowhead at the final destination
+		if centered_points.size() >= 2:
+			var final_point = centered_points[centered_points.size() - 1]
+			var second_to_last = centered_points[centered_points.size() - 2]
+			var direction = (final_point - second_to_last).normalized()
+			
+			var arrow_size = 10.0 
+			# Position arrow tip so the base of the arrow just barely touches the end of the path line
+			# The base is at arrow_tip - direction * arrow_size, so we position tip at final_point + direction * arrow_size
+			var arrow_tip = final_point + direction * arrow_size
+			# Create perpendicular vectors for arrow sides (pointing backwards from direction)
+			var back_direction = -direction
+			var perp = Vector2(-direction.y, direction.x)  # Perpendicular vector
+			var arrow_left = arrow_tip + back_direction * arrow_size + perp * arrow_size * 0.6
+			var arrow_right = arrow_tip + back_direction * arrow_size - perp * arrow_size * 0.6
+			
+			# Draw large arrowhead with glow
+			var arrow_points: PackedVector2Array = [arrow_tip, arrow_left, arrow_right]
+			draw_colored_polygon(arrow_points, COLOR_PATHFINDING_GLOW)
+			draw_colored_polygon(arrow_points, COLOR_PATHFINDING_LINE)
 
 
 ## Draw a single tile with visual variation based on biome theme
@@ -1133,10 +1181,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		if grid_pos.x >= 0 and grid_pos.x < map_width and grid_pos.y >= 0 and grid_pos.y < map_height:
 			if hovered_tile != grid_pos:
 				hovered_tile = grid_pos
+				tile_hovered.emit(grid_pos)
 				queue_redraw()
 		else:
 			if hovered_tile != Vector2i(-1, -1):
 				hovered_tile = Vector2i(-1, -1)
+				tile_hovered.emit(Vector2i(-1, -1))
 				queue_redraw()
 	
 	# Handle mouse clicks on the tactical map
@@ -1154,7 +1204,26 @@ func get_unit_at(grid_pos: Vector2i) -> Node2D:
 	# Check units with a slightly larger tolerance to make clicking easier
 	var tolerance = TILE_SIZE * 0.6
 	for unit in units_container.get_children():
-		if unit.position.distance_to(world_pos) < tolerance:
+		# Check if unit occupies this grid position
+		var unit_grid_pos: Vector2i
+		if unit.has_method("get_grid_position"):
+			unit_grid_pos = unit.get_grid_position()
+		else:
+			# Fallback to distance check
+			if unit.position.distance_to(world_pos) < tolerance:
+				return unit
+			continue
+		
+		# Get unit size (default to 1x1)
+		var unit_size = Vector2i(1, 1)
+		# Check if unit has unit_size property by trying to get it
+		var size_value = unit.get("unit_size")
+		if size_value != null:
+			unit_size = size_value
+		
+		# Check if grid_pos is within the unit's occupied tiles
+		var occupied_tiles = get_occupied_tiles(unit_grid_pos, unit_size)
+		if grid_pos in occupied_tiles:
 			return unit
 	return null
 
@@ -1172,10 +1241,38 @@ func set_unit_position_solid(pos: Vector2i, is_solid: bool) -> void:
 		astar.set_point_solid(pos, is_solid)
 
 
+## Get all tiles occupied by a unit (handles multi-tile units)
+func get_occupied_tiles(grid_pos: Vector2i, size: Vector2i) -> Array[Vector2i]:
+	var occupied: Array[Vector2i] = []
+	for dx in range(size.x):
+		for dy in range(size.y):
+			occupied.append(grid_pos + Vector2i(dx, dy))
+	return occupied
+
+
 func add_unit(unit: Node2D, grid_pos: Vector2i) -> void:
-	unit.position = grid_to_world(grid_pos)
+	# Check if unit has unit_size property (for multi-tile units like bosses)
+	var unit_size = Vector2i(1, 1)
+	if unit.has_method("get") and unit.get("unit_size"):
+		unit_size = unit.unit_size
+	
+	if unit_size == Vector2i(2, 2):
+		# For 2x2 units, center on the 2x2 area
+		var center_grid = grid_pos + Vector2i(1, 1)
+		unit.position = grid_to_world(center_grid)
+	else:
+		# For 1x1 units, center on the tile
+		unit.position = grid_to_world(grid_pos)
+	
 	units_container.add_child(unit)
 	set_unit_position_solid(grid_pos, true)
+	
+	# Mark all occupied tiles as solid for multi-tile units
+	if unit_size == Vector2i(2, 2):
+		for dx in range(2):
+			for dy in range(2):
+				var occupied_pos = grid_pos + Vector2i(dx, dy)
+				set_unit_position_solid(occupied_pos, true)
 
 
 func add_interactable(interactable: Node2D, grid_pos: Vector2i) -> void:
@@ -1226,9 +1323,11 @@ func set_movement_range(center: Vector2i, move_range: int) -> void:
 	queue_redraw()
 
 
-func clear_movement_range() -> void:
+func clear_movement_range(preserve_pathfinding: bool = false) -> void:
 	movement_range_tiles.clear()
 	hovered_tile = Vector2i(-1, -1)
+	if not preserve_pathfinding:
+		clear_pathfinding_path()
 	queue_redraw()
 
 
@@ -1254,6 +1353,39 @@ func set_execute_range(center: Vector2i, exec_range: int) -> void:
 func clear_execute_range() -> void:
 	execute_range_tiles.clear()
 	queue_redraw()
+
+
+## Update pathfinding path from source to target
+func update_pathfinding_path(source_pos: Vector2i, target_pos: Vector2i) -> void:
+	pathfinding_source = source_pos
+	
+	# If source and target are the same, show empty path
+	if source_pos == target_pos:
+		pathfinding_path.clear()
+		queue_redraw()
+		return
+	
+	# Check if target is within movement range
+	if not movement_range_tiles.get(target_pos, false):
+		pathfinding_path.clear()
+		queue_redraw()
+		return
+	
+	# Calculate path using A*
+	var path = find_path(source_pos, target_pos)
+	
+	if path.is_empty() or path.size() < 2:
+		pathfinding_path.clear()
+	else:
+		pathfinding_path = path
+	
+	queue_redraw()
+
+
+## Clear pathfinding path
+func clear_pathfinding_path() -> void:
+	pathfinding_path.clear()
+	pathfinding_source = Vector2i(-1, -1)
 
 
 ## Get cover value at a position (0 = no cover, 25 = half, 50 = full)

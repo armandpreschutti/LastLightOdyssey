@@ -46,6 +46,7 @@ var move_range: int = 5
 var sight_range: int = 5
 var shoot_range: int = 10
 var base_damage: int = 25
+var critical_hit_chance: float = 0.0  # Critical hit chance as percentage (0-100)
 var is_selected: bool = false
 var grid_position: Vector2i = Vector2i.ZERO
 
@@ -108,23 +109,35 @@ func _apply_specialist_bonuses() -> void:
 			sight_range += 2
 			# Scout has reduced attack range
 			shoot_range = 9
+			# Scout has high critical hit chance (agile unit)
+			critical_hit_chance = 15.0
 		"tech":
 			# Tech can see through walls to detect items
 			pass  # Handled in tactical controller
+			# Tech has low critical hit chance (support role)
+			critical_hit_chance = 5.0
 		"medic":
 			# Medic can see exact HP values
 			pass  # Visual only, handled in UI
+			# Medic has moderate critical hit chance
+			critical_hit_chance = 8.0
 		"heavy":
 			# Heavy has higher base damage for CHARGE
 			base_damage = 35
+			# Heavy has high critical hit chance (combat-focused)
+			critical_hit_chance = 12.0
 		"captain":
 			# Captain is balanced - no passive bonuses
 			pass
+			# Captain has moderate critical hit chance
+			critical_hit_chance = 10.0
 		"sniper":
 			# Sniper has extended sight and shoot range for long-range combat
 			sight_range += 2  # 7 base + 2 = 9 total
 			shoot_range += 2  # 10 base + 2 = 12 total
 			base_damage = 30  # Higher than standard 25
+			# Sniper has highest critical hit chance (precision unit)
+			critical_hit_chance = 20.0
 
 
 func _process(delta: float) -> void:

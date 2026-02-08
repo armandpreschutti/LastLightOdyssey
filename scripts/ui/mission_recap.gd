@@ -73,6 +73,12 @@ func show_recap(stats: Dictionary) -> void:
 	objectives_border.visible = has_objectives
 	objectives_container.visible = has_objectives
 	
+	# Get bonus rewards from stats
+	var bonus_fuel = stats.get("bonus_fuel", 0)
+	var bonus_scrap = stats.get("bonus_scrap", 0)
+	var bonus_colonists = stats.get("bonus_colonists", 0)
+	var bonus_hull_repair = stats.get("bonus_hull_repair", 0)
+	
 	# Add objective rows
 	if has_objectives:
 		for obj_data in objectives:
@@ -84,24 +90,56 @@ func show_recap(stats: Dictionary) -> void:
 			var progress = obj_data.get("progress", 0)
 			var max_progress = obj_data.get("max_progress", 1)
 			var obj_type = obj_data.get("type", "BINARY")
+			var potential_rewards = obj_data.get("potential_rewards", {})
+			
+			# Build reward text for display
+			var reward_text = ""
+			if completed:
+				# Show actual rewards received
+				var reward_parts: Array[String] = []
+				if bonus_fuel > 0:
+					reward_parts.append("+%d FUEL" % bonus_fuel)
+				if bonus_scrap > 0:
+					reward_parts.append("+%d SCRAP" % bonus_scrap)
+				if bonus_colonists > 0:
+					reward_parts.append("+%d COLONISTS" % bonus_colonists)
+				if bonus_hull_repair > 0:
+					reward_parts.append("+%d%% HULL" % bonus_hull_repair)
+				
+				if reward_parts.size() > 0:
+					reward_text = " [REWARD: " + " / ".join(reward_parts) + "]"
+			else:
+				# Show potential rewards
+				var reward_parts: Array[String] = []
+				if potential_rewards.get("fuel", 0) > 0:
+					reward_parts.append("%d FUEL" % potential_rewards.get("fuel", 0))
+				if potential_rewards.get("scrap", 0) > 0:
+					reward_parts.append("%d SCRAP" % potential_rewards.get("scrap", 0))
+				if potential_rewards.get("colonists", 0) > 0:
+					reward_parts.append("%d COLONISTS" % potential_rewards.get("colonists", 0))
+				if potential_rewards.get("hull_repair", 0) > 0:
+					reward_parts.append("%d%% HULL" % potential_rewards.get("hull_repair", 0))
+				
+				if reward_parts.size() > 0:
+					reward_text = " [REWARD: " + " / ".join(reward_parts) + "]"
 			
 			# Format objective text based on type and completion
 			if obj_type == "PROGRESS":
 				if completed:
-					obj_label.text = "  ✓ %s (%d/%d) - COMPLETE" % [description, progress, max_progress]
+					obj_label.text = "  ✓ %s (%d/%d) - COMPLETE%s" % [description, progress, max_progress, reward_text]
 					obj_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))  # Green
 				elif progress > 0:
-					obj_label.text = "  %s (%d/%d)" % [description, progress, max_progress]
+					obj_label.text = "  %s (%d/%d)%s" % [description, progress, max_progress, reward_text]
 					obj_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2))  # Yellow
 				else:
-					obj_label.text = "  %s (0/%d) - INCOMPLETE" % [description, max_progress]
+					obj_label.text = "  %s (0/%d) - INCOMPLETE%s" % [description, max_progress, reward_text]
 					obj_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))  # Gray
 			else:  # BINARY
 				if completed:
-					obj_label.text = "  ✓ %s - COMPLETE" % description
+					obj_label.text = "  ✓ %s - COMPLETE%s" % [description, reward_text]
 					obj_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))  # Green
 				else:
-					obj_label.text = "  %s - INCOMPLETE" % description
+					obj_label.text = "  %s - INCOMPLETE%s" % [description, reward_text]
 					obj_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))  # Gray
 			
 			objectives_container.add_child(obj_label)

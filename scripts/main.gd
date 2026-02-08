@@ -19,6 +19,7 @@ extends Node
 @onready var tactical_mode: Node2D = $TacticalMode
 @onready var management_layer: CanvasLayer = $ManagementLayer
 @onready var management_background: Control = $BackgroundLayer/Background
+@onready var fade_transition: Control = $FadeTransitionLayer/FadeTransition
 
 var _pending_ending_type: String = ""  # Store ending type for the win sequence
 var _pending_officer_keys: Array[String] = []  # Store selected officers for mission start
@@ -41,11 +42,22 @@ var _is_jump_animating: bool = false  # Track if jump animation is in progress
 
 
 func _ready() -> void:
+	# Add to group for easy discovery by TutorialManager
+	add_to_group("main")
+	
+	# Ensure fade is black immediately (before any other initialization)
+	# This prevents grey flash when transitioning from title menu
+	fade_transition.set_black()
+	
 	_connect_signals()
 	_initialize_star_map()
 	_initialize_tutorial()
 	tactical_mode.visible = false
 	AudioManager.play_music("management")
+	
+	# Wait a frame to ensure everything is initialized, then fade in from black
+	await get_tree().process_frame
+	fade_transition.fade_in(0.6)
 	
 	# Show voyage intro scene when starting a new voyage
 	_show_voyage_intro()
@@ -86,6 +98,9 @@ func _initialize_star_map() -> void:
 	
 	# Initialize the visual star map
 	star_map.initialize(star_map_generator)
+	# Disconnect signal if already connected (e.g., on restart)
+	if star_map.node_clicked.is_connected(_on_node_clicked):
+		star_map.node_clicked.disconnect(_on_node_clicked)
 	star_map.node_clicked.connect(_on_node_clicked)
 
 
@@ -196,6 +211,12 @@ func _trigger_random_event() -> void:
 func _on_event_scene_dismissed() -> void:
 	# After the scene is dismissed, show the event choice dialog
 	event_dialog.show_event(current_event)
+	
+	# Tutorial: Trigger event_intro after event dialog is visible
+	if TutorialManager.is_active() and TutorialManager.is_at_step("event_intro"):
+		# Wait a frame for dialog to become visible, then queue the step
+		await get_tree().process_frame
+		TutorialManager.queue_step(TutorialManager.current_step_index)
 
 
 func _on_event_choice_made(use_specialist: bool) -> void:
@@ -215,6 +236,10 @@ func _on_team_selected(officer_keys: Array[String]) -> void:
 	# Store officer keys for mission start
 	_pending_officer_keys = officer_keys
 	
+	# Fade to black, then transition to tactical mode
+	fade_transition.fade_out(0.6)
+	await fade_transition.fade_complete
+	
 	# Go directly to tactical mission (scene was already shown before team select)
 	current_phase = GamePhase.TACTICAL
 	AudioManager.play_music("combat")
@@ -230,6 +255,9 @@ func _on_team_selected(officer_keys: Array[String]) -> void:
 	# Start the mission with biome type and stored officer keys
 	tactical_mode.start_mission(_pending_officer_keys, pending_biome_type)
 	_pending_officer_keys.clear()
+	
+	# Fade in from black
+	fade_transition.fade_in(0.6)
 
 
 func _on_team_select_cancelled() -> void:
@@ -263,14 +291,27 @@ func _on_mission_scene_dismissed() -> void:
 		# New flow - show team select dialog after scene
 		current_phase = GamePhase.TEAM_SELECT
 		team_select_dialog.show_dialog(pending_biome_type)
+		
+		# Tutorial: Trigger scavenge_intro after team select dialog is visible
+		if TutorialManager.is_active() and TutorialManager.is_at_step("scavenge_intro"):
+			# Wait a frame for dialog to become visible, then queue the step
+			await get_tree().process_frame
+			TutorialManager.queue_step(TutorialManager.current_step_index)
 
 
 func _on_mission_complete(_success: bool, stats: Dictionary) -> void:
+	# Fade to black, then transition back to management mode
+	fade_transition.fade_out(0.6)
+	await fade_transition.fade_complete
+	
 	# Hide tactical mode
 	tactical_mode.visible = false
 	management_layer.visible = true
 	management_background.visible = true
 	AudioManager.play_music("management")
+	
+	# Fade in from black
+	fade_transition.fade_in(0.6)
 	
 	# Check for colonist loss milestones BEFORE showing mission recap
 	var threshold = _check_colonist_loss_milestones()
@@ -343,6 +384,10 @@ func _show_voyage_intro() -> void:
 func _on_voyage_intro_scene_dismissed() -> void:
 	# After voyage intro is dismissed, allow normal gameplay
 	current_phase = GamePhase.IDLE
+	
+	# Trigger first tutorial step after voyage intro completes
+	if TutorialManager.is_active() and TutorialManager.is_at_step("star_map_intro"):
+		TutorialManager.trigger_first_step()
 
 
 func _on_trading_complete() -> void:
@@ -433,10 +478,17 @@ func _on_restart_pressed() -> void:
 	_first_event_seen = false
 	_is_jump_animating = false
 	
+	# Ensure management UI is visible
+	management_layer.visible = true
+	management_background.visible = true
+	
 	# Clean up tactical UI to prevent artifacts from persisting
 	tactical_mode.visible = false
 	if tactical_mode.has_method("_cleanup_tactical_ui"):
 		tactical_mode._cleanup_tactical_ui()
+	
+	# Hide voyage recap if still visible
+	voyage_recap.visible = false
 	
 	# Regenerate the star map
 	_initialize_star_map()

@@ -291,6 +291,46 @@ The game implements a dynamic difficulty system that scales mission challenges b
 - Mid missions (nodes 21-34): Increasing difficulty, tactical depth required
 - Final missions (nodes 35-49): Reduced scaling prevents frustration while maintaining challenge
 
+### 3.10 Mission Objectives System
+
+Scavenge missions now feature **biome-specific objectives** that provide bonus rewards upon completion. Each mission randomly selects one objective from the biome's available options.
+
+**Objective Types:**
+- **Binary Objectives**: Complete once (e.g., hack security, repair core, activate mining)
+- **Progress Objectives**: Complete multiple times (e.g., retrieve 3 data logs, collect 5 samples, clear 4 passages)
+
+**Biome-Specific Objectives:**
+
+| Biome | Objective ID | Description | Type | Max Progress | Bonus Reward |
+|-------|--------------|-------------|------|--------------|--------------|
+| **Station** | hack_security | Hack security systems | Binary | 1 | +12 Fuel |
+| | retrieve_logs | Retrieve data logs | Progress | 3 | +25 Scrap |
+| | repair_core | Repair power core | Binary | 1 | +25% Hull Repair |
+| **Asteroid** | clear_passages | Clear cave passages | Progress | 4 | +20 Scrap |
+| | activate_mining | Activate mining equipment | Binary | 1 | +22 Scrap |
+| | extract_minerals | Extract rare minerals | Progress | 2 | +30 Scrap |
+| **Planet** | collect_samples | Collect alien samples | Progress | 5 | +20 Colonists |
+| | activate_beacons | Activate beacons | Progress | 3 | +18 Colonists |
+| | clear_nests | Clear hostile nests | Binary | 1 | +25 Colonists |
+
+**Objective Interactables:**
+Each objective requires interacting with specific objects on the tactical map:
+- **Station**: Security Terminal, Data Log, Power Core
+- **Asteroid**: Mining Equipment (for clearing passages and activating), Mining Equipment (for extracting minerals)
+- **Planet**: Sample Collector, Beacon, Nest
+
+**Objective Completion:**
+- Objectives are tracked in the Objectives Panel (top-right of tactical HUD)
+- Progress objectives show current/max progress (e.g., "Collect alien samples (3/5)")
+- Binary objectives show completion status (e.g., "Hack security systems - COMPLETE")
+- Bonus rewards are awarded immediately upon objective completion
+- Objectives are displayed in the team selection dialog before mission start
+
+**Reward System:**
+- Bonus rewards are deterministic - what is displayed is what the player receives
+- Rewards are shown in the team selection dialog before accepting the mission
+- Completing objectives provides significant resource bonuses beyond standard loot collection
+
 ---
 
 ## 4. The "Oregon Trail" Pressure Mechanic
@@ -430,6 +470,7 @@ Upon reaching New Earth, players are shown a comprehensive **Voyage Recap** scre
 - **Target Highlighting**: Red outline on enemies that can be attacked
 - **Movement Range**: Blue overlay on reachable tiles
 - **Execute Range**: Red overlay for Captain's Execute ability range
+- **Pathfinding Visualization**: Neon blue glowing path line with arrowhead showing unit's movement path when hovering over destination tiles
 
 **Camera System:**
 - **Tactical View**: Default zoom (1.0x) with smooth camera centering on unit selection
@@ -520,10 +561,27 @@ Visual feedback elements for unit states.
 #### Interactable Objects
 Items and cover objects found on tactical maps.
 
+**Standard Loot:**
 | Fuel Crate | Scrap Pile | Cover Crate | Destroyed Cover |
 |:----------:|:----------:|:-----------:|:---------------:|
 | ![Fuel](../assets/sprites/objects/crate_fuel.png) | ![Scrap](../assets/sprites/objects/scrap_pile.png) | ![Cover](../assets/sprites/objects/crate_cover.png) | ![Destroyed](../assets/sprites/objects/crate_cover_destroyed.png) |
 | +1 Fuel | +5 Scrap | Half cover (−25%) | Rubble (0% cover) |
+
+**Objective Interactables:**
+These objects are spawned based on mission objectives and provide progress toward completing objectives:
+
+**Station Biome:**
+- **Security Terminal**: Hack security systems objective (binary)
+- **Data Log**: Retrieve data logs objective (progress, multiple spawn)
+- **Power Core**: Repair power core objective (binary)
+
+**Asteroid Biome:**
+- **Mining Equipment**: Used for clear passages, activate mining, and extract minerals objectives
+
+**Planet Biome:**
+- **Sample Collector**: Collect alien samples objective (progress, multiple spawn)
+- **Beacon**: Activate beacons objective (progress, multiple spawn)
+- **Nest**: Clear hostile nests objective (binary, cleared by moving to nest tile or killing enemies)
 
 ---
 
@@ -610,8 +668,10 @@ Interface icons used throughout the game for resource displays, actions, and set
 - [x] Grid-based tilemap system (variable size per biome)
 - [x] A* pathfinding for movement
 - [x] Point-and-click movement with path visualization
+- [x] Visual pathfinding path line with glow effects and arrowhead
 - [x] Fog of war with per-unit reveal radius
 - [x] Interactable objects (Fuel Crates, Scrap Piles)
+- [x] Objective-specific interactable objects (Terminals, Logs, Cores, Equipment, Collectors, Beacons, Nests)
 - [x] Auto-pickup system
 - [x] Procedural map generation with three biome types
 - [x] BSP room generation (Station biome)
@@ -666,8 +726,9 @@ Interface icons used throughout the game for resource displays, actions, and set
 
 ### ✅ Phase 8: UI & UX Polish (COMPLETE)
 - [x] Tactical HUD with unit info
+- [x] Objectives Panel in tactical HUD (displays mission objectives and progress)
 - [x] Management HUD with ship stats
-- [x] Team selection dialog
+- [x] Team selection dialog with objective preview and potential rewards
 - [x] Trading dialog with fuel purchase and hull repair
 - [x] Event dialog with choices
 - [x] Title menu with animated starfield, typewriter subtitle, and polish
@@ -700,14 +761,23 @@ Interface icons used throughout the game for resource displays, actions, and set
 - [x] Volume control and persistence
 - [x] SFX pool system for simultaneous sounds
 
-### ⏳ Phase 11: Game Feel & Balance (IN PROGRESS)
+### ✅ Phase 11: Mission Objectives System (COMPLETE)
+- [x] Mission objective system with binary and progress objective types
+- [x] Biome-specific objective definitions (Station, Asteroid, Planet)
+- [x] Objective interactable objects (Terminals, Logs, Cores, Equipment, Collectors, Beacons, Nests)
+- [x] Objectives Panel UI for tracking mission progress
+- [x] Bonus reward system for objective completion
+- [x] Objective preview in team selection dialog
+- [x] Objective completion notifications
+
+### ⏳ Phase 12: Game Feel & Balance (IN PROGRESS)
 - [x] Mission difficulty scaling system (1.0x to ~2.5x based on progress)
 - [x] Final stage balancing (reduced stability loss and difficulty scaling in nodes 35+)
 - [x] Navigation penalties (ship integrity and stability loss per jump)
 - [x] Drift mode penalty tuning (40 colonists per fuel deficit)
 - [x] Fuel cost system refinement (base 2, +2 row distance, +4 backward)
 - [ ] Fine-tuning event damage/impact balance
-- [ ] Resource economy refinement (fuel costs, scrap drops)
+- [ ] Resource economy refinement (fuel costs, scrap drops, objective rewards)
 - [ ] Combat damage/accuracy fine-tuning
 
 ---
@@ -823,6 +893,16 @@ Interface icons used throughout the game for resource displays, actions, and set
 - [x] Cover indicators on units (half/full cover status)
 - [x] Flanking damage bonus (+50%)
 - [x] Attacker cover bonus (stable firing position)
+- [x] Pathfinding visualization (neon blue path line with glow and arrowhead)
+
+#### Mission Objectives System
+- [x] Mission objective system with binary and progress types
+- [x] Biome-specific objectives (9 total objectives across 3 biomes)
+- [x] Objective interactable objects spawning system
+- [x] Objectives Panel UI component
+- [x] Bonus reward system with deterministic rewards
+- [x] Objective completion tracking and notifications
+- [x] Objective preview in team selection dialog
 
 #### Audio System
 - [x] AudioManager autoload singleton with crossfading music system
@@ -835,6 +915,22 @@ Interface icons used throughout the game for resource displays, actions, and set
 - [x] Audio bus system (Master, Music, SFX) with independent volume control
 - [x] Volume persistence to settings.cfg
 - [x] Music crossfading with 1-second fade duration
+
+#### Mission Objectives System
+- [x] Mission objective system with binary and progress objective types
+- [x] Biome-specific objective definitions (9 objectives across 3 biomes)
+- [x] Objective interactable objects (Security Terminal, Data Log, Power Core, Mining Equipment, Sample Collector, Beacon, Nest)
+- [x] Objectives Panel UI component in tactical HUD
+- [x] Objective completion tracking and progress display
+- [x] Bonus reward system with deterministic rewards
+- [x] Objective preview in team selection dialog with potential rewards
+- [x] Objective completion notifications
+
+#### Pathfinding Visualization
+- [x] Visual pathfinding path line with neon blue glow effect
+- [x] Arrowhead indicator at destination tile
+- [x] Real-time path updates when hovering over movement destinations
+- [x] Path visualization only shows for valid movement targets
 
 ### Immediate Priority (Week 1-2)
 

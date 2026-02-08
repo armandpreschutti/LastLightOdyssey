@@ -2,6 +2,8 @@
 @tool
 extends RefCounted
 
+# warning-ignore: INTEGER_DIVISION
+
 var editor_plugin: EditorPlugin = null
 
 # Initialize with reference to the editor plugin

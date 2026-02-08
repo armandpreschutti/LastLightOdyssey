@@ -7,13 +7,33 @@ signal movement_finished
 signal died
 signal shot_fired(target_position: Vector2i, hit: bool, damage: int)
 
-# Enemy type sprites
-const ENEMY_SPRITES = {
-	"basic": preload("res://assets/sprites/characters/enemy_basic.png"),
-	"heavy": preload("res://assets/sprites/characters/enemy_heavy.png"),
-	"sniper": preload("res://assets/sprites/characters/enemy_sniper.png"),
-	"elite": preload("res://assets/sprites/characters/enemy_elite.png"),
+# Enemy type sprites by biome
+const ENEMY_SPRITES_BY_BIOME = {
+	BiomeConfig.BiomeType.STATION: {
+		"basic": preload("res://assets/sprites/characters/enemy_basic.png"),
+		"heavy": preload("res://assets/sprites/characters/enemy_heavy.png"),
+		"sniper": preload("res://assets/sprites/characters/enemy_sniper.png"),
+		"elite": preload("res://assets/sprites/characters/enemy_elite.png"),
+		"boss": preload("res://assets/sprites/characters/enemy_boss_station.png"),
+	},
+	BiomeConfig.BiomeType.ASTEROID: {
+		"basic": preload("res://assets/sprites/characters/enemy_basic_asteroid.png"),
+		"heavy": preload("res://assets/sprites/characters/enemy_heavy_asteroid.png"),
+		"sniper": preload("res://assets/sprites/characters/enemy_sniper_asteroid.png"),
+		"elite": preload("res://assets/sprites/characters/enemy_elite_asteroid.png"),
+		"boss": preload("res://assets/sprites/characters/enemy_boss_asteroid.png"),
+	},
+	BiomeConfig.BiomeType.PLANET: {
+		"basic": preload("res://assets/sprites/characters/enemy_basic_planet.png"),
+		"heavy": preload("res://assets/sprites/characters/enemy_heavy_planet.png"),
+		"sniper": preload("res://assets/sprites/characters/enemy_sniper_planet.png"),
+		"elite": preload("res://assets/sprites/characters/enemy_elite_planet.png"),
+		"boss": preload("res://assets/sprites/characters/enemy_boss_planet.png"),
+	},
 }
+
+# Legacy support - fallback to STATION sprites
+const ENEMY_SPRITES = ENEMY_SPRITES_BY_BIOME[BiomeConfig.BiomeType.STATION]
 
 # Enemy type stats
 const ENEMY_DATA = {
@@ -21,6 +41,7 @@ const ENEMY_DATA = {
 	"heavy": { "max_hp": 80, "max_ap": 3, "move_range": 3, "sight_range": 5, "shoot_range": 6, "damage": 35, "overwatch_range": 0 },
 	"sniper": { "max_hp": 40, "max_ap": 2, "move_range": 5, "sight_range": 10, "shoot_range": 12, "damage": 30, "overwatch_range": 5 },
 	"elite": { "max_hp": 100, "max_ap": 3, "move_range": 4, "sight_range": 7, "shoot_range": 9, "damage": 40, "overwatch_range": 0 },
+	"boss": { "max_hp": 250, "max_ap": 4, "move_range": 3, "sight_range": 8, "shoot_range": 9, "damage": 70, "overwatch_range": 0 },
 }
 
 @onready var sprite: Sprite2D = $Sprite
@@ -45,6 +66,7 @@ var shoot_range: int = 8
 var base_damage: int = 20
 var overwatch_range: int = 0  # Automatic overwatch range (0 = disabled)
 var grid_position: Vector2i = Vector2i.ZERO
+var unit_size: Vector2i = Vector2i(1, 1)  # 1x1 for regular enemies, 2x2 for bosses
 
 var is_alerted: bool = false
 var is_targetable: bool = false  # Whether this enemy can be attacked by current unit
@@ -70,23 +92,69 @@ func _ready() -> void:
 		alert_indicator.visible = false
 
 
-func initialize(id: int, type: String = "basic") -> void:
+func initialize(id: int, type: String = "basic", biome: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION, difficulty_multiplier: float = 1.0) -> void:
 	enemy_id = id
 	enemy_type = type
 	
-	# Set sprite based on enemy type
-	if sprite and ENEMY_SPRITES.has(type):
-		sprite.texture = ENEMY_SPRITES[type]
+	# Set unit size (bosses are 2x2, others are 1x1)
+	if type == "boss":
+		unit_size = Vector2i(2, 2)
+	else:
+		unit_size = Vector2i(1, 1)
 	
-	# Apply type-based stats
+	# Set sprite based on enemy type and biome (fallback to STATION if not found)
+	if sprite:
+		var biome_sprites = ENEMY_SPRITES_BY_BIOME.get(biome, ENEMY_SPRITES_BY_BIOME[BiomeConfig.BiomeType.STATION])
+		if biome_sprites.has(type):
+			sprite.texture = biome_sprites[type]
+		elif ENEMY_SPRITES.has(type):
+			# Fallback to STATION sprites if biome variant not found
+			sprite.texture = ENEMY_SPRITES[type]
+		
+		# Scale sprite for boss units (64x64 sprite on 2x2 tiles)
+		if type == "boss":
+			sprite.scale = Vector2(1.0, 1.0)  # 64x64 sprite fits perfectly in 2x2 tiles (64x64 pixels = 2x2 tiles)
+			# Adjust HP bar position for larger boss sprite
+			if hp_bar_bg:
+				hp_bar_bg.position = Vector2(0, 28)  # Lower for boss
+				hp_bar_bg.size = Vector2(28, 4)  # Wider for boss
+			if hp_bar:
+				hp_bar.position = Vector2(-13, 29)  # Lower for boss
+				hp_bar.size = Vector2(26, 2)  # Wider for boss
+			# Add boss indicator (glowing aura)
+			if alert_indicator:
+				alert_indicator.position = Vector2(0, -40)  # Higher for boss
+				alert_indicator.size = Vector2(6, 6)  # Larger indicator
+				alert_indicator.color = Color(1.0, 0.8, 0.2, 1.0)  # Gold/yellow for boss
+		else:
+			sprite.scale = Vector2(1.0, 1.0)
+			# Reset HP bar to normal position
+			if hp_bar_bg:
+				hp_bar_bg.position = Vector2(0, 14)
+				hp_bar_bg.size = Vector2(28, 4)
+			if hp_bar:
+				hp_bar.position = Vector2(-13, 15)
+				hp_bar.size = Vector2(26, 2)
+	
+	# Apply type-based stats (with difficulty scaling for bosses)
 	var data = ENEMY_DATA.get(type, ENEMY_DATA["basic"])
-	max_hp = data["max_hp"]
-	max_ap = data["max_ap"]
-	move_range = data["move_range"]
-	sight_range = data["sight_range"]
-	shoot_range = data["shoot_range"]
-	base_damage = data["damage"]
-	overwatch_range = data.get("overwatch_range", 0)
+	if type == "boss":
+		# Boss stats scale with difficulty
+		max_hp = int(data["max_hp"] * difficulty_multiplier)
+		max_ap = data["max_ap"]
+		move_range = data["move_range"]
+		sight_range = data["sight_range"]
+		shoot_range = data["shoot_range"]
+		base_damage = int(data["damage"] * difficulty_multiplier)
+		overwatch_range = data.get("overwatch_range", 0)
+	else:
+		max_hp = data["max_hp"]
+		max_ap = data["max_ap"]
+		move_range = data["move_range"]
+		sight_range = data["sight_range"]
+		shoot_range = data["shoot_range"]
+		base_damage = data["damage"]
+		overwatch_range = data.get("overwatch_range", 0)
 	
 	current_hp = max_hp
 	current_ap = max_ap
@@ -136,6 +204,14 @@ func move_along_path(path: PackedVector2Array) -> void:
 
 func set_grid_position(pos: Vector2i) -> void:
 	grid_position = pos
+	# Update visual position - center on the unit's occupied area
+	if unit_size == Vector2i(2, 2):
+		# For 2x2 units, center on the 2x2 area (grid_pos + 1, 1)
+		var center_grid = pos + Vector2i(1, 1)
+		position = Vector2(center_grid.x * 32 + 16, center_grid.y * 32 + 16)
+	else:
+		# For 1x1 units, center on the tile
+		position = Vector2(pos.x * 32 + 16, pos.y * 32 + 16)
 
 
 func get_grid_position() -> Vector2i:

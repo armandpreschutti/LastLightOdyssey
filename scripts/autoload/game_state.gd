@@ -46,7 +46,7 @@ var cryo_stability: int = 100:
 
 const STABILITY_LOSS_PER_TURN: int = 5  # Base stability loss (used for early stages)
 const COLONIST_LOSS_AT_ZERO_STABILITY: int = 10
-const COLONIST_LOSS_DRIFT_MODE: int = 40  # Increased from 20 to 40 - harsher penalty for insufficient fuel
+const COLONIST_LOSS_DRIFT_MODE: int = 50  # Increased from 40 to 50 (25% increase) - harsher penalty for insufficient fuel
 const FINAL_STAGE_STABILITY_REDUCTION: int = 2  # Reduce stability loss by 2% in final stages (nodes 35+)
 const SHIP_INTEGRITY_LOSS_PER_JUMP: int = 1  # Ship takes minor damage from each jump
 const STABILITY_LOSS_PER_JUMP: int = 2  # Stability decreases slightly with each jump

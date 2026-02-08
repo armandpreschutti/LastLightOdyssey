@@ -168,10 +168,13 @@ func set_tactical_position(pos: Vector2) -> void:
 
 
 ## Immediately snap to a position without transition
-func snap_to_position(world_pos: Vector2, use_combat_zoom: bool = false) -> void:
+func snap_to_position(world_pos: Vector2, use_combat_zoom: bool = false, custom_zoom: Vector2 = Vector2.ZERO) -> void:
 	position = world_pos
 	_target_position = world_pos
-	zoom = zoom_max if use_combat_zoom else zoom_tactical
+	if custom_zoom != Vector2.ZERO:
+		zoom = custom_zoom
+	else:
+		zoom = zoom_max if use_combat_zoom else zoom_tactical
 	_target_zoom = zoom
 	_transitioning = false
 	_combat_transition = false

@@ -119,9 +119,9 @@ const PLANET_THEME := {
 #region Map Size Configuration
 
 const MAP_SIZES := {
-	BiomeType.STATION: { "min": 25, "max": 30 },
-	BiomeType.ASTEROID: { "min": 20, "max": 25 },
-	BiomeType.PLANET: { "min": 35, "max": 40 },
+	BiomeType.STATION: { "min": 17, "max": 20 },
+	BiomeType.ASTEROID: { "min": 14, "max": 17 },
+	BiomeType.PLANET: { "min": 24, "max": 27 },
 }
 
 #endregion

@@ -88,7 +88,17 @@ func show_recap(reason: String) -> void:
 		var is_alive = GameState.officers[officer_key]["alive"]
 		
 		if is_alive:
-			officer_label.text = "  %s - SURVIVED" % officer_name
+			# Show different messages based on failure reason
+			match _reason:
+				"colonists_depleted":
+					# EXTINCTION: They survived but perished soon after
+					officer_label.text = "  %s - SURVIVED, BUT PARISHED SOON AFTER" % officer_name
+				"ship_destroyed":
+					# CATASTROPHIC FAILURE: They went down with the ship
+					officer_label.text = "  %s - WENT DOWN WITH THE SHIP" % officer_name
+				_:
+					# Other failure reasons: Just show survived
+					officer_label.text = "  %s - SURVIVED" % officer_name
 			officer_label.add_theme_color_override("font_color", Color(0.3, 0.9, 0.5))
 		else:
 			officer_label.text = "  %s - K.I.A." % officer_name

@@ -17,6 +17,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/game_over_scene_dialog.tscn" id="12_game_over_scene"]
 [ext_resource type="PackedScene" path="res://scenes/ui/game_over_recap.tscn" id="13_game_over_recap"]
 [ext_resource type="Script" path="res://scripts/tactical/biome_background.gd" id="11_background"]
+[ext_resource type="PackedScene" path="res://scenes/ui/fade_transition.tscn" id="14_fade"]
 
 [node name="Main" type="Node" unique_id=588289983]
 script = ExtResource("1_main")
@@ -190,6 +191,11 @@ visible = false
 
 [node name="GameOverRecap" parent="DialogLayer" unique_id=1316561823 instance=ExtResource("13_game_over_recap")]
 visible = false
+
+[node name="FadeTransitionLayer" type="CanvasLayer" parent="." unique_id=1428451194]
+layer = 100
+
+[node name="FadeTransition" parent="FadeTransitionLayer" unique_id=1428451195 instance=ExtResource("14_fade")]
 
 [node name="TacticalMode" parent="." unique_id=45556294 instance=ExtResource("5_tactical")]
 visible = false

@@ -102,7 +102,10 @@ func show_event(event: Dictionary) -> void:
 		var specialist_name = _get_specialist_display_name(specialist_key)
 		var specialist_desc = _get_specialist_description(specialist_key)
 		var is_alive = GameState.is_officer_alive(specialist_key)
-		var scrap_cost = event.get("mitigation_scrap_cost", 0)
+		# Calculate dynamic scrap cost based on voyage progress
+		var base_cost = event.get("mitigation_scrap_cost", 0)
+		var cost_multiplier = EventManager.get_mitigation_cost_multiplier()
+		var scrap_cost = int(base_cost * cost_multiplier)
 		var has_enough_scrap = GameState.scrap >= scrap_cost
 		
 		if is_alive:
@@ -143,9 +146,13 @@ func _build_losses_text(event: Dictionary, mitigated: bool) -> String:
 	var colonist_gain = event.get("colonist_gain", 0)
 	var fuel_gain = event.get("fuel_gain", 0)
 	var scrap_gain = event.get("scrap_gain", 0)
+	
+	var original_colonist_loss = event.get("colonist_loss", 0)
 
 	if colonist_loss > 0:
 		lines.append("COLONISTS: -%d" % colonist_loss)
+	elif mitigated and colonist_loss == 0 and original_colonist_loss > 0:
+		lines.append("COLONISTS: SAVED")
 	if integrity_loss > 0:
 		lines.append("HULL: -%d%%" % integrity_loss)
 	if colonist_gain > 0:

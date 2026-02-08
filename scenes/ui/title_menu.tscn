@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://day2d8iwj6tdp" path="res://scripts/ui/title_menu.gd" id="1_menu"]
 [ext_resource type="FontFile" uid="uid://xqiy7ijtjsrv" path="res://assets/fonts/VT323-Regular.ttf" id="2_font"]
+[ext_resource type="PackedScene" path="res://scenes/ui/fade_transition.tscn" id="3_fade"]
 
 [node name="TitleMenu" type="Control" unique_id=2119721125]
 layout_mode = 3
@@ -229,3 +230,8 @@ theme_override_font_sizes/font_size = 20
 text = "[ NO SAVED VOYAGE FOUND ]"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="FadeTransitionLayer" type="CanvasLayer" parent="." unique_id=1428451196]
+layer = 100
+
+[node name="FadeTransition" parent="FadeTransitionLayer" unique_id=1428451197 instance=ExtResource("3_fade")]

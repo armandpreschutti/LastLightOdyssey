@@ -47,6 +47,12 @@ signal pause_pressed
 @onready var end_turn_button: Button = $SidePanel/VBox/ButtonContainer/EndTurnButton
 @onready var extract_button: Button = $SidePanel/VBox/ButtonContainer/ExtractButton
 
+# Objectives panel
+@onready var objectives_panel: PanelContainer = $ObjectivesPanel
+
+# Unit stats tooltip
+@onready var unit_stats_tooltip: Control = $UnitStatsTooltip
+
 # Current ability info
 var _current_ability_type: String = ""
 
@@ -323,24 +329,25 @@ func hide_combat_message() -> void:
 		combat_msg.text = ""  # Clear the message text
 
 
-## Initialize objectives panel with mission objectives
+## Show unit stats tooltip with unit data
+func show_unit_tooltip(unit: Node2D) -> void:
+	if unit_stats_tooltip:
+		unit_stats_tooltip.update_unit_stats(unit)
+
+
+## Hide unit stats tooltip
+func hide_unit_tooltip() -> void:
+	if unit_stats_tooltip:
+		unit_stats_tooltip.hide_tooltip()
+
 
 ## Initialize objectives panel with mission objectives
 func initialize_objectives(objectives: Array[MissionObjective]) -> void:
-	var panel = get_node_or_null("ObjectivesPanel")
-	if panel and panel.has_method("initialize"):
-		panel.initialize(objectives)
+	if objectives_panel:
+		objectives_panel.initialize(objectives)
 
 
-## Update a specific objective
+## Update a specific objective's display
 func update_objective(objective_id: String) -> void:
-	var panel = get_node_or_null("ObjectivesPanel")
-	if panel and panel.has_method("update_objective"):
-		panel.update_objective(objective_id)
-
-
-## Update all objectives
-func update_all_objectives() -> void:
-	var panel = get_node_or_null("ObjectivesPanel")
-	if panel and panel.has_method("update_all"):
-		panel.update_all()
+	if objectives_panel:
+		objectives_panel.update_objective(objective_id)

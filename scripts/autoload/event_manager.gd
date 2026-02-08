@@ -16,7 +16,7 @@ var random_events: Array[Dictionary] = [
 		"colonist_loss": 70,
 		"integrity_loss": 15,
 		"specialist_mitigation": "tech",
-		"mitigated_colonist_loss": 25,
+		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 5,
 		"mitigation_scrap_cost": 18,
 	},
@@ -27,7 +27,7 @@ var random_events: Array[Dictionary] = [
 		"colonist_loss": 50,
 		"integrity_loss": 25,
 		"specialist_mitigation": "scout",
-		"mitigated_colonist_loss": 15,
+		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 10,
 		"mitigation_scrap_cost": 22,
 	},
@@ -38,7 +38,7 @@ var random_events: Array[Dictionary] = [
 		"colonist_loss": 100,
 		"integrity_loss": 0,
 		"specialist_mitigation": "medic",
-		"mitigated_colonist_loss": 40,
+		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 0,
 		"mitigation_scrap_cost": 30,
 	},
@@ -49,7 +49,7 @@ var random_events: Array[Dictionary] = [
 		"colonist_loss": 40,
 		"integrity_loss": 20,
 		"specialist_mitigation": "tech",
-		"mitigated_colonist_loss": 15,
+		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 10,
 		"mitigation_scrap_cost": 15,
 	},
@@ -60,7 +60,7 @@ var random_events: Array[Dictionary] = [
 		"colonist_loss": 60,
 		"integrity_loss": 30,
 		"specialist_mitigation": "heavy",
-		"mitigated_colonist_loss": 25,
+		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 15,
 		"mitigation_scrap_cost": 28,
 	},
@@ -81,7 +81,7 @@ var random_events: Array[Dictionary] = [
 		"description": "A faint distress signal beckons. Rescue attempt?",
 		"colonist_loss": 0,
 		"integrity_loss": 15,
-		"colonist_gain": 30,
+		"scrap_gain": 35,
 		"specialist_mitigation": "medic",
 		"mitigated_integrity_loss": 0,
 		"mitigation_scrap_cost": 18,
@@ -93,7 +93,7 @@ var random_events: Array[Dictionary] = [
 		"colonist_loss": 80,
 		"integrity_loss": 10,
 		"specialist_mitigation": "tech",
-		"mitigated_colonist_loss": 30,
+		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 5,
 		"mitigation_scrap_cost": 25,
 	},
@@ -104,7 +104,7 @@ var random_events: Array[Dictionary] = [
 		"colonist_loss": 100,
 		"integrity_loss": 0,
 		"specialist_mitigation": "medic",
-		"mitigated_colonist_loss": 50,
+		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 0,
 		"mitigation_scrap_cost": 35,
 	},
@@ -125,6 +125,35 @@ func roll_random_event() -> Dictionary:
 	return random_events[roll]
 
 
+## Get mitigation cost multiplier based on voyage progress
+## Returns a multiplier that scales from 1.0 at node 0 to ~2.5 at node 49
+## Uses similar scaling pattern to mission difficulty
+func get_mitigation_cost_multiplier() -> float:
+	const COST_SCALE_FACTOR: float = 1.5
+	const FINAL_STAGE_START: int = 35  # Nodes 35+ get reduced scaling
+	const FINAL_STAGE_SCALE_REDUCTION: float = 0.4  # Reduce scaling by 40% in final stages
+	
+	var progress_ratio: float = float(GameState.current_node_index) / float(GameState.nodes_to_new_earth)
+	
+	# Reduce cost scaling in final stages
+	if GameState.current_node_index >= FINAL_STAGE_START:
+		# Calculate what the multiplier would be at node 35
+		var final_stage_progress: float = float(FINAL_STAGE_START) / float(GameState.nodes_to_new_earth)
+		var base_multiplier_at_35: float = 1.0 + (final_stage_progress * COST_SCALE_FACTOR)
+		
+		# Calculate remaining progress after node 35
+		var remaining_progress: float = progress_ratio - final_stage_progress
+		var remaining_scale_factor: float = COST_SCALE_FACTOR * (1.0 - FINAL_STAGE_SCALE_REDUCTION)
+		
+		# Apply reduced scaling for final stages
+		var multiplier: float = base_multiplier_at_35 + (remaining_progress * remaining_scale_factor)
+		return multiplier
+	else:
+		# Normal scaling for early/mid stages
+		var multiplier: float = 1.0 + (progress_ratio * COST_SCALE_FACTOR)
+		return multiplier
+
+
 func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionary:
 	var result = {
 		"colonist_change": 0,
@@ -141,8 +170,10 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
 		result["mitigated"] = true
 		result["colonist_change"] = -event.get("mitigated_colonist_loss", event.get("colonist_loss", 0))
 		result["integrity_change"] = -event.get("mitigated_integrity_loss", event.get("integrity_loss", 0))
-		# Deduct scrap cost for mitigation
-		var scrap_cost = event.get("mitigation_scrap_cost", 0)
+		# Deduct scrap cost for mitigation (with dynamic scaling)
+		var base_cost = event.get("mitigation_scrap_cost", 0)
+		var cost_multiplier = get_mitigation_cost_multiplier()
+		var scrap_cost = int(base_cost * cost_multiplier)
 		result["scrap_change"] -= scrap_cost
 	else:
 		result["colonist_change"] = -event.get("colonist_loss", 0)
@@ -159,6 +190,7 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
 	GameState.fuel += result["fuel_change"]
 	GameState.scrap += result["scrap_change"]
 
+	# warning-ignore: INCOMPATIBLE_TERNARY
 	event_resolved.emit("mitigated" if result["mitigated"] else "standard")
 
 	return result
@@ -170,8 +202,10 @@ func can_mitigate_event(event: Dictionary) -> bool:
 		return false
 	if not GameState.is_officer_alive(specialist_key):
 		return false
-	# Check if player has enough scrap
-	var scrap_cost = event.get("mitigation_scrap_cost", 0)
+	# Check if player has enough scrap (with dynamic scaling)
+	var base_cost = event.get("mitigation_scrap_cost", 0)
+	var cost_multiplier = get_mitigation_cost_multiplier()
+	var scrap_cost = int(base_cost * cost_multiplier)
 	return GameState.scrap >= scrap_cost
 
 

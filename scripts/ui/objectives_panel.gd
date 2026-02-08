@@ -61,7 +61,26 @@ func _update_display() -> void:
 
 func _update_objective_label(label: Label, objective: MissionObjective) -> void:
 	## Update a single objective label with current state
-	label.text = objective.get_display_text()
+	var display_text = objective.get_display_text()
+	
+	# Get potential rewards for display
+	var potential_rewards = MissionObjective.ObjectiveManager.get_potential_rewards(objective)
+	var reward_parts: Array[String] = []
+	
+	if potential_rewards.get("fuel", 0) > 0:
+		reward_parts.append("%d FUEL" % potential_rewards.get("fuel", 0))
+	if potential_rewards.get("scrap", 0) > 0:
+		reward_parts.append("%d SCRAP" % potential_rewards.get("scrap", 0))
+	if potential_rewards.get("colonists", 0) > 0:
+		reward_parts.append("%d COLONISTS" % potential_rewards.get("colonists", 0))
+	if potential_rewards.get("hull_repair", 0) > 0:
+		reward_parts.append("%d%% HULL" % potential_rewards.get("hull_repair", 0))
+	
+	# Add reward info to display text
+	if reward_parts.size() > 0:
+		display_text += " [REWARD: " + " / ".join(reward_parts) + "]"
+	
+	label.text = display_text
 	
 	# Color coding based on state
 	if objective.completed:

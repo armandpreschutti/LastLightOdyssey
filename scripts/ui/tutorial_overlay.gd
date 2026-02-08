@@ -33,6 +33,8 @@ func _ready() -> void:
 
 func _on_tutorial_step_triggered(step_id: String, step_data: Dictionary) -> void:
 	_current_step_data = step_data
+	# Always try to show, even if UI might be blocking
+	# The blocking check will prevent showing if truly blocked
 	_show_prompt(step_data)
 
 
@@ -45,6 +47,18 @@ func _on_tutorial_skipped() -> void:
 
 
 func _show_prompt(step_data: Dictionary) -> void:
+	# Check if UI is blocking before showing
+	# Only block if we're not already showing (to allow transitions)
+	if not _is_showing and _check_ui_blocking():
+		# UI is blocking, don't show yet - TutorialManager will retry
+		# Queue a check after a short delay
+		var timer = get_tree().create_timer(0.3)
+		timer.timeout.connect(func(): 
+			if TutorialManager.is_active() and TutorialManager.is_at_step(step_data.get("id", "")):
+				_show_prompt(step_data)
+		)
+		return
+	
 	if _is_showing:
 		# Quick transition between steps
 		_update_content(step_data)
@@ -213,6 +227,10 @@ func _on_got_it_pressed() -> void:
 	
 	if trigger == "acknowledged":
 		# This step advances on button press
+		# Hide the prompt first, then acknowledge
+		_hide_prompt()
+		# Wait a moment for the hide animation, then acknowledge
+		await get_tree().create_timer(0.1).timeout
 		TutorialManager.acknowledge_step()
 	else:
 		# For event-triggered steps, just hide the prompt temporarily
@@ -239,9 +257,19 @@ func hide_temporarily() -> void:
 ## Called externally to restore the overlay after temporary hide
 func restore_visibility() -> void:
 	if _is_showing:
+		# Check if UI is still blocking before restoring
+		if _check_ui_blocking():
+			return
+		
 		# Make visible before animating
 		fullscreen_dim.visible = true
 		prompt_panel.visible = true
 		var tween = create_tween()
 		tween.tween_property(fullscreen_dim, "modulate:a", 1.0, 0.2)
 		tween.parallel().tween_property(prompt_panel, "modulate:a", 1.0, 0.2)
+
+
+## Check if other UI elements are blocking tutorial display
+func _check_ui_blocking() -> bool:
+	# Use TutorialManager's blocking check
+	return TutorialManager._check_ui_blocking()

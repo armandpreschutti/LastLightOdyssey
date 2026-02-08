@@ -214,32 +214,52 @@ func _carve_corridor(layout: Dictionary, from: Vector2i, to: Vector2i, width: in
 
 
 func _add_cover_to_rooms(layout: Dictionary, density: float) -> void:
-	var cover_count = int(map_width * map_height * density)
-	var placed = 0
-	var attempts = 0
-	var max_attempts = cover_count * 20
+	# Use pattern-based placement instead of random density
+	var placed_patterns: Array[Vector2i] = []
 	
-	while placed < cover_count and attempts < max_attempts:
-		attempts += 1
-		var pos = Vector2i(randi_range(2, map_width - 3), randi_range(2, map_height - 3))
+	# Process each room
+	for room in _rooms:
+		# Determine pattern size for this room
+		var pattern_size = CoverPatterns.get_pattern_size_for_room(room.size.x, room.size.y)
 		
-		# Only place on floor tiles, not near edges
-		if layout.get(pos, TileType.WALL) == TileType.FLOOR:
-			# Check it's not blocking a corridor (has floor neighbors)
-			var floor_neighbors = 0
-			for dir in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-				if layout.get(pos + dir, TileType.WALL) == TileType.FLOOR:
-					floor_neighbors += 1
+		# Calculate how many patterns to place based on room size and density
+		var room_area = room.size.x * room.size.y
+		var target_patterns = maxi(1, int(room_area * density / 5.0))  # Scale down from density
+		target_patterns = mini(target_patterns, 3)  # Max 3 patterns per room
+		
+		var patterns_placed = 0
+		var attempts = 0
+		var max_attempts = 20
+		
+		while patterns_placed < target_patterns and attempts < max_attempts:
+			attempts += 1
 			
-			# Only place if not in a tight corridor AND doesn't block connectivity
-			if floor_neighbors >= 3:
-				# Temporarily place cover to test connectivity
-				layout[pos] = TileType.HALF_COVER
-				if _check_map_connectivity(layout):
-					placed += 1
-				else:
-					# Revert if it blocks connectivity
-					layout[pos] = TileType.FLOOR
+			# Get random pattern of appropriate size
+			var pattern = CoverPatterns.get_random_pattern(pattern_size)
+			if pattern.is_empty():
+				continue
+			
+			# Apply random transformation for variety
+			var transform = CoverPatterns.get_random_transformation()
+			pattern = CoverPatterns.apply_transformation(pattern, transform)
+			
+			# Find valid placement positions in room
+			var valid_positions = _find_pattern_placement_in_room(layout, pattern, room)
+			if valid_positions.is_empty():
+				continue
+			
+			# Try a few random positions
+			valid_positions.shuffle()
+			for try_pos in valid_positions:
+				# Check spacing from other patterns
+				if not _check_pattern_spacing(placed_patterns, try_pos, 3):
+					continue
+				
+				# Place the pattern
+				if _place_pattern(layout, pattern, try_pos):
+					placed_patterns.append(try_pos)
+					patterns_placed += 1
+					break
 
 #endregion
 
@@ -454,29 +474,83 @@ func _carve_circle(layout: Dictionary, center: Vector2i, radius: int) -> void:
 
 
 func _add_cave_cover(layout: Dictionary, density: float) -> void:
-	var cover_count = int(map_width * map_height * density)
-	var placed = 0
-	var attempts = 0
+	# Use pattern-based placement for caves
+	# Find open areas in the cave (3x3 or larger clear spaces)
+	var open_areas: Array[Dictionary] = []
 	
-	while placed < cover_count and attempts < cover_count * 10:
-		attempts += 1
-		var pos = Vector2i(randi_range(2, map_width - 3), randi_range(2, map_height - 3))
-		
-		if layout.get(pos, TileType.WALL) == TileType.FLOOR:
-			# Check there's enough space
-			var floor_neighbors = 0
-			for dir in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-				if layout.get(pos + dir, TileType.WALL) == TileType.FLOOR:
-					floor_neighbors += 1
+	for x in range(3, map_width - 3):
+		for y in range(3, map_height - 3):
+			var pos = Vector2i(x, y)
+			if layout.get(pos, TileType.WALL) != TileType.FLOOR:
+				continue
 			
-			if floor_neighbors >= 3:
-				# Temporarily place cover to test connectivity
-				layout[pos] = TileType.HALF_COVER
-				if _check_map_connectivity(layout):
-					placed += 1
-				else:
-					# Revert if it blocks connectivity
-					layout[pos] = TileType.FLOOR
+			# Check if this is the center of an open area (3x3 clear)
+			var is_open_center = true
+			for dx in range(-1, 2):
+				for dy in range(-1, 2):
+					var check_pos = pos + Vector2i(dx, dy)
+					if layout.get(check_pos, TileType.WALL) != TileType.FLOOR:
+						is_open_center = false
+						break
+				if not is_open_center:
+					break
+			
+			if is_open_center:
+				# Estimate area size (simple check)
+				var area_size = 5  # Default to small
+				open_areas.append({
+					"position": pos,
+					"size": area_size
+				})
+	
+	# Place patterns in open areas
+	var placed_patterns: Array[Vector2i] = []
+	var target_patterns = maxi(1, int(open_areas.size() * density * 2.0))
+	target_patterns = mini(target_patterns, open_areas.size())
+	
+	open_areas.shuffle()
+	var patterns_placed = 0
+	var attempts = 0
+	var max_attempts = target_patterns * 5
+	
+	while patterns_placed < target_patterns and attempts < max_attempts and open_areas.size() > 0:
+		attempts += 1
+		var area = open_areas.pop_front()
+		
+		# Use small patterns for caves (they're usually tighter spaces)
+		var pattern_size = CoverPatterns.PatternSize.SMALL
+		if area["size"] >= 7:
+			pattern_size = CoverPatterns.PatternSize.MEDIUM
+		
+		var pattern = CoverPatterns.get_random_pattern(pattern_size)
+		if pattern.is_empty():
+			continue
+		
+		# Apply random transformation
+		var transform = CoverPatterns.get_random_transformation()
+		pattern = CoverPatterns.apply_transformation(pattern, transform)
+		
+		# Try to place near the open area center
+		var center = area["position"]
+		var search_radius = 2
+		var valid_positions = _find_pattern_placement_in_area(
+			layout, pattern,
+			center.x - search_radius, center.x + search_radius,
+			center.y - search_radius, center.y + search_radius
+		)
+		
+		if valid_positions.is_empty():
+			continue
+		
+		valid_positions.shuffle()
+		for try_pos in valid_positions:
+			if not _check_pattern_spacing(placed_patterns, try_pos, 4):
+				continue
+			
+			if _place_pattern(layout, pattern, try_pos):
+				placed_patterns.append(try_pos)
+				patterns_placed += 1
+				break
 
 
 func _identify_cave_regions(layout: Dictionary) -> void:
@@ -577,40 +651,70 @@ func _create_obstacle_cluster(layout: Dictionary, center: Vector2i, size: int) -
 
 
 func _add_scattered_cover(layout: Dictionary, density: float) -> void:
-	var cover_count = int(map_width * map_height * density)
-	var placed = 0
+	# Use pattern-based placement for open fields
+	# Open fields can use larger patterns strategically
+	var placed_patterns: Array[Vector2i] = []
+	
+	# Calculate target number of patterns based on density
+	var map_area = map_width * map_height
+	var target_patterns = maxi(2, int(map_area * density / 8.0))  # Scale down from density
+	target_patterns = mini(target_patterns, 8)  # Max 8 patterns for open field
+	
+	# Mix of pattern sizes for variety
+	var pattern_sizes: Array = [
+		CoverPatterns.PatternSize.SMALL,
+		CoverPatterns.PatternSize.MEDIUM,
+		CoverPatterns.PatternSize.LARGE
+	]
+	
+	var patterns_placed = 0
 	var attempts = 0
+	var max_attempts = target_patterns * 15
 	
-	# Use Poisson-like spacing - maintain minimum distance between cover
-	var min_distance = 3
-	var cover_positions: Array[Vector2i] = []
-	
-	while placed < cover_count and attempts < cover_count * 20:
+	while patterns_placed < target_patterns and attempts < max_attempts:
 		attempts += 1
-		var pos = Vector2i(
-			randi_range(3, map_width - 4),
-			randi_range(3, map_height - 4)
-		)
 		
-		if layout.get(pos, TileType.WALL) != TileType.FLOOR:
+		# Select pattern size (weighted toward medium/large for open fields)
+		var size_roll = randf()
+		var pattern_size: CoverPatterns.PatternSize
+		if size_roll < 0.3:
+			pattern_size = CoverPatterns.PatternSize.SMALL
+		elif size_roll < 0.7:
+			pattern_size = CoverPatterns.PatternSize.MEDIUM
+		else:
+			pattern_size = CoverPatterns.PatternSize.LARGE
+		
+		var pattern = CoverPatterns.get_random_pattern(pattern_size)
+		if pattern.is_empty():
 			continue
 		
-		# Check distance from other cover
-		var too_close = false
-		for existing in cover_positions:
-			if abs(pos.x - existing.x) + abs(pos.y - existing.y) < min_distance:
-				too_close = true
-				break
+		# Apply random transformation
+		var transform = CoverPatterns.get_random_transformation()
+		pattern = CoverPatterns.apply_transformation(pattern, transform)
 		
-		if not too_close:
-			# Temporarily place cover to test connectivity
-			layout[pos] = TileType.HALF_COVER
-			if _check_map_connectivity(layout):
-				cover_positions.append(pos)
-				placed += 1
-			else:
-				# Revert if it blocks connectivity
-				layout[pos] = TileType.FLOOR
+		# Find valid placement positions (avoid edges and obstacles)
+		var margin = 4
+		var valid_positions = _find_pattern_placement_in_area(
+			layout, pattern,
+			margin, map_width - margin,
+			margin, map_height - margin
+		)
+		
+		if valid_positions.is_empty():
+			continue
+		
+		# Try to place near obstacles for strategic positioning (optional)
+		# Otherwise use random placement
+		valid_positions.shuffle()
+		for try_pos in valid_positions:
+			# Check spacing from other patterns (larger spacing for open fields)
+			if not _check_pattern_spacing(placed_patterns, try_pos, 5):
+				continue
+			
+			if _place_pattern(layout, pattern, try_pos):
+				placed_patterns.append(try_pos)
+				patterns_placed += 1
+				break
 
 
 func _create_open_spawn_regions() -> void:
@@ -644,6 +748,106 @@ func _add_extraction_zone(layout: Dictionary) -> void:
 			var pos = Vector2i(x, y)
 			# Clear any walls/cover for extraction
 			layout[pos] = TileType.EXTRACTION
+
+#endregion
+
+#region Pattern-Based Cover Placement
+
+## Validate if a pattern can be placed at the given position
+## Returns true if pattern fits and doesn't block connectivity
+func _can_place_pattern(layout: Dictionary, pattern: Array, base_pos: Vector2i) -> bool:
+	# Check each tile in the pattern
+	var pattern_tiles: Array[Vector2i] = []
+	for rel_pos in pattern:
+		var abs_pos = base_pos + rel_pos
+		
+		# Check bounds
+		if abs_pos.x < 1 or abs_pos.x >= map_width - 1 or \
+		   abs_pos.y < 1 or abs_pos.y >= map_height - 1:
+			return false
+		
+		# Check tile is floor (not wall, cover, or extraction)
+		if layout.get(abs_pos, TileType.WALL) != TileType.FLOOR:
+			return false
+		
+		pattern_tiles.append(abs_pos)
+	
+	# Temporarily place pattern to test connectivity
+	for pos in pattern_tiles:
+		layout[pos] = TileType.HALF_COVER
+	
+	# Check connectivity
+	var is_connected = _check_map_connectivity(layout)
+	
+	# Revert temporary placement
+	for pos in pattern_tiles:
+		layout[pos] = TileType.FLOOR
+	
+	return is_connected
+
+
+## Place a pattern at the given position
+## Returns true if placement was successful
+func _place_pattern(layout: Dictionary, pattern: Array, base_pos: Vector2i) -> bool:
+	if not _can_place_pattern(layout, pattern, base_pos):
+		return false
+	
+	# Place the pattern
+	for rel_pos in pattern:
+		var abs_pos = base_pos + rel_pos
+		layout[abs_pos] = TileType.HALF_COVER
+	
+	return true
+
+
+## Find valid placement positions for a pattern within a room
+func _find_pattern_placement_in_room(layout: Dictionary, pattern: Array, room: Rect2i) -> Array[Vector2i]:
+	var valid_positions: Array[Vector2i] = []
+	var pattern_bounds = CoverPatterns.get_pattern_bounds(pattern)
+	
+	# Ensure pattern fits in room
+	if pattern_bounds.x > room.size.x or pattern_bounds.y > room.size.y:
+		return valid_positions
+	
+	# Try positions within room (with margin for pattern bounds)
+	var margin_x = room.size.x - pattern_bounds.x
+	var margin_y = room.size.y - pattern_bounds.y
+	
+	for x_offset in range(margin_x + 1):
+		for y_offset in range(margin_y + 1):
+			var try_pos = room.position + Vector2i(x_offset, y_offset)
+			if _can_place_pattern(layout, pattern, try_pos):
+				valid_positions.append(try_pos)
+	
+	return valid_positions
+
+
+## Find valid placement positions for a pattern in open area
+func _find_pattern_placement_in_area(layout: Dictionary, pattern: Array, min_x: int, max_x: int, min_y: int, max_y: int) -> Array[Vector2i]:
+	var valid_positions: Array[Vector2i] = []
+	var pattern_bounds = CoverPatterns.get_pattern_bounds(pattern)
+	
+	# Ensure pattern fits in area
+	if pattern_bounds.x > (max_x - min_x) or pattern_bounds.y > (max_y - min_y):
+		return valid_positions
+	
+	# Try positions within area
+	for x in range(min_x, max_x - pattern_bounds.x + 1):
+		for y in range(min_y, max_y - pattern_bounds.y + 1):
+			var try_pos = Vector2i(x, y)
+			if _can_place_pattern(layout, pattern, try_pos):
+				valid_positions.append(try_pos)
+	
+	return valid_positions
+
+
+## Check minimum spacing between placed patterns
+func _check_pattern_spacing(placed_patterns: Array, new_pos: Vector2i, min_spacing: int = 2) -> bool:
+	for existing_pos in placed_patterns:
+		var distance = abs(new_pos.x - existing_pos.x) + abs(new_pos.y - existing_pos.y)
+		if distance < min_spacing:
+			return false
+	return true
 
 #endregion
 
@@ -817,24 +1021,102 @@ func get_extraction_positions() -> Array[Vector2i]:
 	return positions
 
 
-func get_enemy_spawn_positions(difficulty_multiplier: float = 1.0) -> Array[Vector2i]:
+func get_enemy_spawn_positions(difficulty_multiplier: float = 1.0, min_enemies: int = 0) -> Array[Vector2i]:
 	var positions: Array[Vector2i] = []
 	var enemy_config = BiomeConfig.get_enemy_config(_biome_type, difficulty_multiplier)
 	var num_enemies = randi_range(enemy_config["min_enemies"], enemy_config["max_enemies"])
 	
-	# Enemies spawn in opposite area from players (left side of map, middle area)
-	var spawn_area_x_min = 3
-	var spawn_area_x_max = map_width / 2
-	var spawn_area_y_min = map_height / 4
-	var spawn_area_y_max = map_height * 3 / 4
+	# Ensure we spawn at least the minimum required enemies for objectives
+	if min_enemies > 0:
+		num_enemies = maxi(num_enemies, min_enemies)
 	
-	for _i in range(num_enemies):
+	# Calculate extraction zone area to avoid (bottom-left)
+	var zone_size = 3 if map_width <= 25 else 4
+	var extraction_x_max = 1 + zone_size
+	var extraction_y_min = map_height - zone_size - 1
+	
+	# Define multiple spawn zones across the map to spread enemies out
+	# Avoid extraction zone (bottom-left) and player spawn area (top-right)
+	var spawn_zones: Array[Dictionary] = []
+	var margin = 3
+	
+	# Zone 1: Top-left area
+	spawn_zones.append({
+		"x_min": margin,
+		"x_max": map_width / 2 - 2,
+		"y_min": margin,
+		"y_max": map_height / 3
+	})
+	
+	# Zone 2: Left-middle area (avoiding extraction zone)
+	spawn_zones.append({
+		"x_min": margin,
+		"x_max": map_width / 2 - 2,
+		"y_min": map_height / 3,
+		"y_max": extraction_y_min - 2  # Stop before extraction zone
+	})
+	
+	# Zone 3: Middle-left to center area
+	spawn_zones.append({
+		"x_min": map_width / 4,
+		"x_max": map_width * 2 / 3,
+		"y_min": map_height / 4,
+		"y_max": map_height * 2 / 3
+	})
+	
+	# Zone 4: Bottom-center area (avoiding extraction zone)
+	spawn_zones.append({
+		"x_min": extraction_x_max + 2,  # Start after extraction zone
+		"x_max": map_width * 2 / 3,
+		"y_min": map_height * 2 / 3,
+		"y_max": map_height - margin - 1
+	})
+	
+	# Zone 5: Right side (avoiding player spawn top-right)
+	spawn_zones.append({
+		"x_min": map_width / 2 + 2,
+		"x_max": map_width - margin - 1,
+		"y_min": margin + 5,  # Avoid top-right player spawn
+		"y_max": map_height - margin - 1
+	})
+	
+	# Distribute enemies across zones for better spread
+	var enemies_per_zone = num_enemies / spawn_zones.size()
+	var remaining_enemies = num_enemies % spawn_zones.size()
+	
+	for zone_idx in range(spawn_zones.size()):
+		var zone = spawn_zones[zone_idx]
+		var enemies_in_zone = enemies_per_zone
+		if zone_idx < remaining_enemies:
+			enemies_in_zone += 1
+		
+		for _i in range(enemies_in_zone):
+			var pos = _find_valid_spawn_position(
+				zone["x_min"], zone["x_max"],
+				zone["y_min"], zone["y_max"]
+			)
+			if pos != Vector2i(-1, -1):
+				positions.append(pos)
+	
+	# If we didn't get enough positions, try filling from any zone
+	while positions.size() < num_enemies:
+		var random_zone = spawn_zones[randi() % spawn_zones.size()]
 		var pos = _find_valid_spawn_position(
-			spawn_area_x_min, spawn_area_x_max,
-			spawn_area_y_min, spawn_area_y_max
+			random_zone["x_min"], random_zone["x_max"],
+			random_zone["y_min"], random_zone["y_max"]
 		)
-		if pos != Vector2i(-1, -1):
+		if pos != Vector2i(-1, -1) and pos not in positions:
 			positions.append(pos)
+		else:
+			# Last resort: try anywhere except extraction and player spawn
+			pos = _find_valid_spawn_position(
+				margin, map_width - margin - 1,
+				margin + 5, map_height - margin - 1
+			)
+			if pos != Vector2i(-1, -1) and pos not in positions:
+				positions.append(pos)
+			else:
+				break  # Can't find more valid positions
 	
 	return positions
 
@@ -858,5 +1140,9 @@ func get_biome_type() -> BiomeConfig.BiomeType:
 
 func get_map_dimensions() -> Vector2i:
 	return Vector2i(map_width, map_height)
+
+
+func get_layout() -> Dictionary:
+	return _layout
 
 #endregion

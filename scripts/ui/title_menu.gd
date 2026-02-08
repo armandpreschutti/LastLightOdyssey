@@ -15,6 +15,7 @@ signal settings_pressed
 @onready var scanline_overlay: Control = $ScanlineOverlay
 @onready var version_label: Label = $VersionLabel
 @onready var no_save_message: Label = $NoSaveMessage
+@onready var fade_transition: Control = $FadeTransitionLayer/FadeTransition
 
 #region Starfield particles
 var stars: Array[Dictionary] = []
@@ -49,6 +50,13 @@ func _ready() -> void:
 	_generate_stars()
 	_generate_nebula()
 	_setup_buttons()
+	
+	# Start with black screen, then fade in
+	fade_transition.set_black()
+	# Wait a frame to ensure everything is initialized
+	await get_tree().process_frame
+	fade_transition.fade_in(0.6)
+	
 	_animate_intro()
 	AudioManager.play_music("title")
 	
@@ -325,16 +333,12 @@ func _proceed_with_new_game() -> void:
 	if _glow_tween:
 		_glow_tween.kill()
 	
-	# Fade out and transition to game
+	# Fade to black and transition to game
 	AudioManager.stop_music(0.8)
 	AudioManager.play_sfx("ui_transition")
-	var tween = create_tween()
-	tween.set_ease(Tween.EASE_IN)
-	tween.set_trans(Tween.TRANS_CUBIC)
-	tween.set_parallel(true)
-	tween.tween_property(self, "modulate:a", 0.0, 0.8)
-	tween.set_parallel(false)
-	tween.tween_callback(_start_new_game)
+	fade_transition.fade_out(0.6)
+	await fade_transition.fade_complete
+	_start_new_game()
 
 
 func _start_new_game() -> void:
@@ -365,16 +369,12 @@ func _proceed_with_continue() -> void:
 	if _glow_tween:
 		_glow_tween.kill()
 	
-	# Fade out and transition to game (loaded state)
+	# Fade to black and transition to game (loaded state)
 	AudioManager.stop_music(0.8)
 	AudioManager.play_sfx("ui_transition")
-	var tween = create_tween()
-	tween.set_ease(Tween.EASE_IN)
-	tween.set_trans(Tween.TRANS_CUBIC)
-	tween.set_parallel(true)
-	tween.tween_property(self, "modulate:a", 0.0, 0.8)
-	tween.set_parallel(false)
-	tween.tween_callback(_continue_game)
+	fade_transition.fade_out(0.6)
+	await fade_transition.fade_complete
+	_continue_game()
 
 
 func _continue_game() -> void:
@@ -419,10 +419,10 @@ func _on_quit_pressed() -> void:
 	if _glow_tween:
 		_glow_tween.kill()
 	
-	# Fade out then quit
-	var tween = create_tween()
-	tween.tween_property(self, "modulate:a", 0.0, 0.5)
-	tween.tween_callback(get_tree().quit)
+	# Fade to black then quit
+	fade_transition.fade_out(0.6)
+	await fade_transition.fade_complete
+	get_tree().quit()
 
 
 ## Draw the animated starfield with retro sci-fi colored stars and nebula clouds

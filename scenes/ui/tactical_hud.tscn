@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://dp7k2m5qr8vnx"]
 
 [ext_resource type="Script" uid="uid://5cjenw3gw7mt" path="res://scripts/ui/tactical_hud.gd" id="1_hud"]
-[ext_resource type="PackedScene" uid="uid://b8k3m2n4p5q6r" path="res://scenes/ui/objectives_panel.tscn" id="9_objectives"]
 [ext_resource type="Texture2D" uid="uid://vo2viufuvim8" path="res://assets/sprites/ui/icons/icon_turn.png" id="2_turn"]
 [ext_resource type="Texture2D" uid="uid://4urc04o06ois" path="res://assets/sprites/ui/icons/icon_cryo.png" id="3_cryo"]
 [ext_resource type="Texture2D" uid="uid://bogrtadpxsc8r" path="res://assets/sprites/ui/icons/icon_fuel.png" id="4_fuel"]
@@ -9,13 +8,18 @@
 [ext_resource type="Texture2D" uid="uid://cuktrpqwoxamb" path="res://assets/sprites/ui/icons/icon_health.png" id="6_health"]
 [ext_resource type="Texture2D" uid="uid://dr5jrb0ya1m3i" path="res://assets/sprites/ui/icons/icon_ap.png" id="7_ap"]
 [ext_resource type="Texture2D" uid="uid://dcyfquoyeofqk" path="res://assets/sprites/ui/icons/icon_movement.png" id="8_move"]
+[ext_resource type="PackedScene" uid="uid://b8k3m2n4p5q6r" path="res://scenes/ui/objectives_panel.tscn" id="9_objectives"]
+[ext_resource type="PackedScene" path="res://scenes/ui/unit_stats_tooltip.tscn" id="10_tooltip"]
 
 [node name="TacticalHUD" type="Control" unique_id=933333705]
-visible = false
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 1.0
+offset_top = -8.0
+offset_right = 1.0
+offset_bottom = -8.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
@@ -523,4 +527,9 @@ grow_horizontal = 0
 mouse_filter = 2
 color = Color(0.4, 0.9, 1, 0.8)
 
-[node name="ObjectivesPanel" parent="." instance=ExtResource("9_objectives") unique_id=999888777]
+[node name="ObjectivesPanel" parent="." unique_id=999888777 instance=ExtResource("9_objectives")]
+anchors_preset = 2
+offset_top = -135.0
+grow_horizontal = 1
+
+[node name="UnitStatsTooltip" parent="." unique_id=888777666 instance=ExtResource("10_tooltip")]

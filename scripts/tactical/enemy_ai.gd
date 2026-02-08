@@ -7,6 +7,10 @@ class_name EnemyAI
 
 ## Decide action for an enemy unit
 static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: Node2D) -> Dictionary:
+	# Check if this is a boss enemy - route to boss AI
+	if enemy.get("enemy_type") != null and enemy.enemy_type == "boss":
+		return decide_boss_action(enemy, officers, tactical_map)
+	
 	var enemy_pos = enemy.get_grid_position()
 	var result = {"action": "idle", "target": null, "path": null}
 	
@@ -355,6 +359,7 @@ static func _find_tactical_position(from: Vector2i, target_pos: Vector2i, threat
 		if best_position == from:
 			best_position = _get_closest_position_to_target(from, target_pos, checked_positions)
 	
+	# warning-ignore: UNUSED_VARIABLE
 	var final_cover_status = "effective cover" if _is_cover_effective_against_threats(best_position, threats, tactical_map) else ("any cover" if tactical_map.has_adjacent_cover(best_position) else "no cover")
 	return best_position
 
@@ -399,3 +404,235 @@ static func _get_closest_position_to_target(from: Vector2i, target: Vector2i, po
 			best_pos = pos
 	
 	return best_pos
+
+
+## Decide action for boss enemies (biome-specific behavior)
+static func decide_boss_action(boss: Node2D, officers: Array[Node2D], tactical_map: Node2D) -> Dictionary:
+	# Get biome type from tactical_map using the getter method
+	var biome = BiomeConfig.BiomeType.STATION
+	if tactical_map.has_method("get_biome_type"):
+		biome = tactical_map.get_biome_type()
+	
+	match biome:
+		BiomeConfig.BiomeType.STATION:
+			return _decide_station_boss_action(boss, officers, tactical_map)
+		BiomeConfig.BiomeType.ASTEROID:
+			return _decide_asteroid_boss_action(boss, officers, tactical_map)
+		BiomeConfig.BiomeType.PLANET:
+			return _decide_planet_boss_action(boss, officers, tactical_map)
+		_:
+			return _decide_station_boss_action(boss, officers, tactical_map)
+
+
+## Station Boss AI - Tactical positioning, defensive, uses cover
+static func _decide_station_boss_action(boss: Node2D, officers: Array[Node2D], tactical_map: Node2D) -> Dictionary:
+	var boss_pos = boss.get_grid_position()
+	var result = {"action": "idle", "target": null, "path": null}
+	
+	# Find nearest visible officer
+	var nearest_officer: Node2D = null
+	var nearest_distance = 999
+	var visible_officers: Array[Node2D] = []
+	
+	for officer in officers:
+		if officer.current_hp <= 0:
+			continue
+		
+		var officer_pos = officer.get_grid_position()
+		var distance = abs(officer_pos.x - boss_pos.x) + abs(officer_pos.y - boss_pos.y)
+		
+		if distance <= boss.sight_range:
+			visible_officers.append(officer)
+			if distance < nearest_distance:
+				nearest_distance = distance
+				nearest_officer = officer
+	
+	if not nearest_officer:
+		return result
+	
+	var target_pos = nearest_officer.get_grid_position()
+	var can_shoot = nearest_distance <= boss.shoot_range and boss.has_ap(1) and _has_line_of_sight(boss_pos, target_pos, tactical_map)
+	
+	# Station boss prioritizes defensive positioning and cover
+	# warning-ignore: UNUSED_VARIABLE
+	var has_cover = tactical_map.has_adjacent_cover(boss_pos)
+	var is_effectively_covered = _is_cover_effective_against_threats(boss_pos, visible_officers, tactical_map)
+	
+	# PRIORITY 1: If can shoot from effective cover, shoot
+	if can_shoot and is_effectively_covered:
+		result["action"] = "shoot"
+		result["target"] = nearest_officer
+		result["target_pos"] = target_pos
+		return result
+	
+	# PRIORITY 2: If exposed, move to effective cover
+	if not is_effectively_covered and boss.has_ap(1):
+		var cover_pos = _find_cover_against_threats(boss_pos, visible_officers, boss.move_range, tactical_map)
+		if cover_pos != boss_pos:
+			var path = tactical_map.find_path(boss_pos, cover_pos)
+			if path and path.size() > 1:
+				result["action"] = "move"
+				result["path"] = path
+				result["target_pos"] = cover_pos
+				return result
+	
+	# PRIORITY 3: If can shoot (even without perfect cover), shoot
+	if can_shoot:
+		result["action"] = "shoot"
+		result["target"] = nearest_officer
+		result["target_pos"] = target_pos
+		return result
+	
+	# PRIORITY 4: Move to better tactical position (maintain medium range)
+	if boss.has_ap(1):
+		var tactical_pos = _find_tactical_position(boss_pos, target_pos, visible_officers, boss.move_range, nearest_distance, tactical_map)
+		if tactical_pos != boss_pos:
+			var path = tactical_map.find_path(boss_pos, tactical_pos)
+			if path and path.size() > 1:
+				result["action"] = "move"
+				result["path"] = path
+				result["target_pos"] = tactical_pos
+				return result
+	
+	return result
+
+
+## Asteroid Boss AI - Aggressive, charges players, area attacks
+static func _decide_asteroid_boss_action(boss: Node2D, officers: Array[Node2D], tactical_map: Node2D) -> Dictionary:
+	var boss_pos = boss.get_grid_position()
+	var result = {"action": "idle", "target": null, "path": null}
+	
+	# Find nearest visible officer
+	var nearest_officer: Node2D = null
+	var nearest_distance = 999
+	
+	for officer in officers:
+		if officer.current_hp <= 0:
+			continue
+		
+		var officer_pos = officer.get_grid_position()
+		var distance = abs(officer_pos.x - boss_pos.x) + abs(officer_pos.y - boss_pos.y)
+		
+		if distance <= boss.sight_range and distance < nearest_distance:
+			nearest_distance = distance
+			nearest_officer = officer
+	
+	if not nearest_officer:
+		return result
+	
+	var target_pos = nearest_officer.get_grid_position()
+	var can_shoot = nearest_distance <= boss.shoot_range and boss.has_ap(1) and _has_line_of_sight(boss_pos, target_pos, tactical_map)
+	
+	# Asteroid boss is aggressive - charges toward players
+	# PRIORITY 1: If can shoot, shoot
+	if can_shoot:
+		result["action"] = "shoot"
+		result["target"] = nearest_officer
+		result["target_pos"] = target_pos
+		return result
+	
+	# PRIORITY 2: Charge toward nearest officer (aggressive movement)
+	if boss.has_ap(1):
+		var reachable = _get_reachable_positions(boss_pos, boss.move_range, tactical_map)
+		var charge_pos = _get_closest_position_to_target(boss_pos, target_pos, reachable)
+		
+		if charge_pos != boss_pos:
+			var path = tactical_map.find_path(boss_pos, charge_pos)
+			if path and path.size() > 1:
+				result["action"] = "move"
+				result["path"] = path
+				result["target_pos"] = charge_pos
+				return result
+	
+	return result
+
+
+## Planet Boss AI - Spawns minions, uses hit-and-run tactics
+static func _decide_planet_boss_action(boss: Node2D, officers: Array[Node2D], tactical_map: Node2D) -> Dictionary:
+	var boss_pos = boss.get_grid_position()
+	var result = {"action": "idle", "target": null, "path": null}
+	
+	# Find nearest visible officer
+	var nearest_officer: Node2D = null
+	var nearest_distance = 999
+	var visible_officers: Array[Node2D] = []
+	
+	for officer in officers:
+		if officer.current_hp <= 0:
+			continue
+		
+		var officer_pos = officer.get_grid_position()
+		var distance = abs(officer_pos.x - boss_pos.x) + abs(officer_pos.y - boss_pos.y)
+		
+		if distance <= boss.sight_range:
+			visible_officers.append(officer)
+			if distance < nearest_distance:
+				nearest_distance = distance
+				nearest_officer = officer
+	
+	if not nearest_officer:
+		return result
+	
+	var target_pos = nearest_officer.get_grid_position()
+	var can_shoot = nearest_distance <= boss.shoot_range and boss.has_ap(1) and _has_line_of_sight(boss_pos, target_pos, tactical_map)
+	
+	# Planet boss uses hit-and-run: shoot then reposition
+	# PRIORITY 1: If can shoot and has AP for movement after, shoot
+	if can_shoot and boss.has_ap(2):
+		result["action"] = "shoot"
+		result["target"] = nearest_officer
+		result["target_pos"] = target_pos
+		return result
+	
+	# PRIORITY 2: If can shoot (even without extra AP), shoot
+	if can_shoot:
+		result["action"] = "shoot"
+		result["target"] = nearest_officer
+		result["target_pos"] = target_pos
+		return result
+	
+	# PRIORITY 3: Hit-and-run: move to medium range, maintain distance
+	if boss.has_ap(1):
+		# Prefer positions at medium range (5-7 tiles)
+		var reachable = _get_reachable_positions(boss_pos, boss.move_range, tactical_map)
+		var best_pos = boss_pos
+		var best_score = -999.0
+		
+		for pos in reachable:
+			if pos == boss_pos:
+				continue
+			
+			var distance_to_target = abs(pos.x - target_pos.x) + abs(pos.y - target_pos.y)
+			var score = 0.0
+			
+			# Prefer medium range (5-7 tiles)
+			if distance_to_target >= 5 and distance_to_target <= 7:
+				score += 50.0
+			elif distance_to_target < 5:
+				# Too close - move away
+				score -= (5 - distance_to_target) * 10.0
+			else:
+				# Too far - move closer but not too close
+				score += max(0.0, 30.0 - (distance_to_target - 7) * 5.0)
+			
+			# Bonus for line of sight
+			if _has_line_of_sight(pos, target_pos, tactical_map):
+				score += 20.0
+			
+			# Prefer positions with cover
+			if tactical_map.has_adjacent_cover(pos):
+				score += 15.0
+			
+			if score > best_score:
+				best_score = score
+				best_pos = pos
+		
+		if best_pos != boss_pos:
+			var path = tactical_map.find_path(boss_pos, best_pos)
+			if path and path.size() > 1:
+				result["action"] = "move"
+				result["path"] = path
+				result["target_pos"] = best_pos
+				return result
+	
+	return result
