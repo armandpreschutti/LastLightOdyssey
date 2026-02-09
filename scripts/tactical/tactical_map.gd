@@ -40,6 +40,7 @@ var revealed_tiles: Dictionary = {}  # Vector2i -> bool
 var movement_range_tiles: Dictionary = {}  # Vector2i -> bool (tiles within movement range)
 var execute_range_tiles: Dictionary = {}  # Vector2i -> bool (tiles within execute range)
 var heal_range_tiles: Dictionary = {}  # Vector2i -> bool (tiles within heal range)
+var enemy_target_tiles: Dictionary = {}  # Vector2i -> bool (tiles under attackable enemies)
 var hovered_tile: Vector2i = Vector2i(-1, -1)  # Currently hovered tile
 var pathfinding_path: PackedVector2Array = PackedVector2Array()  # Current pathfinding path
 var pathfinding_source: Vector2i = Vector2i(-1, -1)  # Source position for pathfinding (or -1, -1 if no source)
@@ -194,6 +195,10 @@ func _draw() -> void:
 				
 				# Execute range highlight (red)
 				if execute_range_tiles.get(pos, false):
+					draw_rect(rect, COLOR_EXECUTE_RANGE)
+				
+				# Enemy target tiles highlight (red - tiles under attackable enemies)
+				if enemy_target_tiles.get(pos, false):
 					draw_rect(rect, COLOR_EXECUTE_RANGE)
 				
 				# Hover effect
@@ -1378,6 +1383,31 @@ func set_turret_placement_range(center: Vector2i, placement_range: int) -> void:
 ## Clear execute range highlight
 func clear_execute_range() -> void:
 	execute_range_tiles.clear()
+	queue_redraw()
+
+
+## Set enemy target tile highlight (red tint for tiles under attackable enemies)
+func set_enemy_target_tile(grid_pos: Vector2i, unit_size: Vector2i = Vector2i(1, 1)) -> void:
+	# Handle multi-tile units (like bosses)
+	var occupied_tiles = get_occupied_tiles(grid_pos, unit_size)
+	for pos in occupied_tiles:
+		if pos.x >= 0 and pos.x < map_width and pos.y >= 0 and pos.y < map_height:
+			if revealed_tiles.get(pos, false):
+				enemy_target_tiles[pos] = true
+	queue_redraw()
+
+
+## Clear enemy target tile highlight
+func clear_enemy_target_tile(grid_pos: Vector2i, unit_size: Vector2i = Vector2i(1, 1)) -> void:
+	var occupied_tiles = get_occupied_tiles(grid_pos, unit_size)
+	for pos in occupied_tiles:
+		enemy_target_tiles.erase(pos)
+	queue_redraw()
+
+
+## Clear all enemy target tile highlights
+func clear_all_enemy_target_tiles() -> void:
+	enemy_target_tiles.clear()
 	queue_redraw()
 
 

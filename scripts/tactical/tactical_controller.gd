@@ -2227,6 +2227,12 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	var pos = enemy.get_grid_position()
 	var enemy_type = enemy.enemy_type
 	
+	# Clear enemy target tile highlight if it was highlighted
+	var enemy_size = Vector2i(1, 1)
+	if enemy.get("unit_size") != null:
+		enemy_size = enemy.unit_size
+	tactical_map.clear_enemy_target_tile(pos, enemy_size)
+	
 	# Remove from enemies list
 	var idx = enemies.find(enemy)
 	if idx >= 0:
@@ -2346,7 +2352,8 @@ func _update_enemy_visibility() -> void:
 
 ## Update which enemies are highlighted as attackable by the current unit
 func _update_attackable_highlights() -> void:
-	# First clear all highlights
+	# First clear all highlights (both enemy highlights and tile highlights)
+	tactical_map.clear_all_enemy_target_tiles()
 	for enemy in enemies:
 		if enemy.current_hp > 0:
 			enemy.set_targetable(false)
@@ -2392,10 +2399,17 @@ func _update_attackable_highlights() -> void:
 		
 		# This enemy is attackable - highlight it with hit chance!
 		enemy.set_targetable(true, hit_chance)
+		
+		# Also highlight the tile(s) the enemy is standing on
+		var enemy_size = Vector2i(1, 1)
+		if enemy.get("unit_size") != null:
+			enemy_size = enemy.unit_size
+		tactical_map.set_enemy_target_tile(enemy_pos, enemy_size)
 
 
 ## Clear all attackable enemy highlights
 func _clear_attackable_highlights() -> void:
+	tactical_map.clear_all_enemy_target_tiles()
 	for enemy in enemies:
 		if enemy.current_hp > 0:
 			enemy.set_targetable(false)
@@ -2404,9 +2418,20 @@ func _clear_attackable_highlights() -> void:
 
 ## Update enemy highlights for precision mode (show all visible enemies)
 func _update_precision_mode_highlights() -> void:
+	# Clear all enemy target tiles first
+	tactical_map.clear_all_enemy_target_tiles()
+	
 	for enemy in enemies:
 		if enemy.current_hp > 0:
 			enemy.set_precision_mode(precision_mode)
+			
+			# If precision mode is active and enemy is visible, highlight their tile(s)
+			if precision_mode and enemy.visible:
+				var enemy_pos = enemy.get_grid_position()
+				var enemy_size = Vector2i(1, 1)
+				if enemy.get("unit_size") != null:
+					enemy_size = enemy.unit_size
+				tactical_map.set_enemy_target_tile(enemy_pos, enemy_size)
 
 
 func _on_ability_used(ability_type: String) -> void:

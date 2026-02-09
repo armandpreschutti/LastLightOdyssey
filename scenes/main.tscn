@@ -19,7 +19,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/game_over_recap.tscn" id="13_game_over_recap"]
 [ext_resource type="PackedScene" path="res://scenes/ui/fade_transition.tscn" id="14_fade"]
 [ext_resource type="PackedScene" uid="uid://b7k3m6qv4n8y" path="res://scenes/ui/objective_complete_scene_dialog.tscn" id="14_objective_complete"]
-[ext_resource type="PackedScene" uid="uid://c8k4m7qv5pa0" path="res://scenes/ui/enemy_elimination_scene_dialog.tscn" id="15_enemy_elimination"]
+[ext_resource type="PackedScene" path="res://scenes/ui/enemy_elimination_scene_dialog.tscn" id="15_enemy_elimination"]
 
 [node name="Main" type="Node" unique_id=588289983]
 script = ExtResource("1_main")
@@ -112,7 +112,7 @@ color = Color(0.4, 0.9, 1, 0.5)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
 theme_override_font_sizes/font_size = 16
-text = "Click on CYAN nodes to jump to them.
+text = "Click on AMBER nodes to jump to them.
 Fuel cost varies by distance (shown on connection lines).
 Plan your route to NEW EARTH carefully.
 Node types: EMPTY (events)  SCAVENGE (missions)  TRADE (outposts)"
@@ -205,6 +205,7 @@ visible = false
 layer = 100
 
 [node name="FadeTransition" parent="FadeTransitionLayer" unique_id=1428451195 instance=ExtResource("14_fade")]
+visible = false
 
 [node name="TacticalMode" parent="." unique_id=45556294 instance=ExtResource("5_tactical")]
 visible = false

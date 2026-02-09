@@ -628,7 +628,7 @@ Items and cover objects found on tactical maps.
 | ![Fuel](../assets/sprites/objects/crate_fuel.png) | ![Scrap](../assets/sprites/objects/scrap_pile.png) | ![Health](../assets/sprites/objects/health_pack.png) | ![Cover](../assets/sprites/objects/crate_cover.png) | ![Destroyed](../assets/sprites/objects/crate_cover_destroyed.png) |
 | +1 Fuel | +5 Scrap | +62.5% Max HP | Half cover (−25%) | Rubble (0% cover) |
 
-*Note: Health Packs spawn 1-3 per tactical map and restore 62.5% of maximum HP when picked up (same healing value as Medic's Patch ability).*
+*Note: Health Packs spawn 1-2 per tactical map and restore 62.5% of maximum HP when picked up (same healing value as Medic's Patch ability).*
 
 **Objective Interactables (7 sprites):**
 
@@ -768,7 +768,7 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Interactable objects (Fuel Crates, Scrap Piles, Health Packs)
 - [x] Objective-specific interactable objects (Terminals, Logs, Cores, Equipment, Collectors, Beacons, Nests)
 - [x] Auto-pickup system
-- [x] Health Packs spawn on tactical maps (1-3 per map) and restore 62.5% max HP when picked up
+- [x] Health Packs spawn on tactical maps (1-2 per map) and restore 62.5% max HP when picked up
 - [x] Procedural map generation with three biome types
 - [x] BSP room generation (Station biome)
 - [x] Cellular automata cave generation (Asteroid biome)
