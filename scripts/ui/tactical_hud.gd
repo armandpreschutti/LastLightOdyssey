@@ -57,6 +57,7 @@ signal ability_cancelled
 
 # Current ability info
 var _current_ability_type: String = ""
+var _is_animating: bool = false  # Track animation state to disable ability button
 
 
 func _ready() -> void:
@@ -226,6 +227,11 @@ func set_extract_visible(is_visible: bool) -> void:
 
 func set_end_turn_enabled(enabled: bool) -> void:
 	end_turn_button.disabled = not enabled
+	# Track animation state and disable ability button during animations (same as END TURN button)
+	_is_animating = not enabled
+	# Immediately disable ability button if animating (update_ability_buttons() will handle proper state when called)
+	if ability_container.visible and _is_animating:
+		ability_button.disabled = true
 
 
 func _on_pause_pressed() -> void:
@@ -268,8 +274,8 @@ func update_ability_buttons(officer_type: String, current_ap: int, cooldown: int
 		"medic":
 			ability_name = "patch"
 			ability_text = "[ PATCH ] - 1 AP"
-			ability_description = "Heal a friendly unit within 3 tiles for 62.5% of their maximum health (50% base + 25% from Medic's enhanced healing)."
-			ability_tooltip = "Patch: Costs 1 AP. Heals ally within 3 tiles for 62.5% max HP."
+			ability_description = "Heal yourself or a friendly unit within 3 tiles for 62.5% of their maximum health (50% base + 25% from Medic's enhanced healing)."
+			ability_tooltip = "Patch: Costs 1 AP. Heals yourself or ally within 3 tiles for 62.5% max HP."
 			ap_cost = 1
 		"heavy":
 			ability_name = "charge"
@@ -295,22 +301,31 @@ func update_ability_buttons(officer_type: String, current_ap: int, cooldown: int
 		ability_container.visible = true
 		_current_ability_type = ability_name
 		
-		# Check cooldown
-		if cooldown > 0:
+		# Check cooldown - button must be disabled if on cooldown or during animations
+		var is_on_cooldown := cooldown > 0
+		var has_enough_ap := current_ap >= ap_cost
+		
+		if is_on_cooldown:
 			ability_header.text = "ABILITY: [CD %d]" % cooldown
 			ability_button.text = "%s (CD: %d)" % [ability_text, cooldown]
+			# Always disabled when on cooldown
 			ability_button.disabled = true
 			ability_desc.text = ability_description + "\n>> On cooldown for %d more turn(s)." % cooldown
 			ability_button.tooltip_text = ability_tooltip + "\nCooldown: %d turn(s) remaining." % cooldown
 		else:
 			ability_header.text = "SPECIALIST ABILITY:"
 			ability_button.text = ability_text
-			ability_button.disabled = current_ap < ap_cost
+			# Disabled if not enough AP OR if animations are playing
+			ability_button.disabled = not has_enough_ap or _is_animating
 			ability_desc.text = ability_description
 			ability_button.tooltip_text = ability_tooltip
 
 
 func _on_ability_pressed() -> void:
+	# Safety check: don't proceed if button is disabled
+	if ability_button.disabled:
+		return
+	
 	if _current_ability_type != "":
 		ability_used.emit(_current_ability_type)
 

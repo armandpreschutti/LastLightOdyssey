@@ -19,6 +19,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/game_over_recap.tscn" id="13_game_over_recap"]
 [ext_resource type="PackedScene" path="res://scenes/ui/fade_transition.tscn" id="14_fade"]
 [ext_resource type="PackedScene" uid="uid://b7k3m6qv4n8y" path="res://scenes/ui/objective_complete_scene_dialog.tscn" id="14_objective_complete"]
+[ext_resource type="PackedScene" uid="uid://c8k4m7qv5pa0" path="res://scenes/ui/enemy_elimination_scene_dialog.tscn" id="15_enemy_elimination"]
 
 [node name="Main" type="Node" unique_id=588289983]
 script = ExtResource("1_main")
@@ -195,6 +196,9 @@ visible = false
 visible = false
 
 [node name="ObjectiveCompleteSceneDialog" parent="DialogLayer" unique_id=1316561824 instance=ExtResource("14_objective_complete")]
+visible = false
+
+[node name="EnemyEliminationSceneDialog" parent="DialogLayer" unique_id=1316561825 instance=ExtResource("15_enemy_elimination")]
 visible = false
 
 [node name="FadeTransitionLayer" type="CanvasLayer" parent="." unique_id=1428451194]

@@ -989,6 +989,7 @@ func get_loot_positions() -> Array[Dictionary]:
 	
 	# Fuel crates
 	var num_fuel = randi_range(loot_config["min_fuel"], loot_config["max_fuel"])
+	num_fuel = (num_fuel / 2) as int  # Reduce by 50% (rounds down)
 	for _i in range(num_fuel):
 		var pos = _find_valid_spawn_position(3, map_width - 4, 3, map_height - 4)
 		if pos != Vector2i(-1, -1):
@@ -999,6 +1000,7 @@ func get_loot_positions() -> Array[Dictionary]:
 	
 	# Scrap piles
 	var num_scrap = randi_range(loot_config["min_scrap"], loot_config["max_scrap"])
+	num_scrap = (num_scrap / 2) as int  # Reduce by 50% (rounds down)
 	for _i in range(num_scrap):
 		var pos = _find_valid_spawn_position(3, map_width - 4, 3, map_height - 4)
 		if pos != Vector2i(-1, -1):

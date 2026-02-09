@@ -1390,11 +1390,9 @@ func set_heal_range(center: Vector2i, heal_range: int, medic_unit: Node2D, deplo
 			var pos = Vector2i(x, y)
 			if pos.x < 0 or pos.x >= map_width or pos.y < 0 or pos.y >= map_height:
 				continue
-			if pos == center:
-				continue
 			var distance = abs(pos.x - center.x) + abs(pos.y - center.y)
 			if distance <= heal_range and revealed_tiles.get(pos, false):
-				# Show all tiles within range (potential heal targets)
+				# Show all tiles within range (potential heal targets, including self)
 				heal_range_tiles[pos] = true
 	
 	queue_redraw()

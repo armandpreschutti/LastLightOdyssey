@@ -57,17 +57,22 @@ var _sfx_paths: Dictionary = {
 
 
 func _ready() -> void:
+	# Set process mode to always so audio continues during pause
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	
 	_setup_audio_buses()
 
 	# Create music players
 	_music_player_1 = AudioStreamPlayer.new()
 	_music_player_1.bus = "Music"
 	_music_player_1.name = "MusicPlayer1"
+	_music_player_1.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(_music_player_1)
 
 	_music_player_2 = AudioStreamPlayer.new()
 	_music_player_2.bus = "Music"
 	_music_player_2.name = "MusicPlayer2"
+	_music_player_2.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(_music_player_2)
 
 	_current_music_player = _music_player_1
@@ -78,6 +83,7 @@ func _ready() -> void:
 		var player = AudioStreamPlayer.new()
 		player.bus = "SFX"
 		player.name = "SFXPlayer%d" % i
+		player.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(player)
 		_sfx_players.append(player)
 
@@ -85,12 +91,28 @@ func _ready() -> void:
 
 
 func _setup_audio_buses() -> void:
+	# Ensure Master bus exists and is not muted
+	var master_idx = AudioServer.get_bus_index("Master")
+	if master_idx < 0:
+		master_idx = 0
+		if AudioServer.bus_count == 0:
+			AudioServer.add_bus(0)
+		AudioServer.set_bus_name(0, "Master")
+	AudioServer.set_bus_mute(master_idx, false)
+	# Ensure Master bus has volume
+	if AudioServer.get_bus_volume_db(master_idx) < -79.0:
+		AudioServer.set_bus_volume_db(master_idx, 0.0)
+	
 	var music_idx = AudioServer.get_bus_index("Music")
 	if music_idx < 0:
 		music_idx = AudioServer.bus_count
 		AudioServer.add_bus(music_idx)
 		AudioServer.set_bus_name(music_idx, "Music")
 		AudioServer.set_bus_send(music_idx, "Master")
+	AudioServer.set_bus_mute(music_idx, false)
+	# Ensure Music bus has volume
+	if AudioServer.get_bus_volume_db(music_idx) < -79.0:
+		AudioServer.set_bus_volume_db(music_idx, 0.0)
 
 	var sfx_idx = AudioServer.get_bus_index("SFX")
 	if sfx_idx < 0:
@@ -98,6 +120,10 @@ func _setup_audio_buses() -> void:
 		AudioServer.add_bus(sfx_idx)
 		AudioServer.set_bus_name(sfx_idx, "SFX")
 		AudioServer.set_bus_send(sfx_idx, "Master")
+	AudioServer.set_bus_mute(sfx_idx, false)
+	# Ensure SFX bus has volume
+	if AudioServer.get_bus_volume_db(sfx_idx) < -79.0:
+		AudioServer.set_bus_volume_db(sfx_idx, 0.0)
 
 
 func _load_volume_settings() -> void:
@@ -114,6 +140,14 @@ func _load_volume_settings() -> void:
 		sfx_vol = config.get_value("audio", "sfx", 100.0)
 		music_vol = config.get_value("audio", "music", 70.0)
 
+	# Ensure volumes are not zero
+	if master_vol <= 0.0:
+		master_vol = 80.0
+	if music_vol <= 0.0:
+		music_vol = 70.0
+	if sfx_vol <= 0.0:
+		sfx_vol = 100.0
+
 	set_bus_volume("Master", master_vol)
 	set_bus_volume("SFX", sfx_vol)
 	set_bus_volume("Music", music_vol)
@@ -127,15 +161,23 @@ func _load_audio(path: String) -> AudioStream:
 		push_warning("AudioManager: Audio file not found: %s" % path)
 		return null
 
-	var stream = load(path) as AudioStream
-	if stream:
-		_audio_cache[path] = stream
+	# Use ResourceLoader.load() for more reliable loading, especially for Godot 4.6
+	var stream = ResourceLoader.load(path, "AudioStream", ResourceLoader.CACHE_MODE_REUSE) as AudioStream
+	if not stream:
+		push_warning("AudioManager: Failed to load audio stream: %s" % path)
+		return null
+	
+	_audio_cache[path] = stream
 	return stream
 
 
 func play_music(track_key: String) -> void:
 	if not track_key in _music_paths:
 		push_warning("AudioManager: Unknown music track: %s" % track_key)
+		return
+
+	# Ensure players are initialized
+	if not _current_music_player or not _next_music_player:
 		return
 
 	var stream = _load_audio(_music_paths[track_key])
@@ -151,20 +193,40 @@ func play_music(track_key: String) -> void:
 	_current_music_player = _next_music_player
 	_next_music_player = temp
 
-	# Set loop mode for WAV files
-	if stream is AudioStreamWAV:
-		(stream as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+	# Stop current player before switching
+	if _current_music_player.playing:
+		_current_music_player.stop()
 
-	# Start new track
+	# Set loop mode for WAV files BEFORE assigning to player
+	if stream is AudioStreamWAV:
+		var wav_stream = stream as AudioStreamWAV
+		wav_stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+
+	# Start new track - set all properties before play()
 	_current_music_player.stream = stream
 	_current_music_player.volume_db = 0.0
+	_current_music_player.bus = "Music"  # Explicitly set bus
+	_current_music_player.autoplay = false  # Ensure autoplay is off
+	
+	# Workaround for Godot 4.6 editor audio bug - force initialization
+	# Call play() and verify it started
 	_current_music_player.play()
+	
+	# Force update to ensure playback starts (workaround for 4.6 editor bug)
+	# Use call_deferred to retry if playback didn't start
+	if not _current_music_player.playing:
+		call_deferred("_retry_play_music", _current_music_player)
 
 	# Crossfade out old player
 	if _next_music_player.playing:
 		var tween = create_tween()
 		tween.tween_property(_next_music_player, "volume_db", -80.0, 1.0)
 		tween.tween_callback(_next_music_player.stop)
+
+
+func _retry_play_music(player: AudioStreamPlayer) -> void:
+	if player and not player.playing and player.stream:
+		player.play()
 
 
 func stop_music(fade_duration: float = 0.5) -> void:

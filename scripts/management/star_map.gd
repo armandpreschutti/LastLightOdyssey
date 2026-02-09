@@ -92,12 +92,12 @@ func _zoom_at_point(screen_pos: Vector2, zoom_delta: float) -> void:
 
 
 ## Initialize the star map with generated node graph
-func initialize(map_generator: StarMapGenerator) -> void:
+func initialize(star_map_generator: StarMapGenerator) -> void:
 	# Clear any existing map artifacts from previous voyage
 	_clear_existing_map()
 	
-	generator = map_generator
-	node_graph = map_generator.nodes
+	self.generator = star_map_generator
+	node_graph = star_map_generator.nodes
 	_calculate_map_center()
 	_create_visual_nodes()
 	_draw_connection_lines()

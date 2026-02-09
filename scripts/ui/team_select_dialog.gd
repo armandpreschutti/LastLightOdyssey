@@ -344,7 +344,7 @@ func _get_officer_active_ability(key: String) -> Dictionary:
 		"medic":
 			return {
 				"name": "PATCH",
-				"description": "Heal an adjacent ally for 62.5% of their maximum HP (50% base + 25% from Medic's enhanced healing). Restores significant health in critical situations.",
+				"description": "Heal yourself or an adjacent ally for 62.5% of their maximum HP (50% base + 25% from Medic's enhanced healing). Restores significant health in critical situations.",
 				"ap_cost": 1,
 				"cooldown": 2
 			}

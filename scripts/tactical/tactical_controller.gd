@@ -214,24 +214,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		# Reveal around spawn (will be visible after beam down)
 		tactical_map.reveal_around(spawn_positions[i], officer.sight_range)
 
-	# Spawn loot (only if no mission resource exists at that position)
-	var loot_positions = generator.get_loot_positions()
-	for loot_data in loot_positions:
-		var loot_pos = loot_data["position"]
-		
-		# Check if there's already a mission resource at this position
-		var existing = tactical_map.get_interactable_at(loot_pos)
-		if existing != null and _is_mission_resource(existing):
-			# Skip spawning regular loot if mission resource exists (mission resources take priority)
-			continue
-		
-		var loot: Node2D
-		if loot_data["type"] == "fuel":
-			loot = FuelCrateScene.instantiate()
-		else:
-			loot = ScrapPileScene.instantiate()
-		_safe_add_interactable(loot, loot_pos)
-	
+	# Spawn objective items FIRST (before resources) to prevent resources from spawning on objective tiles
 	# Spawn mining equipment for asteroid biome missions with mining-related objectives
 	if current_biome == BiomeConfig.BiomeType.ASTEROID and is_scavenger_mission:
 		# Check if mission has mining-related objectives
@@ -372,6 +355,24 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 					var nest = NestScene.instantiate()
 					nest.set_grid_position(nest_pos)
 					tactical_map.add_interactable(nest, nest_pos)
+	
+	# Spawn loot AFTER objective items (only if no mission resource exists at that position)
+	var loot_positions = generator.get_loot_positions()
+	for loot_data in loot_positions:
+		var loot_pos = loot_data["position"]
+		
+		# Check if there's already a mission resource at this position
+		var existing = tactical_map.get_interactable_at(loot_pos)
+		if existing != null and _is_mission_resource(existing):
+			# Skip spawning regular loot if mission resource exists (mission resources take priority)
+			continue
+		
+		var loot: Node2D
+		if loot_data["type"] == "fuel":
+			loot = FuelCrateScene.instantiate()
+		else:
+			loot = ScrapPileScene.instantiate()
+		_safe_add_interactable(loot, loot_pos)
 	
 	# Spawn enemies with difficulty-based scaling
 	var difficulty = GameState.get_mission_difficulty()
@@ -784,7 +785,7 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 	if interactable:
 		# Skip auto-pickup for nests (handled above)
 		if not (interactable.has_method("get_objective_id") and interactable.get_objective_id() == "clear_nests"):
-			_auto_pickup(interactable)
+			_auto_pickup(interactable, unit)
 
 	# Check extraction availability
 	_check_extraction_available()
@@ -824,6 +825,9 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 	# Re-enable end turn button after player unit movement completes
 	if unit in deployed_officers:
 		_set_animating(false)
+		# Update ability buttons with new AP after movement (if this is the selected unit)
+		if selected_unit == unit:
+			tactical_hud.update_ability_buttons(unit.officer_type, unit.current_ap, unit.get_ability_cooldown())
 	
 	# Check if unit is out of AP and auto-end turn
 	if unit == deployed_officers[current_unit_index]:
@@ -832,7 +836,7 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 
 func _interact_with(interactable: Node2D) -> void:
 	if selected_unit.use_ap(interactable.interaction_ap_cost):
-		_pickup_item(interactable)
+		_pickup_item(interactable, selected_unit)
 		var interact_cover_level = tactical_map.get_adjacent_cover_level(selected_unit.get_grid_position())
 		tactical_hud.update_selected_unit_full(
 			selected_unit.officer_key,
@@ -856,17 +860,20 @@ func _interact_with(interactable: Node2D) -> void:
 		# Update attackable highlights (AP spent)
 		_update_attackable_highlights()
 		
+		# Update ability buttons with new AP after interaction
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		
 		# Check if unit is out of AP and auto-end turn
 		if selected_unit == deployed_officers[current_unit_index]:
 			_check_auto_end_turn()
 
 
-func _auto_pickup(interactable: Node2D) -> void:
+func _auto_pickup(interactable: Node2D, unit: Node2D) -> void:
 	# Auto-pickup when landing on an item (no AP cost)
-	_pickup_item(interactable)
+	_pickup_item(interactable, unit)
 
 
-func _pickup_item(interactable: Node2D) -> void:
+func _pickup_item(interactable: Node2D, unit: Node2D) -> void:
 	# Check if this is an objective interactable (like mining equipment)
 	if interactable.has_method("get_objective_id"):
 		var objective_id = interactable.get_objective_id()
@@ -932,13 +939,22 @@ func _pickup_item(interactable: Node2D) -> void:
 	# NOTE: Fuel and scrap do NOT count toward objectives - only objective-specific interactables do
 	if interactable.has_method("get_item_type"):
 		var item_type = interactable.get_item_type()
+		var amount: int = 0
 		if item_type == "fuel":
 			mission_fuel_collected += 1
+			amount = 1
 		elif item_type == "scrap":
 			if interactable.has_method("get_scrap_amount"):
-				mission_scrap_collected += interactable.get_scrap_amount()
+				amount = interactable.get_scrap_amount()
+				mission_scrap_collected += amount
 			else:
+				amount = 5
 				mission_scrap_collected += 5
+		
+		# Spawn pickup popup at unit position (slightly above unit, offset way to the left)
+		if amount > 0 and unit:
+			var popup_pos = unit.position + Vector2(-30, -20)  # Way to the left, up by 20px
+			_spawn_pickup_popup(item_type, amount, popup_pos)
 	
 	# Interact with the item (adds to GameState and removes from map)
 	interactable.interact()
@@ -2030,6 +2046,10 @@ func _phase_resolution(shooter: Node2D) -> void:
 		# so that _check_auto_end_turn can properly trigger _on_end_turn_pressed
 		_set_animating(false)
 		
+		# Update ability buttons with new AP after attack (if this is the selected unit)
+		if shooter == selected_unit:
+			tactical_hud.update_ability_buttons(shooter.officer_type, shooter.current_ap, shooter.get_ability_cooldown())
+		
 		# Check if unit is out of AP and auto-end turn
 		if shooter == deployed_officers[current_unit_index]:
 			_check_auto_end_turn()
@@ -2047,6 +2067,14 @@ func _spawn_damage_popup(damage: int, is_hit: bool, world_pos: Vector2, is_heal:
 	popup.script = load("res://scripts/tactical/damage_popup.gd")
 	damage_popup_container.add_child(popup)
 	popup.initialize(damage, is_hit, world_pos, is_heal, is_flank, is_critical)
+
+
+## Spawn a pickup popup for scrap or fuel
+func _spawn_pickup_popup(item_type: String, amount: int, world_pos: Vector2) -> void:
+	var popup = Label.new()
+	popup.script = load("res://scripts/tactical/pickup_popup.gd")
+	damage_popup_container.add_child(popup)
+	popup.initialize(item_type, amount, world_pos)
 
 
 ## Execute AI turn for all enemies
@@ -2234,6 +2262,8 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	if enemies.is_empty():
 		# Check if extraction should become available (for scavenger missions)
 		_check_extraction_available()
+		# Show enemy elimination scene
+		_show_enemy_elimination_scene()
 
 
 ## Check if an enemy is visible to any player unit
@@ -2407,7 +2437,7 @@ func _on_ability_used(ability_type: String) -> void:
 			tactical_map.clear_movement_range()
 			tactical_map.clear_execute_range()  # Clear any existing execute range highlights
 			tactical_map.set_heal_range(selected_unit.get_grid_position(), 3, selected_unit, deployed_officers)
-			tactical_hud.show_combat_message("SELECT ALLY TO HEAL (3 TILES)", Color(0.2, 1, 0.2))
+			tactical_hud.show_combat_message("SELECT TARGET TO HEAL (3 TILES)", Color(0.2, 1, 0.2))
 			tactical_hud.show_cancel_button()
 		
 		"charge":
@@ -2681,6 +2711,8 @@ func _try_patch_target(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -2694,18 +2726,22 @@ func _try_patch_target(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
 			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
-	# Check if target is a friendly officer (not self)
-	if target_unit not in deployed_officers or target_unit == selected_unit:
+	# Check if target is a friendly officer (can heal self or allies)
+	if target_unit not in deployed_officers:
 		tactical_hud.show_combat_message("CANNOT HEAL TARGET", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -2718,6 +2754,8 @@ func _try_patch_target(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -2750,10 +2788,15 @@ func _try_patch_target(grid_pos: Vector2i) -> void:
 		# Re-enable end turn button after patch animation completes
 		_set_animating(false)
 		
+		# Update ability buttons with new AP after patch (ability is now on cooldown)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		
 		# Check if unit is out of AP and auto-end turn
 		_check_auto_end_turn()
 	else:
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -2782,6 +2825,8 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -2794,6 +2839,8 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -2807,6 +2854,8 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -2841,10 +2890,15 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		# Re-enable end turn button after turret placement animation completes
 		_set_animating(false)
 		
+		# Update ability buttons with new AP after turret (ability is now on cooldown)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		
 		# Check if unit is out of AP and auto-end turn
 		_check_auto_end_turn()
 	else:
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 
 
 ## Try to charge an enemy (Heavy ability)
@@ -2857,10 +2911,13 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 	if not selected_unit or selected_unit.officer_type != "heavy":
 		return
 	
+	# Store reference to heavy unit to prevent issues if selected_unit changes during async operations
+	var heavy_unit = selected_unit
+	
 	# Disable end turn button during charge animation
 	_set_animating(true)
 	
-	var heavy_pos = selected_unit.get_grid_position()
+	var heavy_pos = heavy_unit.get_grid_position()
 	var distance = abs(grid_pos.x - heavy_pos.x) + abs(grid_pos.y - heavy_pos.y)
 	
 	# Must be within 4 tiles
@@ -2869,10 +2926,13 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		if heavy_unit == selected_unit:
+			tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
-		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
-			var unit_pos = selected_unit.get_grid_position()
-			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+		if heavy_unit == deployed_officers[current_unit_index] and heavy_unit.has_ap():
+			var unit_pos = heavy_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, heavy_unit.move_range)
 		return
 	
 	# Must be clicking on an enemy
@@ -2887,10 +2947,13 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		if heavy_unit == selected_unit:
+			tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
-		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
-			var unit_pos = selected_unit.get_grid_position()
-			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+		if heavy_unit == deployed_officers[current_unit_index] and heavy_unit.has_ap():
+			var unit_pos = heavy_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, heavy_unit.move_range)
 		return
 	
 	# Must be visible
@@ -2899,19 +2962,25 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		if heavy_unit == selected_unit:
+			tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
-		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
-			var unit_pos = selected_unit.get_grid_position()
-			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+		if heavy_unit == deployed_officers[current_unit_index] and heavy_unit.has_ap():
+			var unit_pos = heavy_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, heavy_unit.move_range)
 		return
 	
 	# Use the ability (spends AP and starts cooldown)
-	if not selected_unit.use_charge():
+	if not heavy_unit.use_charge():
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		if heavy_unit == selected_unit:
+			tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
-		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
-			var unit_pos = selected_unit.get_grid_position()
-			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+		if heavy_unit == deployed_officers[current_unit_index] and heavy_unit.has_ap():
+			var unit_pos = heavy_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, heavy_unit.move_range)
 		return
 	
 	AudioManager.play_sfx("combat_charge")
@@ -2924,17 +2993,17 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 	else:
 		# Move heavy to adjacent tile of enemy
 		tactical_map.set_unit_position_solid(heavy_pos, false)
-		selected_unit.set_grid_position(charge_destination)
+		heavy_unit.set_grid_position(charge_destination)
 		
 		# Animate rush movement (fast)
 		var path = tactical_map.find_path(heavy_pos, charge_destination)
 		if path and path.size() > 1:
 			tactical_hud.show_combat_message("CHARGING!", Color(1, 0.5, 0.1))
-			selected_unit.move_along_path(path)
-			await selected_unit.movement_finished
+			heavy_unit.move_along_path(path)
+			await heavy_unit.movement_finished
 		else:
 			# Direct teleport if no path
-			selected_unit.position = Vector2(charge_destination.x * 32 + 16, charge_destination.y * 32 + 16)
+			heavy_unit.position = Vector2(charge_destination.x * 32 + 16, charge_destination.y * 32 + 16)
 		
 		tactical_map.set_unit_position_solid(charge_destination, true)
 	
@@ -2947,25 +3016,29 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		is_instant_kill = true
 	else:
 		# Heavy damage to heavy enemies (2x base damage)
-		charge_damage = selected_unit.base_damage * 2
+		charge_damage = heavy_unit.base_damage * 2
 	
 	# Face the enemy
-	selected_unit.face_towards(grid_pos)
+	heavy_unit.face_towards(grid_pos)
 	
-	# Perform melee attack animation
-	await _perform_charge_melee_attack(selected_unit, target_enemy, charge_damage, is_instant_kill)
+	# Perform melee attack animation - use stored heavy_unit reference
+	await _perform_charge_melee_attack(heavy_unit, target_enemy, charge_damage, is_instant_kill)
 	
 	await get_tree().create_timer(0.5).timeout
 	tactical_hud.hide_combat_message()
 	
 	# Update fog/visibility/cover
-	tactical_map.reveal_around(selected_unit.get_grid_position(), selected_unit.sight_range)
+	tactical_map.reveal_around(heavy_unit.get_grid_position(), heavy_unit.sight_range)
 	_update_enemy_visibility()
-	_update_unit_cover_indicator(selected_unit)
-	_select_unit(selected_unit)
+	_update_unit_cover_indicator(heavy_unit)
+	_select_unit(heavy_unit)
 	
 	# Re-enable end turn button after charge animation completes
 	_set_animating(false)
+	
+	# Update ability buttons with new AP after charge (ability is now on cooldown)
+	if heavy_unit == selected_unit:
+		tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit.get_ability_cooldown())
 	
 	# Check if unit is out of AP and auto-end turn
 	_check_auto_end_turn()
@@ -2994,12 +3067,57 @@ func _find_charge_destination(from: Vector2i, enemy_pos: Vector2i) -> Vector2i:
 
 ## Perform melee attack animation for charge ability
 func _perform_charge_melee_attack(attacker: Node2D, target: Node2D, damage: int, is_instant_kill: bool) -> void:
+	# CRITICAL: Only allow heavy units to perform charge animation
+	# Check if attacker has officer_type property and verify it's a heavy unit
+	if not "officer_type" in attacker or attacker.officer_type != "heavy":
+		# If attacker is not a heavy unit, just deal damage without animation
+		target.take_damage(damage)
+		_spawn_damage_popup(damage, true, target.position)
+		return
+	
+	# Validate attacker is still valid
+	if not is_instance_valid(attacker):
+		return
+	
 	var attacker_sprite = attacker.get_node_or_null("Sprite")
-	if not attacker_sprite:
+	if not attacker_sprite or not is_instance_valid(attacker_sprite):
 		# Fallback: just deal damage without animation
 		target.take_damage(damage)
 		_spawn_damage_popup(damage, true, target.position)
 		return
+	
+	# CRITICAL: Stop idle animation and kill any existing attack tweens to prevent conflicts
+	if attacker.has_method("_stop_idle_animation"):
+		attacker._stop_idle_animation()
+	if attacker.has_method("_kill_attack_tween"):
+		attacker._kill_attack_tween()
+	
+	# Store original position and state for cleanup
+	var original_pos = attacker_sprite.position
+	var original_modulate = attacker_sprite.modulate
+	
+	# Store tween references for cleanup
+	var charge_tweens: Array[Tween] = []
+	
+	# Helper function to safely create and track tweens
+	var create_charge_tween = func() -> Tween:
+		var tween = create_tween()
+		charge_tweens.append(tween)
+		return tween
+	
+	# Cleanup function to ensure sprite is reset even if animation is interrupted
+	var cleanup_charge_animation = func():
+		if is_instance_valid(attacker_sprite):
+			attacker_sprite.position = original_pos
+			attacker_sprite.modulate = original_modulate
+		# Kill all charge tweens
+		for tween in charge_tweens:
+			if tween and tween.is_valid():
+				tween.kill()
+		charge_tweens.clear()
+		# Restart idle animation
+		if is_instance_valid(attacker) and attacker.has_method("_start_idle_animation"):
+			attacker._start_idle_animation()
 	
 	# Focus camera on action (like normal attacks)
 	var attacker_world = attacker.position
@@ -3007,21 +3125,35 @@ func _perform_charge_melee_attack(attacker: Node2D, target: Node2D, damage: int,
 	combat_camera.focus_on_action(attacker_world, target_world)
 	await get_tree().create_timer(0.2).timeout  # Wait for camera to zoom in
 	
-	var original_pos = attacker_sprite.position
+	# Validate sprite is still valid after await
+	if not is_instance_valid(attacker_sprite):
+		cleanup_charge_animation.call()
+		return
+	
 	var target_direction = (target.position - attacker.position).normalized()
 	var lunge_distance = 12.0  # How far to lunge toward enemy
 	
 	# Phase 1: Wind-up (pull back slightly)
 	tactical_hud.show_combat_message("CHARGE!", Color(1, 0.5, 0.1))
-	var windup_tween = create_tween()
+	var windup_tween = create_charge_tween.call()
 	windup_tween.tween_property(attacker_sprite, "position", original_pos - Vector2(target_direction.x * 4, 0), 0.1)
 	windup_tween.parallel().tween_property(attacker_sprite, "modulate", Color(1.5, 0.8, 0.3, 1.0), 0.1)  # Orange glow
 	await windup_tween.finished
 	
+	# Validate sprite is still valid after await
+	if not is_instance_valid(attacker_sprite):
+		cleanup_charge_animation.call()
+		return
+	
 	# Phase 2: Lunge forward (fast strike)
-	var strike_tween = create_tween()
+	var strike_tween = create_charge_tween.call()
 	strike_tween.tween_property(attacker_sprite, "position", original_pos + Vector2(target_direction.x * lunge_distance, target_direction.y * lunge_distance * 0.5), 0.08).set_ease(Tween.EASE_OUT)
 	await strike_tween.finished
+	
+	# Validate sprite is still valid after await
+	if not is_instance_valid(attacker_sprite):
+		cleanup_charge_animation.call()
+		return
 	
 	# Phase 3: Impact - deal damage and show effects
 	if is_instant_kill:
@@ -3030,45 +3162,66 @@ func _perform_charge_melee_attack(attacker: Node2D, target: Node2D, damage: int,
 		tactical_hud.show_combat_message("HEAVY STRIKE! %d DMG" % damage, Color(1, 0.5, 0.1))
 	
 	# Impact flash on attacker
-	var impact_tween = create_tween()
+	var impact_tween = create_charge_tween.call()
 	impact_tween.tween_property(attacker_sprite, "modulate", Color(2.0, 1.5, 0.5, 1.0), 0.03)  # Bright flash
 	await impact_tween.finished
 	
+	# Validate sprite and target are still valid
+	if not is_instance_valid(attacker_sprite):
+		cleanup_charge_animation.call()
+		return
+	
 	# Deal damage and spawn popup
-	var enemy_hp_before = target.current_hp
-	target.take_damage(damage)
-	var enemy_died = target.current_hp <= 0 and enemy_hp_before > 0
-	_spawn_damage_popup(damage, true, target.position, false, true)  # Use flank style for charge hits
+	var enemy_hp_before = target.current_hp if is_instance_valid(target) else 0
+	if is_instance_valid(target):
+		target.take_damage(damage)
+		var enemy_died = target.current_hp <= 0 and enemy_hp_before > 0
+		_spawn_damage_popup(damage, true, target.position, false, true)  # Use flank style for charge hits
+		
+		# Screen shake effect (subtle)
+		var camera_offset = combat_camera.offset
+		var shake_tween = create_charge_tween.call()
+		shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(4, 2), 0.03)
+		shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(-4, -2), 0.03)
+		shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(2, -1), 0.03)
+		shake_tween.tween_property(combat_camera, "offset", camera_offset, 0.05)
+		await shake_tween.finished
+		
+		# Wait for enemy damage flash animation to complete (takes ~0.38 seconds total)
+		await get_tree().create_timer(0.4).timeout
+		
+		# If enemy died, wait for death animation to complete
+		# Note: _on_enemy_died will handle playing the animation, but we need to wait for it
+		# Since signal handlers run asynchronously, we wait for the animation directly
+		if enemy_died and is_instance_valid(target) and target.has_method("play_death_animation"):
+			await target.play_death_animation()
 	
-	# Screen shake effect (subtle)
-	var camera_offset = combat_camera.offset
-	var shake_tween = create_tween()
-	shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(4, 2), 0.03)
-	shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(-4, -2), 0.03)
-	shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(2, -1), 0.03)
-	shake_tween.tween_property(combat_camera, "offset", camera_offset, 0.05)
-	await shake_tween.finished
-	
-	# Wait for enemy damage flash animation to complete (takes ~0.38 seconds total)
-	await get_tree().create_timer(0.4).timeout
-	
-	# If enemy died, wait for death animation to complete
-	# Note: _on_enemy_died will handle playing the animation, but we need to wait for it
-	# Since signal handlers run asynchronously, we wait for the animation directly
-	if enemy_died and is_instance_valid(target) and target.has_method("play_death_animation"):
-		await target.play_death_animation()
+	# Validate sprite is still valid after all awaits
+	if not is_instance_valid(attacker_sprite):
+		cleanup_charge_animation.call()
+		return
 	
 	# Phase 4: Return to original position
-	var return_tween = create_tween()
+	var return_tween = create_charge_tween.call()
 	return_tween.tween_property(attacker_sprite, "position", original_pos, 0.15).set_ease(Tween.EASE_IN_OUT)
-	return_tween.parallel().tween_property(attacker_sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.15)
+	return_tween.parallel().tween_property(attacker_sprite, "modulate", original_modulate, 0.15)
 	await return_tween.finished
 	
 	# Explicitly ensure sprite position is reset (fixes stuck animation bug)
 	# This ensures the sprite is always in the correct position even if tween had precision issues
 	if is_instance_valid(attacker_sprite):
 		attacker_sprite.position = original_pos
-		attacker_sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)
+		attacker_sprite.modulate = original_modulate
+	
+	# Cleanup all tweens
+	for tween in charge_tweens:
+		if tween and tween.is_valid():
+			tween.kill()
+	charge_tweens.clear()
+	
+	# Restart idle animation to prevent sprite from being stuck
+	if is_instance_valid(attacker) and attacker.has_method("_start_idle_animation"):
+		attacker._start_idle_animation()
 	
 	# Return camera to tactical view and wait for it to complete
 	combat_camera.return_to_tactical()
@@ -3098,6 +3251,8 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3111,6 +3266,8 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3130,6 +3287,8 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3144,6 +3303,8 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3153,6 +3314,8 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 	# Use the ability (spends AP and starts cooldown)
 	if not selected_unit.use_execute():
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		return
 	
 	AudioManager.play_sfx("combat_execute")
@@ -3190,6 +3353,9 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 	# Re-enable end turn button after execute animation completes
 	_set_animating(false)
 	
+	# Update ability buttons with new AP after execute (ability is now on cooldown)
+	tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+	
 	# Check if unit is out of AP and auto-end turn
 	_check_auto_end_turn()
 
@@ -3222,6 +3388,8 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		return
 	
 	# Only requirement: enemy must be visible (if player can see the sprite, they can use precision shot)
@@ -3231,11 +3399,15 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		return
 	
 	# Use the ability (spends AP and starts cooldown)
 	if not selected_unit.use_precision_shot():
 		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		return
 	
 	# Precision Shot deals 2x base damage (60 for sniper with 30 base damage)
@@ -3276,6 +3448,10 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 	
 	# Re-enable end turn button after precision shot animation completes
 	_set_animating(false)
+	
+	# Update ability buttons with new AP after precision shot (ability is now on cooldown)
+	if selected_unit == selected_unit:  # Always true, but keeping pattern consistent
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 	
 	# Check if unit is out of AP and auto-end turn
 	_check_auto_end_turn()
@@ -3402,6 +3578,34 @@ func _show_objective_complete_scene(objective: MissionObjective) -> void:
 	var scene_dialog = main_node.get_node_or_null("DialogLayer/ObjectiveCompleteSceneDialog") if main_node else null
 	if scene_dialog:
 		scene_dialog.show_scene(objective, current_biome, alive_officers, rewards)
+		# Wait for scene to be dismissed
+		await scene_dialog.scene_dismissed
+		# Resume gameplay
+		is_paused = false
+		get_tree().paused = false
+	else:
+		# Fallback: if scene dialog not found, just unpause
+		is_paused = false
+		get_tree().paused = false
+
+
+## Show enemy elimination scene (pauses gameplay)
+func _show_enemy_elimination_scene() -> void:
+	# Get alive officers
+	var alive_officers: Array[String] = []
+	for officer in deployed_officers:
+		if officer.current_hp > 0:
+			alive_officers.append(officer.officer_key)
+	
+	# Pause tactical gameplay
+	is_paused = true
+	get_tree().paused = true
+	
+	# Get reference to the scene dialog (via main node's DialogLayer)
+	var main_node = get_tree().get_first_node_in_group("main")
+	var scene_dialog = main_node.get_node_or_null("DialogLayer/EnemyEliminationSceneDialog") if main_node else null
+	if scene_dialog:
+		scene_dialog.show_scene(current_biome, alive_officers)
 		# Wait for scene to be dismissed
 		await scene_dialog.scene_dismissed
 		# Resume gameplay
