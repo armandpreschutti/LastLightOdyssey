@@ -75,7 +75,7 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 	if is_being_flanked and enemy.has_ap(1):
 		var better_cover_pos = _find_cover_against_threats(enemy_pos, visible_officers, enemy.move_range, tactical_map, reachable)
 		if better_cover_pos != enemy_pos:
-			var path = tactical_map.find_path(enemy_pos, better_cover_pos)
+			var path = _filter_extraction_tiles_from_path(tactical_map.find_path(enemy_pos, better_cover_pos), tactical_map)
 			if path and path.size() > 1:
 				result["action"] = "move"
 				result["path"] = path
@@ -86,7 +86,7 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 	if not has_adjacent_cover and enemy.has_ap(1):
 		var cover_pos = _find_cover_against_threats(enemy_pos, visible_officers, enemy.move_range, tactical_map, reachable)
 		if cover_pos != enemy_pos:
-			var path = tactical_map.find_path(enemy_pos, cover_pos)
+			var path = _filter_extraction_tiles_from_path(tactical_map.find_path(enemy_pos, cover_pos), tactical_map)
 			if path and path.size() > 1:
 				result["action"] = "move"
 				result["path"] = path
@@ -106,7 +106,7 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 		var move_destination = _find_tactical_position(enemy_pos, target_pos, visible_officers, enemy.move_range, nearest_distance, tactical_map, reachable)
 		
 		if move_destination != enemy_pos:
-			var path = tactical_map.find_path(enemy_pos, move_destination)
+			var path = _filter_extraction_tiles_from_path(tactical_map.find_path(enemy_pos, move_destination), tactical_map)
 			
 			if path and path.size() > 1:
 				result["action"] = "move"
@@ -364,6 +364,24 @@ static func _find_tactical_position(from: Vector2i, target_pos: Vector2i, threat
 	return best_position
 
 
+## Filter extraction tiles from a path (enemies should never move through extraction tiles)
+## Path contains world positions from AStarGrid2D, need to convert to grid positions to check
+static func _filter_extraction_tiles_from_path(path: PackedVector2Array, tactical_map: Node2D) -> PackedVector2Array:
+	if path.is_empty():
+		return path
+	
+	var filtered_path: PackedVector2Array = []
+	for world_pos in path:
+		# Convert world position (tile corner) to grid position
+		var grid_pos = tactical_map.world_to_grid(world_pos)
+		
+		# Only add non-extraction tiles
+		if not tactical_map.is_extraction_tile(grid_pos):
+			filtered_path.append(world_pos)
+	
+	return filtered_path
+
+
 ## Get all reachable positions within movement range using BFS
 static func _get_reachable_positions(from: Vector2i, max_range: int, tactical_map: Node2D) -> Array[Vector2i]:
 	var reachable: Array[Vector2i] = []
@@ -375,14 +393,17 @@ static func _get_reachable_positions(from: Vector2i, max_range: int, tactical_ma
 		var current = queue.pop_front()
 		var dist = distances[current]
 		
-		reachable.append(current)
+		# Only add to reachable if not an extraction tile
+		if not tactical_map.is_extraction_tile(current):
+			reachable.append(current)
 		
 		if dist < max_range:
 			var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 			for dir in directions:
 				var next_pos = current + dir
 				
-				if not visited.has(next_pos) and tactical_map.is_tile_walkable(next_pos):
+				# Skip extraction tiles and non-walkable tiles
+				if not visited.has(next_pos) and tactical_map.is_tile_walkable(next_pos) and not tactical_map.is_extraction_tile(next_pos):
 					visited[next_pos] = true
 					distances[next_pos] = dist + 1
 					queue.append(next_pos)
@@ -469,7 +490,7 @@ static func _decide_station_boss_action(boss: Node2D, officers: Array[Node2D], t
 	if not is_effectively_covered and boss.has_ap(1):
 		var cover_pos = _find_cover_against_threats(boss_pos, visible_officers, boss.move_range, tactical_map)
 		if cover_pos != boss_pos:
-			var path = tactical_map.find_path(boss_pos, cover_pos)
+			var path = _filter_extraction_tiles_from_path(tactical_map.find_path(boss_pos, cover_pos), tactical_map)
 			if path and path.size() > 1:
 				result["action"] = "move"
 				result["path"] = path
@@ -487,7 +508,7 @@ static func _decide_station_boss_action(boss: Node2D, officers: Array[Node2D], t
 	if boss.has_ap(1):
 		var tactical_pos = _find_tactical_position(boss_pos, target_pos, visible_officers, boss.move_range, nearest_distance, tactical_map)
 		if tactical_pos != boss_pos:
-			var path = tactical_map.find_path(boss_pos, tactical_pos)
+			var path = _filter_extraction_tiles_from_path(tactical_map.find_path(boss_pos, tactical_pos), tactical_map)
 			if path and path.size() > 1:
 				result["action"] = "move"
 				result["path"] = path
@@ -537,7 +558,7 @@ static func _decide_asteroid_boss_action(boss: Node2D, officers: Array[Node2D], 
 		var charge_pos = _get_closest_position_to_target(boss_pos, target_pos, reachable)
 		
 		if charge_pos != boss_pos:
-			var path = tactical_map.find_path(boss_pos, charge_pos)
+			var path = _filter_extraction_tiles_from_path(tactical_map.find_path(boss_pos, charge_pos), tactical_map)
 			if path and path.size() > 1:
 				result["action"] = "move"
 				result["path"] = path
@@ -628,7 +649,7 @@ static func _decide_planet_boss_action(boss: Node2D, officers: Array[Node2D], ta
 				best_pos = pos
 		
 		if best_pos != boss_pos:
-			var path = tactical_map.find_path(boss_pos, best_pos)
+			var path = _filter_extraction_tiles_from_path(tactical_map.find_path(boss_pos, best_pos), tactical_map)
 			if path and path.size() > 1:
 				result["action"] = "move"
 				result["path"] = path

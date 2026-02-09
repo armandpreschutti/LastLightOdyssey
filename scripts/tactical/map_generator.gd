@@ -987,9 +987,27 @@ func get_loot_positions() -> Array[Dictionary]:
 	var positions: Array[Dictionary] = []
 	var loot_config = BiomeConfig.get_loot_config(_biome_type)
 	
+	# Biome-specific spawn rate multipliers
+	var fuel_multiplier: float = 0.5  # Default: 50% reduction
+	var scrap_multiplier: float = 0.5  # Default: 50% reduction
+	
+	match _biome_type:
+		BiomeConfig.BiomeType.STATION:
+			# Space Station: More fuel crates vs scrap piles
+			fuel_multiplier = 0.75  # Reduce fuel by 25% (keep 75%)
+			scrap_multiplier = 0.25  # Reduce scrap by 75% (keep 25%)
+		BiomeConfig.BiomeType.ASTEROID:
+			# Asteroid: More scrap piles vs fuel crates
+			fuel_multiplier = 0.25  # Reduce fuel by 75% (keep 25%)
+			scrap_multiplier = 0.75  # Reduce scrap by 25% (keep 75%)
+		BiomeConfig.BiomeType.PLANET:
+			# Planetary Surface: No change (50% reduction for both)
+			fuel_multiplier = 0.5
+			scrap_multiplier = 0.5
+	
 	# Fuel crates
 	var num_fuel = randi_range(loot_config["min_fuel"], loot_config["max_fuel"])
-	num_fuel = (num_fuel / 2) as int  # Reduce by 50% (rounds down)
+	num_fuel = (num_fuel * fuel_multiplier) as int  # Apply biome-specific reduction
 	for _i in range(num_fuel):
 		var pos = _find_valid_spawn_position(3, map_width - 4, 3, map_height - 4)
 		if pos != Vector2i(-1, -1):
@@ -1000,7 +1018,7 @@ func get_loot_positions() -> Array[Dictionary]:
 	
 	# Scrap piles
 	var num_scrap = randi_range(loot_config["min_scrap"], loot_config["max_scrap"])
-	num_scrap = (num_scrap / 2) as int  # Reduce by 50% (rounds down)
+	num_scrap = (num_scrap * scrap_multiplier) as int  # Apply biome-specific reduction
 	for _i in range(num_scrap):
 		var pos = _find_valid_spawn_position(3, map_width - 4, 3, map_height - 4)
 		if pos != Vector2i(-1, -1):

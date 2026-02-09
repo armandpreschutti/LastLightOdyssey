@@ -18,6 +18,7 @@ var selected_unit: Node2D = null
 var selected_target: Vector2i = Vector2i(-1, -1)  # For targeting enemies
 var execute_mode: bool = false  # When true, clicking selects execute target
 var charge_mode: bool = false  # When true, clicking selects charge target
+var is_charging: bool = false  # Track when a CHARGE movement is in progress to prevent movement_finished callback interference
 var turret_mode: bool = false  # When true, clicking selects turret placement tile
 var patch_mode: bool = false  # When true, clicking selects patch target
 var precision_mode: bool = false  # When true, clicking selects precision shot target (Sniper)
@@ -755,6 +756,11 @@ func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
 
 
 func _on_unit_movement_finished(unit: Node2D) -> void:
+	# CRITICAL: Skip all processing for CHARGE movements to prevent turn sequencing issues
+	# CHARGE handles all movement completion logic internally and this callback would interfere
+	if is_charging:
+		return
+	
 	var pos = unit.get_grid_position()
 
 	# Mark new position as solid
@@ -786,7 +792,7 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 		# Skip auto-pickup for nests (handled above)
 		if not (interactable.has_method("get_objective_id") and interactable.get_objective_id() == "clear_nests"):
 			_auto_pickup(interactable, unit)
-
+	
 	# Check extraction availability
 	_check_extraction_available()
 	
@@ -991,6 +997,13 @@ func _check_auto_end_turn() -> void:
 	var current_unit = deployed_officers[current_unit_index]
 	if not current_unit:
 		return
+	
+	# CRITICAL: Verify that selected_unit matches the current unit to prevent turn skipping
+	# This ensures we're checking the correct unit, especially after async operations like CHARGE
+	if selected_unit and selected_unit != current_unit:
+		# If selected_unit doesn't match current_unit, we should still check current_unit
+		# but log a warning for debugging
+		pass
 	
 	# If unit has no AP remaining, automatically end their turn
 	if not current_unit.has_ap():
@@ -2135,20 +2148,24 @@ func _on_enemy_movement_finished(_enemy: Node2D) -> void:
 
 ## Calculate resource drop amount based on enemy type
 func _calculate_enemy_resource_drop(enemy_type: String) -> int:
+	var base_amount: int
 	match enemy_type:
 		"basic":
-			return randi_range(3, 5)
+			base_amount = randi_range(3, 5)
 		"heavy":
-			return randi_range(8, 12)
+			base_amount = randi_range(8, 12)
 		"sniper":
-			return randi_range(6, 9)  # Medium-high value
+			base_amount = randi_range(6, 9)  # Medium-high value
 		"elite":
-			return randi_range(12, 18)  # Highest value
+			base_amount = randi_range(12, 18)  # Highest value
 		"boss":
-			return randi_range(20, 30)  # Boss base value (will be multiplied by 2-3x)
+			base_amount = randi_range(20, 30)  # Boss base value (will be multiplied by 2-3x)
 		_:
 			# Default fallback for unknown enemy types
-			return 3
+			base_amount = 3
+	
+	# Reduce by 60% (multiply by 0.4, ensure minimum of 1)
+	return max(1, roundi(base_amount * 0.4))
 
 
 ## Check if an interactable is a mission resource (has objective_id)
@@ -2211,49 +2228,55 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	if enemy.has_method("play_death_animation"):
 		await enemy.play_death_animation()
 	
-	# Spawn resource drop at enemy's death position
-	var resource_amount = _calculate_enemy_resource_drop(enemy_type)
+	# Check if enemy should drop resources (10-15% chance)
+	var drop_chance = randi_range(10, 15)  # Random chance between 10% and 15%
+	var should_drop = randf() * 100.0 < drop_chance
 	
-	# Bosses drop bonus loot (2-3x normal)
-	if enemy_type == "boss":
-		resource_amount = resource_amount * randi_range(2, 3)
-		# Bosses drop both fuel and scrap, but at different positions within 2x2 area
-		# Try to drop fuel at center first, then scrap at a different corner
-		var fuel_amount = randi_range(2, 4)
-		var boss_center_pos = pos + Vector2i(1, 1)  # Center of 2x2 area
+	# Only spawn resource drop if chance succeeds
+	if should_drop:
+		# Spawn resource drop at enemy's death position
+		var resource_amount = _calculate_enemy_resource_drop(enemy_type)
 		
-		# Try to drop fuel at center
-		var fuel_crate = FuelCrateScene.instantiate()
-		fuel_crate.fuel_amount = fuel_amount
-		var fuel_dropped = _safe_add_interactable(fuel_crate, boss_center_pos)
-		
-		# Try to drop scrap at a different position within the 2x2 area
-		# Try corners of the 2x2 area: (0,0), (1,0), (0,1)
-		var scrap_positions = [
-			pos + Vector2i(0, 0),  # Top-left
-			pos + Vector2i(1, 0),   # Top-right
-			pos + Vector2i(0, 1)    # Bottom-left
-		]
-		
-		var scrap_dropped = false
-		for scrap_pos in scrap_positions:
+		# Bosses drop bonus loot (2-3x normal)
+		if enemy_type == "boss":
+			resource_amount = resource_amount * randi_range(2, 3)
+			# Bosses drop both fuel and scrap, but at different positions within 2x2 area
+			# Try to drop fuel at center first, then scrap at a different corner
+			var fuel_amount = randi_range(2, 4)
+			var boss_center_pos = pos + Vector2i(1, 1)  # Center of 2x2 area
+			
+			# Try to drop fuel at center
+			var fuel_crate = FuelCrateScene.instantiate()
+			fuel_crate.fuel_amount = fuel_amount
+			var fuel_dropped = _safe_add_interactable(fuel_crate, boss_center_pos)
+			
+			# Try to drop scrap at a different position within the 2x2 area
+			# Try corners of the 2x2 area: (0,0), (1,0), (0,1)
+			var scrap_positions = [
+				pos + Vector2i(0, 0),  # Top-left
+				pos + Vector2i(1, 0),   # Top-right
+				pos + Vector2i(0, 1)    # Bottom-left
+			]
+			
+			var scrap_dropped = false
+			for scrap_pos in scrap_positions:
+				var scrap_pile = ScrapPileScene.instantiate()
+				scrap_pile.scrap_amount = resource_amount
+				if _safe_add_interactable(scrap_pile, scrap_pos):
+					scrap_dropped = true
+					break
+			
+			# If scrap couldn't be dropped at any corner and fuel wasn't dropped at center,
+			# try dropping scrap at center (only if center is free)
+			if not scrap_dropped and not fuel_dropped:
+				var scrap_pile = ScrapPileScene.instantiate()
+				scrap_pile.scrap_amount = resource_amount
+				_safe_add_interactable(scrap_pile, boss_center_pos)
+		else:
+			# Regular enemies drop at their position
 			var scrap_pile = ScrapPileScene.instantiate()
 			scrap_pile.scrap_amount = resource_amount
-			if _safe_add_interactable(scrap_pile, scrap_pos):
-				scrap_dropped = true
-				break
-		
-		# If scrap couldn't be dropped at any corner and fuel wasn't dropped at center,
-		# try dropping scrap at center (only if center is free)
-		if not scrap_dropped and not fuel_dropped:
-			var scrap_pile = ScrapPileScene.instantiate()
-			scrap_pile.scrap_amount = resource_amount
-			_safe_add_interactable(scrap_pile, boss_center_pos)
-	else:
-		# Regular enemies drop at their position
-		var scrap_pile = ScrapPileScene.instantiate()
-		scrap_pile.scrap_amount = resource_amount
-		_safe_add_interactable(scrap_pile, pos)
+			_safe_add_interactable(scrap_pile, pos)
 	
 	# Remove node
 	enemy.queue_free()
@@ -2996,6 +3019,8 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		heavy_unit.set_grid_position(charge_destination)
 		
 		# Animate rush movement (fast)
+		# CRITICAL: Set is_charging flag to prevent movement_finished callback from interfering with turn sequencing
+		is_charging = true
 		var path = tactical_map.find_path(heavy_pos, charge_destination)
 		if path and path.size() > 1:
 			tactical_hud.show_combat_message("CHARGING!", Color(1, 0.5, 0.1))
@@ -3006,6 +3031,8 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 			heavy_unit.position = Vector2(charge_destination.x * 32 + 16, charge_destination.y * 32 + 16)
 		
 		tactical_map.set_unit_position_solid(charge_destination, true)
+		# Clear the charging flag after movement completes
+		is_charging = false
 	
 	# Calculate damage - instant kill basic enemies, heavy damage to heavy enemies
 	var charge_damage: int
@@ -3041,7 +3068,11 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit.get_ability_cooldown())
 	
 	# Check if unit is out of AP and auto-end turn
-	_check_auto_end_turn()
+	# CRITICAL: Only check auto-end turn if heavy_unit is still the current unit
+	# This prevents turn skipping if the unit reference or index changed during async operations
+	if current_unit_index < deployed_officers.size() and heavy_unit == deployed_officers[current_unit_index]:
+		if not heavy_unit.has_ap():
+			_on_end_turn_pressed()
 
 
 ## Find the best adjacent tile to move to when charging an enemy

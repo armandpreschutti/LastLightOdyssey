@@ -119,43 +119,44 @@ class ObjectiveManager:
 			return {"fuel": 0, "scrap": 0, "colonists": 0, "hull_repair": 0}
 		
 		# Define single deterministic reward for each objective type
+		# Rewards reduced by 40% (multiplied by 0.6)
 		match objective.id:
 			# Collection objectives
 			"retrieve_logs":
 				# Data logs: scrap reward
-				return {"fuel": 0, "scrap": 25, "colonists": 0, "hull_repair": 0}
+				return {"fuel": 0, "scrap": 15, "colonists": 0, "hull_repair": 0}
 			"extract_minerals":
 				# Minerals: scrap reward
-				return {"fuel": 0, "scrap": 30, "colonists": 0, "hull_repair": 0}
+				return {"fuel": 0, "scrap": 18, "colonists": 0, "hull_repair": 0}
 			"collect_samples":
 				# Alien samples: scrap reward
-				return {"fuel": 0, "scrap": 25, "colonists": 0, "hull_repair": 0}
+				return {"fuel": 0, "scrap": 15, "colonists": 0, "hull_repair": 0}
 			
 			# Kill-based objectives
 			"clear_passages":
 				# Clearing passages: scrap reward
-				return {"fuel": 0, "scrap": 20, "colonists": 0, "hull_repair": 0}
+				return {"fuel": 0, "scrap": 12, "colonists": 0, "hull_repair": 0}
 			"clear_nests":
 				# Clearing nests: scrap reward
-				return {"fuel": 0, "scrap": 30, "colonists": 0, "hull_repair": 0}
+				return {"fuel": 0, "scrap": 18, "colonists": 0, "hull_repair": 0}
 			
 			# Binary objectives (hack, repair, activate, etc.)
 			"hack_security":
 				# Hacking security: fuel reward
-				return {"fuel": 12, "scrap": 0, "colonists": 0, "hull_repair": 0}
+				return {"fuel": 7, "scrap": 0, "colonists": 0, "hull_repair": 0}
 			"repair_core":
 				# Repairing core: hull repair reward
-				return {"fuel": 0, "scrap": 0, "colonists": 0, "hull_repair": 25}
+				return {"fuel": 0, "scrap": 0, "colonists": 0, "hull_repair": 15}
 			"activate_mining":
 				# Activating mining: scrap reward
-				return {"fuel": 0, "scrap": 22, "colonists": 0, "hull_repair": 0}
+				return {"fuel": 0, "scrap": 13, "colonists": 0, "hull_repair": 0}
 			"activate_beacons":
 				# Activating beacons: fuel reward
-				return {"fuel": 10, "scrap": 0, "colonists": 0, "hull_repair": 0}
+				return {"fuel": 6, "scrap": 0, "colonists": 0, "hull_repair": 0}
 			
 			_:
 				# Default bonus for unknown objectives
-				return {"fuel": 8, "scrap": 15, "colonists": 0, "hull_repair": 0}
+				return {"fuel": 5, "scrap": 9, "colonists": 0, "hull_repair": 0}
 	
 	
 	static func get_potential_rewards(objective: MissionObjective) -> Dictionary:

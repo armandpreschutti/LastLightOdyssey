@@ -80,8 +80,8 @@ Upon entering a node, the game rolls **1d10** against the Random Event Table.
 | 3 | Disease Outbreak | −100 colonists | Medic | 0 colonists | 30 scrap |
 | 4 | System Malfunction | −40 colonists, −20% integrity | Tech | 0 colonists, −10% integrity | 15 scrap |
 | 5 | Pirate Ambush | −60 colonists, −30% integrity | Heavy | 0 colonists, −15% integrity | 28 scrap |
-| 6 | Supply Cache | +2 fuel, +10 scrap | — | — | — |
-| 7 | Distress Signal | −15% integrity, +35 scrap | Medic | 0% integrity, +35 scrap | 18 scrap |
+| 6 | Space Debris Field | −30 colonists, −20% integrity | Scout | 0 colonists, −10% integrity | 20 scrap |
+| 7 | Sensor Ghost | No effect | — | — | — |
 | 8 | Radiation Storm | −80 colonists, −10% integrity | Tech | 0 colonists, −5% integrity | 25 scrap |
 | 9 | Cryo Pod Failure | −100 colonists | Medic | 0 colonists | 35 scrap |
 | 10 | Clear Skies | No effect | — | — | — |
