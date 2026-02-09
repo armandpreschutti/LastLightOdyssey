@@ -6,6 +6,7 @@ signal end_turn_pressed
 signal extract_pressed
 signal ability_used(ability_type: String)
 signal pause_pressed
+signal ability_cancelled
 
 # Pause button (top left)
 @onready var pause_button: Button = $TopLeftPanel/PauseButton
@@ -42,6 +43,7 @@ signal pause_pressed
 @onready var ability_header: Label = $SidePanel/VBox/AbilityContainer/AbilityHeader
 @onready var ability_button: Button = $SidePanel/VBox/AbilityContainer/AbilityButton
 @onready var ability_desc: Label = $SidePanel/VBox/AbilityContainer/AbilityDesc
+@onready var cancel_button: Button = $SidePanel/VBox/AbilityContainer/CancelButton
 
 # Action buttons
 @onready var end_turn_button: Button = $SidePanel/VBox/ButtonContainer/EndTurnButton
@@ -62,9 +64,11 @@ func _ready() -> void:
 	end_turn_button.pressed.connect(_on_end_turn_pressed)
 	extract_button.pressed.connect(_on_extract_pressed)
 	ability_button.pressed.connect(_on_ability_pressed)
+	cancel_button.pressed.connect(_on_cancel_pressed)
 	cryo_warning.visible = false
 	extract_button.visible = false
 	ability_container.visible = false
+	cancel_button.visible = false
 	
 	# Set up tooltips
 	_setup_tooltips()
@@ -264,8 +268,8 @@ func update_ability_buttons(officer_type: String, current_ap: int, cooldown: int
 		"medic":
 			ability_name = "patch"
 			ability_text = "[ PATCH ] - 1 AP"
-			ability_description = "Heal an adjacent friendly unit for 62.5% of their maximum health (50% base + 25% from Medic's enhanced healing)."
-			ability_tooltip = "Patch: Costs 1 AP. Heals adjacent ally for 62.5% max HP."
+			ability_description = "Heal a friendly unit within 3 tiles for 62.5% of their maximum health (50% base + 25% from Medic's enhanced healing)."
+			ability_tooltip = "Patch: Costs 1 AP. Heals ally within 3 tiles for 62.5% max HP."
 			ap_cost = 1
 		"heavy":
 			ability_name = "charge"
@@ -311,6 +315,18 @@ func _on_ability_pressed() -> void:
 		ability_used.emit(_current_ability_type)
 
 
+func _on_cancel_pressed() -> void:
+	ability_cancelled.emit()
+
+
+func show_cancel_button() -> void:
+	cancel_button.visible = true
+
+
+func hide_cancel_button() -> void:
+	cancel_button.visible = false
+
+
 ## Show a combat message (for attack phases)
 func show_combat_message(message: String, color: Color = Color(1, 1, 0.2)) -> void:
 	# Get the combat message label from the parent tactical scene
@@ -319,6 +335,10 @@ func show_combat_message(message: String, color: Color = Color(1, 1, 0.2)) -> vo
 		combat_msg.text = message
 		combat_msg.add_theme_color_override("font_color", color)
 		combat_msg.visible = true
+		# Show the background panel when message is shown
+		var background_panel = get_node_or_null("../../UILayer/CombatMessageContainer/BackgroundPanel")
+		if background_panel:
+			background_panel.visible = true
 
 
 ## Hide the combat message
@@ -326,6 +346,10 @@ func hide_combat_message() -> void:
 	var combat_msg = get_node_or_null("../../UILayer/CombatMessageContainer/CombatMessage")
 	if combat_msg:
 		combat_msg.visible = false
+		# Hide the background panel when message is hidden
+		var background_panel = get_node_or_null("../../UILayer/CombatMessageContainer/BackgroundPanel")
+		if background_panel:
+			background_panel.visible = false
 		combat_msg.text = ""  # Clear the message text
 
 

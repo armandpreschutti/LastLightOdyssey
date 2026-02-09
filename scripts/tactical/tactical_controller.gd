@@ -19,6 +19,7 @@ var selected_target: Vector2i = Vector2i(-1, -1)  # For targeting enemies
 var execute_mode: bool = false  # When true, clicking selects execute target
 var charge_mode: bool = false  # When true, clicking selects charge target
 var turret_mode: bool = false  # When true, clicking selects turret placement tile
+var patch_mode: bool = false  # When true, clicking selects patch target
 var precision_mode: bool = false  # When true, clicking selects precision shot target (Sniper)
 var current_turn: int = 0
 var current_unit_index: int = 0  # Which unit's turn it is (0-based index)
@@ -86,17 +87,16 @@ func _ready() -> void:
 	tactical_hud.end_turn_pressed.connect(_on_end_turn_pressed)
 	tactical_hud.extract_pressed.connect(_on_extract_pressed)
 	tactical_hud.ability_used.connect(_on_ability_used)
+	tactical_hud.ability_cancelled.connect(_cancel_ability_mode)
 	tactical_hud.pause_pressed.connect(_show_pause_menu)
 
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") and mission_active and not is_paused:
-		# Cancel precision mode if active
-		if precision_mode:
-			precision_mode = false
-			tactical_hud.hide_combat_message()
-			_update_precision_mode_highlights()
-			_update_attackable_highlights()
+		# Cancel any active ability mode
+		if turret_mode or charge_mode or execute_mode or precision_mode or patch_mode:
+			_cancel_ability_mode()
+			get_viewport().set_input_as_handled()
 			return
 		_show_pause_menu()
 		get_viewport().set_input_as_handled()
@@ -411,7 +411,15 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 				_boss_spawned = true
 	
 	# Spawn regular enemies
-	var enemy_positions = generator.get_enemy_spawn_positions(difficulty)
+	# Check if mission requires minimum enemies for objectives (e.g., clear_passages needs 4 kills)
+	var min_enemies_required = 0
+	if is_scavenger_mission and not mission_objectives.is_empty():
+		var objective = mission_objectives[0]
+		if objective.id == "clear_passages" and objective.type == MissionObjective.ObjectiveType.PROGRESS:
+			# Ensure at least enough enemies spawn to complete the objective
+			min_enemies_required = objective.max_progress
+	
+	var enemy_positions = generator.get_enemy_spawn_positions(difficulty, min_enemies_required)
 	var enemy_id = 1
 	for enemy_pos in enemy_positions:
 		var enemy = EnemyUnitScene.instantiate()
@@ -580,6 +588,10 @@ func _on_tile_clicked(grid_pos: Vector2i) -> void:
 		return
 	
 	# Handle ability targeting modes
+	if patch_mode and selected_unit and selected_unit.officer_type == "medic":
+		_try_patch_target(grid_pos)
+		return
+	
 	if turret_mode and selected_unit and selected_unit.officer_type == "tech":
 		_try_place_turret(grid_pos)
 		return
@@ -649,6 +661,11 @@ func _select_unit(unit: Node2D) -> void:
 	# Cancel turret mode when selecting a unit
 	if turret_mode:
 		turret_mode = false
+		tactical_hud.hide_combat_message()
+	# Cancel patch mode when selecting a unit
+	if patch_mode:
+		patch_mode = false
+		tactical_map.clear_heal_range()
 		tactical_hud.hide_combat_message()
 	if selected_unit:
 		selected_unit.set_selected(false)
@@ -2373,13 +2390,25 @@ func _on_ability_used(ability_type: String) -> void:
 			tactical_map.clear_movement_range()
 			tactical_map.set_turret_placement_range(selected_unit.get_grid_position(), 2)  # Filtered execute range (red tiles)
 			tactical_hud.show_combat_message("SELECT TILE FOR TURRET (2 TILES)", Color(0, 1, 1))
+			tactical_hud.show_cancel_button()
 		
 		"patch":
 			if selected_unit.officer_type != "medic":
 				return
 			
-			# Try to auto-heal adjacent ally
-			_try_auto_patch()
+			if not selected_unit.has_ap(1):
+				tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
+				await get_tree().create_timer(1.0).timeout
+				tactical_hud.hide_combat_message()
+				return
+			
+			# Enter patch targeting mode - show light green range tiles (all tiles within 3-tile range)
+			patch_mode = true
+			tactical_map.clear_movement_range()
+			tactical_map.clear_execute_range()  # Clear any existing execute range highlights
+			tactical_map.set_heal_range(selected_unit.get_grid_position(), 3, selected_unit, deployed_officers)
+			tactical_hud.show_combat_message("SELECT ALLY TO HEAL (3 TILES)", Color(0.2, 1, 0.2))
+			tactical_hud.show_cancel_button()
 		
 		"charge":
 			if selected_unit.officer_type != "heavy":
@@ -2396,6 +2425,7 @@ func _on_ability_used(ability_type: String) -> void:
 			tactical_map.clear_movement_range()
 			tactical_map.set_execute_range(selected_unit.get_grid_position(), 4)  # Reuse execute range (red tiles)
 			tactical_hud.show_combat_message("SELECT ENEMY TO CHARGE (4 TILES)", Color(1, 0.5, 0.1))
+			tactical_hud.show_cancel_button()
 		
 		"execute":
 			if selected_unit.officer_type != "captain":
@@ -2412,6 +2442,7 @@ func _on_ability_used(ability_type: String) -> void:
 			tactical_map.clear_movement_range()
 			tactical_map.set_execute_range(selected_unit.get_grid_position(), 4)
 			tactical_hud.show_combat_message("SELECT ENEMY WITHIN 4 TILES (<50%% HP)", Color(1, 0.2, 0.2))
+			tactical_hud.show_cancel_button()
 		
 		"precision":
 			if selected_unit.officer_type != "sniper":
@@ -2430,6 +2461,68 @@ func _on_ability_used(ability_type: String) -> void:
 			tactical_hud.show_combat_message("SELECT ANY VISIBLE ENEMY", Color(0.6, 0.55, 0.8))
 			# Update enemy highlights for precision mode
 			_update_precision_mode_highlights()
+			tactical_hud.show_cancel_button()
+
+
+## Cancel any active ability targeting mode
+func _cancel_ability_mode() -> void:
+	# Check which ability mode is active and clear it
+	if turret_mode:
+		turret_mode = false
+		tactical_map.clear_execute_range()
+		tactical_hud.hide_combat_message()
+		tactical_hud.hide_cancel_button()
+		# Restore movement range if unit still has AP
+		if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+		return
+	
+	if charge_mode:
+		charge_mode = false
+		tactical_map.clear_execute_range()
+		tactical_hud.hide_combat_message()
+		tactical_hud.hide_cancel_button()
+		# Restore movement range if unit still has AP
+		if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+		return
+	
+	if execute_mode:
+		execute_mode = false
+		tactical_map.clear_execute_range()
+		tactical_hud.hide_combat_message()
+		tactical_hud.hide_cancel_button()
+		# Restore movement range if unit still has AP
+		if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+		return
+	
+	if precision_mode:
+		precision_mode = false
+		tactical_map.clear_execute_range()
+		tactical_hud.hide_combat_message()
+		_update_precision_mode_highlights()
+		_update_attackable_highlights()
+		tactical_hud.hide_cancel_button()
+		# Restore movement range if unit still has AP
+		if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+		return
+	
+	if patch_mode:
+		patch_mode = false
+		tactical_map.clear_heal_range()
+		tactical_hud.hide_combat_message()
+		tactical_hud.hide_cancel_button()
+		# Restore movement range if unit still has AP
+		if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+		return
 
 
 ## Check if any officer on overwatch can shoot the enemy
@@ -2566,63 +2659,105 @@ func _is_officer_visible_to_enemy(officer: Node2D, enemy: Node2D) -> bool:
 	return distance <= enemy.sight_range
 
 
-func _try_auto_patch() -> void:
-	if not selected_unit or selected_unit.officer_type != "medic":
-		return
+## Try to patch target at clicked position (Medic ability)
+func _try_patch_target(grid_pos: Vector2i) -> void:
+	patch_mode = false
+	tactical_map.clear_heal_range()  # Clear light green heal range tiles
+	tactical_hud.hide_combat_message()
+	tactical_hud.hide_cancel_button()
 	
-	if not selected_unit.has_ap(1):
-		tactical_hud.show_combat_message("NOT ENOUGH AP (NEEDS 1)", Color(1, 0.3, 0.3))
-		await get_tree().create_timer(1.0).timeout
-		tactical_hud.hide_combat_message()
+	if not selected_unit or selected_unit.officer_type != "medic":
 		return
 	
 	# Disable end turn button during patch animation
 	_set_animating(true)
 	
 	var medic_pos = selected_unit.get_grid_position()
+	var distance = abs(grid_pos.x - medic_pos.x) + abs(grid_pos.y - medic_pos.y)
 	
-	# Find adjacent allies
-	var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-	for dir in directions:
-		var check_pos = medic_pos + dir
-		for officer in deployed_officers:
-			if officer == selected_unit:
-				continue
-			if officer.get_grid_position() == check_pos and officer.current_hp < officer.max_hp:
-				# Found injured adjacent ally
-				if selected_unit.use_patch(officer):
-					AudioManager.play_sfx("combat_heal")
-					# Focus camera on healing action
-					var medic_world = selected_unit.position
-					var target_world = officer.position
-					combat_camera.focus_on_action(medic_world, target_world)
-					await get_tree().create_timer(0.2).timeout  # Wait for camera to zoom in
-					
-					var heal_amount = int(officer.max_hp * 0.5)
-					tactical_hud.show_combat_message("HEALED %s (+%d HP)" % [officer.officer_key.to_upper(), heal_amount], Color(0.2, 1, 0.2))
-					
-					# Show heal popup
-					_spawn_damage_popup(heal_amount, true, officer.position, true)
-					
-					await get_tree().create_timer(1.0).timeout
-					tactical_hud.hide_combat_message()
-					
-					# Return camera to tactical view
-					combat_camera.return_to_tactical()
-					
-					_select_unit(selected_unit)
-					
-					# Re-enable end turn button after patch animation completes
-					_set_animating(false)
-					
-					# Check if unit is out of AP and auto-end turn
-					_check_auto_end_turn()
-					return
+	# Must be within 3 tiles
+	if distance > 3:
+		tactical_hud.show_combat_message("OUT OF RANGE (MAX 3 TILES)", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+		return
 	
-	tactical_hud.show_combat_message("NO INJURED ALLIES NEARBY", Color(1, 0.5, 0))
-	await get_tree().create_timer(1.0).timeout
-	tactical_hud.hide_combat_message()
-	_set_animating(false)
+	# Check if there's a unit at the clicked position
+	var target_unit = tactical_map.get_unit_at(grid_pos)
+	if not target_unit:
+		tactical_hud.show_combat_message("NO TARGET AT TILE", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+		return
+	
+	# Check if target is a friendly officer (not self)
+	if target_unit not in deployed_officers or target_unit == selected_unit:
+		tactical_hud.show_combat_message("CANNOT HEAL TARGET", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+		return
+	
+	# Check if target is injured
+	if target_unit.current_hp >= target_unit.max_hp:
+		tactical_hud.show_combat_message("TARGET AT FULL HEALTH", Color(1, 0.5, 0))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+		return
+	
+	# Use the ability (spends AP and starts cooldown)
+	if selected_unit.use_patch(target_unit):
+		AudioManager.play_sfx("combat_heal")
+		# Focus camera on healing action
+		var medic_world = selected_unit.position
+		var target_world = target_unit.position
+		combat_camera.focus_on_action(medic_world, target_world)
+		await get_tree().create_timer(0.2).timeout  # Wait for camera to zoom in
+		
+		var heal_amount = int(target_unit.max_hp * 0.5 * selected_unit.get_healing_bonus())
+		tactical_hud.show_combat_message("HEALED %s (+%d HP)" % [target_unit.officer_key.to_upper(), heal_amount], Color(0.2, 1, 0.2))
+		
+		# Show heal popup
+		_spawn_damage_popup(heal_amount, true, target_unit.position, true)
+		
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		
+		# Return camera to tactical view
+		combat_camera.return_to_tactical()
+		
+		_select_unit(selected_unit)
+		
+		# Re-enable end turn button after patch animation completes
+		_set_animating(false)
+		
+		# Check if unit is out of AP and auto-end turn
+		_check_auto_end_turn()
+	else:
+		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 
 
 ## Try to place a turret within 2 tiles (Tech ability)
@@ -2630,6 +2765,7 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 	turret_mode = false
 	tactical_map.clear_execute_range()  # Clear red turret range tiles
 	tactical_hud.hide_combat_message()
+	tactical_hud.hide_cancel_button()
 	
 	if not selected_unit or selected_unit.officer_type != "tech":
 		return
@@ -2716,6 +2852,7 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 	charge_mode = false
 	tactical_map.clear_execute_range()  # Clear red charge range tiles
 	tactical_hud.hide_combat_message()
+	tactical_hud.hide_cancel_button()
 	
 	if not selected_unit or selected_unit.officer_type != "heavy":
 		return
@@ -2943,6 +3080,7 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 	execute_mode = false
 	tactical_map.clear_execute_range()
 	tactical_hud.hide_combat_message()
+	tactical_hud.hide_cancel_button()
 	
 	if not selected_unit or selected_unit.officer_type != "captain":
 		return
@@ -3063,6 +3201,7 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 	tactical_hud.hide_combat_message()
 	# Update enemy highlights when exiting precision mode
 	_update_precision_mode_highlights()
+	tactical_hud.hide_cancel_button()
 	
 	if not selected_unit or selected_unit.officer_type != "sniper":
 		return

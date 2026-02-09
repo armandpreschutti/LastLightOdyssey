@@ -233,8 +233,8 @@ func get_ability_cooldown() -> int:
 
 
 ## Start ability cooldown after use
-func _start_cooldown() -> void:
-	ability_cooldown = ABILITY_MAX_COOLDOWN
+func _start_cooldown(cooldown_turns: int = ABILITY_MAX_COOLDOWN) -> void:
+	ability_cooldown = cooldown_turns
 
 
 func take_damage(amount: int) -> void:
@@ -512,7 +512,7 @@ func use_turret() -> bool:
 	return true
 
 
-## Use Patch ability (Medic) - heal adjacent ally
+## Use Patch ability (Medic) - heal ally within 3 tiles
 func use_patch(target: Node2D) -> bool:
 	if officer_type != "medic":
 		return false
@@ -523,13 +523,20 @@ func use_patch(target: Node2D) -> bool:
 	if not use_ap(1):
 		return false
 	
+	# Validate range (3 tiles manhattan distance)
+	var medic_pos = get_grid_position()
+	var target_pos = target.get_grid_position()
+	var distance = abs(medic_pos.x - target_pos.x) + abs(medic_pos.y - target_pos.y)
+	if distance > 3:
+		return false
+	
 	# Heal for 50% of max HP (62.5% with Medic's enhanced healing passive)
 	var base_heal_percent = 0.5
 	var heal_multiplier = get_healing_bonus()  # +25% bonus for Medic
 	var heal_amount = int(target.max_hp * base_heal_percent * heal_multiplier)
 	target.heal(heal_amount)
 	
-	_start_cooldown()
+	_start_cooldown(1)  # 1-turn cooldown for patch
 	return true
 
 

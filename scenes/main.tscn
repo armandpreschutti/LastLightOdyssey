@@ -7,18 +7,18 @@
 [ext_resource type="PackedScene" uid="uid://blam7n4qp2x5v" path="res://scenes/ui/team_select_dialog.tscn" id="4_team"]
 [ext_resource type="PackedScene" uid="uid://c5h7k8nan0p1q" path="res://scenes/ui/trading_dialog.tscn" id="4_trading"]
 [ext_resource type="PackedScene" uid="uid://dm8lan5qv3p6r" path="res://scenes/tactical/tactical_mode.tscn" id="5_tactical"]
-[ext_resource type="PackedScene" path="res://scenes/ui/event_scene_dialog.tscn" id="6_event_scene"]
-[ext_resource type="PackedScene" path="res://scenes/ui/mission_scene_dialog.tscn" id="6_mission_scene"]
-[ext_resource type="PackedScene" path="res://scenes/ui/mission_recap.tscn" id="7_recap"]
-[ext_resource type="PackedScene" path="res://scenes/ui/new_earth_scene_dialog.tscn" id="8_new_earth"]
-[ext_resource type="PackedScene" path="res://scenes/ui/voyage_recap.tscn" id="9_voyage_recap"]
-[ext_resource type="PackedScene" path="res://scenes/ui/voyage_intro_scene_dialog.tscn" id="10_voyage_intro"]
+[ext_resource type="PackedScene" uid="uid://cjd5wailexeke" path="res://scenes/ui/event_scene_dialog.tscn" id="6_event_scene"]
+[ext_resource type="PackedScene" uid="uid://b8k2m5qv3n7x" path="res://scenes/ui/mission_scene_dialog.tscn" id="6_mission_scene"]
+[ext_resource type="PackedScene" uid="uid://jsutwy7p14gi" path="res://scenes/ui/mission_recap.tscn" id="7_recap"]
+[ext_resource type="PackedScene" uid="uid://c7iq6k36m7l3s" path="res://scenes/ui/new_earth_scene_dialog.tscn" id="8_new_earth"]
+[ext_resource type="PackedScene" uid="uid://c4meqewcdr3ey" path="res://scenes/ui/voyage_recap.tscn" id="9_voyage_recap"]
+[ext_resource type="PackedScene" uid="uid://c7k3n6rw4o8y" path="res://scenes/ui/voyage_intro_scene_dialog.tscn" id="10_voyage_intro"]
+[ext_resource type="Script" uid="uid://c7c8g07jnk3pv" path="res://scripts/tactical/biome_background.gd" id="11_background"]
 [ext_resource type="PackedScene" path="res://scenes/ui/colonist_loss_scene_dialog.tscn" id="11_colonist_loss"]
 [ext_resource type="PackedScene" path="res://scenes/ui/game_over_scene_dialog.tscn" id="12_game_over_scene"]
 [ext_resource type="PackedScene" path="res://scenes/ui/game_over_recap.tscn" id="13_game_over_recap"]
-[ext_resource type="PackedScene" path="res://scenes/ui/objective_complete_scene_dialog.tscn" id="14_objective_complete"]
-[ext_resource type="Script" path="res://scripts/tactical/biome_background.gd" id="11_background"]
 [ext_resource type="PackedScene" path="res://scenes/ui/fade_transition.tscn" id="14_fade"]
+[ext_resource type="PackedScene" uid="uid://b7k3m6qv4n8y" path="res://scenes/ui/objective_complete_scene_dialog.tscn" id="14_objective_complete"]
 
 [node name="Main" type="Node" unique_id=588289983]
 script = ExtResource("1_main")
@@ -27,6 +27,7 @@ script = ExtResource("1_main")
 layer = -10
 
 [node name="Background" type="Control" parent="BackgroundLayer" unique_id=436759781]
+layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0

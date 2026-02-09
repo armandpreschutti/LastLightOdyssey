@@ -26,6 +26,7 @@ var current_biome: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION
 # Gameplay highlight colors (consistent across biomes, high visibility)
 const COLOR_MOVEMENT_RANGE := Color(0.3, 0.6, 0.9, 0.35)  # Brighter blue movement highlight
 const COLOR_EXECUTE_RANGE := Color(0.9, 0.2, 0.2, 0.35)  # Red execute range highlight
+const COLOR_HEAL_RANGE := Color(0.3, 1.0, 0.4, 0.4)  # Light green heal range highlight (brighter for visibility)
 const COLOR_HOVER := Color(1.0, 0.9, 0.4, 0.4)     # Brighter yellow hover
 const COLOR_PATHFINDING_LINE := Color(0.2, 0.8, 1.0, 1.0)  # Glowing neon blue pathfinding line
 const COLOR_PATHFINDING_GLOW := Color(0.2, 0.8, 1.0, 0.4)  # Glow effect for neon blue
@@ -38,6 +39,7 @@ var tile_data: Dictionary = {}  # Vector2i -> TileType
 var revealed_tiles: Dictionary = {}  # Vector2i -> bool
 var movement_range_tiles: Dictionary = {}  # Vector2i -> bool (tiles within movement range)
 var execute_range_tiles: Dictionary = {}  # Vector2i -> bool (tiles within execute range)
+var heal_range_tiles: Dictionary = {}  # Vector2i -> bool (tiles within heal range)
 var hovered_tile: Vector2i = Vector2i(-1, -1)  # Currently hovered tile
 var pathfinding_path: PackedVector2Array = PackedVector2Array()  # Current pathfinding path
 var pathfinding_source: Vector2i = Vector2i(-1, -1)  # Source position for pathfinding (or -1, -1 if no source)
@@ -185,6 +187,10 @@ func _draw() -> void:
 				# Movement range highlight
 				if movement_range_tiles.get(pos, false):
 					draw_rect(rect, COLOR_MOVEMENT_RANGE)
+				
+				# Heal range highlight (light green)
+				if heal_range_tiles.get(pos, false):
+					draw_rect(rect, COLOR_HEAL_RANGE)
 				
 				# Execute range highlight (red)
 				if execute_range_tiles.get(pos, false):
@@ -1372,6 +1378,31 @@ func set_turret_placement_range(center: Vector2i, placement_range: int) -> void:
 ## Clear execute range highlight
 func clear_execute_range() -> void:
 	execute_range_tiles.clear()
+	queue_redraw()
+
+
+## Set heal range highlight (manhattan distance, light green tiles, shows all tiles within range)
+func set_heal_range(center: Vector2i, heal_range: int, medic_unit: Node2D, deployed_officers: Array) -> void:
+	heal_range_tiles.clear()
+	
+	for x in range(center.x - heal_range, center.x + heal_range + 1):
+		for y in range(center.y - heal_range, center.y + heal_range + 1):
+			var pos = Vector2i(x, y)
+			if pos.x < 0 or pos.x >= map_width or pos.y < 0 or pos.y >= map_height:
+				continue
+			if pos == center:
+				continue
+			var distance = abs(pos.x - center.x) + abs(pos.y - center.y)
+			if distance <= heal_range and revealed_tiles.get(pos, false):
+				# Show all tiles within range (potential heal targets)
+				heal_range_tiles[pos] = true
+	
+	queue_redraw()
+
+
+## Clear heal range highlight
+func clear_heal_range() -> void:
+	heal_range_tiles.clear()
 	queue_redraw()
 
 

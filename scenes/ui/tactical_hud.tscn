@@ -424,6 +424,14 @@ theme_override_font_sizes/font_size = 11
 text = "Enter overwatch stance. Automatically shoot the first enemy that moves within line of sight."
 autowrap_mode = 2
 
+[node name="CancelButton" type="Button" parent="SidePanel/VBox/AbilityContainer" unique_id=987654321]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.5, 0.3, 1)
+theme_override_colors/font_hover_color = Color(1, 0.7, 0.5, 1)
+theme_override_font_sizes/font_size = 12
+text = "[ CANCEL ]"
+
 [node name="HSeparator4" type="ColorRect" parent="SidePanel/VBox" unique_id=1527676893]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
