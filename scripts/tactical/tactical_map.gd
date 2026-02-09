@@ -1349,6 +1349,26 @@ func set_execute_range(center: Vector2i, exec_range: int) -> void:
 	queue_redraw()
 
 
+## Set turret placement range highlight (manhattan distance, red tiles, filtered to walkable and empty tiles only)
+func set_turret_placement_range(center: Vector2i, placement_range: int) -> void:
+	execute_range_tiles.clear()
+	
+	for x in range(center.x - placement_range, center.x + placement_range + 1):
+		for y in range(center.y - placement_range, center.y + placement_range + 1):
+			var pos = Vector2i(x, y)
+			if pos.x < 0 or pos.x >= map_width or pos.y < 0 or pos.y >= map_height:
+				continue
+			if pos == center:
+				continue
+			var distance = abs(pos.x - center.x) + abs(pos.y - center.y)
+			if distance <= placement_range and revealed_tiles.get(pos, false):
+				# Only show tiles that are walkable and empty
+				if is_tile_walkable(pos) and get_unit_at(pos) == null:
+					execute_range_tiles[pos] = true
+	
+	queue_redraw()
+
+
 ## Clear execute range highlight
 func clear_execute_range() -> void:
 	execute_range_tiles.clear()

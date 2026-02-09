@@ -258,7 +258,7 @@ func update_ability_buttons(officer_type: String, current_ap: int, cooldown: int
 		"tech":
 			ability_name = "turret"
 			ability_text = "[ TURRET ] - 1 AP"
-			ability_description = "Deploy a sentry turret on an adjacent tile. Auto-shoots the nearest enemy each turn for 3 turns."
+			ability_description = "Deploy a sentry turret within 2 tiles. Auto-shoots the nearest enemy each turn for 3 turns."
 			ability_tooltip = "Turret: Costs 1 AP. Place auto-firing sentry (3 turns, 15 DMG/turn)."
 			ap_cost = 1
 		"medic":

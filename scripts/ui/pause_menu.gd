@@ -52,9 +52,8 @@ func _on_abandon_pressed() -> void:
 	# Apply colonist penalty
 	GameState.colonist_count -= ABANDON_COLONIST_COST
 	
-	# Forfeit all resources collected during this mission
-	GameState.fuel -= mission_fuel_collected
-	GameState.scrap -= mission_scrap_collected
+	# Resources are not added to GameState until successful extraction,
+	# so no forfeiture is needed - abandoning simply prevents rewards
 	
 	abandon_pressed.emit()
 	queue_free()

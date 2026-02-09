@@ -337,7 +337,7 @@ func _get_officer_active_ability(key: String) -> Dictionary:
 		"tech":
 			return {
 				"name": "TURRET",
-				"description": "Deploy an auto-firing sentry turret on an adjacent tile. Turret lasts 3 turns and automatically attacks nearby enemies.",
+				"description": "Deploy an auto-firing sentry turret within 2 tiles. Turret lasts 3 turns and automatically attacks nearby enemies.",
 				"ap_cost": 1,
 				"cooldown": 2
 			}

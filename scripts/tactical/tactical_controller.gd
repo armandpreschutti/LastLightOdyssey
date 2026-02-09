@@ -646,6 +646,10 @@ func _select_unit(unit: Node2D) -> void:
 		precision_mode = false
 		tactical_hud.hide_combat_message()
 		_update_precision_mode_highlights()
+	# Cancel turret mode when selecting a unit
+	if turret_mode:
+		turret_mode = false
+		tactical_hud.hide_combat_message()
 	if selected_unit:
 		selected_unit.set_selected(false)
 		tactical_map.clear_movement_range()
@@ -1321,15 +1325,7 @@ func _end_mission(success: bool) -> void:
 		mission_fuel_collected += bonus_fuel
 		mission_scrap_collected += bonus_scrap
 		
-		# Apply bonus rewards directly to GameState
-		if bonus_fuel > 0:
-			GameState.fuel += bonus_fuel
-		if bonus_scrap > 0:
-			GameState.scrap += bonus_scrap
-		if bonus_colonists > 0:
-			GameState.colonist_count += bonus_colonists
-		if bonus_hull_repair > 0:
-			GameState.repair_ship(bonus_hull_repair)
+		# Bonus rewards will be applied to GameState only on successful extraction
 		
 		# Build objectives data array for recap (include reward info)
 		for obj in mission_objectives:
@@ -1362,8 +1358,23 @@ func _end_mission(success: bool) -> void:
 		"biome_type": current_biome,
 	}
 	
-	# Accumulate stats to GameState for voyage recap (only on success)
+	# Apply all resources and rewards to GameState only on successful extraction
 	if success:
+		# Apply collected resources
+		GameState.fuel += mission_fuel_collected
+		GameState.scrap += mission_scrap_collected
+		
+		# Apply bonus rewards (only if this was a scavenger mission with objectives)
+		if bonus_fuel > 0:
+			GameState.fuel += bonus_fuel
+		if bonus_scrap > 0:
+			GameState.scrap += bonus_scrap
+		if bonus_colonists > 0:
+			GameState.colonist_count += bonus_colonists
+		if bonus_hull_repair > 0:
+			GameState.repair_ship(bonus_hull_repair)
+		
+		# Accumulate stats to GameState for voyage recap
 		GameState.add_mission_stats(mission_fuel_collected, mission_scrap_collected, mission_enemies_killed, current_turn)
 
 	# Play beam-up animation on successful extraction
@@ -1557,6 +1568,20 @@ func _play_beam_down_animation() -> void:
 	tactical_hud.hide_combat_message()
 
 
+## Apply forgiveness curve for high hit chances (above 65%)
+## Makes attacks more forgiving for player units when hit chance is high
+func _apply_forgiveness_curve(hit_chance: float) -> float:
+	if hit_chance <= 65.0:
+		return hit_chance
+	
+	# Apply curve: effective_chance = hit_chance + (hit_chance - 65.0) * 0.4
+	# This increases forgiveness proportionally as hit chance increases above 65%
+	var effective_chance = hit_chance + (hit_chance - 65.0) * 0.4
+	
+	# Cap at maximum hit chance
+	return minf(effective_chance, MAX_HIT_CHANCE)
+
+
 ## Calculate hit chance for a shot from shooter_pos to target_pos
 func calculate_hit_chance(shooter_pos: Vector2i, target_pos: Vector2i, shooter: Node2D = null) -> float:
 	var distance = abs(target_pos.x - shooter_pos.x) + abs(target_pos.y - shooter_pos.y)
@@ -1573,7 +1598,15 @@ func calculate_hit_chance(shooter_pos: Vector2i, target_pos: Vector2i, shooter: 
 	hit_chance += attacker_cover_bonus
 	
 	# Clamp to valid range
-	return clampf(hit_chance, MIN_HIT_CHANCE, MAX_HIT_CHANCE)
+	hit_chance = clampf(hit_chance, MIN_HIT_CHANCE, MAX_HIT_CHANCE)
+	
+	# Apply forgiveness curve for player units if hit chance is above 65%
+	if shooter != null and shooter in deployed_officers:
+		hit_chance = _apply_forgiveness_curve(hit_chance)
+		# Re-clamp after applying curve (shouldn't exceed MAX_HIT_CHANCE, but safety check)
+		hit_chance = minf(hit_chance, MAX_HIT_CHANCE)
+	
+	return hit_chance
 
 
 ## Get base hit chance based on shooter type and distance
@@ -2335,9 +2368,11 @@ func _on_ability_used(ability_type: String) -> void:
 				tactical_hud.hide_combat_message()
 				return
 			
-			# Enter turret placement mode
+			# Enter turret placement mode - show red range tiles (filtered to walkable and empty tiles only)
 			turret_mode = true
-			tactical_hud.show_combat_message("SELECT ADJACENT TILE FOR TURRET", Color(0, 1, 1))
+			tactical_map.clear_movement_range()
+			tactical_map.set_turret_placement_range(selected_unit.get_grid_position(), 2)  # Filtered execute range (red tiles)
+			tactical_hud.show_combat_message("SELECT TILE FOR TURRET (2 TILES)", Color(0, 1, 1))
 		
 		"patch":
 			if selected_unit.officer_type != "medic":
@@ -2590,9 +2625,10 @@ func _try_auto_patch() -> void:
 	_set_animating(false)
 
 
-## Try to place a turret on an adjacent tile (Tech ability)
+## Try to place a turret within 2 tiles (Tech ability)
 func _try_place_turret(grid_pos: Vector2i) -> void:
 	turret_mode = false
+	tactical_map.clear_execute_range()  # Clear red turret range tiles
 	tactical_hud.hide_combat_message()
 	
 	if not selected_unit or selected_unit.officer_type != "tech":
@@ -2604,12 +2640,16 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 	var tech_pos = selected_unit.get_grid_position()
 	var distance = abs(grid_pos.x - tech_pos.x) + abs(grid_pos.y - tech_pos.y)
 	
-	# Must be adjacent
-	if distance != 1:
-		tactical_hud.show_combat_message("MUST BE ADJACENT", Color(1, 0.3, 0.3))
+	# Must be within 2 tiles
+	if distance > 2:
+		tactical_hud.show_combat_message("OUT OF RANGE (MAX 2 TILES)", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
 	# Must be a walkable, empty tile
@@ -2618,6 +2658,10 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
 	# Check no unit is already there
@@ -2627,6 +2671,10 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
 	# Use the ability (spends AP and starts cooldown)
@@ -2912,6 +2960,10 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)
 		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
 	# Check line of sight
@@ -2921,6 +2973,10 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)
 		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
 	# Must be clicking on an enemy
@@ -2936,6 +2992,10 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)
 		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
 	# Enemy must be below 50% HP
@@ -2946,6 +3006,10 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)
 		_set_animating(false)
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
 	# Use the ability (spends AP and starts cooldown)

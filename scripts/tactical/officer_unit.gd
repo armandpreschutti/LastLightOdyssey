@@ -497,7 +497,7 @@ func attacks_ignore_cover() -> bool:
 	return officer_type == "sniper"
 
 
-## Use Turret ability (Tech) - place auto-firing sentry on adjacent tile
+## Use Turret ability (Tech) - place auto-firing sentry within 2 tiles
 func use_turret() -> bool:
 	if officer_type != "tech":
 		return false

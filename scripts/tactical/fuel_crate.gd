@@ -8,7 +8,7 @@ func _ready() -> void:
 
 
 func interact() -> void:
-	GameState.fuel += 1
+	# Resources are tracked by tactical_controller and only awarded on successful extraction
 	super.interact()
 
 
