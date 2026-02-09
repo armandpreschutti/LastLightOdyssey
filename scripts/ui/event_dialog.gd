@@ -102,10 +102,10 @@ func show_event(event: Dictionary) -> void:
 		var specialist_name = _get_specialist_display_name(specialist_key)
 		var specialist_desc = _get_specialist_description(specialist_key)
 		var is_alive = GameState.is_officer_alive(specialist_key)
-		# Calculate dynamic scrap cost based on voyage progress
+		# Calculate dynamic scrap cost based on voyage progress (capped at 15)
 		var base_cost = event.get("mitigation_scrap_cost", 0)
 		var cost_multiplier = EventManager.get_mitigation_cost_multiplier()
-		var scrap_cost = int(base_cost * cost_multiplier)
+		var scrap_cost = mini(int(base_cost * cost_multiplier), 15)
 		var has_enough_scrap = GameState.scrap >= scrap_cost
 		
 		if is_alive:

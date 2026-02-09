@@ -170,10 +170,10 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
 		result["mitigated"] = true
 		result["colonist_change"] = -event.get("mitigated_colonist_loss", event.get("colonist_loss", 0))
 		result["integrity_change"] = -event.get("mitigated_integrity_loss", event.get("integrity_loss", 0))
-		# Deduct scrap cost for mitigation (with dynamic scaling)
+		# Deduct scrap cost for mitigation (with dynamic scaling, capped at 15)
 		var base_cost = event.get("mitigation_scrap_cost", 0)
 		var cost_multiplier = get_mitigation_cost_multiplier()
-		var scrap_cost = int(base_cost * cost_multiplier)
+		var scrap_cost = mini(int(base_cost * cost_multiplier), 15)
 		result["scrap_change"] -= scrap_cost
 	else:
 		result["colonist_change"] = -event.get("colonist_loss", 0)
@@ -202,10 +202,10 @@ func can_mitigate_event(event: Dictionary) -> bool:
 		return false
 	if not GameState.is_officer_alive(specialist_key):
 		return false
-	# Check if player has enough scrap (with dynamic scaling)
+	# Check if player has enough scrap (with dynamic scaling, capped at 15)
 	var base_cost = event.get("mitigation_scrap_cost", 0)
 	var cost_multiplier = get_mitigation_cost_multiplier()
-	var scrap_cost = int(base_cost * cost_multiplier)
+	var scrap_cost = mini(int(base_cost * cost_multiplier), 15)
 	return GameState.scrap >= scrap_cost
 
 

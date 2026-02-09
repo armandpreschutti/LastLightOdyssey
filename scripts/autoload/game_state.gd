@@ -33,7 +33,7 @@ var ship_integrity: int = 100:
 		if ship_integrity <= 0:
 			_trigger_game_over("ship_destroyed")
 
-var scrap: int = 0:
+var scrap: int = 25:
 	set(value):
 		scrap = maxi(0, value)
 		scrap_changed.emit(scrap)
@@ -91,7 +91,7 @@ func reset_game() -> void:
 	colonist_count = 1000
 	fuel = 10
 	ship_integrity = 100
-	scrap = 0
+	scrap = 25
 	cryo_stability = 100
 	current_node_index = 0
 	visited_nodes.clear()

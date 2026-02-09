@@ -16,6 +16,7 @@ extends Node
 @onready var team_select_dialog: Control = $DialogLayer/TeamSelectDialog
 @onready var mission_scene_dialog: Control = $DialogLayer/MissionSceneDialog
 @onready var colonist_loss_scene_dialog: Control = $DialogLayer/ColonistLossSceneDialog
+@onready var objective_complete_scene_dialog: Control = $DialogLayer/ObjectiveCompleteSceneDialog
 @onready var tactical_mode: Node2D = $TacticalMode
 @onready var management_layer: CanvasLayer = $ManagementLayer
 @onready var management_background: Control = $BackgroundLayer/Background
@@ -75,6 +76,7 @@ func _connect_signals() -> void:
 	new_earth_scene.scene_dismissed.connect(_on_new_earth_scene_dismissed)
 	voyage_intro_scene_dialog.scene_dismissed.connect(_on_voyage_intro_scene_dismissed)
 	colonist_loss_scene_dialog.scene_dismissed.connect(_on_colonist_loss_scene_dismissed)
+	objective_complete_scene_dialog.scene_dismissed.connect(_on_objective_complete_scene_dismissed)
 	game_over_scene_dialog.scene_dismissed.connect(_on_game_over_scene_dismissed)
 	game_over_recap.main_menu_pressed.connect(_on_main_menu_pressed)
 	game_over_recap.restart_pressed.connect(_on_restart_pressed)
@@ -454,6 +456,12 @@ func _on_colonist_loss_scene_dismissed() -> void:
 	else:
 		# No pending logic, return to idle
 		current_phase = GamePhase.IDLE
+
+
+func _on_objective_complete_scene_dismissed() -> void:
+	# Resume tactical gameplay (unpause)
+	get_tree().paused = false
+	# The tactical controller will handle setting is_paused = false when it receives control back
 
 
 func _on_quit_to_menu() -> void:

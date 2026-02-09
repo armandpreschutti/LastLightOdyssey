@@ -263,10 +263,10 @@ func update_ability_buttons(officer_type: String, current_ap: int, cooldown: int
 			ap_cost = 1
 		"medic":
 			ability_name = "patch"
-			ability_text = "[ PATCH ] - 2 AP"
-			ability_description = "Heal an adjacent friendly unit for 50% of their maximum health."
-			ability_tooltip = "Patch: Costs 2 AP. Heals adjacent ally for 50% max HP."
-			ap_cost = 2
+			ability_text = "[ PATCH ] - 1 AP"
+			ability_description = "Heal an adjacent friendly unit for 62.5% of their maximum health (50% base + 25% from Medic's enhanced healing)."
+			ability_tooltip = "Patch: Costs 1 AP. Heals adjacent ally for 62.5% max HP."
+			ap_cost = 1
 		"heavy":
 			ability_name = "charge"
 			ability_text = "[ CHARGE ] - 1 AP"

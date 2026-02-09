@@ -15,6 +15,13 @@ const ABANDON_COLONIST_COST: int = 20
 @onready var resume_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/ResumeButton
 @onready var abandon_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/AbandonButton
 
+# Ship status labels
+@onready var colonists_value: Label = $PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid/ColonistsValue
+@onready var fuel_value: Label = $PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid/FuelValue
+@onready var integrity_value: Label = $PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid/IntegrityValue
+@onready var scrap_value: Label = $PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid/ScrapValue
+@onready var stability_value: Label = $PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid/StabilityValue
+
 # Track resources collected during this mission (to forfeit on abandon)
 var mission_fuel_collected: int = 0
 var mission_scrap_collected: int = 0
@@ -61,6 +68,9 @@ func show_menu() -> void:
 	# Update the cost label with all penalties
 	_update_cost_label()
 	
+	# Update ship status display
+	_update_ship_status()
+	
 	# Animate appearance
 	modulate.a = 0.0
 	var tween = create_tween()
@@ -87,6 +97,37 @@ func _update_cost_label() -> void:
 		cost_text += "\nYou will lose: " + ", ".join(forfeit_parts)
 	
 	cost_label.text = cost_text
+
+
+func _update_ship_status() -> void:
+	# Update all ship status values from GameState
+	colonists_value.text = str(GameState.colonist_count)
+	fuel_value.text = str(GameState.fuel)
+	integrity_value.text = "%d%%" % GameState.ship_integrity
+	scrap_value.text = str(GameState.scrap)
+	stability_value.text = "%d%%" % GameState.cryo_stability
+	
+	# Color code stability based on value (similar to tactical HUD)
+	if GameState.cryo_stability <= 0:
+		stability_value.add_theme_color_override("font_color", Color(1, 0.2, 0.2))
+	elif GameState.cryo_stability <= 25:
+		stability_value.add_theme_color_override("font_color", Color(1, 1, 0.2))
+	else:
+		stability_value.add_theme_color_override("font_color", Color(0.5, 0.8, 0.9))
+	
+	# Color code fuel if at 0 (drift mode)
+	if GameState.fuel == 0:
+		fuel_value.add_theme_color_override("font_color", Color(1, 0.3, 0.2))
+	else:
+		fuel_value.add_theme_color_override("font_color", Color(1, 1, 1))
+	
+	# Color code integrity if low
+	if GameState.ship_integrity <= 25:
+		integrity_value.add_theme_color_override("font_color", Color(1, 0.3, 0.2))
+	elif GameState.ship_integrity <= 50:
+		integrity_value.add_theme_color_override("font_color", Color(1, 1, 0.2))
+	else:
+		integrity_value.add_theme_color_override("font_color", Color(1, 1, 1))
 
 
 func hide_menu() -> void:

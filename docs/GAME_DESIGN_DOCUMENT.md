@@ -1,5 +1,5 @@
 # Last Light Odyssey - Game Design Document
-**Version 3.2 | Engine: Godot 4.6 | Last Updated: February 2026**
+**Version 3.3 | Engine: Godot 4.6 | Last Updated: February 2026**
 
 > *"The last journey of the human race isn't a hero's quest; it's a survival marathon."*
 
@@ -45,7 +45,7 @@ This layer simulates the grueling trek across the stars.
 | **Colonists** | 1,000 | The player's "health" and final score. Humanity's last survivors. |
 | **Fuel** | 10 | The clock. Each jump consumes fuel. At 0, ship enters "Drift Mode" (−50 colonists per fuel deficit). |
 | **Ship Integrity** | 100% | Damaged by space hazards. At 0%, the ship is destroyed. Game Over. |
-| **Scrap** | 0 | Currency found on tactical maps. Used for repairs and trading. |
+| **Scrap** | 25 | Currency found on tactical maps. Used for repairs and trading. |
 
 ### 2.2 The Star Map (Node System)
 
@@ -394,6 +394,19 @@ Upon reaching New Earth, players are shown a comprehensive **Voyage Recap** scre
   - Tactical turns survived
   - Sectors traversed (nodes visited)
 
+### Game Over Recap Screen
+Upon game over, players are shown a comprehensive **Game Over Recap** screen displaying:
+- **Failure Reason**: Specific game over message (extinction, ship destroyed, captain lost)
+- **Final State**: Colonists remaining, fuel reserves, ship integrity, scrap stockpile
+- **Officer Status**: Survival status for all 6 officers (alive, K.I.A., or contextual messages based on failure type)
+- **Cumulative Statistics** (tracked across entire voyage):
+  - Total fuel collected from missions
+  - Total scrap collected from missions
+  - Total hostiles eliminated
+  - Missions completed
+  - Tactical turns survived
+  - Sectors traversed (nodes visited)
+
 ### Loss Conditions
 
 | Condition | Message |
@@ -401,6 +414,31 @@ Upon reaching New Earth, players are shown a comprehensive **Voyage Recap** scre
 | Colonists = 0 | "EXTINCTION: Humanity's light has been extinguished." |
 | Ship Integrity = 0% | "CATASTROPHIC FAILURE: The ship has been destroyed." |
 | Captain dies | "LEADERSHIP LOST: Without leadership, the mission cannot continue." |
+
+### Voyage Intro Scene
+When starting a new game, players are shown an **Oregon Trail-style intro scene** that sets the narrative tone:
+- **Procedural Scene Generation**: Pixel-art style scene with starship and space backdrop
+- **Random Description**: One of four randomly selected voyage descriptions
+- **Typewriter Effect**: Description text animates character-by-character
+- **Visual Style**: Epic, hopeful but somber color palette with scanline overlay
+- **Timing**: Shown before tutorial begins, blocks interaction until dismissed
+
+### Colonist Loss Milestone System
+As colonists are lost throughout the voyage, the game displays **emotional milestone scenes** when crossing critical thresholds:
+
+**Milestone Thresholds:**
+- **750 colonists** (250 lost): "CASUALTIES MOUNT" - The weight of command grows heavier
+- **500 colonists** (500 lost): "THE WEIGHT OF COMMAND" - Half the mission is gone
+- **250 colonists** (750 lost): "DESPERATION" - Only a quarter remain
+- **100 colonists** (900 lost): "ALL HOPE LOST" - One hundred souls remain
+- **0 colonists** (1000 lost): "EXTINCTION" - The last cryosleeper has failed
+
+**Scene Features:**
+- **Procedural Scene Generation**: Each threshold has unique visual elements and color palette (getting darker/more desperate)
+- **Narrative Text**: Emotional descriptions of the psychological impact on the ship's commander
+- **Typewriter Effect**: Description animates character-by-character
+- **Timing**: Shown after node events or mission completion when thresholds are crossed
+- **One-Time Display**: Each milestone is shown only once per playthrough
 
 ---
 
@@ -476,6 +514,7 @@ Upon reaching New Earth, players are shown a comprehensive **Voyage Recap** scre
 - **Movement Range**: Blue overlay on reachable tiles
 - **Execute Range**: Red overlay for Captain's Execute ability range
 - **Pathfinding Visualization**: Neon blue glowing path line with arrowhead showing unit's movement path when hovering over destination tiles
+- **Unit Stats Tooltip**: Hover tooltip displaying unit statistics (HP, AP, movement range, sight range, shoot range, damage, unit type) with color-coded HP and AP indicators
 
 **Camera System:**
 - **Tactical View**: Default zoom (1.0x) with smooth camera centering on unit selection
@@ -793,6 +832,7 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Save star map layout and node progress
 - [x] Save node types and biome assignments
 - [x] Save cumulative mission statistics (fuel collected, scrap collected, enemies killed, missions completed, tactical turns)
+- [x] Save colonist loss milestone tracking
 - [x] Load game state on continue
 - [x] Continue button on title menu (disabled if no save)
 - [x] New game confirmation dialog when save exists
@@ -819,7 +859,15 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Objective preview in team selection dialog
 - [x] Objective completion notifications
 
-### ⏳ Phase 12: Game Feel & Balance (IN PROGRESS)
+### ✅ Phase 12: Narrative & Feedback Systems (COMPLETE)
+- [x] Voyage intro scene with procedural generation and typewriter effect
+- [x] Colonist loss milestone system with emotional scenes at thresholds (750, 500, 250, 100, 0)
+- [x] Procedural scene generation for milestone scenes with threshold-specific color palettes
+- [x] Game Over Recap screen with cumulative statistics and officer status
+- [x] Unit stats tooltip system (hover to display HP, AP, ranges, damage)
+- [x] Milestone tracking persistence in save system
+
+### ⏳ Phase 13: Game Feel & Balance (IN PROGRESS)
 - [x] Mission difficulty scaling system (1.0x to ~2.5x based on progress)
 - [x] Final stage balancing (reduced stability loss and difficulty scaling in nodes 35+)
 - [x] Navigation penalties (ship integrity and stability loss per jump)
@@ -971,6 +1019,15 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Real-time path updates when hovering over movement destinations
 - [x] Path visualization only shows for valid movement targets
 
+#### Narrative & Feedback Systems
+- [x] Voyage intro scene with Oregon Trail-style presentation
+- [x] Procedural scene generation for intro and milestone scenes
+- [x] Colonist loss milestone system (triggers at 750, 500, 250, 100, 0 colonists)
+- [x] Emotional milestone scenes with threshold-specific narratives and color palettes
+- [x] Game Over Recap screen with failure-specific messaging
+- [x] Unit stats tooltip on hover (HP, AP, ranges, damage, unit type)
+- [x] Milestone tracking and persistence
+
 ### Immediate Priority (Week 1-2)
 
 #### 1. Visual Effects Polish
@@ -1072,7 +1129,7 @@ Last Light Odyssey/
 ```
 
 ### Key Autoloads
-- **GameState**: Global statistics, officer tracking, win/loss logic, save/load system, mission difficulty scaling
+- **GameState**: Global statistics, officer tracking, win/loss logic, save/load system, mission difficulty scaling, cumulative statistics, milestone tracking
 - **EventManager**: Random events, node types, event resolution
 - **TutorialManager**: Tutorial state, step progression, persistence
 - **CombatRNG**: Centralized combat random number generation

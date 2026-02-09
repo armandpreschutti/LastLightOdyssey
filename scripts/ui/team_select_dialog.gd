@@ -1,5 +1,5 @@
 extends Control
-## Team Selection Dialog - Choose 3 officers for tactical mission
+## Team Selection Dialog - Choose 1-3 officers for tactical mission
 
 signal team_selected(officer_keys: Array[String])
 signal cancelled
@@ -15,6 +15,7 @@ signal cancelled
 @onready var deploy_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/DeployButton
 @onready var cancel_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/CancelButton
 
+const MIN_TEAM_SIZE: int = 1
 const MAX_TEAM_SIZE: int = 3
 
 var officer_buttons: Dictionary = {}  # officer_key -> CheckButton
@@ -57,7 +58,10 @@ func _update_title() -> void:
 func _update_description() -> void:
 	# Update description to reflect new selection system
 	if desc_label:
-		desc_label.text = "Select %d officers for deployment. All officers are available, including the Captain." % MAX_TEAM_SIZE
+		if MIN_TEAM_SIZE == MAX_TEAM_SIZE:
+			desc_label.text = "Select %d officers for deployment. All officers are available, including the Captain." % MAX_TEAM_SIZE
+		else:
+			desc_label.text = "Select %d-%d officers for deployment. All officers are available, including the Captain." % [MIN_TEAM_SIZE, MAX_TEAM_SIZE]
 	
 	# Hide or update the captain label since captain is now selectable
 	if captain_label:
@@ -288,9 +292,9 @@ func _get_officer_brief_description(key: String) -> String:
 func _get_officer_stats(key: String) -> Dictionary:
 	match key:
 		"captain":
-			return {"hp": 100, "move_range": 5, "attack_range": 10}
+			return {"hp": 100, "move_range": 6, "attack_range": 10}
 		"scout":
-			return {"hp": 80, "move_range": 6, "attack_range": 9}
+			return {"hp": 80, "move_range": 7, "attack_range": 10}
 		"tech":
 			return {"hp": 70, "move_range": 4, "attack_range": 10}
 		"medic":
@@ -306,17 +310,17 @@ func _get_officer_stats(key: String) -> Dictionary:
 func _get_officer_passive_abilities(key: String) -> Array[String]:
 	match key:
 		"scout":
-			return ["Extended sight range (+2 tiles)", "Reduced attack range (9 tiles)"]
+			return ["Extended sight range (+2 tiles, total 8)", "Increased move range (+1 tile, total 7)", "Can see enemy positions even when not in direct LOS"]
 		"tech":
-			return ["Can detect items through walls"]
+			return ["Can hack/interact with tech objects from 5 tiles away", "Can repair/reinforce cover (spend AP to upgrade adjacent cover)", "Turrets deal +25% damage when Tech is nearby (within 3 tiles)"]
 		"medic":
-			return ["Can see exact HP values of all units"]
+			return ["Can see enemy max HP and damage taken this turn", "Healing abilities restore +25% more HP (Patch: 50% → 62.5%)"]
 		"heavy":
-			return ["Higher base damage (35 vs standard 25)"]
+			return ["Higher base damage (35 vs standard 25)", "Attacks deal 50% splash damage to adjacent enemies", "Enemies within 2 tiles have -10% accuracy (intimidation aura)"]
 		"captain":
-			return []  # No passive abilities
+			return ["Higher base damage (30 vs standard 25)", "Increased move range (+1 tile, total 6)", "Allies within 2 tiles get +20 damage and +15% accuracy (leadership aura)"]
 		"sniper":
-			return ["Extended sight range (+2 tiles)", "Extended attack range (+2 tiles, total 12)", "Higher base damage (30)"]
+			return ["Extended sight range (+2 tiles, total 9)", "Extended attack range (+2 tiles, total 12)", "Higher base damage (30)", "+15% accuracy (precision marksman)", "Attacks ignore cover completely"]
 		_:
 			return []
 
@@ -340,8 +344,8 @@ func _get_officer_active_ability(key: String) -> Dictionary:
 		"medic":
 			return {
 				"name": "PATCH",
-				"description": "Heal an adjacent ally for 50% of their maximum HP. Restores significant health in critical situations.",
-				"ap_cost": 2,
+				"description": "Heal an adjacent ally for 62.5% of their maximum HP (50% base + 25% from Medic's enhanced healing). Restores significant health in critical situations.",
+				"ap_cost": 1,
 				"cooldown": 2
 			}
 		"heavy":
@@ -478,7 +482,7 @@ func _on_officer_toggled(pressed: bool, officer_key: String) -> void:
 		selected_officers.erase(officer_key)
 
 	_update_selected_label()
-	deploy_button.disabled = selected_officers.size() < MAX_TEAM_SIZE
+	deploy_button.disabled = selected_officers.size() < MIN_TEAM_SIZE
 
 
 func _update_selected_label() -> void:
@@ -486,7 +490,7 @@ func _update_selected_label() -> void:
 
 
 func _on_deploy_pressed() -> void:
-	if selected_officers.size() >= MAX_TEAM_SIZE:
+	if selected_officers.size() >= MIN_TEAM_SIZE and selected_officers.size() <= MAX_TEAM_SIZE:
 		visible = false
 		team_selected.emit(selected_officers.duplicate())
 

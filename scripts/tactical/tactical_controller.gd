@@ -378,26 +378,12 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	var enemy_config = BiomeConfig.get_enemy_config(current_biome, difficulty)
 	var heavy_chance = enemy_config["heavy_chance"]
 	
-	# Always spawn a boss enemy in every mission
-	var boss_spawned = false
-	var boss_pos = _find_valid_boss_spawn_position(generator)
-	if boss_pos != Vector2i(-1, -1):
-		var boss = EnemyUnitScene.instantiate()
-		boss.set_grid_position(boss_pos)
-		boss.movement_finished.connect(_on_enemy_movement_finished.bind(boss))
-		boss.died.connect(_on_enemy_died.bind(boss))
-		tactical_map.add_unit(boss, boss_pos)
-		boss.initialize(0, "boss", current_biome, difficulty)
-		boss.visible = false  # Start invisible until revealed
-		enemies.append(boss)
-		boss_spawned = true
-	else:
-		# Fallback: if no valid 2x2 position found, try spawning boss at a regular enemy position
-		push_warning("Could not find valid 2x2 boss spawn position, attempting fallback")
-		var fallback_positions = generator.get_enemy_spawn_positions(difficulty)
-		if fallback_positions.size() > 0:
-			# Use the first enemy spawn position as fallback
-			boss_pos = fallback_positions[0]
+	# Spawn boss enemy based on spawn chance
+	var boss_spawn_chance = _calculate_boss_spawn_chance(difficulty)
+	var _boss_spawned = false
+	if randf() < boss_spawn_chance:
+		var boss_pos = _find_valid_boss_spawn_position(generator)
+		if boss_pos != Vector2i(-1, -1):
 			var boss = EnemyUnitScene.instantiate()
 			boss.set_grid_position(boss_pos)
 			boss.movement_finished.connect(_on_enemy_movement_finished.bind(boss))
@@ -406,7 +392,23 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 			boss.initialize(0, "boss", current_biome, difficulty)
 			boss.visible = false  # Start invisible until revealed
 			enemies.append(boss)
-			boss_spawned = true
+			_boss_spawned = true
+		else:
+			# Fallback: if no valid 2x2 position found, try spawning boss at a regular enemy position
+			push_warning("Could not find valid 2x2 boss spawn position, attempting fallback")
+			var fallback_positions = generator.get_enemy_spawn_positions(difficulty)
+			if fallback_positions.size() > 0:
+				# Use the first enemy spawn position as fallback
+				boss_pos = fallback_positions[0]
+				var boss = EnemyUnitScene.instantiate()
+				boss.set_grid_position(boss_pos)
+				boss.movement_finished.connect(_on_enemy_movement_finished.bind(boss))
+				boss.died.connect(_on_enemy_died.bind(boss))
+				tactical_map.add_unit(boss, boss_pos)
+				boss.initialize(0, "boss", current_biome, difficulty)
+				boss.visible = false  # Start invisible until revealed
+				enemies.append(boss)
+				_boss_spawned = true
 	
 	# Spawn regular enemies
 	var enemy_positions = generator.get_enemy_spawn_positions(difficulty)
@@ -467,13 +469,9 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 
 
 ## Calculate boss spawn chance based on difficulty
-## Scales from 0% at difficulty 1.0 to ~20% at difficulty 2.5+
-func _calculate_boss_spawn_chance(difficulty: float) -> float:
-	if difficulty < 1.2:
-		return 0.0  # No bosses in early game
-	# Scale: 0% at 1.2, increasing to 20% at 2.5+
-	var normalized = (difficulty - 1.2) / (2.5 - 1.2)  # Normalize to 0-1 range
-	return clampf(normalized * 0.20, 0.0, 0.20)
+## Currently set to 0% spawn rate
+func _calculate_boss_spawn_chance(_difficulty: float) -> float:
+	return 0.0  # Boss spawn rate set to 0%
 
 
 ## Find a valid 2x2 spawn position for boss
@@ -2025,15 +2023,17 @@ func _execute_enemy_turn() -> void:
 				
 				# Clear old position
 				tactical_map.set_unit_position_solid(old_pos, false)
-				
+
 				# Move enemy
-				enemy.set_grid_position(new_pos)
 				enemy.use_ap(1)
 				enemy.move_along_path(decision["path"])
-				
+
 				# Wait for movement to finish
 				await enemy.movement_finished
-				
+
+				# Update grid position after animation completes
+				enemy.set_grid_position(new_pos)
+
 				# Mark new position as solid
 				tactical_map.set_unit_position_solid(new_pos, true)
 				
@@ -2535,8 +2535,8 @@ func _try_auto_patch() -> void:
 	if not selected_unit or selected_unit.officer_type != "medic":
 		return
 	
-	if not selected_unit.has_ap(2):
-		tactical_hud.show_combat_message("NOT ENOUGH AP (NEEDS 2)", Color(1, 0.3, 0.3))
+	if not selected_unit.has_ap(1):
+		tactical_hud.show_combat_message("NOT ENOUGH AP (NEEDS 1)", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		return
@@ -3092,8 +3092,9 @@ func _update_objective_progress(objective_id: String, progress_amount: int = 1) 
 		objective.add_progress(progress_amount)
 		tactical_hud.update_objective(objective_id)
 		
-		# Show notification if objective just completed (non-blocking)
+		# Show scene and notification if objective just completed
 		if not was_completed and objective.completed:
+			_show_objective_complete_scene(objective)
 			_show_objective_complete_notification(objective)
 
 
@@ -3110,7 +3111,8 @@ func _complete_objective(objective_id: String) -> void:
 		objective.set_completed()
 		tactical_hud.update_objective(objective_id)
 		
-		# Show notification with bonus reward (non-blocking)
+		# Show scene and notification with bonus reward
+		_show_objective_complete_scene(objective)
 		_show_objective_complete_notification(objective)
 
 
@@ -3175,6 +3177,37 @@ func _find_valid_mining_equipment_position(map_dims: Vector2i, used_positions: A
 			return pos
 	
 	return Vector2i(-1, -1)  # No valid position found
+
+
+## Show objective completion scene (pauses gameplay)
+func _show_objective_complete_scene(objective: MissionObjective) -> void:
+	# Get alive officers
+	var alive_officers: Array[String] = []
+	for officer in deployed_officers:
+		if officer.current_hp > 0:
+			alive_officers.append(officer.officer_key)
+	
+	# Get rewards
+	var rewards = MissionObjective.ObjectiveManager.get_bonus_rewards(objective)
+	
+	# Pause tactical gameplay
+	is_paused = true
+	get_tree().paused = true
+	
+	# Get reference to the scene dialog (via main node's DialogLayer)
+	var main_node = get_tree().get_first_node_in_group("main")
+	var scene_dialog = main_node.get_node_or_null("DialogLayer/ObjectiveCompleteSceneDialog") if main_node else null
+	if scene_dialog:
+		scene_dialog.show_scene(objective, current_biome, alive_officers, rewards)
+		# Wait for scene to be dismissed
+		await scene_dialog.scene_dismissed
+		# Resume gameplay
+		is_paused = false
+		get_tree().paused = false
+	else:
+		# Fallback: if scene dialog not found, just unpause
+		is_paused = false
+		get_tree().paused = false
 
 
 ## Show objective completion notification with bonus reward info

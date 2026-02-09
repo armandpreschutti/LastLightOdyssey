@@ -107,30 +107,31 @@ func _apply_specialist_bonuses() -> void:
 		"scout":
 			# Scout has extended vision for enemy detection
 			sight_range += 2
-			# Scout has reduced attack range
-			shoot_range = 9
-			# Scout has high critical hit chance (agile unit)
-			critical_hit_chance = 15.0
-		"tech":
-			# Tech can see through walls to detect items
-			pass  # Handled in tactical controller
-			# Tech has low critical hit chance (support role)
-			critical_hit_chance = 5.0
-		"medic":
-			# Medic can see exact HP values
-			pass  # Visual only, handled in UI
-			# Medic has moderate critical hit chance
-			critical_hit_chance = 8.0
-		"heavy":
-			# Heavy has higher base damage for CHARGE
-			base_damage = 35
-			# Heavy has high critical hit chance (combat-focused)
+			# Scout has increased mobility
+			move_range += 1
+			# Scout has moderate critical hit chance (recon-focused)
 			critical_hit_chance = 12.0
-		"captain":
-			# Captain is balanced - no passive bonuses
-			pass
-			# Captain has moderate critical hit chance
+		"tech":
+			# Tech has extended interaction range and engineering abilities
+			# Handled via helper functions
+			# Tech has moderate critical hit chance (hybrid support/combat)
 			critical_hit_chance = 10.0
+		"medic":
+			# Medic has enhanced healing and medical intel
+			# Handled via helper functions
+			# Medic has low critical hit chance (support-focused)
+			critical_hit_chance = 5.0
+		"heavy":
+			# Heavy has higher base damage for heavy weapons
+			base_damage = 35
+			# Heavy has moderate critical hit chance (crowd control focus)
+			critical_hit_chance = 10.0
+		"captain":
+			# Captain has leadership bonuses and combat effectiveness
+			base_damage = 30
+			move_range += 1
+			# Captain has moderate-high critical hit chance (combat leader)
+			critical_hit_chance = 12.0
 		"sniper":
 			# Sniper has extended sight and shoot range for long-range combat
 			sight_range += 2  # 7 base + 2 = 9 total
@@ -389,19 +390,111 @@ func try_overwatch_shot(enemy_pos: Vector2i, _hit_chance: float, damage: int = -
 	return true  # Always hits - 100% success
 
 
-## Check if this unit can detect enemies (Scout passive)
+## Check if this unit can detect enemies (Scout passive - fog of war reveal)
 func can_detect_enemies_extended() -> bool:
 	return officer_type == "scout"
 
 
-## Check if this unit can see items through walls (Tech passive)
-func can_see_items_through_walls() -> bool:
+## Check if this unit can see enemy positions even when not in direct LOS (Scout passive)
+func can_see_fog_of_war() -> bool:
+	return officer_type == "scout"
+
+
+## Check if this unit can interact with tech objects from extended range (Tech passive)
+func can_interact_from_range() -> bool:
 	return officer_type == "tech"
 
 
-## Check if this unit can see exact HP (Medic passive)
-func can_see_exact_hp() -> bool:
+## Get interaction range for tech objects (Tech passive - 5 tiles)
+func get_interaction_range() -> int:
+	if officer_type == "tech":
+		return 5
+	return 1  # Standard adjacent interaction
+
+
+## Check if this unit can repair/reinforce cover (Tech passive)
+func can_repair_cover() -> bool:
+	return officer_type == "tech"
+
+
+## Get turret damage bonus when Tech is nearby (Tech passive - +25% within 3 tiles)
+func get_turret_damage_bonus() -> float:
+	if officer_type == "tech":
+		return 1.25  # +25% damage multiplier
+	return 1.0
+
+
+## Get range for turret damage bonus (Tech passive - 3 tiles)
+func get_turret_bonus_range() -> int:
+	if officer_type == "tech":
+		return 3
+	return 0
+
+
+## Check if this unit can see enemy intel (Medic passive - max HP and damage taken)
+func can_see_enemy_intel() -> bool:
 	return officer_type == "medic"
+
+
+## Get healing bonus multiplier (Medic passive - +25% healing)
+func get_healing_bonus() -> float:
+	if officer_type == "medic":
+		return 1.25  # +25% healing (50% -> 62.5%)
+	return 1.0
+
+
+## Get splash damage percentage (Heavy passive - 50% to adjacent enemies)
+func get_splash_damage_percent() -> float:
+	if officer_type == "heavy":
+		return 0.5  # 50% splash damage
+	return 0.0
+
+
+## Get intimidation aura range (Heavy passive - 2 tiles)
+func get_intimidation_aura_range() -> int:
+	if officer_type == "heavy":
+		return 2
+	return 0
+
+
+## Get intimidation aura accuracy debuff (Heavy passive - -10% accuracy)
+func get_intimidation_accuracy_debuff() -> float:
+	if officer_type == "heavy":
+		return -10.0  # -10% accuracy
+	return 0.0
+
+
+## Get leadership aura range (Captain passive - 2 tiles)
+func get_leadership_aura_range() -> int:
+	if officer_type == "captain":
+		return 2
+	return 0
+
+
+## Get leadership damage bonus (Captain passive - +20 damage)
+func get_leadership_damage_bonus() -> int:
+	if officer_type == "captain":
+		return 20
+	return 0
+
+
+## Get leadership accuracy bonus (Captain passive - +15% accuracy)
+func get_leadership_accuracy_bonus() -> float:
+	if officer_type == "captain":
+		return 15.0  # +15% accuracy
+	return 0.0
+
+
+## Get accuracy bonus (Sniper passive - +15% accuracy)
+func get_accuracy_bonus() -> float:
+	if officer_type == "sniper":
+		return 15.0  # +15% accuracy
+	return 0.0
+
+
+## Check if attacks ignore cover (Sniper passive)
+func attacks_ignore_cover() -> bool:
+	return officer_type == "sniper"
 
 
 ## Use Turret ability (Tech) - place auto-firing sentry on adjacent tile
@@ -427,11 +520,13 @@ func use_patch(target: Node2D) -> bool:
 	if is_ability_on_cooldown():
 		return false
 	
-	if not use_ap(2):
+	if not use_ap(1):
 		return false
 	
-	# Heal for 50% of max HP
-	var heal_amount = int(target.max_hp * 0.5)
+	# Heal for 50% of max HP (62.5% with Medic's enhanced healing passive)
+	var base_heal_percent = 0.5
+	var heal_multiplier = get_healing_bonus()  # +25% bonus for Medic
+	var heal_amount = int(target.max_hp * base_heal_percent * heal_multiplier)
 	target.heal(heal_amount)
 	
 	_start_cooldown()
@@ -503,7 +598,7 @@ func can_use_ability(ability_type: String) -> bool:
 		"turret":
 			return officer_type == "tech" and has_ap(1)
 		"patch":
-			return officer_type == "medic" and has_ap(2)
+			return officer_type == "medic" and has_ap(1)
 		"charge":
 			return officer_type == "heavy" and has_ap(1)
 		"execute":
