@@ -25,6 +25,7 @@ extends Node
 
 var _pending_ending_type: String = ""  # Store ending type for the win sequence
 var _pending_officer_keys: Array[String] = []  # Store selected officers for mission start
+var _pending_objectives: Array[MissionObjective] = []  # Store selected objectives for mission start
 var _pending_node_after_colonist_loss: int = -1
 var _pending_biome_after_colonist_loss: int = -1
 var _pending_mission_recap_stats: Dictionary = {}
@@ -236,9 +237,10 @@ func _on_event_choice_made(use_specialist: bool) -> void:
 	current_event = {}
 
 
-func _on_team_selected(officer_keys: Array[String]) -> void:
-	# Store officer keys for mission start
+func _on_team_selected(officer_keys: Array[String], objectives: Array[MissionObjective]) -> void:
+	# Store officer keys and objectives for mission start
 	_pending_officer_keys = officer_keys
+	_pending_objectives = objectives
 	
 	# Fade to black, then transition to tactical mode
 	fade_transition.fade_out(0.6)
@@ -256,9 +258,10 @@ func _on_team_selected(officer_keys: Array[String]) -> void:
 	# Tutorial: Notify that team was selected
 	TutorialManager.notify_trigger("team_selected")
 	
-	# Start the mission with biome type and stored officer keys
-	tactical_mode.start_mission(_pending_officer_keys, pending_biome_type)
+	# Start the mission with biome type, stored officer keys, and stored objectives
+	tactical_mode.start_mission(_pending_officer_keys, pending_biome_type, _pending_objectives)
 	_pending_officer_keys.clear()
+	_pending_objectives.clear()
 	
 	# Fade in from black
 	fade_transition.fade_in(0.6)
@@ -269,6 +272,7 @@ func _on_team_select_cancelled() -> void:
 	current_phase = GamePhase.IDLE
 	pending_biome_type = -1
 	_pending_officer_keys.clear()
+	_pending_objectives.clear()
 
 
 func _on_mission_scene_dismissed() -> void:
@@ -289,8 +293,10 @@ func _on_mission_scene_dismissed() -> void:
 		TutorialManager.notify_trigger("team_selected")
 		
 		# Start the mission with biome type and stored officer keys
-		tactical_mode.start_mission(_pending_officer_keys, pending_biome_type)
+		# Old flow - no objectives stored, pass empty array (will generate random in tactical controller)
+		tactical_mode.start_mission(_pending_officer_keys, pending_biome_type, [])
 		_pending_officer_keys.clear()
+		_pending_objectives.clear()
 	else:
 		# New flow - show team select dialog after scene
 		current_phase = GamePhase.TEAM_SELECT

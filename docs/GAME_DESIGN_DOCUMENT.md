@@ -1,5 +1,5 @@
 # Last Light Odyssey - Game Design Document
-**Version 3.3 | Engine: Godot 4.6 | Last Updated: February 2026**
+**Version 3.4 | Engine: Godot 4.6 | Last Updated: February 2026**
 
 > *"The last journey of the human race isn't a hero's quest; it's a survival marathon."*
 
@@ -109,7 +109,7 @@ When the ship docks at a Scavenge Site, the game switches to isometric turn-base
 | **Captain** | — | **Execute** (1 AP): Guaranteed kill on enemy within 4 tiles below 50% HP. Never misses. 2-turn cooldown. | 100 | 5 | 6 |
 | **Scout** | +2 sight range (base 8 + 2 = 10), extended enemy detection | **Overwatch** (1 AP): Reaction shot at first enemy that moves in LOS. Guaranteed hit. 2-turn cooldown. | 80 | 6 | 10 |
 | **Tech** | Can see items through walls | **Turret** (1 AP): Deploy auto-firing sentry on adjacent tile. Lasts 3 turns, auto-shoots nearest enemy each turn (15 DMG, 6 tile range). 2-turn cooldown. | 70 | 4 | 5 |
-| **Medic** | Can see exact enemy HP | **Patch** (2 AP): Heal adjacent ally for 50% max HP. 2-turn cooldown. | 75 | 5 | 5 |
+| **Medic** | Can see exact enemy HP, +25% healing bonus | **Patch** (1 AP): Heal yourself or ally within 3 tiles for 62.5% max HP (50% base + 25% enhanced healing). 2-turn cooldown. | 75 | 5 | 5 |
 | **Heavy** | Armor Plating (−20% damage taken), +35 base damage | **Charge** (1 AP): Rush enemy within 4 tiles. Instant-kills basic enemies; deals 2x base damage to heavy enemies. 2-turn cooldown. | 120 | 3 | 5 |
 | **Sniper** | +2 sight range (base 7 + 2 = 9), +2 shoot range, +30 base damage | **Precision Shot** (1 AP): Guaranteed hit on any visible enemy. Deals 2x base damage (60). 2-turn cooldown. | 70 | 4 | 9 |
 
@@ -141,8 +141,8 @@ Defender Cover Modifier (reduces attacker's hit chance):
   - Full Cover (walls): −50% hit chance
 
 Attacker Cover Bonus (stable firing position):
-  - Half Cover: +10% hit chance
-  - Full Cover: +15% hit chance
+  - Half Cover: +5% hit chance
+  - Full Cover: +10% hit chance
 
 Flanking Bonus:
   - Attacking from unprotected angle: +50% DAMAGE
@@ -364,7 +364,9 @@ To prevent players from spending unlimited turns looting, the **Cryo-Stability T
 Players can pause during tactical missions and choose to **Abandon Mission**:
 - Costs **20 colonists** as penalty
 - All deployed officers return safely (even if surrounded)
-- No resources are gained from the mission
+- No resources are gained from the mission (all collected fuel and scrap are forfeited)
+- Pause menu displays current mission haul and warns about resource forfeiture
+- Ship status display shows current colonists, fuel, integrity, scrap, and stability with color-coded indicators
 - Useful when a mission goes badly wrong
 
 ---
@@ -509,12 +511,15 @@ As colonists are lost throughout the voyage, the game displays **emotional miles
 - **HP Bars**: Color-coded (green >50%, yellow 25-50%, red <25%) with smooth scaling
 - **AP Indicators**: Gold dots for available AP, dark gray for used
 - **Cover Indicators**: Visual half/full cover indicators on units
+- **Cover Bonus Display**: Shows attacker cover bonus (+5% for half cover, +10% for full cover) when unit is in cover
+- **Status Label**: Dynamic status display showing unit state (WAITING, NO ACTIONS, CRITICAL, READY) with color coding
 - **Hit Chance Display**: Percentage shown on targetable enemies
 - **Target Highlighting**: Red outline on enemies that can be attacked
 - **Movement Range**: Blue overlay on reachable tiles
 - **Execute Range**: Red overlay for Captain's Execute ability range
 - **Pathfinding Visualization**: Neon blue glowing path line with arrowhead showing unit's movement path when hovering over destination tiles
 - **Unit Stats Tooltip**: Hover tooltip displaying unit statistics (HP, AP, movement range, sight range, shoot range, damage, unit type) with color-coded HP and AP indicators
+- **Comprehensive Tooltips**: Extensive tooltip system for all UI elements (pause button, turn label, stability, haul, HP, AP, end turn, extract, abilities, movement, attack range, status, cover bonus)
 
 **Camera System:**
 - **Tactical View**: Default zoom (1.0x) with smooth camera centering on unit selection
@@ -618,10 +623,12 @@ Visual feedback elements for unit states.
 Items and cover objects found on tactical maps.
 
 **Standard Loot:**
-| Fuel Crate | Scrap Pile | Cover Crate | Destroyed Cover |
-|:----------:|:----------:|:-----------:|:---------------:|
-| ![Fuel](../assets/sprites/objects/crate_fuel.png) | ![Scrap](../assets/sprites/objects/scrap_pile.png) | ![Cover](../assets/sprites/objects/crate_cover.png) | ![Destroyed](../assets/sprites/objects/crate_cover_destroyed.png) |
-| +1 Fuel | +5 Scrap | Half cover (−25%) | Rubble (0% cover) |
+| Fuel Crate | Scrap Pile | Health Pack | Cover Crate | Destroyed Cover |
+|:----------:|:----------:|:-----------:|:-----------:|:---------------:|
+| ![Fuel](../assets/sprites/objects/crate_fuel.png) | ![Scrap](../assets/sprites/objects/scrap_pile.png) | ![Health](../assets/sprites/objects/health_pack.png) | ![Cover](../assets/sprites/objects/crate_cover.png) | ![Destroyed](../assets/sprites/objects/crate_cover_destroyed.png) |
+| +1 Fuel | +5 Scrap | +62.5% Max HP | Half cover (−25%) | Rubble (0% cover) |
+
+*Note: Health Packs spawn 1-3 per tactical map and restore 62.5% of maximum HP when picked up (same healing value as Medic's Patch ability).*
 
 **Objective Interactables (7 sprites):**
 
@@ -758,9 +765,10 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Point-and-click movement with path visualization
 - [x] Visual pathfinding path line with glow effects and arrowhead
 - [x] Fog of war with per-unit reveal radius
-- [x] Interactable objects (Fuel Crates, Scrap Piles)
+- [x] Interactable objects (Fuel Crates, Scrap Piles, Health Packs)
 - [x] Objective-specific interactable objects (Terminals, Logs, Cores, Equipment, Collectors, Beacons, Nests)
 - [x] Auto-pickup system
+- [x] Health Packs spawn on tactical maps (1-3 per map) and restore 62.5% max HP when picked up
 - [x] Procedural map generation with three biome types
 - [x] BSP room generation (Station biome)
 - [x] Cellular automata cave generation (Asteroid biome)
@@ -822,10 +830,15 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Title menu with animated starfield, typewriter subtitle, and polish
 - [x] Settings menu (display, audio sliders, tutorial reset)
 - [x] Tutorial system with 9-step guided onboarding
-- [x] Pause menu with abandon mission option
+- [x] Pause menu with abandon mission option, mission haul tracking, and ship status display
 - [x] Confirmation dialog for destructive actions
 - [x] Game over and victory screens with ending text
 - [x] Restart game functionality
+- [x] Comprehensive tooltip system for all UI elements
+- [x] Cover bonus display in tactical HUD (+5% half cover, +10% full cover)
+- [x] Dynamic status label system (WAITING, NO ACTIONS, CRITICAL, READY)
+- [x] Color-coded ship status indicators in pause menu (stability, fuel, integrity)
+- [x] Resource forfeiture warning in pause menu when abandoning missions
 
 ### ✅ Phase 9: Save/Load System (COMPLETE)
 - [x] Save game state to JSON file (colonists, fuel, integrity, scrap, officers)
@@ -984,13 +997,16 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Turret auto-fire system (processes before player actions each turn)
 - [x] Charge pathfinding and melee animation
 - [x] Execute targeting mode with range visualization
+- [x] Medic: Enhanced healing passive (+25% healing bonus, Patch heals 62.5% max HP)
+- [x] Medic: Patch ability updated to 1 AP cost (reduced from 2 AP) and 3-tile range
 
 #### Combat System Enhancements
 - [x] Hit chance display on targetable enemies
 - [x] Cover indicators on units (half/full cover status)
 - [x] Flanking damage bonus (+50%)
-- [x] Attacker cover bonus (stable firing position)
+- [x] Attacker cover bonus (stable firing position: +5% half cover, +10% full cover)
 - [x] Pathfinding visualization (neon blue path line with glow and arrowhead)
+- [x] Cover bonus display in tactical HUD showing attacker accuracy bonus
 
 #### Mission Objectives System
 - [x] Mission objective system with binary and progress types
@@ -1038,7 +1054,7 @@ Interface icons used throughout the game for resource displays, combat info, and
 
 #### 2. Quality of Life Enhancements
 - [ ] Auto-save after jumps and missions
-- [ ] Tooltip system for UI elements
+- [x] Comprehensive tooltip system for UI elements (implemented)
 - [ ] Mission briefing before tactical deployment
 - [ ] Keyboard shortcuts reference
 

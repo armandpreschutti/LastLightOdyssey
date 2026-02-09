@@ -1,7 +1,7 @@
 extends Control
 ## Team Selection Dialog - Choose 1-3 officers for tactical mission
 
-signal team_selected(officer_keys: Array[String])
+signal team_selected(officer_keys: Array[String], objectives: Array[MissionObjective])
 signal cancelled
 
 # Updated paths for new styled layout
@@ -24,6 +24,7 @@ var current_biome_type: int = -1  # BiomeConfig.BiomeType
 var expanded_officers: Dictionary = {}  # officer_key -> bool (track expanded state)
 var officer_detail_containers: Dictionary = {}  # officer_key -> VBoxContainer (detail sections)
 var officer_expand_buttons: Dictionary = {}  # officer_key -> Button (expand/collapse buttons)
+var current_objectives: Array[MissionObjective] = []  # Store the objectives selected for this mission
 
 
 func _ready() -> void:
@@ -70,6 +71,7 @@ func _update_description() -> void:
 
 func _update_objective() -> void:
 	# Update mission objective display based on biome type
+	current_objectives.clear()  # Clear previous objectives
 	if objective_label:
 		if current_biome_type >= 0:
 			# Get mission objective for this biome
@@ -77,6 +79,8 @@ func _update_objective() -> void:
 			var objectives = MissionObjective.ObjectiveManager.get_objectives_for_biome(biome)
 			
 			if not objectives.is_empty():
+				# Store the objectives for later use
+				current_objectives = objectives.duplicate()
 				var objective = objectives[0]
 				var objective_text = _build_objective_description(biome, objective)
 				
@@ -492,7 +496,7 @@ func _update_selected_label() -> void:
 func _on_deploy_pressed() -> void:
 	if selected_officers.size() >= MIN_TEAM_SIZE and selected_officers.size() <= MAX_TEAM_SIZE:
 		visible = false
-		team_selected.emit(selected_officers.duplicate())
+		team_selected.emit(selected_officers.duplicate(), current_objectives.duplicate())
 
 
 func _on_cancel_pressed() -> void:

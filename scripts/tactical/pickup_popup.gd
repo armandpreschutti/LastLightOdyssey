@@ -40,3 +40,6 @@ func initialize(item_type: String, amount: int, world_pos: Vector2) -> void:
 	elif item_type == "fuel":
 		text = "+%d FUEL" % amount
 		add_theme_color_override("font_color", Color(1.0, 0.8, 0.2))  # Yellow/orange for fuel
+	elif item_type == "health_pack":
+		text = "+%d HP" % amount
+		add_theme_color_override("font_color", Color(0.2, 1.0, 0.2))  # Green for health

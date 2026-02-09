@@ -1027,6 +1027,16 @@ func get_loot_positions() -> Array[Dictionary]:
 				"position": pos
 			})
 	
+	# Health packs (1-3 per mission, spawn in all biomes)
+	var num_health_packs = randi_range(1, 3)
+	for _i in range(num_health_packs):
+		var pos = _find_valid_spawn_position(3, map_width - 4, 3, map_height - 4)
+		if pos != Vector2i(-1, -1):
+			positions.append({
+				"type": "health_pack",
+				"position": pos
+			})
+	
 	return positions
 
 

@@ -6,17 +6,13 @@ class_name EnemyAI
 
 
 ## Decide action for an enemy unit
-static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: Node2D) -> Dictionary:
+static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: Node2D, tactical_controller: Node2D = null) -> Dictionary:
 	# Check if this is a boss enemy - route to boss AI
 	if enemy.get("enemy_type") != null and enemy.enemy_type == "boss":
 		return decide_boss_action(enemy, officers, tactical_map)
 	
 	var enemy_pos = enemy.get_grid_position()
 	var result = {"action": "idle", "target": null, "path": null}
-	
-	# Find nearest visible officer
-	var nearest_officer: Node2D = null
-	var nearest_distance = 999
 	
 	# Check for taunting Heavy - must prioritize them if visible
 	var taunted_heavy: Node2D = null
@@ -26,6 +22,14 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 	# Also track all visible officers for flanking calculations
 	var visible_officers: Array[Node2D] = []
 	
+	# Find best target using scoring system (hit chance + health)
+	var best_target: Node2D = null
+	var best_score = -1.0
+	var best_distance = 999
+	
+	# Fallback: nearest officer for movement purposes
+	var nearest_officer: Node2D = null
+	var nearest_distance = 999
 	
 	for officer in officers:
 		if officer.current_hp <= 0:
@@ -33,7 +37,6 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 		
 		var officer_pos = officer.get_grid_position()
 		var distance = abs(officer_pos.x - enemy_pos.x) + abs(officer_pos.y - enemy_pos.y)
-		
 		
 		# Check if officer is visible (in sight range)
 		if distance <= enemy.sight_range:
@@ -44,27 +47,55 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 				taunted_heavy = officer
 				taunted_heavy_distance = distance
 			
+			# Track nearest for fallback movement
 			if distance < nearest_distance:
 				nearest_distance = distance
 				nearest_officer = officer
+			
+			# Only evaluate targets within attack range and with line of sight
+			if distance <= enemy.shoot_range and _has_line_of_sight(enemy_pos, officer_pos, tactical_map):
+				# Calculate hit chance if tactical_controller is available
+				var hit_chance = 50.0  # Default fallback if no controller
+				if tactical_controller and tactical_controller.has_method("calculate_hit_chance"):
+					hit_chance = tactical_controller.calculate_hit_chance(enemy_pos, officer_pos, enemy)
+				
+				# Calculate health score (lower HP = higher priority)
+				var health_percent = float(officer.current_hp) / float(officer.max_hp) if officer.max_hp > 0 else 1.0
+				var health_score = 1.0 - health_percent  # Lower HP = higher score
+				
+				# Normalize hit chance to 0-1 range
+				var hit_chance_score = hit_chance / 100.0
+				
+				# Combined score: 50% hit chance, 50% health (balanced)
+				var combined_score = (hit_chance_score * 0.5) + (health_score * 0.5)
+				
+				# Select target with highest score
+				if combined_score > best_score:
+					best_score = combined_score
+					best_target = officer
+					best_distance = distance
 	
-	# If a taunted Heavy is within range, prioritize them
+	# If a taunted Heavy is within range, prioritize them absolutely
 	if taunted_heavy:
-		nearest_officer = taunted_heavy
-		nearest_distance = taunted_heavy_distance
+		best_target = taunted_heavy
+		best_distance = taunted_heavy_distance
+	
+	# Use best target if found, otherwise fall back to nearest for movement
+	var selected_target = best_target if best_target else nearest_officer
+	var selected_distance = best_distance if best_target else nearest_distance
 	
 	# No officer detected - idle
-	if not nearest_officer:
+	if not selected_target:
 		result["action"] = "idle"
 		return result
 	
-	var target_pos = nearest_officer.get_grid_position()
+	var target_pos = selected_target.get_grid_position()
 	
 	# Check if currently in cover AND if that cover is effective against threats
 	var has_adjacent_cover = tactical_map.has_adjacent_cover(enemy_pos)
 	var is_effectively_covered = _is_cover_effective_against_threats(enemy_pos, visible_officers, tactical_map)
 	var is_being_flanked = has_adjacent_cover and not is_effectively_covered
-	var can_shoot = nearest_distance <= enemy.shoot_range and enemy.has_ap(1) and _has_line_of_sight(enemy_pos, target_pos, tactical_map)
+	var can_shoot = selected_distance <= enemy.shoot_range and enemy.has_ap(1) and _has_line_of_sight(enemy_pos, target_pos, tactical_map)
 
 	# Pre-compute reachable positions once (BFS is expensive) for all movement queries
 	var reachable: Array[Vector2i] = []
@@ -96,14 +127,14 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 	# PRIORITY 3: If can shoot (either in effective cover or no better option), shoot
 	if can_shoot:
 		result["action"] = "shoot"
-		result["target"] = nearest_officer
+		result["target"] = selected_target
 		result["target_pos"] = target_pos
 		return result
 	
 	# PRIORITY 4: Can't shoot - try to move to a better tactical position
 	if enemy.has_ap(1):
 		
-		var move_destination = _find_tactical_position(enemy_pos, target_pos, visible_officers, enemy.move_range, nearest_distance, tactical_map, reachable)
+		var move_destination = _find_tactical_position(enemy_pos, target_pos, visible_officers, enemy.move_range, selected_distance, tactical_map, reachable)
 		
 		if move_destination != enemy_pos:
 			var path = _filter_extraction_tiles_from_path(tactical_map.find_path(enemy_pos, move_destination), tactical_map)

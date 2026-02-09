@@ -58,6 +58,9 @@ func _create_connections() -> void:
 	
 	# Then, create backward connections (secondary paths)
 	_create_backward_connections()
+	
+	# Validate and repair to ensure no dead end nodes exist
+	_validate_and_repair_connections()
 
 
 ## Create forward connections (to next column)
@@ -155,18 +158,94 @@ func _create_flow_connections(current_node: MapNode, next_column_nodes: Array[Ma
 	var ratio = float(current_row) / max(1.0, float(nodes_in_current_col - 1))
 	var target_row = int(ratio * float(nodes_in_next_col - 1))
 	
-	# Connect to target node
+	# Connect to target node (guaranteed first connection)
 	current_node.connections.append(next_column_nodes[target_row].id)
 	
-	# Reduced connections: 1-2 connections per node (down from 2-3)
-	var num_connections = randi_range(1, 2)
+	# Enhanced connections: 2-3 connections per node (increased from 1-2)
+	var num_connections = randi_range(2, 3)
 	
-	if num_connections >= 2:
-		# Add one adjacent connection
-		if target_row > 0 and randf() > 0.5:
-			current_node.connections.append(next_column_nodes[target_row - 1].id)
-		elif target_row < nodes_in_next_col - 1:
-			current_node.connections.append(next_column_nodes[target_row + 1].id)
+	# Add additional connections up to the target number
+	var connections_added = 1
+	var available_indices: Array[int] = []
+	
+	# Collect available adjacent indices
+	if target_row > 0:
+		available_indices.append(target_row - 1)
+	if target_row < nodes_in_next_col - 1:
+		available_indices.append(target_row + 1)
+	
+	# Shuffle to add variety
+	available_indices.shuffle()
+	
+	# Add connections until we reach the target number or run out of options
+	for idx in available_indices:
+		if connections_added >= num_connections:
+			break
+		var connection_id = next_column_nodes[idx].id
+		if not connection_id in current_node.connections:
+			current_node.connections.append(connection_id)
+			connections_added += 1
+
+
+## Validate and repair connections to ensure no dead end nodes
+## Every node (except first and last) must have at least one incoming and one outgoing connection
+func _validate_and_repair_connections() -> void:
+	# Check and repair outgoing connections (every node except last must have at least 1)
+	for node in nodes:
+		# Last node (New Earth) doesn't need outgoing connections
+		if node.id == TOTAL_NODES - 1:
+			continue
+		
+		# Check if node has any outgoing connections
+		if node.connections.is_empty():
+			# Add connection to next column
+			var next_col = node.column + 1
+			if next_col < NUM_COLUMNS:
+				var next_column_nodes = get_nodes_in_column(next_col)
+				if not next_column_nodes.is_empty():
+					# Use flow logic to determine best connection
+					var nodes_in_current_col = _count_nodes_in_column(node.column)
+					_create_flow_connections(node, next_column_nodes, nodes_in_current_col)
+	
+	# Build reverse connection map to check incoming connections
+	# (Rebuild after outgoing repairs to include newly added connections)
+	var incoming_connections: Dictionary = {}  # node_id -> Array of nodes that connect to it
+	for node in nodes:
+		incoming_connections[node.id] = []
+	
+	# Populate incoming connections map
+	for node in nodes:
+		for connection_id in node.connections:
+			if incoming_connections.has(connection_id):
+				incoming_connections[connection_id].append(node.id)
+	
+	# Check and repair incoming connections (every node except first must have at least 1)
+	for node in nodes:
+		# First node (start) doesn't need incoming connections
+		if node.id == 0:
+			continue
+		
+		# Check if node has any incoming connections
+		if incoming_connections[node.id].is_empty():
+			# Add connection from previous column
+			var prev_col = node.column - 1
+			if prev_col >= 0:
+				var prev_column_nodes = get_nodes_in_column(prev_col)
+				if not prev_column_nodes.is_empty():
+					# Find a node in previous column to connect from
+					# Use flow logic to determine best source node
+					var nodes_in_prev_col = prev_column_nodes.size()
+					var nodes_in_current_col = _count_nodes_in_column(node.column)
+					
+					# Calculate which node in previous column should connect to this one
+					var ratio = float(node.row) / max(1.0, float(nodes_in_current_col - 1))
+					var source_row = int(ratio * float(nodes_in_prev_col - 1))
+					
+					var source_node = prev_column_nodes[source_row]
+					# Only add connection if source node is not the last node (last node shouldn't have outgoing connections)
+					# Add connection if not already present
+					if source_node.id != TOTAL_NODES - 1 and not node.id in source_node.connections:
+						source_node.connections.append(node.id)
 
 
 ## Count how many nodes are in a given column

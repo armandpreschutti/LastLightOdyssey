@@ -37,6 +37,7 @@ var mission_objectives: Array[MissionObjective] = []  # Current mission objectiv
 
 var FuelCrateScene: PackedScene
 var ScrapPileScene: PackedScene
+var HealthPackScene: PackedScene
 var MiningEquipmentScene: PackedScene
 var SecurityTerminalScene: PackedScene
 var DataLogScene: PackedScene
@@ -70,6 +71,7 @@ const HALF_COVER_ATTACK_BONUS: float = 5.0   # +5% hit chance when firing from h
 func _ready() -> void:
 	FuelCrateScene = load("res://scenes/tactical/fuel_crate.tscn")
 	ScrapPileScene = load("res://scenes/tactical/scrap_pile.tscn")
+	HealthPackScene = load("res://scenes/tactical/health_pack.tscn")
 	MiningEquipmentScene = load("res://scenes/tactical/mining_equipment.tscn")
 	SecurityTerminalScene = load("res://scenes/tactical/security_terminal.tscn")
 	DataLogScene = load("res://scenes/tactical/data_log.tscn")
@@ -148,7 +150,7 @@ func _on_pause_abandon() -> void:
 	_end_mission(false)
 
 
-func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.BiomeType.STATION) -> void:
+func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.BiomeType.STATION, provided_objectives: Array[MissionObjective] = []) -> void:
 	# Don't set mission_active yet - wait until after beam down animation
 	mission_active = false
 	current_turn = 1
@@ -172,7 +174,11 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	# Initialize mission objectives based on biome (only for scavenger missions)
 	mission_objectives.clear()
 	if is_scavenger_mission:
-		mission_objectives = MissionObjective.ObjectiveManager.get_objectives_for_biome(current_biome)
+		# Use provided objectives if available, otherwise generate random ones
+		if not provided_objectives.is_empty():
+			mission_objectives = provided_objectives.duplicate()
+		else:
+			mission_objectives = MissionObjective.ObjectiveManager.get_objectives_for_biome(current_biome)
 		# Initialize objectives panel in HUD
 		tactical_hud.initialize_objectives(mission_objectives)
 	
@@ -371,6 +377,8 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		var loot: Node2D
 		if loot_data["type"] == "fuel":
 			loot = FuelCrateScene.instantiate()
+		elif loot_data["type"] == "health_pack":
+			loot = HealthPackScene.instantiate()
 		else:
 			loot = ScrapPileScene.instantiate()
 		_safe_add_interactable(loot, loot_pos)
@@ -956,6 +964,17 @@ func _pickup_item(interactable: Node2D, unit: Node2D) -> void:
 			else:
 				amount = 5
 				mission_scrap_collected += 5
+		elif item_type == "health_pack":
+			# Check if unit is at full health - don't consume health pack if so
+			if unit.current_hp >= unit.max_hp:
+				# Unit is at full health, don't consume the health pack
+				return
+			
+			# Health pack heals the unit for 62.5% max HP (same as Medic patch)
+			var heal_amount = int(unit.max_hp * 0.625)
+			unit.heal(heal_amount)
+			AudioManager.play_sfx("combat_heal")
+			amount = heal_amount
 		
 		# Spawn pickup popup at unit position (slightly above unit, offset way to the left)
 		if amount > 0 and unit:
@@ -1359,6 +1378,11 @@ func _end_mission(success: bool) -> void:
 	if is_scavenger_mission and not mission_objectives.is_empty():
 		# Check all objectives for completion (not just the first one)
 		for objective in mission_objectives:
+			# Double-check completion status for progress objectives (in case progress wasn't properly updated)
+			if objective.type == MissionObjective.ObjectiveType.PROGRESS:
+				if objective.progress >= objective.max_progress and not objective.completed:
+					objective.completed = true
+			
 			if objective.completed:
 				var bonuses = MissionObjective.ObjectiveManager.get_bonus_rewards(objective)
 				bonus_fuel += bonuses.get("fuel", 0)
@@ -1366,11 +1390,8 @@ func _end_mission(success: bool) -> void:
 				bonus_colonists += bonuses.get("colonists", 0)
 				bonus_hull_repair += bonuses.get("hull_repair", 0)
 		
-		# Apply bonuses to mission collection (accumulated from all completed objectives)
-		# This ensures bonuses are included in the totals passed to add_mission_stats
-		mission_fuel_collected += bonus_fuel
-		mission_scrap_collected += bonus_scrap
-		
+		# Note: Bonuses are tracked separately and applied to GameState separately
+		# This keeps mission stats (add_mission_stats) showing only collected resources, not bonuses
 		# Bonus rewards will be applied to GameState only on successful extraction
 		
 		# Build objectives data array for recap (include reward info)
@@ -1406,17 +1427,14 @@ func _end_mission(success: bool) -> void:
 	
 	# Apply all resources and rewards to GameState only on successful extraction
 	if success:
-		# Apply collected resources
+		# Apply collected resources (fuel and scrap picked up during mission)
 		GameState.fuel += mission_fuel_collected
 		GameState.scrap += mission_scrap_collected
 		
-		# Apply bonus rewards (only if this was a scavenger mission with objectives)
-		if bonus_fuel > 0:
-			GameState.fuel += bonus_fuel
-		if bonus_scrap > 0:
-			GameState.scrap += bonus_scrap
-		if bonus_colonists > 0:
-			GameState.colonist_count += bonus_colonists
+		# Apply bonus rewards from completed objectives (separate from collected resources)
+		GameState.fuel += bonus_fuel
+		GameState.scrap += bonus_scrap
+		GameState.colonist_count += bonus_colonists
 		if bonus_hull_repair > 0:
 			GameState.repair_ship(bonus_hull_repair)
 		
@@ -2101,7 +2119,7 @@ func _execute_enemy_turn() -> void:
 		# The AI itself will handle whether they can detect players
 		
 		# Enemy takes their action
-		var decision = EnemyAI.decide_action(enemy, deployed_officers, tactical_map)
+		var decision = EnemyAI.decide_action(enemy, deployed_officers, tactical_map, self)
 		
 		match decision["action"]:
 			"shoot":
@@ -3493,11 +3511,19 @@ func _update_objective_progress(objective_id: String, progress_amount: int = 1) 
 	if not is_scavenger_mission or mission_objectives.is_empty():
 		return
 	
-	# Get the single mission objective
-	var objective = mission_objectives[0]
+	# Find the objective that matches the ID (check all objectives, not just first)
+	var objective: MissionObjective = null
+	for obj in mission_objectives:
+		if obj.id == objective_id:
+			objective = obj
+			break
 	
-	# Only update if the ID matches the current mission's objective
-	if objective.id == objective_id and not objective.completed:
+	# If no matching objective found, return early
+	if objective == null:
+		return
+	
+	# Only update if not already completed
+	if not objective.completed:
 		var was_completed = objective.completed
 		objective.add_progress(progress_amount)
 		tactical_hud.update_objective(objective_id)
@@ -3513,11 +3539,19 @@ func _complete_objective(objective_id: String) -> void:
 	if not is_scavenger_mission or mission_objectives.is_empty():
 		return
 	
-	# Get the single mission objective
-	var objective = mission_objectives[0]
+	# Find the objective that matches the ID (check all objectives, not just first)
+	var objective: MissionObjective = null
+	for obj in mission_objectives:
+		if obj.id == objective_id:
+			objective = obj
+			break
 	
-	# Only complete if the ID matches the current mission's objective
-	if objective.id == objective_id and not objective.completed:
+	# If no matching objective found, return early
+	if objective == null:
+		return
+	
+	# Only complete if not already completed
+	if not objective.completed:
 		objective.set_completed()
 		tactical_hud.update_objective(objective_id)
 		
