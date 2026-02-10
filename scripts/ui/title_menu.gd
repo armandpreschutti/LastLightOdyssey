@@ -286,6 +286,8 @@ func _on_button_hover(button: Button) -> void:
 
 
 func _on_new_game_pressed() -> void:
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
 	if not _ready_for_input:
 		return
 	
@@ -343,6 +345,8 @@ func _start_new_game() -> void:
 
 
 func _on_continue_pressed() -> void:
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
 	if not _ready_for_input:
 		return
 	
@@ -386,6 +390,8 @@ func _show_no_save_message() -> void:
 
 
 func _on_settings_pressed() -> void:
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
 	if not _ready_for_input:
 		return
 	
@@ -402,6 +408,8 @@ func _on_settings_back() -> void:
 
 
 func _on_quit_pressed() -> void:
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
 	if not _ready_for_input:
 		return
 	

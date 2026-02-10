@@ -269,12 +269,10 @@ static func get_enemy_config(biome_type: BiomeType, difficulty_multiplier: float
 	base_config["min_enemies"] = scaled_min
 	base_config["max_enemies"] = scaled_max
 	
-	# Adjust heavy_chance to increase with difficulty
-	# Base chance + (difficulty - 1.0) * 0.3
-	# This means later missions have more heavy enemies
-	var base_heavy_chance = base_config["heavy_chance"]
-	var scaled_heavy_chance = base_heavy_chance + (difficulty_multiplier - 1.0) * 0.3
-	base_config["heavy_chance"] = clampf(scaled_heavy_chance, 0.0, 1.0)
+	# Note: heavy_chance is no longer used for spawn selection
+	# Enemy spawn rates are now calculated based on voyage progression in tactical_controller.gd
+	# Keeping base heavy_chance value in config for potential future use
+	# (No scaling applied since it's not used)
 	
 	return base_config
 

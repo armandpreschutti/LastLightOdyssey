@@ -223,6 +223,9 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		tactical_map.reveal_around(spawn_positions[i], officer.sight_range)
 
 	# Spawn objective items FIRST (before resources) to prevent resources from spawning on objective tiles
+	# Track all mission tile positions to exclude them from loot spawning
+	var mission_tile_positions: Array[Vector2i] = []
+	
 	# Spawn mining equipment for asteroid biome missions with mining-related objectives
 	if current_biome == BiomeConfig.BiomeType.ASTEROID and is_scavenger_mission:
 		# Check if mission has mining-related objectives
@@ -257,6 +260,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 				var mining_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
 				if mining_pos != Vector2i(-1, -1):
 					used_positions.append(mining_pos)
+					mission_tile_positions.append(mining_pos)  # Track mission tile position
 					var mining_equipment = MiningEquipmentScene.instantiate()
 					mining_equipment.set_grid_position(mining_pos)
 					tactical_map.add_interactable(mining_equipment, mining_pos)
@@ -288,6 +292,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 				var terminal_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
 				if terminal_pos != Vector2i(-1, -1):
 					used_positions.append(terminal_pos)
+					mission_tile_positions.append(terminal_pos)  # Track mission tile position
 					var security_terminal = SecurityTerminalScene.instantiate()
 					security_terminal.set_grid_position(terminal_pos)
 					tactical_map.add_interactable(security_terminal, terminal_pos)
@@ -298,6 +303,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 					var log_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
 					if log_pos != Vector2i(-1, -1):
 						used_positions.append(log_pos)
+						mission_tile_positions.append(log_pos)  # Track mission tile position
 						var data_log = DataLogScene.instantiate()
 						data_log.set_grid_position(log_pos)
 						tactical_map.add_interactable(data_log, log_pos)
@@ -307,6 +313,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 				var core_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
 				if core_pos != Vector2i(-1, -1):
 					used_positions.append(core_pos)
+					mission_tile_positions.append(core_pos)  # Track mission tile position
 					var power_core = PowerCoreScene.instantiate()
 					power_core.set_grid_position(core_pos)
 					tactical_map.add_interactable(power_core, core_pos)
@@ -341,6 +348,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 					var sample_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
 					if sample_pos != Vector2i(-1, -1):
 						used_positions.append(sample_pos)
+						mission_tile_positions.append(sample_pos)  # Track mission tile position
 						var sample_collector = SampleCollectorScene.instantiate()
 						sample_collector.set_grid_position(sample_pos)
 						tactical_map.add_interactable(sample_collector, sample_pos)
@@ -351,6 +359,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 					var beacon_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
 					if beacon_pos != Vector2i(-1, -1):
 						used_positions.append(beacon_pos)
+						mission_tile_positions.append(beacon_pos)  # Track mission tile position
 						var beacon = BeaconScene.instantiate()
 						beacon.set_grid_position(beacon_pos)
 						tactical_map.add_interactable(beacon, beacon_pos)
@@ -360,6 +369,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 				var nest_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
 				if nest_pos != Vector2i(-1, -1):
 					used_positions.append(nest_pos)
+					mission_tile_positions.append(nest_pos)  # Track mission tile position
 					var nest = NestScene.instantiate()
 					nest.set_grid_position(nest_pos)
 					tactical_map.add_interactable(nest, nest_pos)
@@ -369,7 +379,11 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	for loot_data in loot_positions:
 		var loot_pos = loot_data["position"]
 		
-		# Check if there's already a mission resource at this position
+		# Skip if this position is a mission tile
+		if loot_pos in mission_tile_positions:
+			continue
+		
+		# Check if there's already a mission resource at this position (double-check)
 		var existing = tactical_map.get_interactable_at(loot_pos)
 		if existing != null and _is_mission_resource(existing):
 			# Skip spawning regular loot if mission resource exists (mission resources take priority)
@@ -386,8 +400,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	
 	# Spawn enemies with difficulty-based scaling
 	var difficulty = GameState.get_mission_difficulty()
-	var enemy_config = BiomeConfig.get_enemy_config(current_biome, difficulty)
-	var heavy_chance = enemy_config["heavy_chance"]
+	var _enemy_config = BiomeConfig.get_enemy_config(current_biome, difficulty)
 	
 	# Spawn boss enemy based on spawn chance
 	var boss_spawn_chance = _calculate_boss_spawn_chance(difficulty)
@@ -438,8 +451,8 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		enemy.movement_finished.connect(_on_enemy_movement_finished.bind(enemy))
 		enemy.died.connect(_on_enemy_died.bind(enemy))
 		tactical_map.add_unit(enemy, enemy_pos)
-		# Select enemy type based on difficulty thresholds
-		var enemy_type = _select_enemy_type(difficulty, heavy_chance)
+		# Select enemy type based on voyage progression
+		var enemy_type = _select_enemy_type(difficulty)
 		enemy.initialize(enemy_id, enemy_type, current_biome)
 		enemy.visible = false  # Start invisible until revealed
 		enemies.append(enemy)
@@ -492,7 +505,19 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 ## Calculate boss spawn chance based on difficulty
 ## Currently set to 0% spawn rate
 func _calculate_boss_spawn_chance(_difficulty: float) -> float:
-	return 0.0  # Boss spawn rate set to 0%
+	var current_node = GameState.current_node_index
+	
+	# Boss spawn only at nodes 40-49 (progress 0.8-0.98)
+	# Linear interpolation from 0% at node 40 to 10% at node 49
+	if current_node < 40:
+		return 0.0
+	
+	if current_node >= 49:
+		return 0.10
+	
+	# Interpolate between 0% and 10% for nodes 40-48
+	var progress_in_range = float(current_node - 40) / float(49 - 40)
+	return lerpf(0.0, 0.10, progress_in_range)
 
 
 ## Find a valid 2x2 spawn position for boss
@@ -532,21 +557,77 @@ func _find_valid_boss_spawn_position(generator: MapGenerator) -> Vector2i:
 	return Vector2i(-1, -1)
 
 
-## Select enemy type based on difficulty thresholds
-## Priority: Elite (2.0+) > Sniper (1.5+) > Heavy (scaled chance) > Basic
-func _select_enemy_type(difficulty: float, heavy_chance: float) -> String:
-	# Elite enemies unlock at difficulty 2.0+ (node ~33+)
-	if difficulty >= 2.0:
-		if randf() < 0.12:  # 12% chance for elite
-			return "elite"
+## Select enemy type based on voyage progression
+## Uses linear interpolation between early (nodes 0-10) and end (nodes 40-49) distributions
+## Early: 90% basic, 10% heavy, 0% sniper, 0% elite
+## End: 25% basic, 30% heavy, 20% sniper, 15% elite
+func _select_enemy_type(difficulty: float) -> String:
+	var current_node = GameState.current_node_index
+	var total_nodes = GameState.nodes_to_new_earth
 	
-	# Sniper enemies unlock at difficulty 1.5+ (node ~17+)
-	if difficulty >= 1.5:
-		if randf() < 0.10:  # 10% chance for sniper
-			return "sniper"
+	# Calculate voyage progress (0.0 at start, 1.0 at end)
+	var progress = float(current_node) / float(total_nodes)
 	
-	# Heavy enemies use scaled chance from biome config
-	if randf() < heavy_chance:
+	# Define spawn chances at early stage (nodes 0-10, progress ~0.0-0.2)
+	var early_basic = 0.90
+	var early_heavy = 0.10
+	var early_sniper = 0.0
+	var early_elite = 0.0
+	
+	# Define spawn chances at end stage (nodes 40-49, progress ~0.8-0.98)
+	var end_basic = 0.25
+	var end_heavy = 0.30
+	var end_sniper = 0.20
+	var end_elite = 0.15
+	
+	# Linear interpolation between early and end values
+	var basic_chance = lerpf(early_basic, end_basic, progress)
+	var heavy_chance_calc = lerpf(early_heavy, end_heavy, progress)
+	var sniper_chance = lerpf(early_sniper, end_sniper, progress)
+	var elite_chance = lerpf(early_elite, end_elite, progress)
+	
+	# Apply unlock thresholds: Sniper at difficulty 1.5+ (~node 17), Elite at difficulty 2.0+ (~node 33)
+	if difficulty < 1.5:
+		# Sniper not unlocked yet - redistribute its chance to basic and heavy proportionally
+		var total_available = basic_chance + heavy_chance_calc
+		if total_available > 0:
+			basic_chance += sniper_chance * (basic_chance / total_available)
+			heavy_chance_calc += sniper_chance * (heavy_chance_calc / total_available)
+		else:
+			basic_chance += sniper_chance
+		sniper_chance = 0.0
+	
+	if difficulty < 2.0:
+		# Elite not unlocked yet - redistribute its chance to other types proportionally
+		var total_available = basic_chance + heavy_chance_calc + sniper_chance
+		if total_available > 0:
+			basic_chance += elite_chance * (basic_chance / total_available)
+			heavy_chance_calc += elite_chance * (heavy_chance_calc / total_available)
+			sniper_chance += elite_chance * (sniper_chance / total_available)
+		else:
+			basic_chance += elite_chance
+		elite_chance = 0.0
+	
+	# Normalize probabilities to ensure they sum to 1.0
+	var total = basic_chance + heavy_chance_calc + sniper_chance + elite_chance
+	if total > 0:
+		basic_chance /= total
+		heavy_chance_calc /= total
+		sniper_chance /= total
+		elite_chance /= total
+	
+	# Weighted random selection
+	var roll = randf()
+	
+	if roll < elite_chance:
+		return "elite"
+	roll -= elite_chance
+	
+	if roll < sniper_chance:
+		return "sniper"
+	roll -= sniper_chance
+	
+	if roll < heavy_chance_calc:
 		return "heavy"
 	
 	# Default to basic
@@ -959,9 +1040,15 @@ func _pickup_item(interactable: Node2D, unit: Node2D) -> void:
 		var item_type = interactable.get_item_type()
 		var amount: int = 0
 		if item_type == "fuel":
+			# Play fuel pickup SFX
+			if SFXManager:
+				SFXManager.play_sfx_by_name("interactions", "fuel_pickup")
 			mission_fuel_collected += 1
 			amount = 1
 		elif item_type == "scrap":
+			# Play scrap pickup SFX
+			if SFXManager:
+				SFXManager.play_sfx_by_name("interactions", "scrap_pickup")
 			if interactable.has_method("get_scrap_amount"):
 				amount = interactable.get_scrap_amount()
 				mission_scrap_collected += amount
@@ -974,15 +1061,27 @@ func _pickup_item(interactable: Node2D, unit: Node2D) -> void:
 				# Unit is at full health, don't consume the health pack
 				return
 			
+			# Play health pickup SFX
+			if SFXManager:
+				SFXManager.play_sfx_by_name("interactions", "health_pickup")
+			
 			# Health pack heals the unit for 62.5% max HP (same as Medic patch)
 			var heal_amount = int(unit.max_hp * 0.625)
 			unit.heal(heal_amount)
 			amount = heal_amount
+		else:
+			# Generic pickup SFX for other items
+			if SFXManager:
+				SFXManager.play_sfx_by_name("interactions", "pickup")
 		
 		# Spawn pickup popup at unit position (slightly above unit, offset way to the left)
 		if amount > 0 and unit:
 			var popup_pos = unit.position + Vector2(-30, -20)  # Way to the left, up by 20px
 			_spawn_pickup_popup(item_type, amount, popup_pos)
+	else:
+		# Generic pickup SFX for objective items
+		if SFXManager:
+			SFXManager.play_sfx_by_name("interactions", "pickup")
 	
 	# Interact with the item (adds to GameState and removes from map)
 	interactable.interact()
@@ -1330,12 +1429,27 @@ func _on_officer_died(officer_key: String) -> void:
 	# Remove from deployed list before animation (so they can't be selected)
 	if officer_index >= 0:
 		deployed_officers.remove_at(officer_index)
+		
+		# Adjust current_unit_index if the removed unit was at or before current position
+		# When an element is removed, all elements after it shift left by one position
+		if officer_index <= current_unit_index:
+			current_unit_index -= 1
+			# Clamp to valid range (after removal, size decreased by 1)
+			if deployed_officers.size() > 0:
+				current_unit_index = max(0, min(current_unit_index, deployed_officers.size() - 1))
+			else:
+				current_unit_index = 0
 	
 	# Select another unit if the selected one died
 	if selected_unit and selected_unit.officer_key == officer_key:
 		selected_unit = null
 		if deployed_officers.size() > 0:
-			_select_unit(deployed_officers[0])
+			# Use the adjusted current_unit_index instead of always selecting index 0
+			if current_unit_index < deployed_officers.size():
+				_select_unit(deployed_officers[current_unit_index])
+			else:
+				# Fallback: select first unit if index is somehow invalid
+				_select_unit(deployed_officers[0])
 	
 	# Play death animation
 	if dying_officer.has_method("play_death_animation"):
@@ -1874,6 +1988,12 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
+		
+		# If shooter is an enemy, consume AP to prevent infinite loops
+		# This happens when AI thinks there's LOS but the actual LOS check fails
+		if shooter in enemies and is_instance_valid(shooter) and shooter.has_method("use_ap"):
+			shooter.use_ap(1)
+		
 		return
 	
 	# Calculate hit chance (pass shooter for class-specific calculations)
@@ -1974,6 +2094,10 @@ func _phase_firing(shooter: Node2D, _shooter_pos: Vector2i, target_pos: Vector2i
 	# Brief pause before firing for better sequencing
 	await get_tree().create_timer(0.15).timeout
 	
+	# Play shooting SFX
+	if SFXManager:
+		SFXManager.play_sfx_by_name("combat", "shoot")
+	
 	# Play unique attack animation for the shooter
 	if shooter.has_method("play_attack_animation"):
 		shooter.play_attack_animation()
@@ -1996,6 +2120,10 @@ func _phase_firing(shooter: Node2D, _shooter_pos: Vector2i, target_pos: Vector2i
 func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: bool, damage: int, is_flanking: bool = false, is_critical: bool = false) -> void:
 	# Display hit/miss message with flanking and critical indicators
 	if hit:
+		# Play hit SFX
+		if SFXManager:
+			SFXManager.play_sfx_by_name("combat", "hit")
+		
 		if is_critical and is_flanking:
 			tactical_hud.show_combat_message("CRITICAL FLANKING HIT!", Color(1, 0.8, 0.0))  # Gold for critical + flanking
 		elif is_critical:
@@ -2025,6 +2153,10 @@ func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: 
 			var target_world = Vector2(target_pos.x * 32 + 16, target_pos.y * 32 + 16)
 			_spawn_damage_popup(damage, true, target_world, false, is_flanking, is_critical)
 	else:
+		# Play miss SFX
+		if SFXManager:
+			SFXManager.play_sfx_by_name("combat", "miss")
+		
 		tactical_hud.show_combat_message("MISS!", Color(0.6, 0.6, 0.6))
 		
 		# Show miss popup
@@ -2107,50 +2239,85 @@ func _spawn_pickup_popup(item_type: String, amount: int, world_pos: Vector2) -> 
 func _execute_enemy_turn() -> void:
 	
 	for enemy in enemies:
+		# Check if enemy is valid before processing
+		if not is_instance_valid(enemy):
+			continue
+		
 		if enemy.current_hp <= 0:
 			continue
 		
 		# Enemies always act (they can see and move even if players can't see them)
 		# The AI itself will handle whether they can detect players
 		
-		# Enemy takes their action
-		var decision = EnemyAI.decide_action(enemy, deployed_officers, tactical_map, self)
+		# Safety counter to prevent infinite loops
+		var max_actions = 10
+		var action_count = 0
 		
-		match decision["action"]:
-			"shoot":
-				await execute_shot(enemy, decision["target_pos"], decision["target"])
-				await get_tree().create_timer(0.3).timeout  # Small delay for visual feedback
+		# Continue taking actions until enemy runs out of AP
+		while is_instance_valid(enemy) and enemy.has_ap() and action_count < max_actions:
+			action_count += 1
 			
-			"move":
-				var old_pos = enemy.get_grid_position()
-				var new_pos = decision["target_pos"]
-				
-				# Clear old position
-				tactical_map.set_unit_position_solid(old_pos, false)
-
-				# Move enemy
-				enemy.use_ap(1)
-				enemy.move_along_path(decision["path"])
-
-				# Wait for movement to finish
-				await enemy.movement_finished
-
-				# Update grid position after animation completes
-				enemy.set_grid_position(new_pos)
-
-				# Mark new position as solid
-				tactical_map.set_unit_position_solid(new_pos, true)
-				
-				# Update enemy visibility after movement
-				_update_enemy_visibility()
-				
-				# Check for overwatch shots
-				await _check_overwatch_shots(enemy, new_pos)
-				
-				await get_tree().create_timer(0.2).timeout  # Small delay
+			# Check enemy validity again before taking action
+			if not is_instance_valid(enemy):
+				break
 			
-			"idle":
-				await get_tree().create_timer(0.1).timeout  # Small delay
+			# Enemy takes their action
+			var decision = EnemyAI.decide_action(enemy, deployed_officers, tactical_map, self)
+			
+			match decision["action"]:
+				"shoot":
+					await execute_shot(enemy, decision["target_pos"], decision["target"])
+					
+					# Check if enemy was freed during shot (e.g., killed by overwatch)
+					if not is_instance_valid(enemy):
+						break
+					
+					await get_tree().create_timer(0.3).timeout  # Small delay for visual feedback
+				
+				"move":
+					# Check enemy validity before movement
+					if not is_instance_valid(enemy):
+						break
+					
+					var old_pos = enemy.get_grid_position()
+					var new_pos = decision["target_pos"]
+					
+					# Clear old position
+					tactical_map.set_unit_position_solid(old_pos, false)
+
+					# Move enemy
+					enemy.use_ap(1)
+					enemy.move_along_path(decision["path"])
+
+					# Wait for movement to finish
+					await enemy.movement_finished
+
+					# Check if enemy was freed during movement
+					if not is_instance_valid(enemy):
+						break
+
+					# Update grid position after animation completes
+					enemy.set_grid_position(new_pos)
+
+					# Mark new position as solid
+					tactical_map.set_unit_position_solid(new_pos, true)
+					
+					# Update enemy visibility after movement
+					_update_enemy_visibility()
+					
+					# Check for overwatch shots
+					await _check_overwatch_shots(enemy, new_pos)
+					
+					# Check if enemy was freed during overwatch
+					if not is_instance_valid(enemy):
+						break
+					
+					await get_tree().create_timer(0.2).timeout  # Small delay
+				
+				"idle":
+					# If AI decides to idle and enemy still has AP, break to prevent infinite loop
+					# This should only happen if enemy truly can't do anything useful
+					break
 	
 
 
@@ -2822,6 +2989,10 @@ func _try_patch_target(grid_pos: Vector2i) -> void:
 	
 	# Use the ability (spends AP and starts cooldown)
 	if selected_unit.use_patch(target_unit):
+		# Play patch SFX
+		if SFXManager:
+			SFXManager.play_sfx_by_name("combat", "patch")
+		
 		# Focus camera on healing action
 		var medic_world = selected_unit.position
 		var target_world = target_unit.position
@@ -2936,6 +3107,10 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 	
 	# Use the ability (spends AP and starts cooldown)
 	if selected_unit.use_turret():
+		# Play turret SFX
+		if SFXManager:
+			SFXManager.play_sfx_by_name("combat", "turret")
+		
 		var turret = TurretUnitScene.instantiate()
 		turret.set_grid_position(grid_pos)
 		turret.position = Vector2(grid_pos.x * 32 + 16, grid_pos.y * 32 + 16)
@@ -3053,6 +3228,10 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 			var unit_pos = heavy_unit.get_grid_position()
 			tactical_map.set_movement_range(unit_pos, heavy_unit.move_range)
 		return
+	
+	# Play charge SFX
+	if SFXManager:
+		SFXManager.play_sfx_by_name("combat", "charge")
 	
 	# Find adjacent position to the enemy to move to
 	var charge_destination = _find_charge_destination(heavy_pos, grid_pos)
@@ -3396,6 +3575,10 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		return
 	
+	# Play execute SFX
+	if SFXManager:
+		SFXManager.play_sfx_by_name("combat", "execute")
+	
 	# Guaranteed kill - deal remaining HP as damage
 	var execute_damage = target_enemy.current_hp
 	selected_unit.face_towards(grid_pos)
@@ -3486,6 +3669,10 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 		# Update ability buttons (ability not used, button should be re-enabled)
 		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		return
+	
+	# Play precision shot SFX
+	if SFXManager:
+		SFXManager.play_sfx_by_name("combat", "precision_shot")
 	
 	# Precision Shot deals 2x base damage (60 for sniper with 30 base damage)
 	var precision_damage = selected_unit.base_damage * 2

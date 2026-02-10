@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://dp8k7m6qv5n2w"]
 
 [ext_resource type="Script" path="res://scripts/management/star_map.gd" id="1_starmap"]
+[ext_resource type="Script" path="res://scripts/management/nebula_background.gd" id="2_nebula"]
 
 [node name="StarMap" type="Control"]
 layout_mode = 3
@@ -21,6 +22,16 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 color = Color(0.05, 0.05, 0.08, 1)
+
+[node name="NebulaBackground" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("2_nebula")
 
 [node name="MapContent" type="Control" parent="."]
 layout_mode = 1

@@ -38,6 +38,9 @@ func _ready() -> void:
 	_load_settings()
 	_update_ui_from_pending()
 	
+	# Apply audio settings on startup
+	_apply_audio_settings()
+	
 	# Fade in
 	modulate.a = 0.0
 	var tween = create_tween()
@@ -165,8 +168,13 @@ func _apply_display_settings() -> void:
 
 
 func _apply_audio_settings() -> void:
-	# Audio settings are saved but not applied (no audio playback)
-	pass
+	# Apply volume settings to SFXManager and MusicManager
+	if SFXManager:
+		SFXManager.set_master_volume(_pending_master)
+		SFXManager.set_sfx_volume(_pending_sfx)
+	if MusicManager:
+		MusicManager.set_master_volume(_pending_master)
+		MusicManager.set_music_volume(_pending_music)
 
 
 func _on_fullscreen_toggled(toggled: bool) -> void:
@@ -180,16 +188,27 @@ func _on_resolution_selected(index: int) -> void:
 func _on_master_changed(value: float) -> void:
 	_pending_master = value
 	master_value.text = "%d%%" % int(value)
+	# Apply master volume in real-time
+	if SFXManager:
+		SFXManager.set_master_volume(value)
+	if MusicManager:
+		MusicManager.set_master_volume(value)
 
 
 func _on_sfx_changed(value: float) -> void:
 	_pending_sfx = value
 	sfx_value.text = "%d%%" % int(value)
+	# Apply SFX volume in real-time
+	if SFXManager:
+		SFXManager.set_sfx_volume(value)
 
 
 func _on_music_changed(value: float) -> void:
 	_pending_music = value
 	music_value.text = "%d%%" % int(value)
+	# Apply music volume in real-time
+	if MusicManager:
+		MusicManager.set_music_volume(value)
 
 
 func _on_reset_tutorial_pressed() -> void:
@@ -215,6 +234,8 @@ func _on_reset_tutorial_pressed() -> void:
 
 
 func _on_apply_pressed() -> void:
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
 	_save_settings()
 	_apply_display_settings()
 	_apply_audio_settings()
@@ -238,6 +259,8 @@ func _on_apply_pressed() -> void:
 
 
 func _on_back_pressed() -> void:
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
 	# Fade out and remove
 	var tween = create_tween()
 	tween.tween_property(self, "modulate:a", 0.0, 0.2)

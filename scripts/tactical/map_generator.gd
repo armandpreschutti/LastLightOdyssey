@@ -55,6 +55,9 @@ func generate(biome_type: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION,
 	# Add extraction zone
 	_add_extraction_zone(layout)
 	
+	# Ensure perimeter walls are always present (fixes edge gaps)
+	_ensure_perimeter_walls(layout)
+	
 	# Store layout for spawn position validation
 	_layout = layout
 	return layout
@@ -70,12 +73,28 @@ func _generate_bsp_layout(config: Dictionary) -> Dictionary:
 		for y in range(map_height):
 			layout[Vector2i(x, y)] = TileType.WALL
 	
-	# Create BSP tree
-	var root = BSPNode.new(Rect2i(1, 1, map_width - 2, map_height - 2))
-	_split_bsp(root, config["min_room_size"], config["max_room_size"])
+	# Calculate playable area (excluding 1-tile border)
+	var playable_width = map_width - 2
+	var playable_height = map_height - 2
+	var playable_area = playable_width * playable_height
+	
+	# Calculate base area for scaling (17x17 map = 15x15 playable = 225 tiles)
+	var base_playable_area = 15 * 15
+	
+	# Create BSP tree (1-tile border maintained)
+	var root = BSPNode.new(Rect2i(1, 1, playable_width, playable_height))
+	
+	# Adjust splitting aggressiveness based on map size
+	# Larger maps should split more aggressively to create more rooms
+	var area_ratio = float(playable_area) / float(base_playable_area)
+	var min_room_size = config["min_room_size"]
+	var max_room_size = config["max_room_size"]
+	
+	# Pass map dimensions for size-aware splitting
+	_split_bsp(root, min_room_size, max_room_size, playable_width, playable_height, area_ratio)
 	
 	# Create rooms in leaf nodes
-	_create_rooms(root, config["min_room_size"], config["max_room_size"])
+	_create_rooms(root, min_room_size, max_room_size)
 	
 	# Carve out rooms and corridors
 	_carve_bsp_layout(root, layout, config["corridor_width"])
@@ -86,9 +105,42 @@ func _generate_bsp_layout(config: Dictionary) -> Dictionary:
 	return layout
 
 
-func _split_bsp(node: BSPNode, min_size: int, _max_size: int) -> void:
-	# Stop if too small to split
-	if node.rect.size.x < min_size * 2 + 3 and node.rect.size.y < min_size * 2 + 3:
+func _split_bsp(node: BSPNode, min_size: int, _max_size: int, map_width: int = 0, map_height: int = 0, area_ratio: float = 1.0) -> void:
+	# Calculate size-aware minimum threshold
+	# On larger maps, be more aggressive with splitting (lower threshold)
+	# This creates more rooms instead of leaving wall space
+	var adjusted_min_size = min_size
+	if area_ratio > 1.0:
+		# For larger maps, reduce the minimum size threshold to allow more splits
+		# This scales down the threshold proportionally, but not too aggressively
+		adjusted_min_size = maxi(min_size - 1, int(min_size * (1.0 / sqrt(area_ratio))))
+	
+	# Calculate node area to determine if we should continue splitting
+	var node_area = node.rect.size.x * node.rect.size.y
+	var base_node_area = 15 * 15  # Base map playable area
+	var node_area_ratio = float(node_area) / float(base_node_area)
+	
+	# Stop if too small to split (using adjusted threshold)
+	var min_split_threshold = adjusted_min_size * 2 + 3
+	if node.rect.size.x < min_split_threshold and node.rect.size.y < min_split_threshold:
+		return
+	
+	# On larger maps, be more likely to continue splitting even if node is relatively small
+	# This ensures we create more rooms on larger maps
+	var should_continue_splitting = true
+	if area_ratio > 1.2:  # Maps significantly larger than base
+		# On large maps, continue splitting if node is still reasonably large
+		var large_map_threshold = adjusted_min_size * 2 + 2
+		if node.rect.size.x < large_map_threshold and node.rect.size.y < large_map_threshold:
+			# Only stop if both dimensions are very small
+			if node.rect.size.x < adjusted_min_size + 2 and node.rect.size.y < adjusted_min_size + 2:
+				should_continue_splitting = false
+	else:
+		# On normal/small maps, use standard threshold
+		if node.rect.size.x < min_split_threshold and node.rect.size.y < min_split_threshold:
+			should_continue_splitting = false
+	
+	if not should_continue_splitting:
 		return
 	
 	# Decide split direction based on aspect ratio and randomness
@@ -104,11 +156,11 @@ func _split_bsp(node: BSPNode, min_size: int, _max_size: int) -> void:
 	var min_split: int
 	
 	if split_horizontal:
-		min_split = min_size + 1
-		max_split = node.rect.size.y - min_size - 1
+		min_split = adjusted_min_size + 1
+		max_split = node.rect.size.y - adjusted_min_size - 1
 	else:
-		min_split = min_size + 1
-		max_split = node.rect.size.x - min_size - 1
+		min_split = adjusted_min_size + 1
+		max_split = node.rect.size.x - adjusted_min_size - 1
 	
 	if max_split <= min_split:
 		return  # Can't split
@@ -126,9 +178,9 @@ func _split_bsp(node: BSPNode, min_size: int, _max_size: int) -> void:
 		node.right = BSPNode.new(Rect2i(node.rect.position.x + split_pos, node.rect.position.y,
 										node.rect.size.x - split_pos, node.rect.size.y))
 	
-	# Recursively split children
-	_split_bsp(node.left, min_size, _max_size)
-	_split_bsp(node.right, min_size, _max_size)
+	# Recursively split children (pass along map dimensions and area ratio)
+	_split_bsp(node.left, min_size, _max_size, map_width, map_height, area_ratio)
+	_split_bsp(node.right, min_size, _max_size, map_width, map_height, area_ratio)
 
 
 func _create_rooms(node: BSPNode, min_size: int, max_size: int) -> void:
@@ -733,6 +785,23 @@ func _create_open_spawn_regions() -> void:
 	
 	# Bottom-right
 	_rooms.append(Rect2i(map_width - margin - region_size, map_height - margin - region_size, region_size, region_size))
+
+#endregion
+
+#region Perimeter Walls
+
+## Ensures the entire perimeter of the map has wall tiles
+## This prevents open spaces at the edges of the map
+func _ensure_perimeter_walls(layout: Dictionary) -> void:
+	# Top and bottom edges
+	for x in range(map_width):
+		layout[Vector2i(x, 0)] = TileType.WALL
+		layout[Vector2i(x, map_height - 1)] = TileType.WALL
+	
+	# Left and right edges
+	for y in range(map_height):
+		layout[Vector2i(0, y)] = TileType.WALL
+		layout[Vector2i(map_width - 1, y)] = TileType.WALL
 
 #endregion
 

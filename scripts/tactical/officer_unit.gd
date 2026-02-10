@@ -241,11 +241,18 @@ func take_damage(amount: int) -> void:
 	current_hp -= actual_damage
 	_update_hp_bar()
 	
+	# Play damage SFX
+	if SFXManager:
+		SFXManager.play_sfx_by_name("combat", "hit")
+	
 	# Damage flash effect
 	_flash_damage()
 
 	if current_hp <= 0:
 		current_hp = 0
+		# Play death SFX
+		if SFXManager:
+			SFXManager.play_sfx_by_name("combat", "death")
 		died.emit(officer_key)
 
 

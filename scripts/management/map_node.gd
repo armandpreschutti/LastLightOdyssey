@@ -25,17 +25,18 @@ const NODE_SIZE = Vector2(80, 80)
 
 # Sprite textures for different node types
 const NODE_TEXTURES = {
-	EventManager.NodeType.EMPTY_SPACE: preload("res://assets/sprites/navigation/planet_earth.png"),
+	EventManager.NodeType.EMPTY_SPACE: preload("res://assets/sprites/navigation/waypoint.png"),
 	EventManager.NodeType.SCAVENGE_SITE: preload("res://assets/sprites/navigation/asteroid.png"),
-	EventManager.NodeType.TRADING_OUTPOST: preload("res://assets/sprites/navigation/station_trading.png"),
+	EventManager.NodeType.TRADING_OUTPOST: preload("res://assets/sprites/navigation/outpost.png"),
 }
 
-# Additional planet variations for visual variety
-const PLANET_VARIATIONS = [
-	preload("res://assets/sprites/navigation/planet_earth.png"),
-	preload("res://assets/sprites/navigation/planet_red.png"),
-	preload("res://assets/sprites/navigation/planet_gas.png"),
-]
+# Planet variations no longer used - EMPTY_SPACE nodes now use waypoint sprite
+# Kept for reference if needed in the future
+# const PLANET_VARIATIONS = [
+# 	preload("res://assets/sprites/navigation/planet_earth.png"),
+# 	preload("res://assets/sprites/navigation/planet_red.png"),
+# 	preload("res://assets/sprites/navigation/planet_gas.png"),
+# ]
 
 # Color scheme for labels and effects
 const COLOR_LOCKED = Color(0.4, 0.4, 0.4, 1.0)
@@ -47,6 +48,9 @@ const COLOR_HOVER = Color(1.0, 0.85, 0.3, 1.0)  # Brighter amber
 # Glow colors
 const GLOW_AVAILABLE = Color(1.0, 0.69, 0.0, 0.3)
 const GLOW_CURRENT = Color(0.2, 1.0, 0.2, 0.4)
+
+# Question mark sprite for LOCKED nodes
+const QUESTION_MARK_TEXTURE = preload("res://assets/sprites/navigation/question_mark.png")
 
 var is_hovered: bool = false
 var _pulse_tween: Tween = null
@@ -110,7 +114,7 @@ func _update_visual() -> void:
 	match current_state:
 		NodeState.LOCKED:
 			label.add_theme_color_override("font_color", COLOR_LOCKED)
-			sprite.modulate = Color(0.4, 0.4, 0.4, 0.6)
+			sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)
 			if glow_effect:
 				glow_effect.visible = false
 			if current_indicator:
@@ -136,7 +140,7 @@ func _update_visual() -> void:
 				
 		NodeState.VISITED:
 			label.add_theme_color_override("font_color", COLOR_VISITED)
-			sprite.modulate = Color(0.6, 0.6, 0.6, 0.8)
+			sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)
 			if glow_effect:
 				glow_effect.visible = false
 			if current_indicator:
@@ -148,22 +152,42 @@ func _update_sprite_texture() -> void:
 	if not sprite:
 		return
 	
-	# Special cases for start and end nodes
+	# Check if node has been visited, is current, or has an amber line
+	var is_visited = GameState.visited_nodes.has(node_id)
+	var is_current = current_state == NodeState.CURRENT
+	var has_amber_line = _has_amber_line()
+	
+	# Show question mark for unvisited nodes without amber lines
+	# Reveal if visited OR is current OR has amber line to it
+	if not is_visited and not is_current and not has_amber_line:
+		sprite.texture = QUESTION_MARK_TEXTURE
+		return
+	
+	# Special cases for start and end nodes (always show actual type)
 	if node_id == 0:
-		# Start node - use Earth
-		sprite.texture = preload("res://assets/sprites/navigation/planet_earth.png")
+		# Start node - use Earth (red planet)
+		sprite.texture = preload("res://assets/sprites/navigation/planet_red.png")
 	elif _is_new_earth_node():
-		# End node (New Earth) - use a distinct planet
-		sprite.texture = preload("res://assets/sprites/navigation/planet_gas.png")
+		# End node (New Earth) - use Earth sprite
+		sprite.texture = preload("res://assets/sprites/navigation/planet_earth.png")
 	else:
-		# Regular nodes - use type-based texture with some variation
+		# Regular nodes - use type-based texture
 		match node_type:
 			EventManager.NodeType.EMPTY_SPACE:
-				# Use planet variation based on node_id for variety
-				var variation_index = node_id % PLANET_VARIATIONS.size()
-				sprite.texture = PLANET_VARIATIONS[variation_index]
+				# Use waypoint sprite
+				sprite.texture = NODE_TEXTURES[EventManager.NodeType.EMPTY_SPACE]
 			EventManager.NodeType.SCAVENGE_SITE:
-				sprite.texture = NODE_TEXTURES[EventManager.NodeType.SCAVENGE_SITE]
+				# Use biome-based sprite
+				match biome_type:
+					BiomeConfig.BiomeType.ASTEROID:
+						sprite.texture = preload("res://assets/sprites/navigation/asteroid.png")
+					BiomeConfig.BiomeType.STATION:
+						sprite.texture = preload("res://assets/sprites/navigation/station_trading.png")
+					BiomeConfig.BiomeType.PLANET:
+						sprite.texture = preload("res://assets/sprites/navigation/planet_gas.png")
+					_:
+						# Default to asteroid if biome type is unknown
+						sprite.texture = preload("res://assets/sprites/navigation/asteroid.png")
 			EventManager.NodeType.TRADING_OUTPOST:
 				sprite.texture = NODE_TEXTURES[EventManager.NodeType.TRADING_OUTPOST]
 			_:
@@ -175,6 +199,18 @@ func _update_label_text() -> void:
 	if not label:
 		return
 	
+	# Check if node has been visited, is current, or has an amber line
+	var is_visited = GameState.visited_nodes.has(node_id)
+	var is_current = current_state == NodeState.CURRENT
+	var has_amber_line = _has_amber_line()
+	
+	# Show no text for unvisited nodes without amber lines
+	# Reveal if visited OR is current OR has amber line to it
+	if not is_visited and not is_current and not has_amber_line:
+		label.text = ""
+		return
+	
+	# Special cases for start and end nodes (always show actual type)
 	if node_id == 0:
 		label.text = "EARTH"
 	elif _is_new_earth_node():
@@ -242,6 +278,34 @@ func is_clickable() -> bool:
 ## Check if this is the New Earth node
 func _is_new_earth_node() -> bool:
 	return is_new_earth
+
+
+## Check if this node has an amber line connecting to it (is reachable from current node)
+func _has_amber_line() -> bool:
+	# A node has an amber line if it's reachable from the current node
+	# This means it's in the current node's connections
+	var current_node_id = GameState.current_node_index
+	
+	# If we're the current node, we don't have a line to ourselves
+	if node_id == current_node_id:
+		return false
+	
+	# We need to check if this node is in the current node's connections
+	# Since we don't have direct access to the node graph, we can check if we're AVAILABLE
+	# AVAILABLE state means we're reachable, which means we have an amber line
+	# However, we also need to account for the fact that the state might not be updated yet
+	# So we'll use a more direct approach: check if we're reachable by checking the state
+	# But actually, the cleanest is to check if current_state is AVAILABLE
+	# However, that might not work if state hasn't been updated
+	
+	# Alternative: We can check if the node is reachable by looking at GameState
+	# But GameState doesn't store connections...
+	
+	# Simplest approach: If the node is AVAILABLE, it means it's reachable from current
+	# which means it has an amber line (since we only draw amber lines from current to reachable)
+	return current_state == NodeState.AVAILABLE
+
+
 
 
 func _on_mouse_entered() -> void:

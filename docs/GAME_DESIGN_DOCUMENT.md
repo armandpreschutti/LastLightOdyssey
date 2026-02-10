@@ -11,7 +11,7 @@
 3. [The Tactical Layer](#3-the-tactical-layer-the-search)
 4. [The Pressure Mechanic](#4-the-oregon-trail-pressure-mechanic)
 5. [Win/Loss Conditions](#5-winloss-logic)
-6. [Visual & Audio Direction](#6-visual--audio-direction)
+6. [Visual Direction](#6-visual-direction)
 7. [Implementation Status](#7-implementation-status)
 8. [Next Steps & Roadmap](#8-next-steps--roadmap)
 
@@ -52,9 +52,10 @@ This layer simulates the grueling trek across the stars.
 A procedurally generated node graph with **50 nodes** leading to New Earth.
 
 **Structure:**
-- 16 columns of nodes with layout: [1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 3, 4, 3, 3, 2, 1] = 50 total nodes
-- Each node connects to 1-3 nodes in adjacent columns (forward connections primary, backward connections at 30% chance)
-- Variable fuel costs: base 2 fuel, +2 for row distance (diagonal/vertical movement), +4 for backward travel
+- 16 rows of nodes with layout: [1, 2, 3, 5, 5, 5, 5, 5, 5, 5, 3, 4, 3, 3, 2, 1] = 50 total nodes
+- Progression is bottom-to-top (start at bottom, New Earth at top)
+- Each node connects to 1-3 nodes in adjacent rows (forward connections primary, backward connections at 30% chance)
+- Variable fuel costs: base 2 fuel, +2 for column distance (horizontal/diagonal movement), +4 for backward travel
 - Fuel costs are calculated per connection and saved with the star map
 - If insufficient fuel for a jump, ship enters "Drift Mode" and loses 50 colonists per fuel deficit
 - **Navigation Penalties**: Each jump causes −1% ship integrity and −2% cryo-stability (harsh but necessary for tension)
@@ -444,7 +445,7 @@ As colonists are lost throughout the voyage, the game displays **emotional miles
 
 ---
 
-## 6. Visual & Audio Direction
+## 6. Visual Direction
 
 ### Art Style
 - **Low-fidelity 2D sprites** with gritty color palette
@@ -715,28 +716,9 @@ Interface icons used throughout the game for resource displays, combat info, and
 | ![Health](../assets/sprites/ui/icons/icon_health.png) | ![AP](../assets/sprites/ui/icons/icon_ap.png) | ![Movement](../assets/sprites/ui/icons/icon_movement.png) | ![Turn](../assets/sprites/ui/icons/icon_turn.png) | ![Enemies](../assets/sprites/ui/icons/icon_enemies.png) |
 
 **System Icons**
-| Display | Audio |
-|:-------:|:-----:|
-| ![Display](../assets/sprites/ui/icons/icon_display.png) | ![Audio](../assets/sprites/ui/icons/icon_audio.png) |
-
----
-
-### Sound Design (IMPLEMENTED)
-
-**Audio System:**
-- **AudioManager** autoload singleton with crossfading music system
-- **Music Tracks**: Title ambient, Management ambient, Combat ambient (all looped)
-- **SFX Pool**: 8-player pool for simultaneous sound effects
-- **Audio Buses**: Master, Music, SFX with independent volume control (0-100%)
-- **Volume Persistence**: Settings saved to `user://settings.cfg`
-
-**Sound Effects:**
-- **UI**: Click, hover, dialog open/close, end turn, transition
-- **Combat**: Fire, hit, miss, overwatch, turret fire, heal, charge, execute, precision shot, damage, death, enemy alert
-- **Alarms**: Cryo alarm, game over, victory
-- **Movement**: Footstep, extraction beam, jump warp
-
-**Music Crossfading**: Smooth transitions between tracks with 1-second fade duration
+| Display |
+|:-------:|
+| ![Display](../assets/sprites/ui/icons/icon_display.png) |
 
 ---
 
@@ -828,7 +810,7 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Trading dialog with fuel purchase and hull repair
 - [x] Event dialog with choices
 - [x] Title menu with animated starfield, typewriter subtitle, and polish
-- [x] Settings menu (display, audio sliders, tutorial reset)
+- [x] Settings menu (display, tutorial reset)
 - [x] Tutorial system with 9-step guided onboarding
 - [x] Pause menu with abandon mission option, mission haul tracking, and ship status display
 - [x] Confirmation dialog for destructive actions
@@ -850,18 +832,7 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Continue button on title menu (disabled if no save)
 - [x] New game confirmation dialog when save exists
 - [x] Delete save functionality
-- [x] Settings persistence (display, audio, tutorial state)
-
-### ✅ Phase 10: Audio (COMPLETE)
-- [x] AudioManager autoload singleton with crossfading music system
-- [x] Background ambient music (title, management, combat tracks)
-- [x] UI sound effects (click, hover, dialog, transitions)
-- [x] Combat sound effects (shots, impacts, abilities, death)
-- [x] Alarm sounds for warnings (cryo, game over, victory)
-- [x] Movement sounds (footsteps, extraction, jump)
-- [x] Audio bus system (Master, Music, SFX)
-- [x] Volume control and persistence
-- [x] SFX pool system for simultaneous sounds
+- [x] Settings persistence (display, tutorial state)
 
 ### ✅ Phase 11: Mission Objectives System (COMPLETE)
 - [x] Mission objective system with binary and progress objective types
@@ -918,7 +889,6 @@ Interface icons used throughout the game for resource displays, combat info, and
 
 #### Settings Menu
 - [x] Display settings (fullscreen toggle, resolution: 720p/900p/1080p)
-- [x] Audio volume sliders (Master, SFX, Music)
 - [x] Reset Tutorial button with visual feedback
 - [x] Settings persistence to user://settings.cfg
 - [x] Apply button with confirmation feedback
@@ -1017,18 +987,6 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Objective completion tracking and notifications
 - [x] Objective preview in team selection dialog
 
-#### Audio System
-- [x] AudioManager autoload singleton with crossfading music system
-- [x] Three music tracks: Title ambient, Management ambient, Combat ambient (all looped)
-- [x] SFX pool system (8 players for simultaneous sounds)
-- [x] Complete UI sound effects (click, hover, dialog open/close, end turn, transition)
-- [x] Complete combat sound effects (fire, hit, miss, overwatch, turret, heal, charge, execute, precision, damage, death, alert)
-- [x] Alarm sounds (cryo failure, game over, victory)
-- [x] Movement sounds (footstep, extraction beam, jump warp)
-- [x] Audio bus system (Master, Music, SFX) with independent volume control
-- [x] Volume persistence to settings.cfg
-- [x] Music crossfading with 1-second fade duration
-
 #### Pathfinding Visualization
 - [x] Visual pathfinding path line with neon blue glow effect
 - [x] Arrowhead indicator at destination tile
@@ -1118,9 +1076,6 @@ Interface icons used throughout the game for resource displays, combat info, and
 ```
 Last Light Odyssey/
 ├── assets/
-│   ├── audio/          # Sound effects and music
-│   │   ├── music/      # Ambient music tracks (title, management, combat)
-│   │   └── sfx/        # Sound effects (UI, combat, movement, alarms)
 │   ├── fonts/          # Custom fonts
 │   └── sprites/        # All game graphics
 │       ├── characters/ # Officer and enemy sprites (biome variants, bosses)
@@ -1137,7 +1092,7 @@ Last Light Odyssey/
 │   ├── tactical/       # Combat scenes
 │   └── ui/             # Interface scenes
 ├── scripts/
-│   ├── autoload/       # Global singletons (GameState, EventManager, TutorialManager, CombatRNG, AudioManager)
+│   ├── autoload/       # Global singletons (GameState, EventManager, TutorialManager, CombatRNG)
 │   ├── management/     # Star map logic, node generation
 │   ├── tactical/       # Combat logic, map generation, enemy AI, biome config
 │   └── ui/             # Interface scripts
@@ -1149,14 +1104,12 @@ Last Light Odyssey/
 - **EventManager**: Random events, node types, event resolution
 - **TutorialManager**: Tutorial state, step progression, persistence
 - **CombatRNG**: Centralized combat random number generation
-- **AudioManager**: Music crossfading, SFX pool, bus volume control
 
 ### Key Classes
 - **BiomeConfig**: Biome type definitions, color themes, enemy/loot configurations, difficulty scaling
 - **MapGenerator**: Procedural map generation (BSP, caves, open fields)
 - **StarMapGenerator**: Star map node graph generation (50 nodes, 16 columns) with biome assignment
 - **EnemyAI**: Smart enemy behavior with flanking awareness and repositioning
-- **AudioManager**: Music and SFX playback with crossfading and volume control
 
 ### Design Philosophy
 > *"Start with Gray Boxes."* Don't polish art until the mechanics feel fun. If the game is stressful and addictive with just squares and numbers, it will be a masterpiece once polish is added.

@@ -243,14 +243,20 @@ func set_end_turn_enabled(enabled: bool) -> void:
 
 
 func _on_pause_pressed() -> void:
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
 	pause_pressed.emit()
 
 
 func _on_end_turn_pressed() -> void:
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
 	end_turn_pressed.emit()
 
 
 func _on_extract_pressed() -> void:
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
 	extract_pressed.emit()
 
 
@@ -339,6 +345,8 @@ func _on_ability_pressed() -> void:
 
 
 func _on_cancel_pressed() -> void:
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
 	ability_cancelled.emit()
 
 

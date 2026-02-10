@@ -37,8 +37,8 @@ const ENEMY_SPRITES = ENEMY_SPRITES_BY_BIOME[BiomeConfig.BiomeType.STATION]
 
 # Enemy type stats
 const ENEMY_DATA = {
-	"basic": { "max_hp": 50, "max_ap": 2, "move_range": 4, "sight_range": 6, "shoot_range": 8, "damage": 20, "overwatch_range": 0 },
-	"heavy": { "max_hp": 80, "max_ap": 3, "move_range": 3, "sight_range": 5, "shoot_range": 6, "damage": 35, "overwatch_range": 0 },
+	"basic": { "max_hp": 50, "max_ap": 1, "move_range": 4, "sight_range": 6, "shoot_range": 8, "damage": 20, "overwatch_range": 0 },
+	"heavy": { "max_hp": 80, "max_ap": 2, "move_range": 3, "sight_range": 5, "shoot_range": 6, "damage": 35, "overwatch_range": 0 },
 	"sniper": { "max_hp": 40, "max_ap": 2, "move_range": 5, "sight_range": 10, "shoot_range": 12, "damage": 30, "overwatch_range": 5 },
 	"elite": { "max_hp": 100, "max_ap": 3, "move_range": 4, "sight_range": 7, "shoot_range": 9, "damage": 40, "overwatch_range": 0 },
 	"boss": { "max_hp": 250, "max_ap": 4, "move_range": 3, "sight_range": 8, "shoot_range": 9, "damage": 70, "overwatch_range": 0 },
@@ -249,11 +249,18 @@ func take_damage(amount: int) -> void:
 	current_hp -= amount
 	_update_hp_bar()
 	
+	# Play damage SFX
+	if SFXManager:
+		SFXManager.play_sfx_by_name("combat", "hit")
+	
 	# Damage flash effect
 	_flash_damage()
 
 	if current_hp <= 0:
 		current_hp = 0
+		# Play death SFX
+		if SFXManager:
+			SFXManager.play_sfx_by_name("combat", "death")
 		died.emit()
 
 

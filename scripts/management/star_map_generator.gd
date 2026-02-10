@@ -1,10 +1,10 @@
 class_name StarMapGenerator
 extends RefCounted
 ## Generates a semi-linear node graph for the star map
-## Creates 50 nodes arranged in columns with branching paths
+## Creates 50 nodes arranged in rows (bottom-to-top) with branching paths
 
 const TOTAL_NODES = 50
-const NUM_COLUMNS = 16
+const NUM_ROWS = 16
 
 # Node data structure
 class MapNode:
@@ -35,23 +35,25 @@ func generate() -> Array[MapNode]:
 	return nodes
 
 
-## Create the node structure with semi-linear layout
+## Create the node structure with semi-linear layout (bottom-to-top)
 func _create_node_structure() -> void:
-	# Column structure: [1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 3, 4, 3, 3, 2, 1]
+	# Row structure: [1, 2, 3, 5, 5, 5, 5, 5, 5, 5, 3, 4, 3, 3, 2, 1]
 	# This creates 50 nodes total with branching paths
-	var column_sizes: Array[int] = [1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 3, 4, 3, 3, 2, 1]
+	# Note: column field stores row index (vertical progression), row field stores column index (horizontal positioning)
+	var row_sizes: Array[int] = [1, 2, 3, 5, 5, 5, 5, 5, 5, 5, 3, 4, 3, 3, 2, 1]
 	
 	var node_id = 0
-	for col_idx in range(NUM_COLUMNS):
-		var nodes_in_column = column_sizes[col_idx]
-		for row_idx in range(nodes_in_column):
-			var node = MapNode.new(node_id, col_idx, row_idx)
+	for row_idx in range(NUM_ROWS):
+		var nodes_in_row = row_sizes[row_idx]
+		for col_idx in range(nodes_in_row):
+			# column field = row index (vertical progression), row field = column index (horizontal positioning)
+			var node = MapNode.new(node_id, row_idx, col_idx)
 			nodes.append(node)
 			node_id += 1
 
 
 ## Create connections between nodes
-## Only creates connections between adjacent columns (no skipping nodes)
+## Only creates connections between adjacent rows (no skipping nodes)
 func _create_connections() -> void:
 	# First, create forward connections (primary path)
 	_create_forward_connections()
@@ -63,103 +65,103 @@ func _create_connections() -> void:
 	_validate_and_repair_connections()
 
 
-## Create forward connections (to next column)
+## Create forward connections (to next row, upward progression)
 func _create_forward_connections() -> void:
 	for i in range(nodes.size()):
 		var current_node = nodes[i]
-		var current_col = current_node.column
+		var current_row = current_node.column  # column field stores row index
 		
-		# Don't connect the last column (New Earth)
-		if current_col >= NUM_COLUMNS - 1:
+		# Don't connect the last row (New Earth)
+		if current_row >= NUM_ROWS - 1:
 			continue
 		
-		# Find nodes in the next column
-		var next_column_nodes: Array[MapNode] = []
+		# Find nodes in the next row
+		var next_row_nodes: Array[MapNode] = []
 		for node in nodes:
-			if node.column == current_col + 1:
-				next_column_nodes.append(node)
+			if node.column == current_row + 1:  # column field stores row index
+				next_row_nodes.append(node)
 		
-		if next_column_nodes.is_empty():
+		if next_row_nodes.is_empty():
 			continue
 		
-		# Connect to 1-3 nodes in next column based on position
-		var current_row = current_node.row
-		var nodes_in_current_col = _count_nodes_in_column(current_col)
-		var nodes_in_next_col = next_column_nodes.size()
+		# Connect to 1-3 nodes in next row based on position
+		var current_col = current_node.row  # row field stores column index
+		var nodes_in_current_row = _count_nodes_in_row(current_row)
+		var nodes_in_next_row = next_row_nodes.size()
 		
 		# Determine connection strategy based on relative positions
-		if nodes_in_current_col == 1:
-			# Single node connects to all in next column
-			for next_node in next_column_nodes:
+		if nodes_in_current_row == 1:
+			# Single node connects to all in next row
+			for next_node in next_row_nodes:
 				current_node.connections.append(next_node.id)
-		elif nodes_in_next_col == 1:
+		elif nodes_in_next_row == 1:
 			# All connect to single node
-			current_node.connections.append(next_column_nodes[0].id)
+			current_node.connections.append(next_row_nodes[0].id)
 		else:
 			# Create natural flow connections
-			_create_flow_connections(current_node, next_column_nodes, nodes_in_current_col)
+			_create_flow_connections(current_node, next_row_nodes, nodes_in_current_row)
 
 
-## Create backward connections (to previous column only - adjacent nodes)
+## Create backward connections (to previous row only - adjacent nodes, downward)
 func _create_backward_connections() -> void:
 	for i in range(nodes.size()):
 		var current_node = nodes[i]
-		var current_col = current_node.column
+		var current_row = current_node.column  # column field stores row index
 		
 		# Don't add backward connections from start node (node 0) or last node (New Earth)
 		if current_node.id == 0 or current_node.id == TOTAL_NODES - 1:
 			continue
 		
-		# Don't add backward connections from first column
-		if current_col <= 0:
+		# Don't add backward connections from first row
+		if current_row <= 0:
 			continue
 		
 		# Reduced chance to 30% for fewer connections
 		if randf() > 0.30:
 			continue
 		
-		# Only connect to immediately previous column (adjacent nodes only)
-		var target_col = current_col - 1
+		# Only connect to immediately previous row (adjacent nodes only)
+		var target_row = current_row - 1
 		
-		# Find nodes in the previous column
-		var prev_column_nodes: Array[MapNode] = []
+		# Find nodes in the previous row
+		var prev_row_nodes: Array[MapNode] = []
 		for node in nodes:
-			if node.column == target_col:
-				prev_column_nodes.append(node)
+			if node.column == target_row:  # column field stores row index
+				prev_row_nodes.append(node)
 		
-		if prev_column_nodes.is_empty():
+		if prev_row_nodes.is_empty():
 			continue
 		
-		# Connect to 1 node in previous column (reduced from 1-2)
-		var nodes_in_prev_col = prev_column_nodes.size()
+		# Connect to 1 node in previous row (reduced from 1-2)
+		var nodes_in_prev_row = prev_row_nodes.size()
 		
 		# Use similar flow logic for backward connections
-		var current_row = current_node.row
-		var nodes_in_current_col = _count_nodes_in_column(current_col)
+		var current_col = current_node.row  # row field stores column index
+		var nodes_in_current_row = _count_nodes_in_row(current_row)
 		
-		# Calculate target row in previous column
-		var ratio = float(current_row) / max(1.0, float(nodes_in_current_col - 1))
-		var target_row = int(ratio * float(nodes_in_prev_col - 1))
+		# Calculate target column in previous row
+		var ratio = float(current_col) / max(1.0, float(nodes_in_current_row - 1))
+		var target_col = int(ratio * float(nodes_in_prev_row - 1))
 		
 		# Connect to target node (avoid duplicates)
-		var target_id = prev_column_nodes[target_row].id
+		var target_id = prev_row_nodes[target_col].id
 		if not target_id in current_node.connections:
 			current_node.connections.append(target_id)
 
 
 ## Create natural flowing connections between nodes
-## Only connects to adjacent column (next column)
-func _create_flow_connections(current_node: MapNode, next_column_nodes: Array[MapNode], nodes_in_current_col: int) -> void:
-	var current_row = current_node.row
-	var nodes_in_next_col = next_column_nodes.size()
+## Only connects to adjacent row (next row, upward)
+func _create_flow_connections(current_node: MapNode, next_row_nodes: Array[MapNode], nodes_in_current_row: int) -> void:
+	var current_col = current_node.row  # row field stores column index
+	var nodes_in_next_row = next_row_nodes.size()
 	
-	# Calculate which rows in the next column this node should connect to
+	# Calculate which columns in the next row this node should connect to
 	# Use proportional mapping to create natural flow
-	var ratio = float(current_row) / max(1.0, float(nodes_in_current_col - 1))
-	var target_row = int(ratio * float(nodes_in_next_col - 1))
+	var ratio = float(current_col) / max(1.0, float(nodes_in_current_row - 1))
+	var target_col = int(ratio * float(nodes_in_next_row - 1))
 	
 	# Connect to target node (guaranteed first connection)
-	current_node.connections.append(next_column_nodes[target_row].id)
+	current_node.connections.append(next_row_nodes[target_col].id)
 	
 	# Enhanced connections: 2-3 connections per node (increased from 1-2)
 	var num_connections = randi_range(2, 3)
@@ -169,10 +171,10 @@ func _create_flow_connections(current_node: MapNode, next_column_nodes: Array[Ma
 	var available_indices: Array[int] = []
 	
 	# Collect available adjacent indices
-	if target_row > 0:
-		available_indices.append(target_row - 1)
-	if target_row < nodes_in_next_col - 1:
-		available_indices.append(target_row + 1)
+	if target_col > 0:
+		available_indices.append(target_col - 1)
+	if target_col < nodes_in_next_row - 1:
+		available_indices.append(target_col + 1)
 	
 	# Shuffle to add variety
 	available_indices.shuffle()
@@ -181,7 +183,7 @@ func _create_flow_connections(current_node: MapNode, next_column_nodes: Array[Ma
 	for idx in available_indices:
 		if connections_added >= num_connections:
 			break
-		var connection_id = next_column_nodes[idx].id
+		var connection_id = next_row_nodes[idx].id
 		if not connection_id in current_node.connections:
 			current_node.connections.append(connection_id)
 			connections_added += 1
@@ -198,14 +200,14 @@ func _validate_and_repair_connections() -> void:
 		
 		# Check if node has any outgoing connections
 		if node.connections.is_empty():
-			# Add connection to next column
-			var next_col = node.column + 1
-			if next_col < NUM_COLUMNS:
-				var next_column_nodes = get_nodes_in_column(next_col)
-				if not next_column_nodes.is_empty():
+			# Add connection to next row
+			var next_row = node.column + 1  # column field stores row index
+			if next_row < NUM_ROWS:
+				var next_row_nodes = get_nodes_in_row(next_row)
+				if not next_row_nodes.is_empty():
 					# Use flow logic to determine best connection
-					var nodes_in_current_col = _count_nodes_in_column(node.column)
-					_create_flow_connections(node, next_column_nodes, nodes_in_current_col)
+					var nodes_in_current_row = _count_nodes_in_row(node.column)
+					_create_flow_connections(node, next_row_nodes, nodes_in_current_row)
 	
 	# Build reverse connection map to check incoming connections
 	# (Rebuild after outgoing repairs to include newly added connections)
@@ -227,32 +229,32 @@ func _validate_and_repair_connections() -> void:
 		
 		# Check if node has any incoming connections
 		if incoming_connections[node.id].is_empty():
-			# Add connection from previous column
-			var prev_col = node.column - 1
-			if prev_col >= 0:
-				var prev_column_nodes = get_nodes_in_column(prev_col)
-				if not prev_column_nodes.is_empty():
-					# Find a node in previous column to connect from
+			# Add connection from previous row
+			var prev_row = node.column - 1  # column field stores row index
+			if prev_row >= 0:
+				var prev_row_nodes = get_nodes_in_row(prev_row)
+				if not prev_row_nodes.is_empty():
+					# Find a node in previous row to connect from
 					# Use flow logic to determine best source node
-					var nodes_in_prev_col = prev_column_nodes.size()
-					var nodes_in_current_col = _count_nodes_in_column(node.column)
+					var nodes_in_prev_row = prev_row_nodes.size()
+					var nodes_in_current_row = _count_nodes_in_row(node.column)
 					
-					# Calculate which node in previous column should connect to this one
-					var ratio = float(node.row) / max(1.0, float(nodes_in_current_col - 1))
-					var source_row = int(ratio * float(nodes_in_prev_col - 1))
+					# Calculate which node in previous row should connect to this one
+					var ratio = float(node.row) / max(1.0, float(nodes_in_current_row - 1))  # row field stores column index
+					var source_col = int(ratio * float(nodes_in_prev_row - 1))
 					
-					var source_node = prev_column_nodes[source_row]
+					var source_node = prev_row_nodes[source_col]
 					# Only add connection if source node is not the last node (last node shouldn't have outgoing connections)
 					# Add connection if not already present
 					if source_node.id != TOTAL_NODES - 1 and not node.id in source_node.connections:
 						source_node.connections.append(node.id)
 
 
-## Count how many nodes are in a given column
-func _count_nodes_in_column(column: int) -> int:
+## Count how many nodes are in a given row
+func _count_nodes_in_row(row: int) -> int:
 	var count = 0
 	for node in nodes:
-		if node.column == column:
+		if node.column == row:  # column field stores row index
 			count += 1
 	return count
 
@@ -329,34 +331,36 @@ func get_node(node_id: int) -> MapNode:
 	return null
 
 
-## Get all nodes in a specific column
-func get_nodes_in_column(column: int) -> Array[MapNode]:
+## Get all nodes in a specific row
+func get_nodes_in_row(row: int) -> Array[MapNode]:
 	var result: Array[MapNode] = []
 	for node in nodes:
-		if node.column == column:
+		if node.column == row:  # column field stores row index
 			result.append(node)
 	return result
 
 
 ## Calculate fuel costs for all connections based on distance
-## All connections are now adjacent (column distance = 1), so base cost is simpler
+## All connections are now adjacent (row distance = 1), so base cost is simpler
 func _calculate_fuel_costs() -> void:
 	for node in nodes:
 		for connection_id in node.connections:
 			var target_node = get_node(connection_id)
 			if target_node:
-				var column_distance = target_node.column - node.column
-				var row_distance = abs(target_node.row - node.row)
+				# column field stores row index (vertical progression)
+				# row field stores column index (horizontal positioning)
+				var row_distance = target_node.column - node.column  # Vertical distance
+				var column_distance = abs(target_node.row - node.row)  # Horizontal distance
 				
-				# Determine if this is a backward connection
-				var is_backward = column_distance < 0
+				# Determine if this is a backward connection (downward)
+				var is_backward = row_distance < 0
 				
 				# Since all connections are adjacent, base cost is 2 (increased from 1)
-				# (column distance should always be 1 or -1)
+				# (row distance should always be 1 or -1)
 				var fuel_cost = 2
 				
-				# Add penalty for row distance (diagonal/vertical movement)
-				if row_distance > 0:
+				# Add penalty for column distance (horizontal/diagonal movement)
+				if column_distance > 0:
 					fuel_cost += 2  # Increased from +1 to +2
 				
 				# Add penalty for backward connections (going backward is less efficient)

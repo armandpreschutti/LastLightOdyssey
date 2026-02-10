@@ -15,8 +15,9 @@ var node_graph: Array[StarMapGenerator.MapNode] = []
 var node_visuals: Dictionary = {}  # node_id -> MapNode visual instance
 var generator: StarMapGenerator = null  # Reference to generator for helper methods
 
-const COLUMN_SPACING = 180.0  # Horizontal spacing between columns
-const ROW_SPACING = 200.0  # Vertical spacing between rows
+const COLUMN_SPACING = 200.0  # Horizontal spacing between columns (within a row)
+const ROW_SPACING = 180.0  # Vertical spacing between rows (bottom-to-top progression)
+const NUM_ROWS = 16  # Number of rows in the map
 const RANDOMNESS = 25.0  # Maximum random offset for node positions
 
 const LINE_COLOR = Color(1.0, 0.69, 0.0, 0.25)  # Amber, transparent
@@ -181,35 +182,36 @@ func _create_visual_nodes() -> void:
 		node_visuals[node_data.id] = node_visual
 
 
-## Calculate base world position for a node based on its column and row
-## Uses a mix of vertical and circular/spiral layout
+## Calculate base world position for a node based on its row and column
+## Uses a mix of horizontal and circular/spiral layout (bottom-to-top progression)
 func _calculate_base_node_position(node_data: StarMapGenerator.MapNode) -> Vector2:
-	var column = node_data.column
-	var row = node_data.row
+	# Note: column field stores row index (vertical progression), row field stores column index (horizontal positioning)
+	var row = node_data.column  # Vertical progression (bottom-to-top)
+	var column = node_data.row  # Horizontal positioning within the row
 	
-	# Count nodes in this column to center them
-	var nodes_in_column = 0
+	# Count nodes in this row to center them horizontally
+	var nodes_in_row = 0
 	for n in node_graph:
-		if n.column == column:
-			nodes_in_column += 1
+		if n.column == row:  # column field stores row index
+			nodes_in_row += 1
 	
-	# Center the nodes vertically within the column
-	var vertical_offset = -(nodes_in_column - 1) * ROW_SPACING / 2.0
-	var base_y = vertical_offset + row * ROW_SPACING
+	# Center the nodes horizontally within the row
+	var horizontal_offset = -(nodes_in_row - 1) * COLUMN_SPACING / 2.0
+	var base_x = horizontal_offset + column * COLUMN_SPACING
 	
-	# Base column-based X position
-	var base_x = column * COLUMN_SPACING
+	# Base row-based Y position (inverted so row 0 is at bottom)
+	var base_y = (NUM_ROWS - 1 - row) * ROW_SPACING
 	
 	# Add circular/spiral component for more organic layout
-	# Spiral radius increases with column
-	var spiral_radius = column * 40.0
-	# Angle based on column position (creates spiral pattern)
-	var angle = column * 0.3
+	# Spiral radius increases with row (vertical progression)
+	var spiral_radius = row * 40.0
+	# Angle based on row position (creates spiral pattern)
+	var angle = row * 0.3
 	
 	# Mix the spiral offset with the base position
-	# Use spiral for Y offset, keep X mostly column-based with slight spiral
-	var spiral_x_offset = spiral_radius * cos(angle) * 0.3  # Subtle X spiral
-	var spiral_y_offset = spiral_radius * sin(angle) * 0.5  # More pronounced Y spiral
+	# Use spiral for X offset (horizontal), keep Y mostly row-based with slight spiral
+	var spiral_x_offset = spiral_radius * cos(angle) * 0.5  # More pronounced X spiral (horizontal)
+	var spiral_y_offset = spiral_radius * sin(angle) * 0.3  # Subtle Y spiral
 	
 	# Combine base position with spiral offset
 	var x = base_x + spiral_x_offset
@@ -227,6 +229,8 @@ func _draw_connection_lines() -> void:
 	# Track drawn connections to avoid duplicates
 	var drawn_connections: Dictionary = {}  # "from_id:to_id" -> true
 	
+	var current_node_id = GameState.current_node_index
+	
 	# Draw lines for each connection
 	for node_data in node_graph:
 		var from_id = node_data.id
@@ -241,14 +245,13 @@ func _draw_connection_lines() -> void:
 			
 			if node_visuals.has(connection_id):
 				var to_pos = node_visuals[connection_id].position + Vector2(35, 35)  # Center of node
-				var fuel_cost = node_data.connection_fuel_costs.get(connection_id, 1)
 				
-				# Only draw connections from current/available nodes
-				var from_state = _determine_initial_state(from_id)
-				if from_state == StarMapNode.NodeState.CURRENT or from_state == StarMapNode.NodeState.AVAILABLE:
+				# Only draw amber lines FROM the current node TO reachable nodes
+				if from_id == current_node_id:
+					var fuel_cost = node_data.connection_fuel_costs.get(connection_id, 1)
 					_draw_line_with_label(from_pos, to_pos, fuel_cost)
 				else:
-					# Draw dimmer line for locked connections
+					# Draw dimmer line for all other connections
 					_draw_line(from_pos, to_pos, true)
 
 

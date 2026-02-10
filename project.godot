@@ -26,6 +26,8 @@ GameState="*res://scripts/autoload/game_state.gd"
 EventManager="*res://scripts/autoload/event_manager.gd"
 TutorialManager="*res://scripts/autoload/tutorial_manager.gd"
 CombatRNG="*res://scripts/autoload/combat_rng.gd"
+MusicManager="*res://scripts/autoload/music_manager.gd"
+SFXManager="*res://scripts/autoload/sfx_manager.gd"
 
 [display]
 

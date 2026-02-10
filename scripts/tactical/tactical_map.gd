@@ -118,7 +118,8 @@ func _reveal_interactables_at(pos: Vector2i) -> void:
 
 
 func find_path(from: Vector2i, to: Vector2i) -> PackedVector2Array:
-	if astar.is_point_solid(to):
+	# Check if destination is blocked by terrain or turret
+	if astar.is_point_solid(to) or has_turret_at(to):
 		return PackedVector2Array()
 
 	# Temporarily unmark start position so unit can path from its own tile
@@ -127,6 +128,33 @@ func find_path(from: Vector2i, to: Vector2i) -> PackedVector2Array:
 		astar.set_point_solid(from, false)
 
 	var path = astar.get_point_path(from, to)
+	
+	# Check if path goes through any turret tiles
+	# AStarGrid2D.get_point_path() returns world positions at tile corners
+	# We need to check each tile the path passes through
+	if path.size() > 1:
+		# Convert path to grid positions and check each tile
+		var checked_tiles: Dictionary = {}
+		for i in range(path.size()):
+			var world_pos = path[i]
+			var grid_pos = world_to_grid(world_pos)
+			# Skip if we've already checked this tile
+			if checked_tiles.has(grid_pos):
+				continue
+			checked_tiles[grid_pos] = true
+			
+			# Check start and end positions (skip them as they're already validated)
+			if i == 0 and grid_pos == from:
+				continue
+			if i == path.size() - 1 and grid_pos == to:
+				continue
+			
+			# Check if this tile has a turret
+			if has_turret_at(grid_pos):
+				# Path blocked by turret, return empty
+				if start_was_solid:
+					astar.set_point_solid(from, true)
+				return PackedVector2Array()
 
 	if start_was_solid:
 		astar.set_point_solid(from, true)
@@ -141,10 +169,28 @@ func get_movement_cost(from: Vector2i, to: Vector2i) -> int:
 	return path.size() - 1
 
 
+## Check if a tile has a turret on it
+func has_turret_at(pos: Vector2i) -> bool:
+	var world_pos = grid_to_world(pos)
+	# Check all children for turrets (turrets are added as children to tactical_map)
+	for child in get_children():
+		# Check if this child is a turret by checking if it has the turret-specific methods
+		if child.has_method("get_grid_position") and child.has_method("tick_turn"):
+			var turret_pos = child.get_grid_position()
+			if turret_pos == pos:
+				return true
+	return false
+
+
 func is_tile_walkable(pos: Vector2i) -> bool:
 	if pos.x < 0 or pos.x >= map_width or pos.y < 0 or pos.y >= map_height:
 		return false
-	return not astar.is_point_solid(pos)
+	# Check if tile is blocked by terrain or has a turret
+	if astar.is_point_solid(pos):
+		return false
+	if has_turret_at(pos):
+		return false
+	return true
 
 
 ## Check if a tile blocks line of sight (only walls block LOS, not cover)
@@ -1320,8 +1366,8 @@ func set_movement_range(center: Vector2i, move_range: int) -> void:
 				if next_pos.x < 0 or next_pos.x >= map_width or next_pos.y < 0 or next_pos.y >= map_height:
 					continue
 				
-				# Check if walkable and not visited
-				if not visited.has(next_pos) and not astar.is_point_solid(next_pos):
+				# Check if walkable (not solid terrain and no turret) and not visited
+				if not visited.has(next_pos) and not astar.is_point_solid(next_pos) and not has_turret_at(next_pos):
 					visited[next_pos] = true
 					distances[next_pos] = dist + 1
 					movement_range_tiles[next_pos] = true

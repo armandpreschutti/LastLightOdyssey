@@ -42,11 +42,15 @@ func _input(event: InputEvent) -> void:
 
 
 func _on_resume_pressed() -> void:
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
 	resume_pressed.emit()
 	queue_free()
 
 
 func _on_abandon_pressed() -> void:
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
 	# Apply colonist penalty
 	GameState.colonist_count -= ABANDON_COLONIST_COST
 	

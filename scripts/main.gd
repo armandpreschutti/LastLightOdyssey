@@ -285,6 +285,10 @@ func _on_team_selected(officer_keys: Array[String], objectives: Array[MissionObj
 	_pending_officer_keys.clear()
 	_pending_objectives.clear()
 	
+	# Start tactical music if this is a scavenger mission
+	if pending_node_type == EventManager.NodeType.SCAVENGE_SITE:
+		MusicManager.play_tactical_music()
+	
 	# Fade in from black
 	fade_transition.fade_in(0.6)
 
@@ -318,6 +322,10 @@ func _on_mission_scene_dismissed() -> void:
 		tactical_mode.start_mission(_pending_officer_keys, pending_biome_type, [])
 		_pending_officer_keys.clear()
 		_pending_objectives.clear()
+		
+		# Start tactical music if this is a scavenger mission
+		if pending_node_type == EventManager.NodeType.SCAVENGE_SITE:
+			MusicManager.play_tactical_music()
 	else:
 		# New flow - show team select dialog after scene
 		current_phase = GamePhase.TEAM_SELECT
@@ -331,6 +339,9 @@ func _on_mission_scene_dismissed() -> void:
 
 
 func _on_mission_complete(_success: bool, stats: Dictionary) -> void:
+	# Stop tactical music when leaving tactical mode
+	MusicManager.stop_music()
+	
 	# Fade to black, then transition back to management mode
 	fade_transition.fade_out(0.6)
 	await fade_transition.fade_complete
@@ -360,6 +371,9 @@ func _on_mission_complete(_success: bool, stats: Dictionary) -> void:
 func _on_recap_dismissed() -> void:
 	current_phase = GamePhase.IDLE
 	pending_biome_type = -1
+	
+	# Resume navigation music after returning from tactical mission
+	MusicManager.play_navigation_music()
 	
 	# Tutorial: Notify mission complete
 	TutorialManager.notify_trigger("mission_complete")
@@ -411,6 +425,9 @@ func _show_voyage_intro() -> void:
 func _on_voyage_intro_scene_dismissed() -> void:
 	# After voyage intro is dismissed, allow normal gameplay
 	current_phase = GamePhase.IDLE
+	
+	# Start navigation music when entering IDLE phase
+	MusicManager.play_navigation_music()
 	
 	# Trigger first tutorial step after voyage intro completes
 	if TutorialManager.is_active() and TutorialManager.is_at_step("star_map_intro"):
@@ -481,6 +498,8 @@ func _on_colonist_loss_scene_dismissed() -> void:
 	else:
 		# No pending logic, return to idle
 		current_phase = GamePhase.IDLE
+		# Resume navigation music after returning from tactical mission
+		MusicManager.play_navigation_music()
 
 
 func _on_objective_complete_scene_dismissed() -> void:
@@ -496,16 +515,23 @@ func _on_enemy_elimination_scene_dismissed() -> void:
 
 
 func _on_quit_to_menu() -> void:
+	# Stop all music when quitting to menu
+	MusicManager.stop_music()
 	# Return to title menu
 	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
 
 
 func _on_main_menu_pressed() -> void:
+	# Stop all music when returning to menu
+	MusicManager.stop_music()
 	# Return to title menu
 	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
 
 
 func _on_restart_pressed() -> void:
+	# Stop all music when restarting
+	MusicManager.stop_music()
+	
 	GameState.reset_game()
 	current_phase = GamePhase.IDLE
 	current_event = {}
