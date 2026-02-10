@@ -33,7 +33,6 @@ func setup(title: String, message: String, yes_text: String = "YES", no_text: St
 func show_dialog() -> void:
 	visible = true
 	no_button.grab_focus()
-	AudioManager.play_sfx("ui_dialog_open")
 	
 	# Animate appearance
 	modulate.a = 0.0
@@ -52,7 +51,6 @@ func _on_no_pressed() -> void:
 
 
 func _close() -> void:
-	AudioManager.play_sfx("ui_dialog_close")
 	var tween = create_tween()
 	tween.tween_property(self, "modulate:a", 0.0, 0.15)
 	tween.tween_callback(queue_free)

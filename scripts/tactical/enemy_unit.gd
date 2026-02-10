@@ -331,8 +331,6 @@ func is_moving() -> bool:
 ## Set alert state (when enemy detects player)
 func set_alerted(alerted: bool) -> void:
 	is_alerted = alerted
-	if alerted:
-		AudioManager.play_sfx("combat_enemy_alert")
 	if alert_indicator:
 		alert_indicator.visible = alerted
 		

@@ -4,6 +4,7 @@ extends CanvasLayer
 @onready var fullscreen_dim: ColorRect = $FullscreenDim
 @onready var prompt_container: Control = $PromptContainer
 @onready var prompt_panel: PanelContainer = $PromptContainer/PromptPanel
+
 @onready var title_label: Label = $PromptContainer/PromptPanel/MarginContainer/VBoxContainer/HeaderContainer/TitleLabel
 @onready var step_counter: Label = $PromptContainer/PromptPanel/MarginContainer/VBoxContainer/HeaderContainer/StepCounter
 @onready var content_label: Label = $PromptContainer/PromptPanel/MarginContainer/VBoxContainer/ContentLabel
@@ -62,13 +63,15 @@ func _show_prompt(step_data: Dictionary) -> void:
 	if _is_showing:
 		# Quick transition between steps
 		_update_content(step_data)
+		# Reposition in case the new step has a different position
+		_position_panel(step_data.get("position", "center"), step_data.get("target", ""))
 		return
 	
 	_is_showing = true
 	_update_content(step_data)
 	
 	# Position the panel based on step data
-	_position_panel(step_data.get("position", "center"))
+	_position_panel(step_data.get("position", "center"), step_data.get("target", ""))
 	
 	# Make visible before animating
 	fullscreen_dim.visible = true
@@ -132,10 +135,16 @@ func _hide_immediate() -> void:
 func _update_content(step_data: Dictionary) -> void:
 	content_label.text = step_data.get("text", "")
 	
-	# Update step counter
-	var current_index = TutorialManager.current_step_index + 1
+	# Update step counter with dynamic display number
+	var step_id = step_data.get("id", "")
+	var display_number = TutorialManager.get_step_display_number(step_id)
 	var total_steps = TutorialManager.tutorial_steps.size()
-	step_counter.text = "[%d/%d]" % [current_index, total_steps]
+	
+	# If display number not assigned yet, use current index as fallback
+	if display_number == 0:
+		display_number = TutorialManager.current_step_index + 1
+	
+	step_counter.text = "[%d/%d]" % [display_number, total_steps]
 	
 	# Show/hide "Got It" button based on trigger type
 	var trigger = step_data.get("trigger", "acknowledged")
@@ -152,7 +161,7 @@ func _update_content(step_data: Dictionary) -> void:
 		timer.timeout.connect(func(): got_it_button.disabled = false)
 
 
-func _position_panel(position: String) -> void:
+func _position_panel(position: String, target: String = "") -> void:
 	var viewport_size = get_viewport().get_visible_rect().size
 	var panel_size = prompt_panel.size
 	
@@ -162,7 +171,23 @@ func _position_panel(position: String) -> void:
 		"left":
 			prompt_panel.position = Vector2(50, (viewport_size.y - panel_size.y) / 2)
 		"right":
-			prompt_panel.position = Vector2(viewport_size.x - panel_size.x - 50, (viewport_size.y - panel_size.y) / 2)
+			# Check if target is management_hud to position relative to SHIP STATUS panel
+			if target == "management_hud":
+				var ship_status_panel = _find_ship_status_panel()
+				if ship_status_panel:
+					# Position to the right of SHIP STATUS panel, aligned to its top
+					# Get the panel's position in screen coordinates
+					var ship_status_rect = ship_status_panel.get_global_rect()
+					prompt_panel.position = Vector2(
+						ship_status_rect.position.x + ship_status_rect.size.x + 20,  # 20px spacing
+						ship_status_rect.position.y  # Align to top of SHIP STATUS panel
+					)
+				else:
+					# Fallback to right side of screen
+					prompt_panel.position = Vector2(viewport_size.x - panel_size.x - 50, (viewport_size.y - panel_size.y) / 2)
+			else:
+				# Standard right side positioning
+				prompt_panel.position = Vector2(viewport_size.x - panel_size.x - 50, (viewport_size.y - panel_size.y) / 2)
 		"top":
 			prompt_panel.position = Vector2((viewport_size.x - panel_size.x) / 2, 50)
 		"bottom":
@@ -224,18 +249,30 @@ func _on_pulse_timer_timeout() -> void:
 
 func _on_got_it_pressed() -> void:
 	var trigger = _current_step_data.get("trigger", "acknowledged")
+	var current_step_id = _current_step_data.get("id", "")
 	
 	if trigger == "acknowledged":
 		# This step advances on button press
 		# Hide the prompt first, then acknowledge
 		_hide_prompt()
-		# Wait a moment for the hide animation, then acknowledge
-		await get_tree().create_timer(0.1).timeout
+		# Wait for hide animation to complete (0.2s), then wait 1 second before advancing
+		await get_tree().create_timer(0.2).timeout  # Wait for hide animation
+		await get_tree().create_timer(1.0).timeout  # Wait 1 second after panel closes
 		TutorialManager.acknowledge_step()
 	else:
-		# For event-triggered steps, just hide the prompt temporarily
-		# The TutorialManager will show the next step when the event fires
-		_hide_prompt()
+		# For event-triggered steps, check if this is step 1/9 (star_map_intro)
+		# If so, advance to step 2/9 after 1 second delay
+		if current_step_id == "star_map_intro":
+			_hide_prompt()
+			# Wait for hide animation to complete (0.2s), then wait 1 second before advancing
+			await get_tree().create_timer(0.2).timeout  # Wait for hide animation
+			await get_tree().create_timer(1.0).timeout  # Wait 1 second after panel closes
+			# Force show step 2/9 (resources_intro) immediately
+			TutorialManager.force_show_step("resources_intro")
+		else:
+			# For other event-triggered steps, just hide the prompt temporarily
+			# The TutorialManager will show the next step when the event fires
+			_hide_prompt()
 
 
 func _on_skip_pressed() -> void:
@@ -273,3 +310,28 @@ func restore_visibility() -> void:
 func _check_ui_blocking() -> bool:
 	# Use TutorialManager's blocking check
 	return TutorialManager._check_ui_blocking()
+
+
+## Public method to check if tutorial panel is currently showing
+func is_showing() -> bool:
+	return _is_showing
+
+
+## Find the SHIP STATUS panel (ManagementHUD) in the scene tree
+func _find_ship_status_panel() -> Control:
+	# Try to find ManagementHUD node
+	var main_node = get_tree().get_first_node_in_group("main")
+	if not main_node:
+		# Try to get Main from root
+		var root = get_tree().root
+		for child in root.get_children():
+			if child.name == "Main" or (child.get_script() and child.get_script().resource_path.ends_with("main.gd")):
+				main_node = child
+				break
+	
+	if main_node:
+		var management_hud = main_node.get_node_or_null("ManagementHUD")
+		if management_hud:
+			return management_hud
+	
+	return null

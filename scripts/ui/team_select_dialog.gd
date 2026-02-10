@@ -45,7 +45,6 @@ func show_dialog(biome_type: int = -1) -> void:
 	_update_selected_label()
 	deploy_button.disabled = true
 	visible = true
-	AudioManager.play_sfx("ui_dialog_open")
 
 
 func _update_title() -> void:

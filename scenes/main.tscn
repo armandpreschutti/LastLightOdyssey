@@ -205,7 +205,6 @@ visible = false
 layer = 100
 
 [node name="FadeTransition" parent="FadeTransitionLayer" unique_id=1428451195 instance=ExtResource("14_fade")]
-visible = false
 
 [node name="TacticalMode" parent="." unique_id=45556294 instance=ExtResource("5_tactical")]
 visible = false

@@ -165,9 +165,8 @@ func _apply_display_settings() -> void:
 
 
 func _apply_audio_settings() -> void:
-	AudioManager.set_bus_volume("Master", _pending_master)
-	AudioManager.set_bus_volume("SFX", _pending_sfx)
-	AudioManager.set_bus_volume("Music", _pending_music)
+	# Audio settings are saved but not applied (no audio playback)
+	pass
 
 
 func _on_fullscreen_toggled(toggled: bool) -> void:
@@ -216,7 +215,6 @@ func _on_reset_tutorial_pressed() -> void:
 
 
 func _on_apply_pressed() -> void:
-	AudioManager.play_sfx("ui_click")
 	_save_settings()
 	_apply_display_settings()
 	_apply_audio_settings()
@@ -240,7 +238,6 @@ func _on_apply_pressed() -> void:
 
 
 func _on_back_pressed() -> void:
-	AudioManager.play_sfx("ui_click")
 	# Fade out and remove
 	var tween = create_tween()
 	tween.tween_property(self, "modulate:a", 0.0, 0.2)

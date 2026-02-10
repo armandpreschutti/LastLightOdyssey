@@ -56,7 +56,6 @@ func _ready() -> void:
 	_initialize_star_map()
 	_initialize_tutorial()
 	tactical_mode.visible = false
-	AudioManager.play_music("management")
 	
 	# Wait a frame to ensure everything is initialized, then fade in from black
 	await get_tree().process_frame
@@ -121,12 +120,30 @@ func _initialize_tutorial() -> void:
 
 func _on_node_clicked(node_id: int) -> void:
 	
+	# Block interactions when tutorial is active
+	if tutorial_overlay and tutorial_overlay.is_showing():
+		return
+	
 	if current_phase != GamePhase.IDLE:
 		return
 	
 	if _is_jump_animating:
 		return
 	
+	var current_node = GameState.current_node_index
+	
+	# If clicking the current node (e.g., re-clicking an OUTPOST), skip jump and process directly
+	if node_id == current_node:
+		# Block interactions when tutorial is active
+		if tutorial_overlay and tutorial_overlay.is_showing():
+			return
+		
+		var node_type = star_map.get_node_type(node_id)
+		if node_type == EventManager.NodeType.TRADING_OUTPOST:
+			# Reopen trading interface without jumping
+			current_phase = GamePhase.TRADING
+			trading_dialog.show_trading()
+			return
 	
 	# Tutorial: Notify that a node was clicked (first time only for intro step)
 	if not _first_node_clicked:
@@ -186,6 +203,12 @@ func _process_node_after_jump(node_id: int) -> void:
 	
 	match pending_node_type:
 		EventManager.NodeType.SCAVENGE_SITE:
+			# Tutorial: Trigger scavenge_intro if not shown yet
+			if TutorialManager.is_active() and not "scavenge_intro" in TutorialManager._shown_step_ids:
+				# Wait a moment for jump animation, then trigger
+				await get_tree().create_timer(0.5).timeout
+				TutorialManager.trigger_step_by_id("scavenge_intro")
+			
 			# Show mission scene first, then team selection
 			current_phase = GamePhase.EVENT_DISPLAY
 			mission_scene_dialog.show_scene(pending_biome_type)
@@ -248,7 +271,6 @@ func _on_team_selected(officer_keys: Array[String], objectives: Array[MissionObj
 	
 	# Go directly to tactical mission (scene was already shown before team select)
 	current_phase = GamePhase.TACTICAL
-	AudioManager.play_music("combat")
 	
 	# Hide management UI, show tactical
 	management_layer.visible = false
@@ -282,7 +304,6 @@ func _on_mission_scene_dismissed() -> void:
 	if _pending_officer_keys.size() > 0:
 		# Old flow - start tactical mission directly (shouldn't happen with new flow)
 		current_phase = GamePhase.TACTICAL
-		AudioManager.play_music("combat")
 		
 		# Hide management UI, show tactical
 		management_layer.visible = false
@@ -318,7 +339,6 @@ func _on_mission_complete(_success: bool, stats: Dictionary) -> void:
 	tactical_mode.visible = false
 	management_layer.visible = true
 	management_background.visible = true
-	AudioManager.play_music("management")
 	
 	# Fade in from black
 	fade_transition.fade_in(0.6)
@@ -355,8 +375,6 @@ func _on_game_over(reason: String) -> void:
 	tactical_mode.visible = false
 	management_layer.visible = true
 	management_background.visible = true
-	AudioManager.stop_music(1.5)
-	AudioManager.play_sfx("alarm_game_over")
 
 	# Show game over scene dialog first
 	game_over_scene_dialog.show_scene(reason)
@@ -369,7 +387,6 @@ func _on_game_won(ending_type: String) -> void:
 	tactical_mode.visible = false
 	management_layer.visible = false
 	management_background.visible = true
-	AudioManager.play_sfx("alarm_victory")
 
 	# Show New Earth arrival scene first
 	new_earth_scene.show_scene(ending_type)
@@ -479,13 +496,11 @@ func _on_enemy_elimination_scene_dismissed() -> void:
 
 
 func _on_quit_to_menu() -> void:
-	AudioManager.stop_music(0.5)
 	# Return to title menu
 	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
 
 
 func _on_main_menu_pressed() -> void:
-	AudioManager.stop_music(0.5)
 	# Return to title menu
 	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
 

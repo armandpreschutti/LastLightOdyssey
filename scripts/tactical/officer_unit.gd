@@ -162,7 +162,6 @@ func move_along_path(path: PackedVector2Array) -> void:
 		movement_finished.emit()
 		return
 
-	AudioManager.play_sfx("move_step")
 	# AStarGrid2D returns corner positions, but we need centered positions
 	# Offset each position by half tile size (16 pixels) to center units in tiles
 	var centered_path: PackedVector2Array = []
@@ -238,7 +237,6 @@ func _start_cooldown(cooldown_turns: int = ABILITY_MAX_COOLDOWN) -> void:
 
 
 func take_damage(amount: int) -> void:
-	AudioManager.play_sfx("combat_damage")
 	var actual_damage = amount
 	current_hp -= actual_damage
 	_update_hp_bar()

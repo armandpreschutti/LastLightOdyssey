@@ -110,6 +110,11 @@ var current_step_index: int = 0
 var tutorial_completed_flag: bool = false
 var _pending_triggers: Array[String] = []
 
+# Dynamic step tracking
+var _shown_step_ids: Array[String] = []  # Track which step IDs have been shown
+var _step_order_map: Dictionary = {}  # Map step IDs to their display order (1-9)
+var _next_display_number: int = 3  # Next available display number (3-9, since 1-2 are fixed)
+
 # Queue system for delayed/conditional step triggering
 var _queued_steps: Array[Dictionary] = []  # Array of {step_index, delay, context_check, timer}
 var _delay_timer: Timer = null
@@ -123,6 +128,10 @@ func _ready() -> void:
 	_delay_timer.one_shot = true
 	_delay_timer.timeout.connect(_on_delay_timer_timeout)
 	add_child(_delay_timer)
+	
+	# Initialize fixed step display numbers
+	_step_order_map["star_map_intro"] = 1
+	_step_order_map["resources_intro"] = 2
 
 
 func _load_tutorial_state() -> void:
@@ -156,9 +165,15 @@ func reset_tutorial() -> void:
 	tutorial_completed_flag = false
 	current_step_index = 0
 	is_tutorial_active = false
+	_shown_step_ids.clear()
+	_step_order_map.clear()
+	_next_display_number = 3
 	_queued_steps.clear()
 	if _delay_timer:
 		_delay_timer.stop()
+	# Re-initialize fixed step display numbers
+	_step_order_map["star_map_intro"] = 1
+	_step_order_map["resources_intro"] = 2
 	_save_tutorial_state()
 
 
@@ -187,6 +202,8 @@ func acknowledge_step() -> void:
 	
 	if current_step.get("trigger", "") == "acknowledged":
 		advance_step()
+		# Check if tutorial should complete after advancing
+		_check_tutorial_completion()
 
 
 ## Called by game systems when specific events occur
@@ -194,13 +211,30 @@ func notify_trigger(trigger_name: String) -> void:
 	if not is_tutorial_active:
 		return
 	
+	# Check if there's a step waiting for this trigger
+	if should_show_step_by_trigger(trigger_name):
+		# Find the step that matches this trigger
+		for i in range(tutorial_steps.size()):
+			var step = tutorial_steps[i]
+			var step_id = step.get("id", "")
+			var step_trigger = step.get("trigger", "")
+			
+			# Skip if already shown
+			if step_id in _shown_step_ids:
+				continue
+			
+			# Check if this trigger matches
+			if step_trigger == trigger_name:
+				# Check prerequisites
+				if _check_step_prerequisites(step_id):
+					trigger_step_by_id(step_id)
+					return
+	
+	# Also check current step (for linear progression of steps 1-2)
 	var current_step = get_current_step()
-	if current_step.is_empty():
-		return
-	
-	
-	if current_step.get("trigger", "") == trigger_name:
-		advance_step()
+	if not current_step.is_empty():
+		if current_step.get("trigger", "") == trigger_name:
+			advance_step()
 
 
 ## Advance to the next tutorial step
@@ -208,24 +242,40 @@ func advance_step() -> void:
 	if not is_tutorial_active:
 		return
 	
-	current_step_index += 1
-	
-	if current_step_index >= tutorial_steps.size():
-		_complete_tutorial()
+	var current_step = get_current_step()
+	if current_step.is_empty():
 		return
 	
-	# Check context before showing next step
-	# For steps with "acknowledged" trigger and no context wait, show immediately with delay
-	var next_step = get_current_step()
-	if next_step.get("trigger", "") == "acknowledged" and next_step.get("wait_for_context", "").is_empty():
-		# Show immediately with delay
-		var delay = next_step.get("delay_after_trigger", 1.0)
-		if delay > 0:
-			queue_step(current_step_index, delay)
-		else:
+	var current_step_id = current_step.get("id", "")
+	
+	# Mark current step as shown
+	mark_step_shown(current_step_id)
+	
+	# For steps 1-2 (fixed), use linear progression
+	if current_step_id in ["star_map_intro", "resources_intro"]:
+		var previous_step_index = current_step_index
+		current_step_index += 1
+		
+		if current_step_index >= tutorial_steps.size():
+			_check_tutorial_completion()
+			return
+		
+		# Special case: transitioning from step 0 (1/9) to step 1 (2/9)
+		if previous_step_index == 0 and current_step_index == 1:
 			_trigger_current_step()
+		else:
+			var next_step = get_current_step()
+			if next_step.get("trigger", "") == "acknowledged" and next_step.get("wait_for_context", "").is_empty():
+				var delay = next_step.get("delay_after_trigger", 1.0)
+				if delay > 0:
+					queue_step(current_step_index, delay)
+				else:
+					_trigger_current_step()
+			else:
+				_check_and_show_next_step()
 	else:
-		_check_and_show_next_step()
+		# For steps 3-9, check if tutorial is complete
+		_check_tutorial_completion()
 
 
 ## Get the current tutorial step data
@@ -267,6 +317,11 @@ func _trigger_current_step() -> void:
 	if step.is_empty():
 		return
 	
+	var step_id = step.get("id", "")
+	
+	# Mark step as shown if not already
+	mark_step_shown(step_id)
+	
 	# Clear any queued steps for this index to avoid conflicts
 	for i in range(_queued_steps.size() - 1, -1, -1):
 		if _queued_steps[i].get("step_index", -1) == current_step_index:
@@ -276,7 +331,7 @@ func _trigger_current_step() -> void:
 	if _delay_timer and _delay_timer.time_left > 0:
 		_delay_timer.stop()
 	
-	tutorial_step_triggered.emit(step.get("id", ""), step)
+	tutorial_step_triggered.emit(step_id, step)
 
 
 func _complete_tutorial() -> void:
@@ -286,10 +341,109 @@ func _complete_tutorial() -> void:
 	tutorial_completed.emit()
 
 
+## Check if all tutorial steps have been shown and complete tutorial if so
+func _check_tutorial_completion() -> void:
+	# Check if all 9 steps have been shown
+	if _shown_step_ids.size() >= 9:
+		_complete_tutorial()
+
+
 ## Utility: Check if we're at a specific step
 func is_at_step(step_id: String) -> bool:
 	var current = get_current_step()
 	return current.get("id", "") == step_id
+
+
+## Mark a step as shown and assign it a display number
+func mark_step_shown(step_id: String) -> void:
+	if step_id in _shown_step_ids:
+		return  # Already shown
+	
+	_shown_step_ids.append(step_id)
+	
+	# Assign display number if not already assigned
+	if not step_id in _step_order_map:
+		# Steps 1-2 are fixed, 3-4 are dynamic, 5-9 are fixed after scavenger
+		if step_id == "star_map_intro":
+			_step_order_map[step_id] = 1
+		elif step_id == "resources_intro":
+			_step_order_map[step_id] = 2
+		elif step_id in ["event_intro", "scavenge_intro"]:
+			# Dynamic steps 3-4: assign next available number
+			_step_order_map[step_id] = _next_display_number
+			_next_display_number += 1
+		else:
+			# Steps 5-9: assign in order
+			_step_order_map[step_id] = _next_display_number
+			_next_display_number += 1
+
+
+## Get the display number for a step (1-9)
+func get_step_display_number(step_id: String) -> int:
+	if step_id in _step_order_map:
+		return _step_order_map[step_id]
+	return 0  # Not assigned yet
+
+
+## Check if a step should be shown based on trigger
+func should_show_step_by_trigger(trigger_name: String) -> bool:
+	if not is_tutorial_active:
+		return false
+	
+	# Check if there's a step waiting for this trigger that hasn't been shown
+	for step in tutorial_steps:
+		var step_id = step.get("id", "")
+		var step_trigger = step.get("trigger", "")
+		
+		# Skip if already shown
+		if step_id in _shown_step_ids:
+			continue
+		
+		# Check if this trigger matches and step should be shown
+		if step_trigger == trigger_name:
+			# Special handling for steps 3-4 (event_intro, scavenge_intro)
+			if step_id in ["event_intro", "scavenge_intro"]:
+				# These can show at any time after resources_intro
+				if "resources_intro" in _shown_step_ids:
+					return true
+			else:
+				# Other steps need their prerequisites
+				return _check_step_prerequisites(step_id)
+	
+	return false
+
+
+## Check if step prerequisites are met
+func _check_step_prerequisites(step_id: String) -> bool:
+	match step_id:
+		"tactical_movement", "tactical_combat", "tactical_abilities", "cryo_stability", "extraction":
+			# Tactical steps require scavenge_intro to be shown
+			return "scavenge_intro" in _shown_step_ids
+		_:
+			return true
+
+
+## Trigger a specific step by ID
+func trigger_step_by_id(step_id: String) -> void:
+	if not is_tutorial_active:
+		return
+	
+	# Check if step already shown
+	if step_id in _shown_step_ids:
+		return
+	
+	# Find the step
+	for i in range(tutorial_steps.size()):
+		if tutorial_steps[i].get("id", "") == step_id:
+			# Mark as shown and assign display number
+			mark_step_shown(step_id)
+			
+			# Set current step index
+			current_step_index = i
+			
+			# Trigger the step
+			_trigger_current_step()
+			return
 
 
 ## Force show a specific step (for debugging or special cases)

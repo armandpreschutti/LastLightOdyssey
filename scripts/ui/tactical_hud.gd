@@ -8,7 +8,10 @@ signal ability_used(ability_type: String)
 signal pause_pressed
 signal ability_cancelled
 
-# Pause button (top left)
+# Pause button panel (top left) - includes panel, glow, and border
+@onready var pause_panel: PanelContainer = $TopLeftPanel
+@onready var pause_glow: ColorRect = $TopLeftGlow
+@onready var pause_border: ColorRect = $TopLeftBorder
 @onready var pause_button: Button = $TopLeftPanel/PauseButton
 
 # Top bar elements - updated paths for icon-based layout
@@ -70,6 +73,11 @@ func _ready() -> void:
 	extract_button.visible = false
 	ability_container.visible = false
 	cancel_button.visible = false
+	
+	# Hide pause panel and all its decorative elements by default - only show during active tactical missions
+	pause_panel.visible = false
+	pause_glow.visible = false
+	pause_border.visible = false
 	
 	# Set up tooltips
 	_setup_tooltips()
@@ -390,3 +398,17 @@ func initialize_objectives(objectives: Array[MissionObjective]) -> void:
 func update_objective(objective_id: String) -> void:
 	if objectives_panel:
 		objectives_panel.update_objective(objective_id)
+
+
+## Show the pause button panel (only during active tactical missions)
+func show_pause_button() -> void:
+	pause_panel.visible = true
+	pause_glow.visible = true
+	pause_border.visible = true
+
+
+## Hide the pause button panel (when not in tactical missions)
+func hide_pause_button() -> void:
+	pause_panel.visible = false
+	pause_glow.visible = false
+	pause_border.visible = false

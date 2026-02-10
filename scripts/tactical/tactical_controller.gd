@@ -187,7 +187,8 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		biome_background.set_biome(current_biome)
 	
 	var generator = MapGenerator.new()
-	var layout = generator.generate(current_biome)
+	# Pass voyage progression to scale map size
+	var layout = generator.generate(current_biome, GameState.current_node_index, GameState.nodes_to_new_earth)
 	
 	# Set tactical map dimensions and biome theme
 	var map_dims = generator.get_map_dimensions()
@@ -466,6 +467,8 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	
 	# Now activate the mission and start the turn
 	mission_active = true
+	# Show pause button only when mission is active
+	tactical_hud.show_pause_button()
 
 	# Select first officer (start of turn order)
 	if deployed_officers.size() > 0:
@@ -738,8 +741,9 @@ func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
 	unit.set_grid_position(target_pos)
 	unit.move_along_path(path)
 	
-	# Tutorial: Notify that a unit moved
-	TutorialManager.notify_trigger("unit_moved")
+	# Tutorial: Notify that a unit moved (only if scavenge_intro has been shown)
+	if TutorialManager.is_active() and "scavenge_intro" in TutorialManager._shown_step_ids:
+		TutorialManager.notify_trigger("unit_moved")
 
 	# Update HUD (cover level will be updated after movement finishes)
 	tactical_hud.update_selected_unit_full(
@@ -973,7 +977,6 @@ func _pickup_item(interactable: Node2D, unit: Node2D) -> void:
 			# Health pack heals the unit for 62.5% max HP (same as Medic patch)
 			var heal_amount = int(unit.max_hp * 0.625)
 			unit.heal(heal_amount)
-			AudioManager.play_sfx("combat_heal")
 			amount = heal_amount
 		
 		# Spawn pickup popup at unit position (slightly above unit, offset way to the left)
@@ -1030,7 +1033,6 @@ func _check_auto_end_turn() -> void:
 
 
 func _on_end_turn_pressed() -> void:
-	AudioManager.play_sfx("ui_end_turn")
 	# Cancel precision mode when ending turn
 	if precision_mode:
 		precision_mode = false
@@ -1082,7 +1084,6 @@ func _on_end_turn_pressed() -> void:
 		
 		# Show cryo failure warning if stability is 0
 		if GameState.cryo_stability <= 0:
-			AudioManager.play_sfx("alarm_cryo")
 			tactical_hud.show_cryo_warning()
 		
 		turn_ended.emit(current_turn)
@@ -1337,7 +1338,6 @@ func _on_officer_died(officer_key: String) -> void:
 			_select_unit(deployed_officers[0])
 	
 	# Play death animation
-	AudioManager.play_sfx("combat_death")
 	if dying_officer.has_method("play_death_animation"):
 		await dying_officer.play_death_animation()
 	
@@ -1354,6 +1354,7 @@ func _on_officer_died(officer_key: String) -> void:
 
 func _end_mission(success: bool) -> void:
 	mission_active = false
+	tactical_hud.hide_pause_button()  # Hide pause button when mission ends
 	GameState.exit_tactical_mode()
 
 	# Clear attackable highlights
@@ -1474,6 +1475,7 @@ func _end_mission(success: bool) -> void:
 func _cleanup_tactical_ui() -> void:
 	tactical_hud.visible = false
 	tactical_hud.hide_combat_message()
+	tactical_hud.hide_pause_button()  # Hide pause button when leaving tactical mode
 	# Clear any pending pause menu
 	if current_pause_menu != null:
 		current_pause_menu.queue_free()
@@ -1484,7 +1486,6 @@ func _cleanup_tactical_ui() -> void:
 
 ## Play beam-up extraction animation - units float up with a light beam effect
 func _play_beam_up_animation() -> void:
-	AudioManager.play_sfx("move_extraction")
 	# Hide HUD during animation
 	tactical_hud.show_combat_message("EXTRACTION IN PROGRESS...", Color(0.4, 0.9, 1.0))
 	
@@ -1557,7 +1558,6 @@ func _play_beam_up_animation() -> void:
 
 ## Play beam-down insertion animation - units descend from above with a light beam effect
 func _play_beam_down_animation() -> void:
-	AudioManager.play_sfx("move_extraction")
 	# Show message during animation
 	tactical_hud.show_combat_message("BEAMING DOWN...", Color(0.4, 0.9, 1.0))
 	
@@ -1886,8 +1886,9 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 	if is_flanking:
 		damage = int(base_damage * (1.0 + FLANK_DAMAGE_BONUS))
 	
-	# Tutorial: Notify that a unit attacked
-	TutorialManager.notify_trigger("unit_attacked")
+		# Tutorial: Notify that a unit attacked (only if scavenge_intro has been shown)
+		if TutorialManager.is_active() and "scavenge_intro" in TutorialManager._shown_step_ids:
+			TutorialManager.notify_trigger("unit_attacked")
 	
 	# PHASE 1: AIMING (1.0s - balanced timing)
 	await _phase_aiming(shooter, shooter_pos, target_pos, hit_chance, is_flanking, damage)
@@ -1966,7 +1967,6 @@ func _phase_aiming(shooter: Node2D, shooter_pos: Vector2i, target_pos: Vector2i,
 func _phase_firing(shooter: Node2D, _shooter_pos: Vector2i, target_pos: Vector2i, hit_chance: float, damage: int) -> bool:
 	# Display firing message
 	tactical_hud.show_combat_message("FIRING...", Color(1, 0.5, 0))
-	AudioManager.play_sfx("combat_fire")
 	
 	# Calculate hit/miss
 	var hit = shooter.shoot_at(target_pos, hit_chance, damage)
@@ -2008,8 +2008,6 @@ func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: 
 		# Apply damage (check validity in case target was freed during earlier phases)
 		if is_instance_valid(target):
 			if is_critical:
-				# Play critical hit sound (will warn if combat_crit doesn't exist, but continue)
-				AudioManager.play_sfx("combat_crit")
 				# Screen shake effect for critical hits (more intense than regular hits)
 				var camera_offset = combat_camera.offset
 				var shake_tween = create_tween()
@@ -2018,8 +2016,6 @@ func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: 
 				shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(4, -2), 0.04)
 				shake_tween.tween_property(combat_camera, "offset", camera_offset + Vector2(-3, 2), 0.04)
 				shake_tween.tween_property(combat_camera, "offset", camera_offset, 0.06)
-			else:
-				AudioManager.play_sfx("combat_hit")
 			target.take_damage(damage)
 
 			# Show damage popup (pass critical flag)
@@ -2030,7 +2026,6 @@ func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: 
 			_spawn_damage_popup(damage, true, target_world, false, is_flanking, is_critical)
 	else:
 		tactical_hud.show_combat_message("MISS!", Color(0.6, 0.6, 0.6))
-		AudioManager.play_sfx("combat_miss")
 		
 		# Show miss popup
 		var target_world = Vector2(target_pos.x * 32 + 16, target_pos.y * 32 + 16)
@@ -2216,7 +2211,6 @@ func _safe_add_interactable(interactable: Node2D, grid_pos: Vector2i) -> bool:
 
 
 func _on_enemy_died(enemy: Node2D) -> void:
-	AudioManager.play_sfx("combat_death")
 	mission_enemies_killed += 1
 	
 	# Update objectives based on enemy kills (only if objective matches)
@@ -2646,7 +2640,6 @@ func _check_overwatch_shots(enemy: Node2D, enemy_pos: Vector2i) -> void:
 			continue
 		
 		# Overwatch triggered!
-		AudioManager.play_sfx("combat_overwatch")
 		tactical_hud.show_combat_message("OVERWATCH TRIGGERED!", Color(1, 1, 0.2))
 		await get_tree().create_timer(0.8).timeout
 		
@@ -2718,7 +2711,6 @@ func _check_sniper_overwatch(officer: Node2D, officer_pos: Vector2i) -> void:
 			continue
 		
 		# Sniper overwatch triggered!
-		AudioManager.play_sfx("combat_overwatch")
 		tactical_hud.show_combat_message("SNIPER OVERWATCH!", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(0.8).timeout
 		
@@ -2830,7 +2822,6 @@ func _try_patch_target(grid_pos: Vector2i) -> void:
 	
 	# Use the ability (spends AP and starts cooldown)
 	if selected_unit.use_patch(target_unit):
-		AudioManager.play_sfx("combat_heal")
 		# Focus camera on healing action
 		var medic_world = selected_unit.position
 		var target_world = target_unit.position
@@ -2928,9 +2919,23 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
+	# Check no interactable is already there (resources, mission units, etc.)
+	var interactable_at = tactical_map.get_interactable_at(grid_pos)
+	if interactable_at:
+		tactical_hud.show_combat_message("TILE OCCUPIED", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+		return
+	
 	# Use the ability (spends AP and starts cooldown)
 	if selected_unit.use_turret():
-		AudioManager.play_sfx("combat_turret_fire")
 		var turret = TurretUnitScene.instantiate()
 		turret.set_grid_position(grid_pos)
 		turret.position = Vector2(grid_pos.x * 32 + 16, grid_pos.y * 32 + 16)
@@ -3049,7 +3054,6 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 			tactical_map.set_movement_range(unit_pos, heavy_unit.move_range)
 		return
 	
-	AudioManager.play_sfx("combat_charge")
 	# Find adjacent position to the enemy to move to
 	var charge_destination = _find_charge_destination(heavy_pos, grid_pos)
 	
@@ -3392,7 +3396,6 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		return
 	
-	AudioManager.play_sfx("combat_execute")
 	# Guaranteed kill - deal remaining HP as damage
 	var execute_damage = target_enemy.current_hp
 	selected_unit.face_towards(grid_pos)
@@ -3499,7 +3502,6 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 	await get_tree().create_timer(0.6).timeout
 	
 	# Play attack animation
-	AudioManager.play_sfx("combat_precision")
 	if selected_unit.has_method("play_attack_animation"):
 		selected_unit.play_attack_animation()
 
@@ -3765,7 +3767,6 @@ func _process_turrets() -> void:
 		
 		if nearest_enemy:
 			var _enemy_pos = nearest_enemy.get_grid_position()
-			AudioManager.play_sfx("combat_turret_fire")
 			
 			# Focus camera on turret attack
 			var turret_world = turret.position

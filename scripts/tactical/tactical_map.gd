@@ -1373,8 +1373,8 @@ func set_turret_placement_range(center: Vector2i, placement_range: int) -> void:
 				continue
 			var distance = abs(pos.x - center.x) + abs(pos.y - center.y)
 			if distance <= placement_range and revealed_tiles.get(pos, false):
-				# Only show tiles that are walkable and empty
-				if is_tile_walkable(pos) and get_unit_at(pos) == null:
+				# Only show tiles that are walkable and empty (no units or interactables)
+				if is_tile_walkable(pos) and get_unit_at(pos) == null and get_interactable_at(pos) == null:
 					execute_range_tiles[pos] = true
 	
 	queue_redraw()

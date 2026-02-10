@@ -347,7 +347,16 @@ func _update_node_states() -> void:
 
 ## Handle node click
 func _on_node_clicked(node_id: int) -> void:
+	var current_node_id = GameState.current_node_index
 	
+	# Allow clicking the current node if it's a TRADING_OUTPOST (for reopening trading interface)
+	if node_id == current_node_id:
+		var node_type = get_node_type(node_id)
+		if node_type == EventManager.NodeType.TRADING_OUTPOST:
+			node_clicked.emit(node_id)
+			return
+	
+	# Otherwise, check if node is reachable (normal jump logic)
 	if _is_node_reachable(node_id):
 		node_clicked.emit(node_id)
 
@@ -418,7 +427,6 @@ func animate_jump(from_node_id: int, to_node_id: int) -> void:
 	if not node_visuals.has(from_node_id) or not node_visuals.has(to_node_id):
 		return
 	
-	AudioManager.play_sfx("move_jump")
 	# Clean up any existing ship animation
 	_cleanup_ship_animation()
 	

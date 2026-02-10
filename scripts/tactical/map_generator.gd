@@ -26,13 +26,13 @@ class BSPNode:
 #endregion
 
 
-func generate(biome_type: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION) -> Dictionary:
+func generate(biome_type: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION, node_index: int = 0, total_nodes: int = 50) -> Dictionary:
 	_biome_type = biome_type
 	_occupied_positions.clear()
 	_rooms.clear()
 	
-	# Get map size from biome config
-	var size = BiomeConfig.get_map_size(biome_type)
+	# Get map size from biome config (scaled by voyage progression)
+	var size = BiomeConfig.get_map_size(biome_type, node_index, total_nodes)
 	map_width = size.x
 	map_height = size.y
 	

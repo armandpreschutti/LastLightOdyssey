@@ -215,9 +215,39 @@ static func get_theme(biome_type: BiomeType) -> Dictionary:
 			return STATION_THEME
 
 
-static func get_map_size(biome_type: BiomeType) -> Vector2i:
+static func get_map_size(biome_type: BiomeType, node_index: int = 0, total_nodes: int = 50) -> Vector2i:
 	var config = MAP_SIZES.get(biome_type, MAP_SIZES[BiomeType.STATION])
-	var size = randi_range(config["min"], config["max"])
+	
+	# Calculate size scaling based on voyage progression
+	# Maps get slightly bigger as difficulty ramps up
+	# Scale factor: +1 tile per ~12 nodes, capped at +4 tiles total
+	var progress_ratio: float = float(node_index) / float(total_nodes)
+	var size_increase: int = int(progress_ratio * 4.0)  # Max +4 tiles by end of voyage
+	
+	# Apply scaling to both min and max
+	var scaled_min = config["min"] + size_increase
+	var scaled_max = config["max"] + size_increase
+	
+	# Cap maximum size to prevent maps from getting too large
+	# Station: max 24, Asteroid: max 21, Planet: max 31
+	var max_cap: int
+	match biome_type:
+		BiomeType.STATION:
+			max_cap = 24
+		BiomeType.ASTEROID:
+			max_cap = 21
+		BiomeType.PLANET:
+			max_cap = 31
+		_:
+			max_cap = 24
+	
+	scaled_min = mini(scaled_min, max_cap)
+	scaled_max = mini(scaled_max, max_cap)
+	
+	# Ensure min doesn't exceed max
+	scaled_min = mini(scaled_min, scaled_max)
+	
+	var size = randi_range(scaled_min, scaled_max)
 	return Vector2i(size, size)
 
 

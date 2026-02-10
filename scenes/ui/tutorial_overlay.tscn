@@ -7,15 +7,6 @@
 layer = 100
 script = ExtResource("1_tutorial")
 
-[node name="FullscreenDim" type="ColorRect" parent="." unique_id=98669462]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(0, 0, 0.05, 0.55)
-
 [node name="PromptContainer" type="Control" parent="." unique_id=798668242]
 layout_mode = 3
 anchors_preset = 15
@@ -140,6 +131,16 @@ theme_override_font_sizes/font_size = 48
 text = "V"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="FullscreenDim" type="ColorRect" parent="." unique_id=98669462]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0.05, 0.55)
+z_index = -1
 
 [node name="PulseTimer" type="Timer" parent="." unique_id=243943904]
 wait_time = 0.8
