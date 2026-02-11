@@ -92,6 +92,10 @@ func _ready() -> void:
 	tactical_hud.ability_used.connect(_on_ability_used)
 	tactical_hud.ability_cancelled.connect(_cancel_ability_mode)
 	tactical_hud.pause_pressed.connect(_show_pause_menu)
+	
+	# Hide the UILayer CanvasLayer on startup - CanvasLayer children render
+	# independently of parent Node2D visibility, so we must hide it explicitly
+	ui_layer.visible = false
 
 
 func _input(event: InputEvent) -> void:
@@ -476,6 +480,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	tactical_hud.update_stability(GameState.cryo_stability)
 	tactical_hud.set_extract_visible(false)
 	tactical_hud.visible = true
+	ui_layer.visible = true
 
 	# Center and zoom camera on spawn positions (where units will land) immediately (before fade in and beam down animations)
 	if spawn_positions.size() > 0:
@@ -1163,6 +1168,11 @@ func _on_end_turn_pressed() -> void:
 	# Clear attackable highlights before changing turns
 	_clear_attackable_highlights()
 	
+	# Track the unit whose turn just ended (for consecutive turn pause)
+	var previous_unit: Node2D = null
+	if current_unit_index < deployed_officers.size():
+		previous_unit = deployed_officers[current_unit_index]
+	
 	# Advance to next unit's turn
 	current_unit_index += 1
 	
@@ -1208,9 +1218,21 @@ func _on_end_turn_pressed() -> void:
 	
 	# Select the next unit whose turn it is
 	if deployed_officers.size() > 0:
-		_select_unit(deployed_officers[current_unit_index])
+		var next_unit = deployed_officers[current_unit_index]
+		
+		# Add a small pause when the same unit gets consecutive turns
+		# (e.g., a lone officer with no enemies around)
+		if previous_unit != null and next_unit == previous_unit and mission_active:
+			_set_animating(true)
+			await get_tree().create_timer(0.6).timeout
+			# Re-check mission is still active after the pause
+			if not mission_active:
+				return
+			_set_animating(false)
+		
+		_select_unit(next_unit)
 		# Center camera on the active unit
-		_center_camera_on_unit(deployed_officers[current_unit_index])
+		_center_camera_on_unit(next_unit)
 
 
 func _is_current_unit_turn() -> bool:

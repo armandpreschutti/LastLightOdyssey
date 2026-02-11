@@ -1,19 +1,24 @@
 [gd_scene format=3 uid="uid://dp8k7m6qv5n2w"]
 
-[ext_resource type="Script" path="res://scripts/management/star_map.gd" id="1_starmap"]
-[ext_resource type="Script" path="res://scripts/management/nebula_background.gd" id="2_nebula"]
+[ext_resource type="Script" uid="uid://cclud0gv1sd3x" path="res://scripts/management/star_map.gd" id="1_starmap"]
+[ext_resource type="Script" uid="uid://4sfd3x5a0yko" path="res://scripts/management/nebula_background.gd" id="2_nebula"]
+[ext_resource type="Texture2D" uid="uid://ccxb2onsmg4at" path="res://assets/sprites/navigation/waypoint.png" id="3_waypoint"]
+[ext_resource type="Texture2D" uid="uid://d2gx2j4l6lhjr" path="res://assets/sprites/navigation/asteroid.png" id="4_asteroid"]
+[ext_resource type="Texture2D" uid="uid://g27gvr7yp5kn" path="res://assets/sprites/navigation/station_trading.png" id="5_station"]
+[ext_resource type="Texture2D" uid="uid://hmgh553sxea0" path="res://assets/sprites/navigation/planet_gas.png" id="6_planet"]
+[ext_resource type="Texture2D" uid="uid://ukf6ay2w864f" path="res://assets/sprites/navigation/outpost.png" id="7_outpost"]
+[ext_resource type="Texture2D" uid="uid://b224xf2ekytgn" path="res://assets/sprites/navigation/question_mark.png" id="8_unknown"]
 
-[node name="StarMap" type="Control"]
+[node name="StarMap" type="Control" unique_id=380385132]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 0
 script = ExtResource("1_starmap")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=1045835027]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -23,7 +28,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0.05, 0.05, 0.08, 1)
 
-[node name="NebulaBackground" type="Control" parent="."]
+[node name="NebulaBackground" type="Control" parent="." unique_id=800753536]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -33,30 +38,139 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("2_nebula")
 
-[node name="MapContent" type="Control" parent="."]
+[node name="MapContent" type="Control" parent="." unique_id=2008622355]
 layout_mode = 1
 anchors_preset = 0
 offset_right = 40.0
 offset_bottom = 40.0
 mouse_filter = 2
 
-[node name="LinesContainer" type="Control" parent="MapContent"]
+[node name="LinesContainer" type="Control" parent="MapContent" unique_id=582930549]
 layout_mode = 1
 anchors_preset = 0
 offset_right = 40.0
 offset_bottom = 40.0
 mouse_filter = 2
 
-[node name="NodesContainer" type="Control" parent="MapContent"]
+[node name="NodesContainer" type="Control" parent="MapContent" unique_id=1514419431]
 layout_mode = 1
 anchors_preset = 0
 offset_right = 40.0
 offset_bottom = 40.0
 mouse_filter = 2
 
-[node name="ShipContainer" type="Control" parent="MapContent"]
+[node name="ShipContainer" type="Control" parent="MapContent" unique_id=1864977287]
 layout_mode = 1
 anchors_preset = 0
 offset_right = 40.0
 offset_bottom = 40.0
 mouse_filter = 2
+
+[node name="UILayer" type="CanvasLayer" parent="." unique_id=194651772]
+
+[node name="LegendContainer" type="MarginContainer" parent="UILayer" unique_id=1008941342]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 1686.0
+offset_top = -243.0
+offset_right = 1886.0
+offset_bottom = -9.0
+grow_vertical = 0
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="PanelContainer" type="PanelContainer" parent="UILayer/LegendContainer" unique_id=1398226061]
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="UILayer/LegendContainer/PanelContainer" unique_id=577536991]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="UILayer/LegendContainer/PanelContainer/VBoxContainer" unique_id=2082252863]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+theme_override_font_sizes/font_size = 14
+text = "NAVIGATION LEGEND"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="UILayer/LegendContainer/PanelContainer/VBoxContainer" unique_id=2122848035]
+layout_mode = 2
+
+[node name="GridContainer" type="GridContainer" parent="UILayer/LegendContainer/PanelContainer/VBoxContainer" unique_id=218547002]
+layout_mode = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 6
+columns = 2
+
+[node name="WaypointIcon" type="TextureRect" parent="UILayer/LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1786114588]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("3_waypoint")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="WaypointLabel" type="Label" parent="UILayer/LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=802385113]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Random Encounter"
+
+[node name="AsteroidIcon" type="TextureRect" parent="UILayer/LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1073508841]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("4_asteroid")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="AsteroidLabel" type="Label" parent="UILayer/LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1740650396]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Asteroid Mission"
+
+[node name="StationIcon" type="TextureRect" parent="UILayer/LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1905135081]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("5_station")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="StationLabel" type="Label" parent="UILayer/LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=759474226]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Space Station Mission"
+
+[node name="PlanetIcon" type="TextureRect" parent="UILayer/LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1435844420]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("6_planet")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="PlanetLabel" type="Label" parent="UILayer/LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1938877551]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Planetary Mission"
+
+[node name="OutpostIcon" type="TextureRect" parent="UILayer/LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=901000214]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("7_outpost")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="OutpostLabel" type="Label" parent="UILayer/LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=964002579]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Trading Outpost"
+
+[node name="UnknownIcon" type="TextureRect" parent="UILayer/LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=281929293]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("8_unknown")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="UnknownLabel" type="Label" parent="UILayer/LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1664489924]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Uncharted Node"

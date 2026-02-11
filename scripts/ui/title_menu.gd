@@ -271,6 +271,14 @@ func _enable_buttons() -> void:
 	_ready_for_input = true
 
 
+func _disable_buttons() -> void:
+	new_game_button.disabled = true
+	continue_button.disabled = true
+	settings_button.disabled = true
+	quit_button.disabled = true
+	_ready_for_input = false
+
+
 func _on_button_hover(button: Button) -> void:
 	if not _ready_for_input:
 		return
@@ -286,16 +294,20 @@ func _on_button_hover(button: Button) -> void:
 
 
 func _on_new_game_pressed() -> void:
-	if SFXManager:
-		SFXManager.play_sfx_by_name("ui", "click")
 	if not _ready_for_input:
 		return
+		
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
 	
 	# Check if save exists - show confirmation dialog if so
 	if GameState.has_save_file():
+		# Temporarily disable input while dialog is shown
+		_disable_buttons()
 		_show_new_game_confirmation()
 		return
 	
+	_disable_buttons()
 	_proceed_with_new_game()
 
 
@@ -323,8 +335,8 @@ func _on_new_game_confirmed() -> void:
 
 
 func _on_new_game_cancelled() -> void:
-	# Dialog closes itself, nothing else to do
-	pass
+	# Dialog closes itself, re-enable buttons
+	_enable_buttons()
 
 
 func _proceed_with_new_game() -> void:
@@ -339,26 +351,32 @@ func _proceed_with_new_game() -> void:
 
 
 func _start_new_game() -> void:
+	if not is_inside_tree():
+		return
 	# Reset game state and load main scene
 	GameState.reset_game()
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 
 func _on_continue_pressed() -> void:
-	if SFXManager:
-		SFXManager.play_sfx_by_name("ui", "click")
 	if not _ready_for_input:
 		return
+		
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
 	
 	if continue_button.disabled:
 		# Show "no save found" message
 		_show_no_save_message()
 		return
 	
+	_disable_buttons()
+	
 	# Load saved game
 	if GameState.load_game():
 		_proceed_with_continue()
 	else:
+		_enable_buttons()
 		_show_no_save_message()
 
 
@@ -374,6 +392,8 @@ func _proceed_with_continue() -> void:
 
 
 func _continue_game() -> void:
+	if not is_inside_tree():
+		return
 	# Load main scene - it will use the loaded GameState
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
@@ -390,10 +410,13 @@ func _show_no_save_message() -> void:
 
 
 func _on_settings_pressed() -> void:
-	if SFXManager:
-		SFXManager.play_sfx_by_name("ui", "click")
 	if not _ready_for_input:
 		return
+		
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
+	
+	_disable_buttons()
 	
 	# Load and show settings menu
 	var settings_scene = load("res://scenes/ui/settings_menu.tscn")
@@ -404,14 +427,17 @@ func _on_settings_pressed() -> void:
 
 func _on_settings_back() -> void:
 	# Settings menu removes itself when back is pressed
-	pass
+	_enable_buttons()
 
 
 func _on_quit_pressed() -> void:
-	if SFXManager:
-		SFXManager.play_sfx_by_name("ui", "click")
 	if not _ready_for_input:
 		return
+		
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
+	
+	_disable_buttons()
 	
 	# Stop glow effect
 	if _glow_tween:

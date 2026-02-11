@@ -162,24 +162,23 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 				result["target_pos"] = move_destination
 				return result
 	
-	# PRIORITY 5: Fallback - if visible to player and out of attack range, move towards nearest officer
+	# PRIORITY 5: Visible enemy with AP remaining - ALWAYS move towards closest officer
 	if enemy.has_ap(1) and enemy.visible:
-		# Check if enemy is within attack range of any officer
-		var any_officer_in_range = false
+		# Find the closest officer (regardless of sight range) to move towards
+		var closest_officer: Node2D = null
+		var closest_dist = 999
 		for officer in officers:
 			if officer.current_hp <= 0:
 				continue
 			var officer_pos = officer.get_grid_position()
-			var distance_to_officer = abs(officer_pos.x - enemy_pos.x) + abs(officer_pos.y - enemy_pos.y)
-			if distance_to_officer <= enemy.shoot_range:
-				any_officer_in_range = true
-				break
+			var dist = abs(officer_pos.x - enemy_pos.x) + abs(officer_pos.y - enemy_pos.y)
+			if dist < closest_dist:
+				closest_dist = dist
+				closest_officer = officer
 		
-		# If no officer is in range, move towards nearest officer
-		if not any_officer_in_range and nearest_officer:
-			var nearest_officer_pos = nearest_officer.get_grid_position()
-			# Find position that gets us within attack range
-			var move_target_pos = _find_position_within_attack_range(enemy_pos, nearest_officer_pos, enemy.shoot_range, enemy.move_range, tactical_map, reachable)
+		if closest_officer and reachable.size() > 0:
+			var closest_officer_pos = closest_officer.get_grid_position()
+			var move_target_pos = _get_closest_position_to_target(enemy_pos, closest_officer_pos, reachable)
 			
 			if move_target_pos != enemy_pos:
 				var path = _filter_extraction_tiles_from_path(tactical_map.find_path(enemy_pos, move_target_pos), tactical_map)
@@ -691,6 +690,18 @@ static func _decide_station_boss_action(boss: Node2D, officers: Array[Node2D], t
 				result["target_pos"] = tactical_pos
 				return result
 	
+	# PRIORITY 5: Visible boss - always move towards closest officer
+	if boss.has_ap(1) and boss.visible and nearest_officer:
+		var reachable = _get_reachable_positions(boss_pos, boss.move_range, tactical_map)
+		var move_pos = _get_closest_position_to_target(boss_pos, target_pos, reachable)
+		if move_pos != boss_pos:
+			var path = _filter_extraction_tiles_from_path(tactical_map.find_path(boss_pos, move_pos), tactical_map)
+			if path and path.size() > 1:
+				result["action"] = "move"
+				result["path"] = path
+				result["target_pos"] = move_pos
+				return result
+	
 	return result
 
 
@@ -739,6 +750,18 @@ static func _decide_asteroid_boss_action(boss: Node2D, officers: Array[Node2D], 
 				result["action"] = "move"
 				result["path"] = path
 				result["target_pos"] = charge_pos
+				return result
+	
+	# PRIORITY 3: Visible boss - always move towards closest officer
+	if boss.has_ap(1) and boss.visible and nearest_officer:
+		var reachable_fallback = _get_reachable_positions(boss_pos, boss.move_range, tactical_map)
+		var move_pos = _get_closest_position_to_target(boss_pos, target_pos, reachable_fallback)
+		if move_pos != boss_pos:
+			var path = _filter_extraction_tiles_from_path(tactical_map.find_path(boss_pos, move_pos), tactical_map)
+			if path and path.size() > 1:
+				result["action"] = "move"
+				result["path"] = path
+				result["target_pos"] = move_pos
 				return result
 	
 	return result
@@ -830,6 +853,18 @@ static func _decide_planet_boss_action(boss: Node2D, officers: Array[Node2D], ta
 				result["action"] = "move"
 				result["path"] = path
 				result["target_pos"] = best_pos
+				return result
+	
+	# PRIORITY 4: Visible boss - always move towards closest officer
+	if boss.has_ap(1) and boss.visible and nearest_officer:
+		var reachable_fallback = _get_reachable_positions(boss_pos, boss.move_range, tactical_map)
+		var move_pos = _get_closest_position_to_target(boss_pos, target_pos, reachable_fallback)
+		if move_pos != boss_pos:
+			var path = _filter_extraction_tiles_from_path(tactical_map.find_path(boss_pos, move_pos), tactical_map)
+			if path and path.size() > 1:
+				result["action"] = "move"
+				result["path"] = path
+				result["target_pos"] = move_pos
 				return result
 	
 	return result

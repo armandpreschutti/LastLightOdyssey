@@ -146,6 +146,9 @@ func _input(event: InputEvent) -> void:
 		else:
 			_skip_typewriter()
 	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN, MOUSE_BUTTON_WHEEL_LEFT, MOUSE_BUTTON_WHEEL_RIGHT]:
+			return
+			
 		if _input_ready:
 			_dismiss()
 		else:

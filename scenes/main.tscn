@@ -19,7 +19,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/game_over_recap.tscn" id="13_game_over_recap"]
 [ext_resource type="PackedScene" path="res://scenes/ui/fade_transition.tscn" id="14_fade"]
 [ext_resource type="PackedScene" uid="uid://b7k3m6qv4n8y" path="res://scenes/ui/objective_complete_scene_dialog.tscn" id="14_objective_complete"]
-[ext_resource type="PackedScene" path="res://scenes/ui/enemy_elimination_scene_dialog.tscn" id="15_enemy_elimination"]
+[ext_resource type="PackedScene" uid="uid://c8k4m7qv5pa0" path="res://scenes/ui/enemy_elimination_scene_dialog.tscn" id="15_enemy_elimination"]
 
 [node name="Main" type="Node" unique_id=588289983]
 script = ExtResource("1_main")
@@ -43,25 +43,25 @@ script = ExtResource("11_background")
 
 [node name="InstructionsGlow" type="ColorRect" parent="ManagementLayer" unique_id=2076566904]
 offset_left = 640.0
-offset_top = 16.0
+offset_top = 887.0
 offset_right = 1348.0
-offset_bottom = 144.0
+offset_bottom = 1015.0
 mouse_filter = 2
 color = Color(0.4, 0.9, 1, 0.12)
 
 [node name="InstructionsBorder" type="ColorRect" parent="ManagementLayer" unique_id=1136280488]
 offset_left = 639.0
-offset_top = 14.0
+offset_top = 885.0
 offset_right = 1350.0
-offset_bottom = 187.0
+offset_bottom = 1058.0
 mouse_filter = 2
 color = Color(0.4, 0.9, 1, 0.5)
 
 [node name="InstructionsPanel" type="PanelContainer" parent="ManagementLayer" unique_id=30382744]
 offset_left = 644.0
-offset_top = 20.0
+offset_top = 891.0
 offset_right = 1344.0
-offset_bottom = 182.0
+offset_bottom = 1053.0
 mouse_filter = 2
 
 [node name="BackgroundGradient" type="ColorRect" parent="ManagementLayer/InstructionsPanel" unique_id=113793915]
@@ -120,41 +120,41 @@ autowrap_mode = 2
 
 [node name="CornerTL" type="ColorRect" parent="ManagementLayer" unique_id=704142327]
 offset_left = 644.0
-offset_top = 20.0
+offset_top = 891.0
 offset_right = 652.0
-offset_bottom = 28.0
+offset_bottom = 899.0
 mouse_filter = 2
 color = Color(0.4, 0.9, 1, 0.8)
 
 [node name="CornerTR" type="ColorRect" parent="ManagementLayer" unique_id=1414057248]
 offset_left = 1336.0
-offset_top = 20.0
+offset_top = 891.0
 offset_right = 1344.0
-offset_bottom = 28.0
+offset_bottom = 899.0
 mouse_filter = 2
 color = Color(0.4, 0.9, 1, 0.8)
 
 [node name="CornerBL" type="ColorRect" parent="ManagementLayer" unique_id=1605959517]
 offset_left = 644.0
-offset_top = 175.0
+offset_top = 1046.0
 offset_right = 652.0
-offset_bottom = 183.0
+offset_bottom = 1054.0
 mouse_filter = 2
 color = Color(0.4, 0.9, 1, 0.8)
 
 [node name="CornerBR" type="ColorRect" parent="ManagementLayer" unique_id=1083867956]
 offset_left = 1336.0
-offset_top = 175.0
+offset_top = 1046.0
 offset_right = 1344.0
-offset_bottom = 183.0
+offset_bottom = 1054.0
 mouse_filter = 2
 color = Color(0.4, 0.9, 1, 0.8)
 
 [node name="ManagementHUD" parent="ManagementLayer" unique_id=357450589 instance=ExtResource("2_hud")]
-offset_left = 20.0
-offset_top = -260.0
-offset_right = 300.0
-offset_bottom = -20.0
+offset_left = 10.0
+offset_top = -278.0
+offset_right = 290.0
+offset_bottom = -38.0
 
 [node name="DialogLayer" type="CanvasLayer" parent="." unique_id=1428451193]
 layer = 10
@@ -207,4 +207,3 @@ layer = 100
 [node name="FadeTransition" parent="FadeTransitionLayer" unique_id=1428451195 instance=ExtResource("14_fade")]
 
 [node name="TacticalMode" parent="." unique_id=45556294 instance=ExtResource("5_tactical")]
-visible = false

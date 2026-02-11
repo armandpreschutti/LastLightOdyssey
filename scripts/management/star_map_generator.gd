@@ -248,6 +248,19 @@ func _validate_and_repair_connections() -> void:
 					# Add connection if not already present
 					if source_node.id != TOTAL_NODES - 1 and not node.id in source_node.connections:
 						source_node.connections.append(node.id)
+	
+	# CRITICAL: Ensure every node in the penultimate row connects to New Earth (last node)
+	# This guarantees New Earth is ALWAYS reachable as the final destination
+	var new_earth_id = TOTAL_NODES - 1
+	var penultimate_row_nodes = get_nodes_in_row(NUM_ROWS - 2)
+	for node in penultimate_row_nodes:
+		if not new_earth_id in node.connections:
+			node.connections.append(new_earth_id)
+	
+	# Also ensure New Earth has NO outgoing connections (it's the final destination)
+	var new_earth_node = nodes[new_earth_id] if new_earth_id < nodes.size() else null
+	if new_earth_node:
+		new_earth_node.connections.clear()
 
 
 ## Count how many nodes are in a given row
@@ -265,10 +278,16 @@ func _assign_node_types() -> void:
 	nodes[0].node_type = EventManager.NodeType.EMPTY_SPACE
 	
 	# Last node is always New Earth (Empty Space - triggers win)
-	nodes[TOTAL_NODES - 1].node_type = EventManager.NodeType.EMPTY_SPACE
+	# Use actual last index in case nodes.size() differs from TOTAL_NODES
+	var last_node_index = nodes.size() - 1
+	nodes[last_node_index].node_type = EventManager.NodeType.EMPTY_SPACE
+	
+	# Also set by TOTAL_NODES - 1 if different (belt-and-suspenders safety)
+	if TOTAL_NODES - 1 != last_node_index and TOTAL_NODES - 1 < nodes.size():
+		nodes[TOTAL_NODES - 1].node_type = EventManager.NodeType.EMPTY_SPACE
 	
 	# Assign types to remaining nodes with weighted distribution
-	for i in range(1, TOTAL_NODES - 1):
+	for i in range(1, last_node_index):
 		nodes[i].node_type = _roll_node_type()
 
 

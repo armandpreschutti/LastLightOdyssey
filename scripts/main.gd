@@ -42,6 +42,7 @@ var tutorial_overlay: CanvasLayer = null
 var _first_node_clicked: bool = false
 var _first_event_seen: bool = false
 var _is_jump_animating: bool = false  # Track if jump animation is in progress
+var _suppress_fuel_warning: bool = false  # Track if player dismissed fuel warning
 
 
 func _ready() -> void:
@@ -154,8 +155,47 @@ func _on_node_clicked(node_id: int) -> void:
 	var from_node = GameState.current_node_index
 	var fuel_cost = star_map.get_fuel_cost(from_node, node_id)
 	
-	# Start ship jump animation, then execute jump when animation completes
-	_execute_jump_with_animation(from_node, node_id, fuel_cost)
+	# Check if player has enough fuel - warn about drift mode if not
+	if GameState.fuel < fuel_cost and not _suppress_fuel_warning:
+		_show_fuel_warning(from_node, node_id, fuel_cost)
+	else:
+		# Start ship jump animation, then execute jump when animation completes
+		_execute_jump_with_animation(from_node, node_id, fuel_cost)
+
+
+## Show fuel warning dialog when player doesn't have enough fuel for the jump
+func _show_fuel_warning(from_node_id: int, to_node_id: int, fuel_cost: int) -> void:
+	var fuel_deficit = fuel_cost - GameState.fuel
+	var colonist_loss = GameState.COLONIST_LOSS_DRIFT_MODE * fuel_deficit
+	var hull_loss = GameState.SHIP_INTEGRITY_LOSS_PER_JUMP * fuel_deficit
+	
+	var dialog_scene = load("res://scenes/ui/confirm_dialog.tscn")
+	var dialog = dialog_scene.instantiate()
+	$DialogLayer.add_child(dialog)
+	
+	var message = "DRIFT MODE will engage.\n\nPenalties:\n• -%d COLONISTS\n• -%d HULL INTEGRITY\n\nProceed with jump?" % [colonist_loss, hull_loss]
+	dialog.setup("⚠ INSUFFICIENT FUEL", message, "JUMP", "CANCEL")
+	
+	# Add "Don't show again" checkbox
+	var checkbox = CheckBox.new()
+	checkbox.text = "Don't show again"
+	checkbox.add_theme_color_override("font_color", Color(0.5, 0.6, 0.7))
+	checkbox.add_theme_color_override("font_hover_color", Color(0.7, 0.85, 0.9))
+	checkbox.add_theme_font_size_override("font_size", 14)
+	var vbox = dialog.get_node("PanelContainer/MarginContainer/VBoxContainer")
+	vbox.add_child(checkbox)
+	
+	dialog.show_dialog()
+	
+	# Play warning SFX
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "menu_open")
+	
+	dialog.confirmed.connect(func():
+		if checkbox.button_pressed:
+			_suppress_fuel_warning = true
+		_execute_jump_with_animation(from_node_id, to_node_id, fuel_cost)
+	)
 
 
 ## Execute jump with ship animation
@@ -549,6 +589,7 @@ func _on_restart_pressed() -> void:
 	_first_node_clicked = false
 	_first_event_seen = false
 	_is_jump_animating = false
+	_suppress_fuel_warning = false
 	
 	# Ensure management UI is visible
 	management_layer.visible = true

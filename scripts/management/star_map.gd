@@ -51,6 +51,23 @@ const SHIP_ANIMATION_DURATION = 1.5  # seconds
 
 func _ready() -> void:
 	MapNodeScene = load("res://scenes/management/map_node.tscn")
+	_setup_legend_style()
+
+
+## Setup the legend panel styling to match the game's aesthetic
+func _setup_legend_style() -> void:
+	var legend_panel = get_node_or_null("UILayer/LegendContainer/PanelContainer")
+	if not legend_panel:
+		return
+		
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.05, 0.1, 0.85)  # Darker, semi-transparent blue
+	style.border_color = Color(1.0, 0.69, 0.0, 0.5)  # Amber border
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	style.set_content_margin_all(12)
+	
+	legend_panel.add_theme_stylebox_override("panel", style)
 
 
 ## Handle input for panning the map (right-click or middle-click drag)

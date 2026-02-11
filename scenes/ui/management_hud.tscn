@@ -1,23 +1,25 @@
-[gd_scene load_steps=6 format=3 uid="uid://bhd16wq58r0sj"]
+[gd_scene format=3 uid="uid://bhd16wq58r0sj"]
 
 [ext_resource type="Script" uid="uid://bhfsk44lrvrqc" path="res://scripts/ui/management_hud.gd" id="1_hud"]
-[ext_resource type="Texture2D" uid="uid://icon_colonists" path="res://assets/sprites/ui/icons/icon_colonists.png" id="2_colonists"]
-[ext_resource type="Texture2D" uid="uid://icon_fuel" path="res://assets/sprites/ui/icons/icon_fuel.png" id="3_fuel"]
-[ext_resource type="Texture2D" uid="uid://icon_hull" path="res://assets/sprites/ui/icons/icon_hull.png" id="4_hull"]
-[ext_resource type="Texture2D" uid="uid://icon_scrap" path="res://assets/sprites/ui/icons/icon_scrap.png" id="5_scrap"]
+[ext_resource type="Texture2D" uid="uid://usj00pg0mfsb" path="res://assets/sprites/ui/icons/icon_colonists.png" id="2_colonists"]
+[ext_resource type="Texture2D" uid="uid://bogrtadpxsc8r" path="res://assets/sprites/ui/icons/icon_fuel.png" id="3_fuel"]
+[ext_resource type="Texture2D" uid="uid://cpy36v51jmkqa" path="res://assets/sprites/ui/icons/icon_hull.png" id="4_hull"]
+[ext_resource type="Texture2D" uid="uid://dlq4cvxnvfbg3" path="res://assets/sprites/ui/icons/icon_scrap.png" id="5_scrap"]
 
-[node name="ManagementHUD" type="Control"]
+[node name="ManagementHUD" type="Control" unique_id=2015427981]
 layout_mode = 3
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_top = -240.0
-offset_right = 280.0
+offset_left = 15.0
+offset_top = -271.0
+offset_right = 295.0
+offset_bottom = -31.0
 grow_vertical = 0
 mouse_filter = 2
 script = ExtResource("1_hud")
 
-[node name="GlowEffect" type="ColorRect" parent="."]
+[node name="GlowEffect" type="ColorRect" parent="." unique_id=1284282175]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -29,42 +31,44 @@ offset_bottom = 4.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.15)
+color = Color(0.4, 0.9, 1, 0.15)
 
-[node name="BorderOuter" type="ColorRect" parent="."]
+[node name="BorderOuter" type="ColorRect" parent="." unique_id=252681454]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -2.0
-offset_top = -2.0
+offset_top = -18.0
 offset_right = 2.0
-offset_bottom = 2.0
+offset_bottom = 25.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.6)
+color = Color(0.4, 0.9, 1, 0.6)
 
-[node name="PanelContainer" type="PanelContainer" parent="."]
+[node name="PanelContainer" type="PanelContainer" parent="." unique_id=1627484941]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_top = -15.0
+offset_bottom = 21.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="BackgroundGradient" type="ColorRect" parent="PanelContainer"]
+[node name="BackgroundGradient" type="ColorRect" parent="PanelContainer" unique_id=2013530813]
 layout_mode = 2
 mouse_filter = 2
 color = Color(0.02, 0.05, 0.1, 0.95)
 
-[node name="ScanlineOverlay" type="ColorRect" parent="PanelContainer"]
+[node name="ScanlineOverlay" type="ColorRect" parent="PanelContainer" unique_id=1721780883]
 layout_mode = 2
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.03)
+color = Color(0.4, 0.9, 1, 0.03)
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
+[node name="MarginContainer" type="MarginContainer" parent="." unique_id=1779286083]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -77,189 +81,185 @@ theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 15
 theme_override_constants/margin_bottom = 12
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer" unique_id=272300749]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="HeaderContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="HeaderContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer" unique_id=1465797440]
 layout_mode = 2
 mouse_filter = 2
 alignment = 1
 
-[node name="LeftDecor" type="ColorRect" parent="MarginContainer/VBoxContainer/HeaderContainer"]
+[node name="LeftDecor" type="ColorRect" parent="MarginContainer/VBoxContainer/HeaderContainer" unique_id=664901200]
 custom_minimum_size = Vector2(30, 2)
 layout_mode = 2
 size_flags_vertical = 4
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.5)
+color = Color(0.4, 0.9, 1, 0.5)
 
-[node name="HeaderLabel" type="Label" parent="MarginContainer/VBoxContainer/HeaderContainer"]
+[node name="HeaderLabel" type="Label" parent="MarginContainer/VBoxContainer/HeaderContainer" unique_id=1752767488]
 layout_mode = 2
-mouse_filter = 2
-theme_override_colors/font_color = Color(0.4, 0.9, 1.0, 1)
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 22
 text = "[ SHIP STATUS ]"
 horizontal_alignment = 1
 
-[node name="RightDecor" type="ColorRect" parent="MarginContainer/VBoxContainer/HeaderContainer"]
+[node name="RightDecor" type="ColorRect" parent="MarginContainer/VBoxContainer/HeaderContainer" unique_id=1052100812]
 custom_minimum_size = Vector2(30, 2)
 layout_mode = 2
 size_flags_vertical = 4
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.5)
+color = Color(0.4, 0.9, 1, 0.5)
 
-[node name="HSeparator" type="ColorRect" parent="MarginContainer/VBoxContainer"]
+[node name="HSeparator" type="ColorRect" parent="MarginContainer/VBoxContainer" unique_id=695907586]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.3)
+color = Color(0.4, 0.9, 1, 0.3)
 
-[node name="StatsContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="StatsContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer" unique_id=1876289323]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 6
 
-[node name="ColonistsRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StatsContainer"]
+[node name="ColonistsRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StatsContainer" unique_id=1253384750]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 10
 
-[node name="ColonistsIcon" type="TextureRect" parent="MarginContainer/VBoxContainer/StatsContainer/ColonistsRow"]
+[node name="ColonistsIcon" type="TextureRect" parent="MarginContainer/VBoxContainer/StatsContainer/ColonistsRow" unique_id=576571545]
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 texture = ExtResource("2_colonists")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="ColonistsLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/ColonistsRow"]
+[node name="ColonistsLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/ColonistsRow" unique_id=1685944486]
 layout_mode = 2
 size_flags_horizontal = 3
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
 theme_override_font_sizes/font_size = 18
 text = "COLONISTS: 1000"
 
-[node name="FuelRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StatsContainer"]
+[node name="FuelRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StatsContainer" unique_id=425559611]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 10
 
-[node name="FuelIcon" type="TextureRect" parent="MarginContainer/VBoxContainer/StatsContainer/FuelRow"]
+[node name="FuelIcon" type="TextureRect" parent="MarginContainer/VBoxContainer/StatsContainer/FuelRow" unique_id=1720426279]
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 texture = ExtResource("3_fuel")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="FuelLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/FuelRow"]
+[node name="FuelLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/FuelRow" unique_id=599598153]
 layout_mode = 2
 size_flags_horizontal = 3
-mouse_filter = 2
-theme_override_colors/font_color = Color(1.0, 0.69, 0.0, 1)
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
 theme_override_font_sizes/font_size = 18
 text = "FUEL CELLS: 10"
 
-[node name="IntegrityRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StatsContainer"]
+[node name="IntegrityRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StatsContainer" unique_id=1199695057]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 10
 
-[node name="IntegrityIcon" type="TextureRect" parent="MarginContainer/VBoxContainer/StatsContainer/IntegrityRow"]
+[node name="IntegrityIcon" type="TextureRect" parent="MarginContainer/VBoxContainer/StatsContainer/IntegrityRow" unique_id=1299073314]
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 texture = ExtResource("4_hull")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="IntegrityLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/IntegrityRow"]
+[node name="IntegrityLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/IntegrityRow" unique_id=1731214028]
 layout_mode = 2
 size_flags_horizontal = 3
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
 theme_override_font_sizes/font_size = 18
 text = "HULL INTEGRITY: 100%"
 
-[node name="ScrapRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StatsContainer"]
+[node name="ScrapRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StatsContainer" unique_id=1988144992]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 10
 
-[node name="ScrapIcon" type="TextureRect" parent="MarginContainer/VBoxContainer/StatsContainer/ScrapRow"]
+[node name="ScrapIcon" type="TextureRect" parent="MarginContainer/VBoxContainer/StatsContainer/ScrapRow" unique_id=2027627049]
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 texture = ExtResource("5_scrap")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="ScrapLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/ScrapRow"]
+[node name="ScrapLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/ScrapRow" unique_id=227250908]
 layout_mode = 2
 size_flags_horizontal = 3
-mouse_filter = 2
-theme_override_colors/font_color = Color(1.0, 0.69, 0.0, 1)
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
 theme_override_font_sizes/font_size = 18
 text = "SCRAP: 0"
 
-[node name="HSeparator2" type="ColorRect" parent="MarginContainer/VBoxContainer"]
+[node name="HSeparator2" type="ColorRect" parent="MarginContainer/VBoxContainer" unique_id=1410202378]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.3)
+color = Color(0.4, 0.9, 1, 0.3)
 
-[node name="StatusLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+[node name="StatusLabel" type="Label" parent="MarginContainer/VBoxContainer" unique_id=2105480999]
 visible = false
 layout_mode = 2
-mouse_filter = 2
-theme_override_colors/font_color = Color(1.0, 0.3, 0.2, 1)
+theme_override_colors/font_color = Color(1, 0.3, 0.2, 1)
 theme_override_font_sizes/font_size = 16
 text = "[ DRIFT MODE - NO FUEL ]"
 horizontal_alignment = 1
 
-[node name="HSeparator3" type="ColorRect" parent="MarginContainer/VBoxContainer"]
+[node name="HSeparator3" type="ColorRect" parent="MarginContainer/VBoxContainer" unique_id=1060253692]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.3)
+color = Color(0.4, 0.9, 1, 0.3)
 
-[node name="QuitButton" type="Button" parent="MarginContainer/VBoxContainer"]
+[node name="QuitButton" type="Button" parent="MarginContainer/VBoxContainer" unique_id=2119121706]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.3, 0.3, 1)
-theme_override_colors/font_hover_color = Color(1.0, 0.4, 0.3, 1)
 theme_override_colors/font_pressed_color = Color(0.4, 0.2, 0.2, 1)
+theme_override_colors/font_hover_color = Color(1, 0.4, 0.3, 1)
 theme_override_font_sizes/font_size = 16
 text = "[ QUIT TO MENU ]"
 
-[node name="CornerTL" type="ColorRect" parent="."]
+[node name="CornerTL" type="ColorRect" parent="." unique_id=107551062]
 layout_mode = 1
-anchors_preset = 0
+offset_top = -15.0
 offset_right = 8.0
-offset_bottom = 8.0
+offset_bottom = -7.0
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.8)
+color = Color(0.4, 0.9, 1, 0.8)
 
-[node name="CornerTR" type="ColorRect" parent="."]
+[node name="CornerTR" type="ColorRect" parent="." unique_id=1063822584]
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
 offset_left = -8.0
-offset_bottom = 8.0
+offset_top = -15.0
+offset_bottom = -7.0
 grow_horizontal = 0
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.8)
+color = Color(0.4, 0.9, 1, 0.8)
 
-[node name="CornerBL" type="ColorRect" parent="."]
+[node name="CornerBL" type="ColorRect" parent="." unique_id=1328763104]
 layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_top = -8.0
+offset_top = 14.0
 offset_right = 8.0
+offset_bottom = 22.0
 grow_vertical = 0
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.8)
+color = Color(0.4, 0.9, 1, 0.8)
 
-[node name="CornerBR" type="ColorRect" parent="."]
+[node name="CornerBR" type="ColorRect" parent="." unique_id=1062053000]
 layout_mode = 1
 anchors_preset = 3
 anchor_left = 1.0
@@ -267,8 +267,9 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -8.0
-offset_top = -8.0
+offset_top = 14.0
+offset_bottom = 22.0
 grow_horizontal = 0
 grow_vertical = 0
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.8)
+color = Color(0.4, 0.9, 1, 0.8)

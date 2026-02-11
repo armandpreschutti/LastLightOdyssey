@@ -85,6 +85,12 @@ layout_mode = 2
 mouse_filter = 2
 color = Color(0.01, 0.0, 0.02, 1)
 
+[node name="SceneImage" type="TextureRect" parent="VBoxContainer/ImageContainer"]
+layout_mode = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
 [node name="SceneCanvas" type="Control" parent="VBoxContainer/ImageContainer"]
 layout_mode = 2
 mouse_filter = 2
