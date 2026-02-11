@@ -111,8 +111,8 @@ func _load_settings() -> void:
 	
 	if err != OK:
 		# Use defaults if no config exists
-		_pending_fullscreen = false
-		_pending_resolution = 1  # 1600x900
+		_pending_fullscreen = true
+		_pending_resolution = 2  # 1920x1080
 		_pending_master = 80.0
 		_pending_sfx = 100.0
 		_pending_scene = 100.0
@@ -120,8 +120,8 @@ func _load_settings() -> void:
 		return
 	
 	# Load display settings
-	_pending_fullscreen = config.get_value("display", "fullscreen", false)
-	_pending_resolution = config.get_value("display", "resolution", 1)
+	_pending_fullscreen = config.get_value("display", "fullscreen", true)
+	_pending_resolution = config.get_value("display", "resolution", 2)
 	
 	# Load audio settings
 	_pending_master = config.get_value("audio", "master", 80.0)
@@ -168,11 +168,7 @@ func _update_volume_labels() -> void:
 
 
 func _apply_display_settings() -> void:
-	# Check if running in editor - display settings have limitations there
-	if OS.has_feature("editor"):
-		return
-	
-	# Apply fullscreen
+	# Apply fullscreen logic immediately
 	if _pending_fullscreen:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	else:
@@ -244,8 +240,8 @@ func _on_reset_settings_pressed() -> void:
 		SFXManager.play_sfx_by_name("ui", "click")
 		
 	# Reset pending values to defaults
-	_pending_fullscreen = false
-	_pending_resolution = 1 # 1600x900
+	_pending_fullscreen = true
+	_pending_resolution = 2 # 1920x1080
 	_pending_master = 80.0
 	_pending_sfx = 100.0
 	_pending_scene = 100.0
@@ -298,14 +294,8 @@ func _on_apply_pressed() -> void:
 	_apply_display_settings()
 	_apply_audio_settings()
 	
-	# Visual feedback - show different message in editor
-	var feedback_text: String
-	if OS.has_feature("editor"):
-		feedback_text = "[ SAVED! ]"  # Settings saved but display changes limited in editor
-	else:
-		feedback_text = "[ APPLIED! ]"
-	
-	apply_button.text = feedback_text
+	# Visual feedback
+	apply_button.text = "[ APPLIED! ]"
 	apply_button.disabled = true
 	
 	var tween = create_tween()

@@ -1371,11 +1371,6 @@ func _on_extract_pressed() -> void:
 			else:
 				units_outside_zone.append(officer)
 	
-	# Check if captain would be left behind - captain must always be extracted
-	for unit in units_outside_zone:
-		if unit.officer_type == "captain":
-			_show_captain_required_warning()
-			return
 	
 	# If some units are outside the zone, show warning
 	if units_outside_zone.size() > 0:
@@ -1387,18 +1382,6 @@ func _on_extract_pressed() -> void:
 		_end_mission(true)
 
 
-func _show_captain_required_warning() -> void:
-	var dialog = ConfirmDialogScene.instantiate()
-	ui_layer.add_child(dialog)
-	
-	var message = "Your CAPTAIN must be in the extraction zone to initiate extraction.\n\nMove your Captain to the extraction tiles before extracting. The Captain cannot be left behind."
-	
-	dialog.setup("[ EXTRACTION DENIED ]", message, "UNDERSTOOD", "")
-	dialog.show_dialog()
-	
-	# Hide the cancel button for info-only dialog and focus confirm button
-	dialog.no_button.visible = false
-	dialog.yes_button.grab_focus()
 
 
 func _show_extraction_warning(units_in_zone: Array[Node2D], units_outside_zone: Array[Node2D]) -> void:
