@@ -1,34 +1,12 @@
-extends Control
+extends BaseSceneDialog
 ## Voyage Intro Scene Dialog - Displays an Oregon Trail-style scene when starting a new voyage
 ## Shows a pixel art scene with voyage title, location, and story setup
 
-signal scene_dismissed
-
-@onready var scene_image: TextureRect = $VBoxContainer/ImageContainer/SceneImage
-@onready var scanline_overlay: Control = $VBoxContainer/ImageContainer/ScanlineOverlay
-@onready var scene_canvas: Control = $VBoxContainer/ImageContainer/SceneCanvas
-@onready var title_label: Label = $VBoxContainer/TitleBar/TitleLabel
-@onready var location_label: Label = $VBoxContainer/TitleBar/LocationLabel
-@onready var description_label: Label = $VBoxContainer/DescriptionLabel
-@onready var prompt_label: Label = $VBoxContainer/PromptLabel
-@onready var background: ColorRect = $Background
-
-var _prompt_tween: Tween = null
-var _typewriter_tween: Tween = null
-var _current_desc: String = ""
-var _current_char: int = 0
-var _input_ready: bool = false
 var _scene_stars: Array[Dictionary] = []
 var _scene_particles: Array[Dictionary] = []
 
-# Voyage intro descriptions (randomly selected)
-const VOYAGE_DESCRIPTIONS: Array[String] = [
-	"The last remnants of humanity embark on their final journey. Earth lies in ruins, but hope remains in the distant stars. One thousand souls rest in cryo-sleep, their fate in your hands. New Earth awaits, but the path is treacherous and unknown.",
-	"With the old world consumed by fire and ash, the great ark ship sets course for salvation. One thousand souls in cryo-sleep, six officers to guide them. The voyage begins.",
-	"From the ashes of a dying planet, humanity's last hope launches into the void. One thousand colonists slumber in cryo-pods, their lives depending on every decision you make. The journey to New Earth will test every resource, every choice, every life aboard.",
-	"The starship departs the dying Earth, carrying the last of humanity. One thousand cryosleepers dream of a new world as the ship drifts through unknown sectors, past derelict stations and alien worlds. The crew must navigate to a new beginning.",
-	"Humanity's final exodus begins. The ship's engines ignite, leaving behind a world that can no longer sustain life. One thousand souls rest in cryo-stasis, their future uncertain. Ahead lies New Earth, but the journey will demand sacrifice.",
-]
+# Voyage intro description
+const VOYAGE_DESCRIPTION: String = "The last remnants of humanity embark on their final journey. Earth lies in ruins, but hope remains in the distant stars. One thousand souls rest in cryo-sleep, their fate in your hands. New Earth awaits, but the path is treacherous and unknown."
 
 # Color palette for voyage intro (epic, hopeful but somber)
 const VOYAGE_PALETTE: Dictionary = {
@@ -39,126 +17,32 @@ const VOYAGE_PALETTE: Dictionary = {
 }
 
 
-func _ready() -> void:
-	visible = false
-	scanline_overlay.draw.connect(_draw_scene_scanlines)
-	scene_canvas.draw.connect(_draw_procedural_scene)
-
-
 func show_scene() -> void:
-	# Randomly select a voyage description
-	var description = VOYAGE_DESCRIPTIONS[randi() % VOYAGE_DESCRIPTIONS.size()]
+	# Set voyage description
+	var description = VOYAGE_DESCRIPTION
 	
-	# Set title
-	title_label.text = "VOYAGE COMMENCED"
-	
-	# Set location/date flavor text
-	location_label.text = "DEPARTURE  |  SECTOR 0-000  |  CYCLE 0"
-	
-	# Use procedural generation for voyage intro scene
-	scene_image.visible = false
-	scene_canvas.visible = true
+	# Generate procedural scene elements
 	_generate_scene_elements()
-	scene_canvas.queue_redraw()
+	if scene_canvas:
+		scene_canvas.queue_redraw()
 	
-	# Start typewriter effect for description
-	_current_desc = description
-	_current_char = 0
-	description_label.text = ""
+	# Play voyage intro SFX
+	_play_voyage_sfx()
 	
-	# Hide prompt initially
-	prompt_label.modulate.a = 0.0
-	_input_ready = false
+	# Load static image
+	if ResourceLoader.exists("res://assets/sprites/scenes/voyage_intro.png"):
+		var scene_image = find_child("SceneImage", true, false)
+		if scene_image:
+			scene_image.texture = load("res://assets/sprites/scenes/voyage_intro.png")
+			scene_image.visible = true
+			if scene_canvas: scene_canvas.visible = false
 	
-	# Fade in
-	modulate.a = 0.0
-	visible = true
-	
-	var tween = create_tween()
-	tween.tween_property(self, "modulate:a", 1.0, 0.3)
-	tween.tween_callback(_start_description_typewriter)
-
-
-func _start_description_typewriter() -> void:
-	_typewriter_tween = create_tween()
-	_typewriter_tween.set_loops(_current_desc.length())
-	_typewriter_tween.tween_callback(_add_desc_char)
-	_typewriter_tween.tween_interval(0.03)
-	_typewriter_tween.finished.connect(_on_typewriter_done)
-
-
-func _add_desc_char() -> void:
-	if _current_char < _current_desc.length():
-		description_label.text = _current_desc.substr(0, _current_char + 1)
-		_current_char += 1
-
-
-func _on_typewriter_done() -> void:
-	description_label.text = _current_desc
-	_show_prompt()
-
-
-func _show_prompt() -> void:
-	_input_ready = true
-	
-	# Pulse the prompt text
-	_prompt_tween = create_tween()
-	_prompt_tween.set_loops()
-	_prompt_tween.tween_property(prompt_label, "modulate:a", 1.0, 0.6)
-	_prompt_tween.tween_property(prompt_label, "modulate:a", 0.3, 0.6)
-
-
-func _input(event: InputEvent) -> void:
-	if not visible:
-		return
-	
-	if event is InputEventKey and event.pressed and not event.is_echo():
-		if _input_ready:
-			_dismiss()
-		else:
-			# Skip typewriter
-			_skip_typewriter()
-	elif event is InputEventMouseButton and event.pressed:
-		if _input_ready:
-			_dismiss()
-		else:
-			_skip_typewriter()
-
-
-func _skip_typewriter() -> void:
-	if _typewriter_tween and _typewriter_tween.is_running():
-		_typewriter_tween.kill()
-	description_label.text = _current_desc
-	_on_typewriter_done()
-
-
-func _dismiss() -> void:
-	if _prompt_tween:
-		_prompt_tween.kill()
-	
-	var tween = create_tween()
-	tween.tween_property(self, "modulate:a", 0.0, 0.2)
-	tween.tween_callback(_on_dismissed)
-
-
-func _on_dismissed() -> void:
-	visible = false
-	scene_dismissed.emit()
-
-
-## Draw CRT-style scanlines over the scene image
-func _draw_scene_scanlines() -> void:
-	var rect_size = scanline_overlay.size
-	var scanline_color = Color(0.0, 0.0, 0.0, 0.12)
-	var line_spacing: float = 2.0
-	
-	var y: float = 0.0
-	while y < rect_size.y:
-		scanline_overlay.draw_rect(
-			Rect2(0, y, rect_size.x, 1.0),
-			scanline_color
-		)
-		y += line_spacing
+	# Show the scene with text (base class handles typewriter, fade, etc.)
+	show_scene_with_text(
+		"VOYAGE COMMENCED",
+		"DEPARTURE  |  SECTOR 0-000  |  CYCLE 0",
+		description
+	)
 
 
 #region Procedural Scene Generation
@@ -184,7 +68,14 @@ func _generate_scene_elements() -> void:
 		})
 
 
-func _draw_procedural_scene() -> void:
+## Play voyage intro SFX
+func _play_voyage_sfx() -> void:
+	var sfx_path = "res://assets/audio/sfx/scenes/voyage_intro_scene/voyage_intro.mp3"
+	SFXManager.play_scene_sfx(sfx_path)
+
+
+## Override base class method to draw scene-specific content
+func _draw_scene_content() -> void:
 	var canvas_size = scene_canvas.size
 	var palette = VOYAGE_PALETTE
 	

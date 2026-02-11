@@ -97,9 +97,36 @@ func _load_volume_settings() -> void:
 	music_volume = config.get_value("audio", "music", 70.0)
 
 
+
+# Ducking settings
+var ducking_tween: Tween = null
+var ducking_db: float = 0.0
+const DUCKING_AMOUNT: float = -12.0  # dB reduction during ducking
+const DUCKING_FADE_IN_TIME: float = 0.5  # Time to lower volume
+const DUCKING_FADE_OUT_TIME: float = 1.0  # Time to restore volume
+
+
+## Set ducking state (lower music volume temporarily)
+func set_ducking(active: bool) -> void:
+	if ducking_tween and ducking_tween.is_running():
+		ducking_tween.kill()
+	
+	ducking_tween = create_tween()
+	var target_db = DUCKING_AMOUNT if active else 0.0
+	var duration = DUCKING_FADE_IN_TIME if active else DUCKING_FADE_OUT_TIME
+	
+	ducking_tween.tween_method(_set_ducking_db, ducking_db, target_db, duration)
+
+
+## Internal callback for tweening ducking volume
+func _set_ducking_db(value: float) -> void:
+	ducking_db = value
+	_update_volume()
+
+
 ## Update volume for all music players
 func _update_volume() -> void:
-	var target_volume_db = _calculate_volume_db()
+	var target_volume_db = _calculate_volume_db() + ducking_db
 	
 	# Update both players if they exist
 	if navigation_player:
@@ -107,7 +134,6 @@ func _update_volume() -> void:
 	
 	if tactical_player:
 		tactical_player.volume_db = target_volume_db
-
 
 ## Calculate volume in dB from percentage values
 func _calculate_volume_db() -> float:

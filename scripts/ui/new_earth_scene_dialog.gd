@@ -5,6 +5,7 @@ extends Control
 signal scene_dismissed
 
 @onready var scene_canvas: Control = $VBoxContainer/ImageContainer/SceneCanvas
+@onready var scene_image: TextureRect = $VBoxContainer/ImageContainer/SceneImage
 @onready var scanline_overlay: Control = $VBoxContainer/ImageContainer/ScanlineOverlay
 @onready var title_label: Label = $VBoxContainer/TitleBar/TitleLabel
 @onready var location_label: Label = $VBoxContainer/TitleBar/LocationLabel
@@ -55,13 +56,26 @@ func show_scene(ending_type: String) -> void:
 		"good":
 			_current_desc = "The journey was long and costly, but you have reached New Earth. Though many were lost along the way, enough remain to rebuild civilization."
 		"bad":
-			_current_desc = "You have reached New Earth, but at a terrible cost. Only a handful of colonists remain. Humanity's survival hangs by a thread."
+			_current_desc = "You have reached New Earth, but at a terrible cost. Only a handful of colonists remain. Humanity's last hope hangs by a thread."
 		_:
 			_current_desc = "After a long journey through the void, you have reached your destination. A new home awaits the survivors."
 	
-	# Generate stars
-	_generate_stars()
-	scene_canvas.queue_redraw()
+	# Load scene image
+	var image_path = "res://assets/sprites/scenes/new_earth_%s.png" % ending_type
+	# Fallback for default if needed
+	if not ResourceLoader.exists(image_path) and ending_type == "":
+		image_path = "res://assets/sprites/scenes/new_earth_default.png"
+		
+	if ResourceLoader.exists(image_path):
+		scene_image.texture = load(image_path)
+		scene_image.visible = true
+		scene_canvas.visible = false
+	else:
+		# Fallback
+		scene_image.visible = false
+		scene_canvas.visible = true
+		_generate_stars()
+		scene_canvas.queue_redraw()
 	
 	# Start typewriter effect
 	_current_char = 0
@@ -70,6 +84,9 @@ func show_scene(ending_type: String) -> void:
 	# Hide prompt initially
 	prompt_label.modulate.a = 0.0
 	_input_ready = false
+	
+	# Play ending-specific SFX
+	_play_arrival_sfx(ending_type)
 	
 	# Fade in
 	modulate.a = 0.0
@@ -94,7 +111,7 @@ func _start_description_typewriter() -> void:
 	_typewriter_tween = create_tween()
 	_typewriter_tween.set_loops(_current_desc.length())
 	_typewriter_tween.tween_callback(_add_desc_char)
-	_typewriter_tween.tween_interval(0.025)
+	_typewriter_tween.tween_interval(0.05)
 	_typewriter_tween.finished.connect(_on_typewriter_done)
 
 
@@ -154,6 +171,21 @@ func _dismiss() -> void:
 func _on_dismissed() -> void:
 	visible = false
 	scene_dismissed.emit()
+
+
+## Play ending-specific SFX
+func _play_arrival_sfx(ending_type: String) -> void:
+	# Map ending types to SFX file names
+	var sfx_files: Dictionary = {
+		"perfect": "arrival_perfect.mp3",
+		"good": "arrival_good.mp3",
+		"bad": "arrival_bad.mp3",
+	}
+	
+	var sfx_file = sfx_files.get(ending_type, "arrival_good.mp3")  # Default to good
+	
+	var sfx_path = "res://assets/audio/sfx/scenes/new_earth_scene/" + sfx_file
+	SFXManager.play_scene_sfx(sfx_path)
 
 
 ## Draw CRT-style scanlines

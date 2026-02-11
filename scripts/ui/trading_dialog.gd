@@ -69,4 +69,6 @@ func _on_repair_trade_pressed() -> void:
 
 func _on_close_pressed() -> void:
 	visible = false
+	if SFXManager:
+		SFXManager.stop_scene_sfx()
 	trading_complete.emit()

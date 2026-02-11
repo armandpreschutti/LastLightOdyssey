@@ -28,6 +28,7 @@ const COLOR_MOVEMENT_RANGE := Color(0.3, 0.6, 0.9, 0.35)  # Brighter blue moveme
 const COLOR_EXECUTE_RANGE := Color(0.9, 0.2, 0.2, 0.35)  # Red execute range highlight
 const COLOR_HEAL_RANGE := Color(0.3, 1.0, 0.4, 0.4)  # Light green heal range highlight (brighter for visibility)
 const COLOR_HOVER := Color(1.0, 0.9, 0.4, 0.4)     # Brighter yellow hover
+const COLOR_MISSION_HIGHLIGHT := Color(1.0, 0.84, 0.0, 0.5) # Bright Gold/Yellow for mission objectives
 const COLOR_PATHFINDING_LINE := Color(0.2, 0.8, 1.0, 1.0)  # Glowing neon blue pathfinding line
 const COLOR_PATHFINDING_GLOW := Color(0.2, 0.8, 1.0, 0.4)  # Glow effect for neon blue
 
@@ -41,6 +42,7 @@ var movement_range_tiles: Dictionary = {}  # Vector2i -> bool (tiles within move
 var execute_range_tiles: Dictionary = {}  # Vector2i -> bool (tiles within execute range)
 var heal_range_tiles: Dictionary = {}  # Vector2i -> bool (tiles within heal range)
 var enemy_target_tiles: Dictionary = {}  # Vector2i -> bool (tiles under attackable enemies)
+var mission_highlight_tiles: Dictionary = {} # Vector2i -> bool (tiles with mission objectives)
 var hovered_tile: Vector2i = Vector2i(-1, -1)  # Currently hovered tile
 var pathfinding_path: PackedVector2Array = PackedVector2Array()  # Current pathfinding path
 var pathfinding_source: Vector2i = Vector2i(-1, -1)  # Source position for pathfinding (or -1, -1 if no source)
@@ -75,6 +77,7 @@ func set_map_dimensions(width: int, height: int) -> void:
 func initialize_map(layout: Dictionary, biome_type: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION) -> void:
 	set_biome(biome_type)
 	tile_data = layout
+	mission_highlight_tiles.clear()
 	_update_astar_solids()
 	_initialize_fog()
 	queue_redraw()
@@ -118,8 +121,8 @@ func _reveal_interactables_at(pos: Vector2i) -> void:
 
 
 func find_path(from: Vector2i, to: Vector2i) -> PackedVector2Array:
-	# Check if destination is blocked by terrain or turret
-	if astar.is_point_solid(to) or has_turret_at(to):
+	# Check if destination is blocked by terrain
+	if astar.is_point_solid(to):
 		return PackedVector2Array()
 
 	# Temporarily unmark start position so unit can path from its own tile
@@ -128,33 +131,6 @@ func find_path(from: Vector2i, to: Vector2i) -> PackedVector2Array:
 		astar.set_point_solid(from, false)
 
 	var path = astar.get_point_path(from, to)
-	
-	# Check if path goes through any turret tiles
-	# AStarGrid2D.get_point_path() returns world positions at tile corners
-	# We need to check each tile the path passes through
-	if path.size() > 1:
-		# Convert path to grid positions and check each tile
-		var checked_tiles: Dictionary = {}
-		for i in range(path.size()):
-			var world_pos = path[i]
-			var grid_pos = world_to_grid(world_pos)
-			# Skip if we've already checked this tile
-			if checked_tiles.has(grid_pos):
-				continue
-			checked_tiles[grid_pos] = true
-			
-			# Check start and end positions (skip them as they're already validated)
-			if i == 0 and grid_pos == from:
-				continue
-			if i == path.size() - 1 and grid_pos == to:
-				continue
-			
-			# Check if this tile has a turret
-			if has_turret_at(grid_pos):
-				# Path blocked by turret, return empty
-				if start_was_solid:
-					astar.set_point_solid(from, true)
-				return PackedVector2Array()
 
 	if start_was_solid:
 		astar.set_point_solid(from, true)
@@ -185,10 +161,8 @@ func has_turret_at(pos: Vector2i) -> bool:
 func is_tile_walkable(pos: Vector2i) -> bool:
 	if pos.x < 0 or pos.x >= map_width or pos.y < 0 or pos.y >= map_height:
 		return false
-	# Check if tile is blocked by terrain or has a turret
+	# Check if tile is blocked by terrain
 	if astar.is_point_solid(pos):
-		return false
-	if has_turret_at(pos):
 		return false
 	return true
 
@@ -216,6 +190,19 @@ func grid_to_world(grid_pos: Vector2i) -> Vector2:
 	return Vector2(grid_pos.x * TILE_SIZE + TILE_SIZE / 2, grid_pos.y * TILE_SIZE + TILE_SIZE / 2)
 
 
+## Add a mission highlight to a specific tile
+func add_mission_highlight(pos: Vector2i) -> void:
+	mission_highlight_tiles[pos] = true
+	queue_redraw()
+
+
+## Remove a mission highlight from a specific tile
+func remove_mission_highlight(pos: Vector2i) -> void:
+	if mission_highlight_tiles.has(pos):
+		mission_highlight_tiles.erase(pos)
+		queue_redraw()
+
+
 func _draw() -> void:
 	# Draw all tiles
 	for x in range(map_width):
@@ -230,6 +217,10 @@ func _draw() -> void:
 				# Get tile type and draw with variation
 				var tile_type = tile_data.get(pos, TileType.FLOOR)
 				_draw_tile(x, y, rect, tile_type)
+				
+				# Mission objective highlight (Gold)
+				if mission_highlight_tiles.get(pos, false):
+					draw_rect(rect, COLOR_MISSION_HIGHLIGHT)
 				
 				# Movement range highlight
 				if movement_range_tiles.get(pos, false):
@@ -1366,8 +1357,8 @@ func set_movement_range(center: Vector2i, move_range: int) -> void:
 				if next_pos.x < 0 or next_pos.x >= map_width or next_pos.y < 0 or next_pos.y >= map_height:
 					continue
 				
-				# Check if walkable (not solid terrain and no turret) and not visited
-				if not visited.has(next_pos) and not astar.is_point_solid(next_pos) and not has_turret_at(next_pos):
+				# Check if walkable (not solid terrain) and not visited
+				if not visited.has(next_pos) and not astar.is_point_solid(next_pos):
 					visited[next_pos] = true
 					distances[next_pos] = dist + 1
 					movement_range_tiles[next_pos] = true
@@ -1419,8 +1410,8 @@ func set_turret_placement_range(center: Vector2i, placement_range: int) -> void:
 				continue
 			var distance = abs(pos.x - center.x) + abs(pos.y - center.y)
 			if distance <= placement_range and revealed_tiles.get(pos, false):
-				# Only show tiles that are walkable and empty (no units or interactables)
-				if is_tile_walkable(pos) and get_unit_at(pos) == null and get_interactable_at(pos) == null:
+				# Only show tiles that are walkable and empty (no units, interactables, or turrets)
+				if is_tile_walkable(pos) and get_unit_at(pos) == null and get_interactable_at(pos) == null and not has_turret_at(pos):
 					execute_range_tiles[pos] = true
 	
 	queue_redraw()

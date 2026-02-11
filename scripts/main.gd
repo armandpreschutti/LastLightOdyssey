@@ -213,6 +213,10 @@ func _process_node_after_jump(node_id: int) -> void:
 			current_phase = GamePhase.EVENT_DISPLAY
 			mission_scene_dialog.show_scene(pending_biome_type)
 		EventManager.NodeType.TRADING_OUTPOST:
+			# Play outpost arrival SFX
+			if SFXManager:
+				SFXManager.play_scene_sfx("res://assets/audio/sfx/scenes/common_scene/outpost_arrival.mp3")
+			
 			# Show trading interface
 			current_phase = GamePhase.TRADING
 			trading_dialog.show_trading()
@@ -420,14 +424,14 @@ func _show_voyage_intro() -> void:
 	# Show voyage intro scene when starting a new voyage
 	current_phase = GamePhase.EVENT_DISPLAY  # Use EVENT_DISPLAY phase to block interaction
 	voyage_intro_scene_dialog.show_scene()
+	
+	# Start navigation music immediately
+	MusicManager.play_navigation_music()
 
 
 func _on_voyage_intro_scene_dismissed() -> void:
 	# After voyage intro is dismissed, allow normal gameplay
 	current_phase = GamePhase.IDLE
-	
-	# Start navigation music when entering IDLE phase
-	MusicManager.play_navigation_music()
 	
 	# Trigger first tutorial step after voyage intro completes
 	if TutorialManager.is_active() and TutorialManager.is_at_step("star_map_intro"):
@@ -480,12 +484,17 @@ func _on_colonist_loss_scene_dismissed() -> void:
 		pending_node_type = node_type
 		pending_biome_type = biome_type
 		
-		match node_type:
+		match pending_node_type:
 			EventManager.NodeType.SCAVENGE_SITE:
 				# Show mission scene first, then team selection
 				current_phase = GamePhase.EVENT_DISPLAY
-				mission_scene_dialog.show_scene(biome_type)
+				mission_scene_dialog.show_scene(pending_biome_type)
 			EventManager.NodeType.TRADING_OUTPOST:
+				# Play outpost arrival SFX
+				if SFXManager:
+					SFXManager.play_scene_sfx("res://assets/audio/sfx/scenes/common_scene/outpost_arrival.mp3")
+				
+				# Show trading interface
 				current_phase = GamePhase.TRADING
 				trading_dialog.show_trading()
 			_:

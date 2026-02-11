@@ -74,11 +74,18 @@ func show_scene(threshold: int) -> void:
 		GameState.colonist_count
 	]
 	
-	# Use procedural generation for colonist loss scenes
-	scene_image.visible = false
-	scene_canvas.visible = true
-	_generate_scene_elements(threshold)
-	scene_canvas.queue_redraw()
+	# Load scene image
+	var image_path = "res://assets/sprites/scenes/loss_%d.png" % threshold
+	if ResourceLoader.exists(image_path):
+		scene_image.texture = load(image_path)
+		scene_image.visible = true
+		scene_canvas.visible = false
+	else:
+		# Fallback to procedural if image missing
+		scene_image.visible = false
+		scene_canvas.visible = true
+		_generate_scene_elements(threshold)
+		scene_canvas.queue_redraw()
 	
 	# Start typewriter effect for description
 	_current_desc = description
@@ -88,6 +95,9 @@ func show_scene(threshold: int) -> void:
 	# Hide prompt initially
 	prompt_label.modulate.a = 0.0
 	_input_ready = false
+	
+	# Play threshold-specific SFX
+	_play_milestone_sfx(threshold)
 	
 	# Fade in
 	modulate.a = 0.0
@@ -102,7 +112,7 @@ func _start_description_typewriter() -> void:
 	_typewriter_tween = create_tween()
 	_typewriter_tween.set_loops(_current_desc.length())
 	_typewriter_tween.tween_callback(_add_desc_char)
-	_typewriter_tween.tween_interval(0.03)
+	_typewriter_tween.tween_interval(0.05)
 	_typewriter_tween.finished.connect(_on_typewriter_done)
 
 
@@ -162,7 +172,28 @@ func _dismiss() -> void:
 
 func _on_dismissed() -> void:
 	visible = false
+	if SFXManager:
+		SFXManager.stop_scene_sfx()
 	scene_dismissed.emit()
+
+
+## Play threshold-specific SFX
+func _play_milestone_sfx(threshold: int) -> void:
+	# Map thresholds to SFX file names
+	var sfx_files: Dictionary = {
+		750: "casualties_mount.mp3",
+		500: "weight_of_command.mp3",
+		250: "desperation.mp3",
+		100: "all_hope_lost.mp3",
+		0: "extinction.mp3",
+	}
+	
+	var sfx_file = sfx_files.get(threshold, "")
+	if sfx_file == "":
+		return
+	
+	var sfx_path = "res://assets/audio/sfx/scenes/colonist_loss_scene/" + sfx_file
+	SFXManager.play_scene_sfx(sfx_path)
 
 
 ## Draw CRT-style scanlines over the scene image

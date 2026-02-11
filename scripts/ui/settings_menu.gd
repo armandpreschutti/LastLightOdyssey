@@ -19,8 +19,11 @@ const RESOLUTIONS: Array[Vector2i] = [
 @onready var master_value: Label = $PanelContainer/MarginContainer/VBoxContainer/AudioSection/MasterContainer/MasterValue
 @onready var sfx_slider: HSlider = $PanelContainer/MarginContainer/VBoxContainer/AudioSection/SFXContainer/SFXSlider
 @onready var sfx_value: Label = $PanelContainer/MarginContainer/VBoxContainer/AudioSection/SFXContainer/SFXValue
+@onready var scene_slider: HSlider = $PanelContainer/MarginContainer/VBoxContainer/AudioSection/SceneContainer/SceneSlider
+@onready var scene_value: Label = $PanelContainer/MarginContainer/VBoxContainer/AudioSection/SceneContainer/SceneValue
 @onready var music_slider: HSlider = $PanelContainer/MarginContainer/VBoxContainer/AudioSection/MusicContainer/MusicSlider
 @onready var music_value: Label = $PanelContainer/MarginContainer/VBoxContainer/AudioSection/MusicContainer/MusicValue
+@onready var reset_settings_button: Button = $PanelContainer/MarginContainer/VBoxContainer/AudioSection/ResetSettingsButton
 @onready var reset_tutorial_button: Button = $PanelContainer/MarginContainer/VBoxContainer/TutorialSection/ResetTutorialButton
 @onready var apply_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/ApplyButton
 @onready var back_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/BackButton
@@ -30,6 +33,7 @@ var _pending_fullscreen: bool = false
 var _pending_resolution: int = 1
 var _pending_master: float = 80.0
 var _pending_sfx: float = 100.0
+var _pending_scene: float = 100.0
 var _pending_music: float = 70.0
 
 
@@ -70,10 +74,20 @@ func _connect_signals() -> void:
 	else:
 		sfx_slider.value_changed.connect(_on_sfx_changed)
 		
+	if not scene_slider:
+		push_error("SettingsMenu: scene_slider is null!")
+	else:
+		scene_slider.value_changed.connect(_on_scene_changed)
+		
 	if not music_slider:
 		push_error("SettingsMenu: music_slider is null!")
 	else:
 		music_slider.value_changed.connect(_on_music_changed)
+		
+	if not reset_settings_button:
+		push_error("SettingsMenu: reset_settings_button is null!")
+	else:
+		reset_settings_button.pressed.connect(_on_reset_settings_pressed)
 		
 	if not reset_tutorial_button:
 		push_error("SettingsMenu: reset_tutorial_button is null!")
@@ -101,6 +115,7 @@ func _load_settings() -> void:
 		_pending_resolution = 1  # 1600x900
 		_pending_master = 80.0
 		_pending_sfx = 100.0
+		_pending_scene = 100.0
 		_pending_music = 70.0
 		return
 	
@@ -111,6 +126,7 @@ func _load_settings() -> void:
 	# Load audio settings
 	_pending_master = config.get_value("audio", "master", 80.0)
 	_pending_sfx = config.get_value("audio", "sfx", 100.0)
+	_pending_scene = config.get_value("audio", "scene", 100.0)
 	_pending_music = config.get_value("audio", "music", 70.0)
 
 
@@ -127,6 +143,7 @@ func _save_settings() -> void:
 	# Save audio settings
 	config.set_value("audio", "master", _pending_master)
 	config.set_value("audio", "sfx", _pending_sfx)
+	config.set_value("audio", "scene", _pending_scene)
 	config.set_value("audio", "music", _pending_music)
 	
 	config.save(CONFIG_PATH)
@@ -137,6 +154,7 @@ func _update_ui_from_pending() -> void:
 	resolution_selector.selected = _pending_resolution
 	master_slider.value = _pending_master
 	sfx_slider.value = _pending_sfx
+	scene_slider.value = _pending_scene
 	music_slider.value = _pending_music
 	
 	_update_volume_labels()
@@ -145,6 +163,7 @@ func _update_ui_from_pending() -> void:
 func _update_volume_labels() -> void:
 	master_value.text = "%d%%" % int(_pending_master)
 	sfx_value.text = "%d%%" % int(_pending_sfx)
+	scene_value.text = "%d%%" % int(_pending_scene)
 	music_value.text = "%d%%" % int(_pending_music)
 
 
@@ -172,6 +191,7 @@ func _apply_audio_settings() -> void:
 	if SFXManager:
 		SFXManager.set_master_volume(_pending_master)
 		SFXManager.set_sfx_volume(_pending_sfx)
+		SFXManager.set_scene_volume(_pending_scene)
 	if MusicManager:
 		MusicManager.set_master_volume(_pending_master)
 		MusicManager.set_music_volume(_pending_music)
@@ -203,12 +223,50 @@ func _on_sfx_changed(value: float) -> void:
 		SFXManager.set_sfx_volume(value)
 
 
+func _on_scene_changed(value: float) -> void:
+	_pending_scene = value
+	scene_value.text = "%d%%" % int(value)
+	# Apply Scene volume in real-time
+	if SFXManager:
+		SFXManager.set_scene_volume(value)
+
+
 func _on_music_changed(value: float) -> void:
 	_pending_music = value
 	music_value.text = "%d%%" % int(value)
 	# Apply music volume in real-time
 	if MusicManager:
 		MusicManager.set_music_volume(value)
+
+
+func _on_reset_settings_pressed() -> void:
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
+		
+	# Reset pending values to defaults
+	_pending_fullscreen = false
+	_pending_resolution = 1 # 1600x900
+	_pending_master = 80.0
+	_pending_sfx = 100.0
+	_pending_scene = 100.0
+	_pending_music = 70.0
+	
+	# Update UI to reflect defaults
+	_update_ui_from_pending()
+	
+	# Apply audio settings immediately for feedback
+	_apply_audio_settings()
+	
+	# Visual feedback
+	reset_settings_button.text = "[ RESET! ]"
+	reset_settings_button.disabled = true
+	
+	var tween = create_tween()
+	tween.tween_interval(1.0)
+	tween.tween_callback(func():
+		reset_settings_button.text = "[ RESET SETTINGS ]"
+		reset_settings_button.disabled = false
+	)
 
 
 func _on_reset_tutorial_pressed() -> void:

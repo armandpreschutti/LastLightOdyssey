@@ -510,8 +510,8 @@ static func _get_reachable_positions(from: Vector2i, max_range: int, tactical_ma
 		var current = queue.pop_front()
 		var dist = distances[current]
 		
-		# Only add to reachable if not an extraction tile
-		if not tactical_map.is_extraction_tile(current):
+		# Only add to reachable if not an extraction tile and not a turret tile
+		if not tactical_map.is_extraction_tile(current) and not tactical_map.has_turret_at(current):
 			reachable.append(current)
 		
 		if dist < max_range:
@@ -519,8 +519,8 @@ static func _get_reachable_positions(from: Vector2i, max_range: int, tactical_ma
 			for dir in directions:
 				var next_pos = current + dir
 				
-				# Skip extraction tiles and non-walkable tiles
-				if not visited.has(next_pos) and tactical_map.is_tile_walkable(next_pos) and not tactical_map.is_extraction_tile(next_pos):
+				# Skip extraction tiles, turret tiles, and non-walkable tiles
+				if not visited.has(next_pos) and tactical_map.is_tile_walkable(next_pos) and not tactical_map.is_extraction_tile(next_pos) and not tactical_map.has_turret_at(next_pos):
 					visited[next_pos] = true
 					distances[next_pos] = dist + 1
 					queue.append(next_pos)

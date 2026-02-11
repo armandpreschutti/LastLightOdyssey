@@ -91,6 +91,9 @@ func show_scene(event: Dictionary) -> void:
 	prompt_label.modulate.a = 0.0
 	_input_ready = false
 	
+	# Play event-specific SFX
+	_play_event_sfx(event_id)
+	
 	# Fade in
 	modulate.a = 0.0
 	visible = true
@@ -104,7 +107,7 @@ func _start_description_typewriter() -> void:
 	_typewriter_tween = create_tween()
 	_typewriter_tween.set_loops(_current_desc.length())
 	_typewriter_tween.tween_callback(_add_desc_char)
-	_typewriter_tween.tween_interval(0.03)
+	_typewriter_tween.tween_interval(0.05)
 	_typewriter_tween.finished.connect(_on_typewriter_done)
 
 
@@ -164,7 +167,33 @@ func _dismiss() -> void:
 
 func _on_dismissed() -> void:
 	visible = false
+	if SFXManager:
+		SFXManager.stop_scene_sfx()
 	scene_dismissed.emit()
+
+
+## Play event-specific SFX
+func _play_event_sfx(event_id: int) -> void:
+	# Map event IDs to SFX file names
+	var sfx_files: Dictionary = {
+		1: "solar_flare.mp3",
+		2: "meteor_shower.mp3",
+		3: "disease_outbreak.mp3",
+		4: "system_malfunction.mp3",
+		5: "pirate_ambush.mp3",
+		6: "space_debris.mp3",
+		7: "sensor_ghost.mp3",
+		8: "radiation_storm.mp3",
+		9: "cryo_failure.mp3",
+		10: "clear_skies.mp3",
+	}
+	
+	var sfx_file = sfx_files.get(event_id, "")
+	if sfx_file == "":
+		return
+	
+	var sfx_path = "res://assets/audio/sfx/scenes/event_scene/" + sfx_file
+	SFXManager.play_scene_sfx(sfx_path)
 
 
 ## Draw CRT-style scanlines over the scene image

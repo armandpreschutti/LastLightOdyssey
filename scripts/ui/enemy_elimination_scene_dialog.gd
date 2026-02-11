@@ -53,11 +53,20 @@ func show_scene(biome_type: int, alive_officers: Array[String]) -> void:
 		GameState.current_node_index + 1
 	]
 	
-	# Use procedural generation for mission scene
-	scene_image.visible = false
-	scene_canvas.visible = true
-	_generate_scene_elements()
-	scene_canvas.queue_redraw()
+	# Load scene image
+	var image_name = "elimination_" + biome_name.to_lower()
+	var image_path = "res://assets/sprites/scenes/%s.png" % image_name
+	
+	if ResourceLoader.exists(image_path):
+		scene_image.texture = load(image_path)
+		scene_image.visible = true
+		scene_canvas.visible = false
+	else:
+		# Fallback
+		scene_image.visible = false
+		scene_canvas.visible = true
+		_generate_scene_elements()
+		scene_canvas.queue_redraw()
 	
 	# Build description
 	var description = "All hostiles eliminated. Extraction is now available."
@@ -70,6 +79,9 @@ func show_scene(biome_type: int, alive_officers: Array[String]) -> void:
 	# Hide prompt initially
 	prompt_label.modulate.a = 0.0
 	_input_ready = false
+	
+	# Play enemy elimination SFX
+	_play_elimination_sfx()
 	
 	# Fade in
 	modulate.a = 0.0
@@ -84,7 +96,7 @@ func _start_description_typewriter() -> void:
 	_typewriter_tween = create_tween()
 	_typewriter_tween.set_loops(_current_desc.length())
 	_typewriter_tween.tween_callback(_add_desc_char)
-	_typewriter_tween.tween_interval(0.03)
+	_typewriter_tween.tween_interval(0.05)
 	_typewriter_tween.finished.connect(_on_typewriter_done)
 
 
@@ -145,6 +157,12 @@ func _dismiss() -> void:
 func _on_dismissed() -> void:
 	visible = false
 	scene_dismissed.emit()
+
+
+## Play enemy elimination SFX
+func _play_elimination_sfx() -> void:
+	var sfx_path = "res://assets/audio/sfx/scenes/enemy_elimination_scene/all_hostiles_eliminated.mp3"
+	SFXManager.play_scene_sfx(sfx_path)
 
 
 ## Draw CRT-style scanlines over the scene image

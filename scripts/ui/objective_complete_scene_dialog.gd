@@ -72,11 +72,31 @@ func show_scene(objective: MissionObjective, biome_type: int, alive_officers: Ar
 		GameState.current_node_index + 1
 	]
 	
-	# Use procedural generation for mission scene
-	scene_image.visible = false
-	scene_canvas.visible = true
-	_generate_scene_elements()
-	scene_canvas.queue_redraw()
+	# Determine objective type from description keywords
+	var obj_lower = _objective_description.to_lower()
+	var obj_type = "generic"
+	
+	if "hack" in obj_lower: obj_type = "hack"
+	elif "retrieve" in obj_lower: obj_type = "retrieve"
+	elif "repair" in obj_lower: obj_type = "repair"
+	elif "clear" in obj_lower and "passage" in obj_lower: obj_type = "clear"
+	elif "mining" in obj_lower: obj_type = "mining"
+	elif "extract" in obj_lower: obj_type = "extract"
+	elif "sample" in obj_lower: obj_type = "collect"
+	elif "beacon" in obj_lower: obj_type = "beacon"
+	elif "nest" in obj_lower: obj_type = "nest"
+	
+	var image_path = "res://assets/sprites/scenes/mission_%s.png" % obj_type
+	if ResourceLoader.exists(image_path):
+		scene_image.texture = load(image_path)
+		scene_image.visible = true
+		scene_canvas.visible = false
+	else:
+		# Use procedural generation for mission scene
+		scene_image.visible = false
+		scene_canvas.visible = true
+		_generate_scene_elements()
+		scene_canvas.queue_redraw()
 	
 	# Build description with objective and rewards
 	var description = "%s.%s" % [_objective_description, _rewards_text]
@@ -89,6 +109,9 @@ func show_scene(objective: MissionObjective, biome_type: int, alive_officers: Ar
 	# Hide prompt initially
 	prompt_label.modulate.a = 0.0
 	_input_ready = false
+	
+	# Play objective complete SFX
+	_play_objective_sfx()
 	
 	# Fade in
 	modulate.a = 0.0
@@ -103,7 +126,7 @@ func _start_description_typewriter() -> void:
 	_typewriter_tween = create_tween()
 	_typewriter_tween.set_loops(_current_desc.length())
 	_typewriter_tween.tween_callback(_add_desc_char)
-	_typewriter_tween.tween_interval(0.03)
+	_typewriter_tween.tween_interval(0.05)
 	_typewriter_tween.finished.connect(_on_typewriter_done)
 
 
@@ -163,7 +186,15 @@ func _dismiss() -> void:
 
 func _on_dismissed() -> void:
 	visible = false
+	if SFXManager:
+		SFXManager.stop_scene_sfx()
 	scene_dismissed.emit()
+
+
+## Play objective complete SFX
+func _play_objective_sfx() -> void:
+	var sfx_file = "objective_complete.mp3"
+	SFXManager.play_scene_sfx("res://assets/audio/sfx/scenes/objective_complete_scene/" + sfx_file)
 
 
 ## Draw CRT-style scanlines over the scene image

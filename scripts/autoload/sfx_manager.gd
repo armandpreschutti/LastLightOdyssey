@@ -10,6 +10,10 @@ var pool_index: int = 0
 
 var master_volume: float = 80.0  # 0-100
 var sfx_volume: float = 100.0  # 0-100
+var music_volume: float = 70.0  # 0-100
+var scene_volume: float = 100.0  # 0-100 (Separate channel for narrative scene SFX)
+
+var scene_player: AudioStreamPlayer = null
 
 
 func _ready() -> void:
@@ -21,9 +25,19 @@ func _ready() -> void:
 		add_child(player)
 		audio_pool.append(player)
 	
+	# Create dedicated Scene SFX player
+	scene_player = AudioStreamPlayer.new()
+	scene_player.name = "SceneSFXPlayer"
+	scene_player.bus = "Master"
+	add_child(scene_player)
+	
 	# Load volume settings
 	_load_volume_settings()
 	_update_volume()
+	
+	# Connect signal for auto-undocking
+	if scene_player:
+		scene_player.finished.connect(_on_scene_sfx_finished)
 
 
 ## Load volume settings from config file
@@ -40,6 +54,8 @@ func _load_volume_settings() -> void:
 	# Load audio settings
 	master_volume = config.get_value("audio", "master", 80.0)
 	sfx_volume = config.get_value("audio", "sfx", 100.0)
+	music_volume = config.get_value("audio", "music", 70.0)
+	scene_volume = config.get_value("audio", "scene", 100.0)
 
 
 ## Update volume for all SFX players
@@ -48,6 +64,9 @@ func _update_volume() -> void:
 	
 	for player in audio_pool:
 		player.volume_db = volume_db
+	
+	# Update Scene SFX volume separately
+	_update_scene_volume()
 
 
 ## Calculate volume in dB from percentage values
@@ -64,7 +83,25 @@ func _calculate_volume_db() -> float:
 		return -80.0
 	
 	# Map 0-1 to -80 to 0 dB
+	# Map 0-1 to -80 to 0 dB
 	return linear_to_db(combined_linear)
+
+
+## Calculate scene volume in dB
+func _calculate_scene_volume_db() -> float:
+	var master_linear = master_volume / 100.0
+	var scene_linear = scene_volume / 100.0
+	var combined_linear = master_linear * scene_linear
+	
+	if combined_linear <= 0.0:
+		return -80.0
+	return linear_to_db(combined_linear)
+
+
+## Update Scene SFX volume
+func _update_scene_volume() -> void:
+	if scene_player:
+		scene_player.volume_db = _calculate_scene_volume_db()
 
 
 ## Update master volume (called from settings menu)
@@ -77,6 +114,12 @@ func set_master_volume(volume: float) -> void:
 func set_sfx_volume(volume: float) -> void:
 	sfx_volume = clamp(volume, 0.0, 100.0)
 	_update_volume()
+
+
+## Update Scene volume (called from settings menu)
+func set_scene_volume(volume: float) -> void:
+	scene_volume = clamp(volume, 0.0, 100.0)
+	_update_scene_volume()
 
 
 ## Play a sound effect by path
@@ -108,6 +151,43 @@ func play_sfx(path: String, pitch_scale: float = 1.0) -> void:
 func play_sfx_by_name(category: String, name: String, pitch_scale: float = 1.0) -> void:
 	var path = "res://assets/audio/sfx/%s/%s.mp3" % [category, name]
 	play_sfx(path, pitch_scale)
+
+
+## Play use Scene SFX player (dedicated channel, stops previous scene SFX)
+func play_scene_sfx(path: String) -> void:
+	if not scene_player:
+		return
+		
+	# Stop any currently playing scene SFX first
+	scene_player.stop()
+	
+	var stream = load(path)
+	if not stream:
+		push_warning("SFXManager: Failed to load scene audio file: %s" % path)
+		return
+	
+	scene_player.stream = stream
+	scene_player.play()
+	
+	# Lower music volume
+	if MusicManager:
+		MusicManager.set_ducking(true)
+
+
+## Stop current running scene SFX immediately
+func stop_scene_sfx() -> void:
+	if scene_player and scene_player.playing:
+		scene_player.stop()
+		# Restore music volume immediately if manually stopped
+		if MusicManager:
+			MusicManager.set_ducking(false)
+
+
+## Callback when scene SFX finishes naturally
+func _on_scene_sfx_finished() -> void:
+	# Restore music volume
+	if MusicManager:
+		MusicManager.set_ducking(false)
 
 
 ## Get next available player from the pool (round-robin)

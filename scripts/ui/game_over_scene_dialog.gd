@@ -5,6 +5,7 @@ extends Control
 signal scene_dismissed
 
 @onready var scene_canvas: Control = $VBoxContainer/ImageContainer/SceneCanvas
+@onready var scene_image: TextureRect = $VBoxContainer/ImageContainer/SceneImage
 @onready var scanline_overlay: Control = $VBoxContainer/ImageContainer/ScanlineOverlay
 @onready var title_label: Label = $VBoxContainer/TitleBar/TitleLabel
 @onready var location_label: Label = $VBoxContainer/TitleBar/LocationLabel
@@ -91,9 +92,19 @@ func show_scene(reason: String) -> void:
 		GameState.current_node_index + 1
 	]
 	
-	# Generate scene elements
-	_generate_scene_elements(reason)
-	scene_canvas.queue_redraw()
+	# Load scene image
+	var image_name = "game_over_" + reason.replace("colonists_depleted", "colonists").replace("ship_destroyed", "ship").replace("captain_died", "captain")
+	var image_path = "res://assets/sprites/scenes/%s.png" % image_name
+	
+	if ResourceLoader.exists(image_path):
+		scene_image.texture = load(image_path)
+		scene_image.visible = true
+		scene_canvas.visible = false
+	else:
+		scene_image.visible = false
+		scene_canvas.visible = true
+		_generate_scene_elements(reason)
+		scene_canvas.queue_redraw()
 	
 	# Start typewriter effect for description
 	_current_desc = description
@@ -103,6 +114,9 @@ func show_scene(reason: String) -> void:
 	# Hide prompt initially
 	prompt_label.modulate.a = 0.0
 	_input_ready = false
+	
+	# Play reason-specific SFX
+	_play_game_over_sfx(reason)
 	
 	# Fade in
 	modulate.a = 0.0
@@ -117,7 +131,7 @@ func _start_description_typewriter() -> void:
 	_typewriter_tween = create_tween()
 	_typewriter_tween.set_loops(_current_desc.length())
 	_typewriter_tween.tween_callback(_add_desc_char)
-	_typewriter_tween.tween_interval(0.03)
+	_typewriter_tween.tween_interval(0.05)
 	_typewriter_tween.finished.connect(_on_typewriter_done)
 
 
@@ -176,7 +190,24 @@ func _dismiss() -> void:
 
 func _on_dismissed() -> void:
 	visible = false
+	if SFXManager:
+		SFXManager.stop_scene_sfx()
 	scene_dismissed.emit()
+
+
+## Play reason-specific SFX
+func _play_game_over_sfx(reason: String) -> void:
+	# Map game over reasons to SFX file names
+	var sfx_files: Dictionary = {
+		"colonists_depleted": "extinction.mp3",
+		"ship_destroyed": "ship_destroyed.mp3",
+		"captain_died": "captain_died.mp3",
+	}
+	
+	var sfx_file = sfx_files.get(reason, "extinction.mp3")  # Default to extinction
+	
+	var sfx_path = "res://assets/audio/sfx/scenes/game_over_scene/" + sfx_file
+	SFXManager.play_scene_sfx(sfx_path)
 
 
 ## Draw CRT-style scanlines

@@ -43,7 +43,7 @@ func _ready() -> void:
 	scene_canvas.draw.connect(_draw_procedural_scene)
 
 
-func show_scene(biome_type: int) -> void:
+func show_scene(biome_type: int, objective_type: String = "") -> void:
 	_current_biome = biome_type as BiomeConfig.BiomeType
 	var biome_name = BiomeConfig.get_biome_name(_current_biome)
 	var description = BIOME_DESCRIPTIONS.get(_current_biome, "An unknown location awaits.")
@@ -59,11 +59,28 @@ func show_scene(biome_type: int) -> void:
 		GameState.current_node_index + 1
 	]
 	
-	# Use procedural generation for mission scenes
-	scene_image.visible = false
-	scene_canvas.visible = true
-	_generate_scene_elements()
-	scene_canvas.queue_redraw()
+	# Map objective type to image name
+	var image_name = "mission_" + objective_type
+	if objective_type == "":
+		# mapping logic if objective_type is empty or not passed, trying to infer or default
+		image_name = "mission_scan" # Default generic 
+	
+	# Load specific art
+	var image_path = "res://assets/sprites/scenes/%s.png" % image_name
+	if not ResourceLoader.exists(image_path):
+		# Fallback to generic biome art maybe? Or just procedural
+		pass
+
+	if ResourceLoader.exists(image_path):
+		scene_image.texture = load(image_path)
+		scene_image.visible = true
+		scene_canvas.visible = false
+	else:
+		# Use procedural generation for mission scenes
+		scene_image.visible = false
+		scene_canvas.visible = true
+		_generate_scene_elements()
+		scene_canvas.queue_redraw()
 	
 	# Start typewriter effect for description
 	_current_desc = description
@@ -73,6 +90,9 @@ func show_scene(biome_type: int) -> void:
 	# Hide prompt initially
 	prompt_label.modulate.a = 0.0
 	_input_ready = false
+	
+	# Play biome-specific SFX
+	_play_mission_sfx(_current_biome)
 	
 	# Fade in
 	modulate.a = 0.0
@@ -87,7 +107,7 @@ func _start_description_typewriter() -> void:
 	_typewriter_tween = create_tween()
 	_typewriter_tween.set_loops(_current_desc.length())
 	_typewriter_tween.tween_callback(_add_desc_char)
-	_typewriter_tween.tween_interval(0.03)
+	_typewriter_tween.tween_interval(0.05)
 	_typewriter_tween.finished.connect(_on_typewriter_done)
 
 
@@ -147,7 +167,26 @@ func _dismiss() -> void:
 
 func _on_dismissed() -> void:
 	visible = false
+	if SFXManager:
+		SFXManager.stop_scene_sfx()
 	scene_dismissed.emit()
+
+
+## Play biome-specific SFX
+func _play_mission_sfx(biome_type: BiomeConfig.BiomeType) -> void:
+	# Map biomes to SFX file names
+	var sfx_files: Dictionary = {
+		BiomeConfig.BiomeType.STATION: "mission_station.mp3",
+		BiomeConfig.BiomeType.ASTEROID: "mission_asteroid.mp3",
+		BiomeConfig.BiomeType.PLANET: "mission_planet.mp3",
+	}
+	
+	var sfx_file = sfx_files.get(biome_type, "")
+	if sfx_file == "":
+		return
+	
+	var sfx_path = "res://assets/audio/sfx/scenes/mission_scene/" + sfx_file
+	SFXManager.play_scene_sfx(sfx_path)
 
 
 ## Draw CRT-style scanlines over the scene image

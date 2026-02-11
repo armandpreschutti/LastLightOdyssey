@@ -43,14 +43,19 @@ func show_recap(stats: Dictionary) -> void:
 	var objectives: Array = stats.get("objectives", [])
 	
 	# Set outcome
+	# Set outcome
 	if success:
 		title_label.text = "[ EXTRACTION COMPLETE ]"
 		outcome_label.text = "TEAM SUCCESSFULLY EXTRACTED"
 		outcome_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))
+		if SFXManager:
+			SFXManager.play_scene_sfx("res://assets/audio/sfx/scenes/common_scene/extraction_complete.mp3")
 	else:
 		title_label.text = "[ MISSION FAILED ]"
 		outcome_label.text = "EXTRACTION FAILED - TEAM LOST"
 		outcome_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2))
+		if SFXManager:
+			SFXManager.play_scene_sfx("res://assets/audio/sfx/scenes/common_scene/extraction_failed.mp3")
 	
 	# Clear old officer status labels
 	for child in officers_container.get_children():
@@ -242,6 +247,8 @@ func _on_continue_pressed() -> void:
 
 
 func _dismiss() -> void:
+	if SFXManager:
+		SFXManager.stop_scene_sfx()
 	visible = false
 	recap_dismissed.emit()
 

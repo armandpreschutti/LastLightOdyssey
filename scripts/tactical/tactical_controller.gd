@@ -261,6 +261,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 				if mining_pos != Vector2i(-1, -1):
 					used_positions.append(mining_pos)
 					mission_tile_positions.append(mining_pos)  # Track mission tile position
+					tactical_map.add_mission_highlight(mining_pos) # Add highlight
 					var mining_equipment = MiningEquipmentScene.instantiate()
 					mining_equipment.set_grid_position(mining_pos)
 					tactical_map.add_interactable(mining_equipment, mining_pos)
@@ -293,6 +294,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 				if terminal_pos != Vector2i(-1, -1):
 					used_positions.append(terminal_pos)
 					mission_tile_positions.append(terminal_pos)  # Track mission tile position
+					tactical_map.add_mission_highlight(terminal_pos) # Add highlight
 					var security_terminal = SecurityTerminalScene.instantiate()
 					security_terminal.set_grid_position(terminal_pos)
 					tactical_map.add_interactable(security_terminal, terminal_pos)
@@ -304,6 +306,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 					if log_pos != Vector2i(-1, -1):
 						used_positions.append(log_pos)
 						mission_tile_positions.append(log_pos)  # Track mission tile position
+						tactical_map.add_mission_highlight(log_pos) # Add highlight
 						var data_log = DataLogScene.instantiate()
 						data_log.set_grid_position(log_pos)
 						tactical_map.add_interactable(data_log, log_pos)
@@ -314,6 +317,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 				if core_pos != Vector2i(-1, -1):
 					used_positions.append(core_pos)
 					mission_tile_positions.append(core_pos)  # Track mission tile position
+					tactical_map.add_mission_highlight(core_pos) # Add highlight
 					var power_core = PowerCoreScene.instantiate()
 					power_core.set_grid_position(core_pos)
 					tactical_map.add_interactable(power_core, core_pos)
@@ -349,6 +353,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 					if sample_pos != Vector2i(-1, -1):
 						used_positions.append(sample_pos)
 						mission_tile_positions.append(sample_pos)  # Track mission tile position
+						tactical_map.add_mission_highlight(sample_pos) # Add highlight
 						var sample_collector = SampleCollectorScene.instantiate()
 						sample_collector.set_grid_position(sample_pos)
 						tactical_map.add_interactable(sample_collector, sample_pos)
@@ -360,6 +365,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 					if beacon_pos != Vector2i(-1, -1):
 						used_positions.append(beacon_pos)
 						mission_tile_positions.append(beacon_pos)  # Track mission tile position
+						tactical_map.add_mission_highlight(beacon_pos) # Add highlight
 						var beacon = BeaconScene.instantiate()
 						beacon.set_grid_position(beacon_pos)
 						tactical_map.add_interactable(beacon, beacon_pos)
@@ -370,6 +376,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 				if nest_pos != Vector2i(-1, -1):
 					used_positions.append(nest_pos)
 					mission_tile_positions.append(nest_pos)  # Track mission tile position
+					tactical_map.add_mission_highlight(nest_pos) # Add highlight
 					var nest = NestScene.instantiate()
 					nest.set_grid_position(nest_pos)
 					tactical_map.add_interactable(nest, nest_pos)
@@ -808,6 +815,10 @@ func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
 	var move_cost = path.size() - 1
 	if move_cost <= 0 or move_cost > unit.move_range:
 		return
+	
+	# Check if target position has a turret
+	if tactical_map.has_turret_at(target_pos):
+		return
 
 	if not unit.use_ap(1):
 		return
@@ -876,6 +887,8 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 			if objective_id == "clear_nests":
 				# Complete objective when player moves to nest square
 				_complete_objective("clear_nests")
+				# Remove the highlight
+				tactical_map.remove_mission_highlight(pos)
 				# Remove the nest after objective is completed
 				nest_interactable.queue_free()
 	
@@ -976,6 +989,9 @@ func _pickup_item(interactable: Node2D, unit: Node2D) -> void:
 	# Check if this is an objective interactable (like mining equipment)
 	if interactable.has_method("get_objective_id"):
 		var objective_id = interactable.get_objective_id()
+		
+		# Remove mission highlight when interacting with any objective item
+		tactical_map.remove_mission_highlight(interactable.get_grid_position())
 		
 		# ASTEROID objectives
 		if objective_id == "activate_mining":
@@ -1283,6 +1299,19 @@ func _check_extraction_available() -> void:
 	tactical_hud.set_extract_visible((any_on_extraction and any_alive) or can_extract_after_kill)
 
 
+## End all unit turns by setting AP to 0 (used during extraction to freeze all actions)
+func _end_all_unit_turns() -> void:
+	# End all player unit turns
+	for officer in deployed_officers:
+		if officer.has_method("set_ap"):
+			officer.set_ap(0)
+	
+	# End all enemy unit turns
+	for enemy in enemies:
+		if enemy.has_method("set_ap"):
+			enemy.set_ap(0)
+
+
 func _on_extract_pressed() -> void:
 	if not mission_active:
 		return
@@ -1307,6 +1336,9 @@ func _on_extract_pressed() -> void:
 			if alive_count > 0:
 				avg_pos /= alive_count
 				combat_camera.center_on_position_with_zoom(avg_pos, Vector2(1.5, 1.5))
+			
+			# End all unit turns to prevent actions during extraction
+			_end_all_unit_turns()
 			
 			# Extract all surviving units directly (beam-up animation will play in _end_mission)
 			_end_mission(true)
@@ -1350,6 +1382,8 @@ func _on_extract_pressed() -> void:
 		_show_extraction_warning(units_in_zone, units_outside_zone)
 	else:
 		# All units are in zone, extract normally
+		# End all unit turns to prevent actions during extraction
+		_end_all_unit_turns()
 		_end_mission(true)
 
 
@@ -1403,6 +1437,9 @@ func _on_extraction_warning_confirmed(units_outside_zone: Array[Node2D]) -> void
 		# Check if unit is still valid (may have been removed by previous call)
 		if is_instance_valid(unit) and unit in deployed_officers:
 			_on_officer_died(unit.officer_key)
+	
+	# End all unit turns to prevent actions during extraction
+	_end_all_unit_turns()
 	
 	# Extract with remaining units
 	_end_mission(true)
@@ -1603,6 +1640,9 @@ func _play_beam_up_animation() -> void:
 	# Hide HUD during animation
 	tactical_hud.show_combat_message("EXTRACTION IN PROGRESS...", Color(0.4, 0.9, 1.0))
 	
+	# Play beam SFX
+	SFXManager.play_scene_sfx("res://assets/audio/sfx/scenes/common_scene/beam.mp3")
+	
 	# Center camera on the group (animate from current position)
 	if deployed_officers.size() > 0:
 		var avg_pos = Vector2.ZERO
@@ -1674,6 +1714,9 @@ func _play_beam_up_animation() -> void:
 func _play_beam_down_animation() -> void:
 	# Show message during animation
 	tactical_hud.show_combat_message("BEAMING DOWN...", Color(0.4, 0.9, 1.0))
+	
+	# Play beam SFX
+	SFXManager.play_scene_sfx("res://assets/audio/sfx/scenes/common_scene/beam.mp3")
 	
 	# Camera should already be centered on spawn positions from start_mission
 	# No need to reposition here - it's already in the right place
@@ -3105,6 +3148,20 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
+	# Check no turret is already there
+	if tactical_map.has_turret_at(grid_pos):
+		tactical_hud.show_combat_message("TURRET ALREADY THERE", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_set_animating(false)
+		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		# Restore movement range if unit still has AP
+		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			var unit_pos = selected_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+		return
+	
 	# Use the ability (spends AP and starts cooldown)
 	if selected_unit.use_turret():
 		# Play turret SFX
@@ -3117,6 +3174,9 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		tactical_map.add_child(turret)
 		turret.initialize()
 		active_turrets.append(turret)
+		
+		# Mark turret tile as solid so units cannot move through it
+		tactical_map.set_unit_position_solid(grid_pos, true)
 		
 		# Focus camera on turret placement
 		var tech_world = selected_unit.position
@@ -3228,10 +3288,6 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 			var unit_pos = heavy_unit.get_grid_position()
 			tactical_map.set_movement_range(unit_pos, heavy_unit.move_range)
 		return
-	
-	# Play charge SFX
-	if SFXManager:
-		SFXManager.play_sfx_by_name("combat", "charge")
 	
 	# Find adjacent position to the enemy to move to
 	var charge_destination = _find_charge_destination(heavy_pos, grid_pos)
@@ -3431,6 +3487,10 @@ func _perform_charge_melee_attack(attacker: Node2D, target: Node2D, damage: int,
 	# Deal damage and spawn popup
 	var enemy_hp_before = target.current_hp if is_instance_valid(target) else 0
 	if is_instance_valid(target):
+		# Play charge SFX right as the hit connects
+		if SFXManager:
+			SFXManager.play_sfx_by_name("combat", "charge")
+		
 		target.take_damage(damage)
 		var enemy_died = target.current_hp <= 0 and enemy_hp_before > 0
 		_spawn_damage_popup(damage, true, target.position, false, true)  # Use flank style for charge hits
@@ -3516,20 +3576,20 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
-	# Check line of sight
-	if not has_line_of_sight(captain_pos, grid_pos):
-		tactical_hud.show_combat_message("NO LINE OF SIGHT", Color(1, 0.3, 0.3))
-		await get_tree().create_timer(1.0).timeout
-		tactical_hud.hide_combat_message()
-		_select_unit(selected_unit)
-		_set_animating(false)
-		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
-		# Restore movement range if unit still has AP
-		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
-			var unit_pos = selected_unit.get_grid_position()
-			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
-		return
+	# Check line of sight - Removed per design change (can execute any enemy in range)
+	# if not has_line_of_sight(captain_pos, grid_pos):
+	# 	tactical_hud.show_combat_message("NO LINE OF SIGHT", Color(1, 0.3, 0.3))
+	# 	await get_tree().create_timer(1.0).timeout
+	# 	tactical_hud.hide_combat_message()
+	# 	_select_unit(selected_unit)
+	# 	_set_animating(false)
+	# 	# Update ability buttons (ability not used, button should be re-enabled)
+	# 	tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+	# 	# Restore movement range if unit still has AP
+	# 	if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+	# 		var unit_pos = selected_unit.get_grid_position()
+	# 		tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+	# 	return
 	
 	# Must be clicking on an enemy
 	var target_enemy: Node2D = null
@@ -3575,10 +3635,6 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		return
 	
-	# Play execute SFX
-	if SFXManager:
-		SFXManager.play_sfx_by_name("combat", "execute")
-	
 	# Guaranteed kill - deal remaining HP as damage
 	var execute_damage = target_enemy.current_hp
 	selected_unit.face_towards(grid_pos)
@@ -3595,6 +3651,12 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 	
 	# Fire projectile
 	projectile.fire(shooter_world, target_world)
+	
+	# Play execute SFX just before impact to build anticipation
+	await get_tree().create_timer(0.05).timeout  # Small delay for anticipation
+	if SFXManager:
+		SFXManager.play_sfx_by_name("combat", "execute")
+	
 	await projectile.impact_reached
 	
 	# Apply lethal damage
@@ -3670,10 +3732,6 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
 		return
 	
-	# Play precision shot SFX
-	if SFXManager:
-		SFXManager.play_sfx_by_name("combat", "precision_shot")
-	
 	# Precision Shot deals 2x base damage (60 for sniper with 30 base damage)
 	var precision_damage = selected_unit.base_damage * 2
 	selected_unit.face_towards(grid_pos)
@@ -3694,6 +3752,12 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 
 	# Fire projectile
 	projectile.fire(shooter_world, target_world)
+	
+	# Play precision shot SFX just before impact to build anticipation
+	await get_tree().create_timer(0.05).timeout  # Small delay for anticipation
+	if SFXManager:
+		SFXManager.play_sfx_by_name("combat", "precision_shot")
+	
 	await projectile.impact_reached
 
 	# Guaranteed hit with 2x damage
@@ -3987,7 +4051,10 @@ func _process_turrets() -> void:
 	
 	# Remove expired turrets
 	for turret in turrets_to_remove:
+		var turret_pos = turret.get_grid_position()
 		active_turrets.erase(turret)
+		# Unmark turret tile as solid so units can move through it again
+		tactical_map.set_unit_position_solid(turret_pos, false)
 		# Only show expiration message if mission is still active
 		if mission_active:
 			tactical_hud.show_combat_message("TURRET EXPIRED", Color(0.5, 0.5, 0.5))

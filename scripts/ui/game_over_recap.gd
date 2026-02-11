@@ -41,6 +41,9 @@ func _ready() -> void:
 func show_recap(reason: String) -> void:
 	_reason = reason
 	
+	if SFXManager:
+		SFXManager.play_scene_sfx("res://assets/audio/sfx/scenes/common_scene/voyage_failure.mp3")
+	
 	# Set title
 	title_label.text = "[ MISSION FAILED ]"
 	
@@ -201,6 +204,9 @@ func _animate_recap_in() -> void:
 func _on_main_menu_pressed() -> void:
 	if _stat_tween and _stat_tween.is_running():
 		_stat_tween.kill()
+		
+	if SFXManager:
+		SFXManager.stop_scene_sfx()
 	
 	var tween = create_tween()
 	tween.tween_property(self, "modulate:a", 0.0, 0.3)
@@ -213,6 +219,9 @@ func _on_main_menu_pressed() -> void:
 func _on_restart_pressed() -> void:
 	if _stat_tween and _stat_tween.is_running():
 		_stat_tween.kill()
+		
+	if SFXManager:
+		SFXManager.stop_scene_sfx()
 	
 	var tween = create_tween()
 	tween.tween_property(self, "modulate:a", 0.0, 0.3)
