@@ -46,7 +46,7 @@ var cryo_stability: int = 100:
 
 const STABILITY_LOSS_PER_TURN: int = 5  # Base stability loss (used for early stages)
 const COLONIST_LOSS_AT_ZERO_STABILITY: int = 10
-const COLONIST_LOSS_DRIFT_MODE: int = 50  # Increased from 40 to 50 (25% increase) - harsher penalty for insufficient fuel
+const COLONIST_LOSS_DRIFT_MODE: int = 100  # Flat 100 loss for drift mode, regardless of fuel deficit
 const FINAL_STAGE_STABILITY_REDUCTION: int = 2  # Reduce stability loss by 2% in final stages (nodes 35+)
 const SHIP_INTEGRITY_LOSS_PER_JUMP: int = 1  # Ship takes minor damage from each jump
 const STABILITY_LOSS_PER_JUMP: int = 2  # Stability decreases slightly with each jump
@@ -67,6 +67,8 @@ var officers: Dictionary = {
 var current_node_index: int = 0
 var nodes_to_new_earth: int = 50
 var visited_nodes: Array[int] = []  # Track which nodes have been visited
+var travel_history: Array[int] = [0] # Track exact sequence of nodes visited (v4)
+var successful_scavenge_nodes: Array[int] = [] # Track nodes where mission was successfully extracted
 var node_types: Dictionary = {}  # Pre-rolled node types (node_id -> NodeType)
 var node_biomes: Dictionary = {}  # Pre-rolled biome types for scavenge nodes (node_id -> BiomeType)
 var is_in_tactical_mode: bool = false
@@ -95,6 +97,8 @@ func reset_game() -> void:
 	cryo_stability = 100
 	current_node_index = 0
 	visited_nodes.clear()
+	travel_history = [0]
+	successful_scavenge_nodes.clear()
 	node_types.clear()
 	node_biomes.clear()
 	tactical_turn_count = 0
@@ -137,8 +141,8 @@ func jump_to_node(target_node_index: int, fuel_cost: int = 1) -> void:
 		# Not enough fuel: consume what we have, then drift mode for the rest
 		var fuel_deficit = fuel_cost - fuel
 		fuel = 0
-		# Drift Mode: lose colonists due to life-support rationing (per fuel deficit)
-		colonist_count -= COLONIST_LOSS_DRIFT_MODE * fuel_deficit
+		# Drift Mode: lose colonists due to life-support rationing (flat cost)
+		colonist_count -= COLONIST_LOSS_DRIFT_MODE
 		# Additional penalty: ship integrity loss during drift mode
 		ship_integrity -= SHIP_INTEGRITY_LOSS_PER_JUMP * fuel_deficit
 	
@@ -152,6 +156,7 @@ func jump_to_node(target_node_index: int, fuel_cost: int = 1) -> void:
 	
 	# Move to new node
 	current_node_index = target_node_index
+	travel_history.append(target_node_index)
 	
 	# Check win condition
 	if current_node_index >= nodes_to_new_earth - 1:  # Last node is New Earth
@@ -273,6 +278,8 @@ func save_game() -> bool:
 		"scrap": scrap,
 		"current_node_index": current_node_index,
 		"visited_nodes": visited_nodes,
+		"travel_history": travel_history,
+		"successful_scavenge_nodes": successful_scavenge_nodes,
 		"node_types": node_types,
 		"node_biomes": node_biomes,
 		"officers": officers,
@@ -336,6 +343,21 @@ func load_game() -> bool:
 	var loaded_visited = save_data.get("visited_nodes", [])
 	for node_id in loaded_visited:
 		visited_nodes.append(int(node_id))
+	
+	# Restore travel history
+	travel_history.clear()
+	var loaded_history = save_data.get("travel_history", [])
+	if loaded_history.is_empty() and current_node_index >= 0:
+		travel_history = [current_node_index] # Fallback for old saves
+	else:
+		for node_id in loaded_history:
+			travel_history.append(int(node_id))
+	
+	# Restore successful scavenge nodes
+	successful_scavenge_nodes.clear()
+	var loaded_successful = save_data.get("successful_scavenge_nodes", [])
+	for node_id in loaded_successful:
+		successful_scavenge_nodes.append(int(node_id))
 	
 	# Restore node types
 	node_types.clear()

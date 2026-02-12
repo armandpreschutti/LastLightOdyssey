@@ -169,17 +169,7 @@ def extraction_failed_gen(t, dur):
     thud = sine_wave(t, 60 * (1 - progress)) * 0.4
     return mix(fall, buzz, static, thud)
 
-def outpost_arrival_gen(t, dur):
-    """Docking with trading outpost."""
-    # Mechanical docking latches
-    latch = square_wave(t, 60) * 0.2 * (1 if (t * 2) % 1.0 < 0.1 else 0)
-    # Station hum
-    hum = sine_wave(t, 120) * 0.25
-    # Communication bleeps
-    bleep = sine_wave(t, 1200 + 400 * random.choice([-1, 0, 1])) * 0.15 * (1 if random.random() < 0.1 else 0)
-    # Air hiss
-    hiss = white_noise(0.2) * (1 - t/dur) * 0.3
-    return mix(latch, hum, bleep, hiss)
+
 
 def voyage_failure_gen(t, dur):
     """Final game over screen (recap)."""
@@ -656,7 +646,7 @@ def main():
         ("beam.mp3", beam_gen, 3.0),
         ("extraction_complete.mp3", extraction_complete_gen, 4.0),
         ("extraction_failed.mp3", extraction_failed_gen, 4.0),
-        ("outpost_arrival.mp3", outpost_arrival_gen, 3.0),
+
         ("voyage_failure.mp3", voyage_failure_gen, 5.0),
     ]
     # Place these in appropriate folders or a 'common' folder?

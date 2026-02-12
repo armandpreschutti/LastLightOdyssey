@@ -683,15 +683,23 @@ func _on_tile_hovered(grid_pos: Vector2i) -> void:
 
 
 func _on_tile_clicked(grid_pos: Vector2i) -> void:
+	print("DEBUG: Tile clicked at ", grid_pos)
 	if not mission_active:
+		print("DEBUG: Mission not active")
 		return
 	
 	# Prevent input during animations (including enemy overwatch)
 	if is_animating:
+		print("DEBUG: Is animating, input ignored")
 		return
 	
 	# Check if it's the current unit's turn
 	if not _is_current_unit_turn():
+		print("DEBUG: Not current unit turn. Current index: ", current_unit_index)
+		if selected_unit:
+			print("DEBUG: Selected unit: ", selected_unit.name, " (", selected_unit.officer_key, ")")
+		else:
+			print("DEBUG: No unit selected")
 		return
 	
 	# Handle ability targeting modes
@@ -755,6 +763,12 @@ func _on_tile_clicked(grid_pos: Vector2i) -> void:
 			return
 
 	# Try to move selected unit (only if it's their turn)
+	if selected_unit:
+		print("DEBUG: Checking movement conditions for ", selected_unit.name)
+		print("DEBUG: Is current turn unit: ", selected_unit == deployed_officers[current_unit_index])
+		print("DEBUG: Has AP: ", selected_unit.has_ap())
+		print("DEBUG: Is moving: ", selected_unit.is_moving())
+	
 	if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap() and not selected_unit.is_moving():
 		_try_move_unit(selected_unit, grid_pos)
 
@@ -812,14 +826,18 @@ func _select_unit(unit: Node2D) -> void:
 
 
 func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
+	print("DEBUG: Trying to move to ", target_pos)
 	var current_pos = unit.get_grid_position()
 	var path = tactical_map.find_path(current_pos, target_pos)
+	print("DEBUG: Path found, size: ", path.size())
 
 	if path.is_empty():
 		return
 
 	var move_cost = path.size() - 1
+	print("DEBUG: Move cost: ", move_cost, " Range: ", unit.move_range)
 	if move_cost <= 0 or move_cost > unit.move_range:
+		print("DEBUG: Invalid move cost or out of range")
 		return
 	
 	# Check if target position has a turret
@@ -827,13 +845,16 @@ func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
 		return
 
 	if not unit.use_ap(1):
+		print("DEBUG: Failed to use AP")
 		return
+	
+	print("DEBUG: Movement started successfully")
 	
 	# Disable end turn button during movement animation
 	_set_animating(true)
 
 	# Clear old position from pathfinding
-	tactical_map.set_unit_position_solid(current_pos, false)
+	# Removed: tactical_map.set_unit_position_solid(current_pos, false)
 
 	# Move unit
 	unit.set_grid_position(target_pos)
@@ -874,7 +895,7 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 	var pos = unit.get_grid_position()
 
 	# Mark new position as solid
-	tactical_map.set_unit_position_solid(pos, true)
+	# Removed: tactical_map.set_unit_position_solid(pos, true)
 
 	# Reveal fog around new position
 	tactical_map.reveal_around(pos, unit.sight_range)
@@ -1480,7 +1501,7 @@ func _on_officer_died(officer_key: String) -> void:
 	
 	# Clear position from map immediately
 	var pos = dying_officer.get_grid_position()
-	tactical_map.set_unit_position_solid(pos, false)
+	# Removed: tactical_map.set_unit_position_solid(pos, false)
 	
 	# Remove from deployed list before animation (so they can't be selected)
 	if officer_index >= 0:
@@ -2328,6 +2349,11 @@ func _spawn_pickup_popup(item_type: String, amount: int, world_pos: Vector2) -> 
 ## Execute AI turn for all enemies
 func _execute_enemy_turn() -> void:
 	
+	# Reduce overwatch cooldown for all enemies at start of turn
+	for enemy in enemies:
+		if is_instance_valid(enemy) and enemy.has_method("reduce_overwatch_cooldown"):
+			enemy.reduce_overwatch_cooldown()
+	
 	for enemy in enemies:
 		# Check if enemy is valid before processing
 		if not is_instance_valid(enemy):
@@ -2373,7 +2399,7 @@ func _execute_enemy_turn() -> void:
 					var new_pos = decision["target_pos"]
 					
 					# Clear old position
-					tactical_map.set_unit_position_solid(old_pos, false)
+					# Removed: tactical_map.set_unit_position_solid(old_pos, false)
 
 					# Move enemy
 					enemy.use_ap(1)
@@ -2390,7 +2416,7 @@ func _execute_enemy_turn() -> void:
 					enemy.set_grid_position(new_pos)
 
 					# Mark new position as solid
-					tactical_map.set_unit_position_solid(new_pos, true)
+					# Removed: tactical_map.set_unit_position_solid(new_pos, true)
 					
 					# Update enemy visibility after movement
 					_update_enemy_visibility()
@@ -2489,15 +2515,7 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	if idx >= 0:
 		enemies.remove_at(idx)
 	
-	# Clear from map (handle multi-tile units like bosses)
-	if enemy.get("unit_size") != null and enemy.unit_size == Vector2i(2, 2):
-		# Clear all 4 tiles for 2x2 boss
-		for dx in range(2):
-			for dy in range(2):
-				var occupied_pos = pos + Vector2i(dx, dy)
-				tactical_map.set_unit_position_solid(occupied_pos, false)
-	else:
-		tactical_map.set_unit_position_solid(pos, false)
+	# Removed from map (solidity is no longer tracked for units)
 	
 	# Play death animation before removing
 	if enemy.has_method("play_death_animation"):
@@ -2964,11 +2982,20 @@ func _check_sniper_overwatch(officer: Node2D, officer_pos: Vector2i) -> void:
 			continue
 		
 		# Check line of sight
+		# Check line of sight
 		if not has_line_of_sight(enemy_pos, officer_pos):
+			continue
+		
+		# Check overwatch cooldown
+		if enemy.overwatch_cooldown > 0:
 			continue
 		
 		# Sniper overwatch triggered!
 		tactical_hud.show_combat_message("SNIPER OVERWATCH!", Color(1, 0.3, 0.3))
+		
+		# Start cooldown
+		enemy.start_overwatch_cooldown()
+		
 		await get_tree().create_timer(0.8).timeout
 		
 		# Calculate damage and hit chance
@@ -3223,7 +3250,7 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		active_turrets.append(turret)
 		
 		# Mark turret tile as solid so units cannot move through it
-		tactical_map.set_unit_position_solid(grid_pos, true)
+		# Removed: tactical_map.set_unit_position_solid(grid_pos, true)
 		
 		# Focus camera on turret placement
 		var tech_world = selected_unit.position
@@ -3344,7 +3371,7 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		pass
 	else:
 		# Move heavy to adjacent tile of enemy
-		tactical_map.set_unit_position_solid(heavy_pos, false)
+		# Removed: tactical_map.set_unit_position_solid(heavy_pos, false)
 		heavy_unit.set_grid_position(charge_destination)
 		
 		# Animate rush movement (fast)
@@ -3359,7 +3386,7 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 			# Direct teleport if no path
 			heavy_unit.position = Vector2(charge_destination.x * 32 + 16, charge_destination.y * 32 + 16)
 		
-		tactical_map.set_unit_position_solid(charge_destination, true)
+		# Removed: tactical_map.set_unit_position_solid(charge_destination, true)
 		# Clear the charging flag after movement completes
 		is_charging = false
 	
@@ -4101,7 +4128,7 @@ func _process_turrets() -> void:
 		var turret_pos = turret.get_grid_position()
 		active_turrets.erase(turret)
 		# Unmark turret tile as solid so units can move through it again
-		tactical_map.set_unit_position_solid(turret_pos, false)
+		# Removed: tactical_map.set_unit_position_solid(turret_pos, false)
 		# Only show expiration message if mission is still active
 		if mission_active:
 			tactical_hud.show_combat_message("TURRET EXPIRED", Color(0.5, 0.5, 0.5))

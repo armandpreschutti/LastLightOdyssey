@@ -39,7 +39,7 @@ const ENEMY_SPRITES = ENEMY_SPRITES_BY_BIOME[BiomeConfig.BiomeType.STATION]
 const ENEMY_DATA = {
 	"basic": { "max_hp": 50, "max_ap": 1, "move_range": 4, "sight_range": 6, "shoot_range": 8, "damage": 20, "overwatch_range": 0 },
 	"heavy": { "max_hp": 80, "max_ap": 2, "move_range": 3, "sight_range": 5, "shoot_range": 6, "damage": 35, "overwatch_range": 0 },
-	"sniper": { "max_hp": 40, "max_ap": 2, "move_range": 5, "sight_range": 10, "shoot_range": 12, "damage": 30, "overwatch_range": 5 },
+	"sniper": { "max_hp": 40, "max_ap": 1, "move_range": 5, "sight_range": 10, "shoot_range": 12, "damage": 30, "overwatch_range": 5 },
 	"elite": { "max_hp": 100, "max_ap": 3, "move_range": 4, "sight_range": 7, "shoot_range": 9, "damage": 40, "overwatch_range": 0 },
 	"boss": { "max_hp": 250, "max_ap": 4, "move_range": 3, "sight_range": 8, "shoot_range": 9, "damage": 70, "overwatch_range": 0 },
 }
@@ -65,6 +65,8 @@ var sight_range: int = 6
 var shoot_range: int = 8
 var base_damage: int = 20
 var overwatch_range: int = 0  # Automatic overwatch range (0 = disabled)
+var overwatch_cooldown: int = 0  # Current cooldown turns
+const OVERWATCH_COOLDOWN_TURNS: int = 3  # Turns to wait after shooting
 var grid_position: Vector2i = Vector2i.ZERO
 var unit_size: Vector2i = Vector2i(1, 1)  # 1x1 for regular enemies, 2x2 for bosses
 
@@ -170,6 +172,7 @@ func initialize(id: int, type: String = "basic", biome: BiomeConfig.BiomeType = 
 	
 	current_hp = max_hp
 	current_ap = max_ap
+	overwatch_cooldown = 0
 	_update_hp_bar()
 
 
@@ -479,6 +482,17 @@ func update_cover_indicator(cover_level: int) -> void:
 		half_cover_indicator.visible = (cover_level == 1)
 	if full_cover_indicator:
 		full_cover_indicator.visible = (cover_level == 2)
+
+
+## Start overwatch cooldown (called when sniper shoots)
+func start_overwatch_cooldown() -> void:
+	overwatch_cooldown = OVERWATCH_COOLDOWN_TURNS
+
+
+## Reduce overwatch cooldown (called at start of enemy turn)
+func reduce_overwatch_cooldown() -> void:
+	if overwatch_cooldown > 0:
+		overwatch_cooldown -= 1
 
 
 #region Attack Animations

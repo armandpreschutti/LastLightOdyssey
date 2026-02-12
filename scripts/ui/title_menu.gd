@@ -395,7 +395,7 @@ func _proceed_with_new_game() -> void:
 		_glow_tween.kill()
 	
 	# Fade to black and transition to game
-	fade_transition.fade_out(0.6)
+	fade_transition.fade_out(2.0)
 	await fade_transition.fade_complete
 	MusicManager.stop_music()
 	_start_new_game()
@@ -437,7 +437,7 @@ func _proceed_with_continue() -> void:
 		_glow_tween.kill()
 	
 	# Fade to black and transition to game (loaded state)
-	fade_transition.fade_out(0.6)
+	fade_transition.fade_out(2.0)
 	await fade_transition.fade_complete
 	MusicManager.stop_music()
 	_continue_game()
@@ -498,7 +498,7 @@ func _on_quit_pressed() -> void:
 		_glow_tween.kill()
 	
 	# Fade to black then quit
-	fade_transition.fade_out(0.6)
+	fade_transition.fade_out(2.0)
 	await fade_transition.fade_complete
 	MusicManager.stop_music()
 	get_tree().quit()

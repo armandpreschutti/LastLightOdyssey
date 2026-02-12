@@ -58,6 +58,9 @@ func generate(biome_type: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION,
 	# Ensure perimeter walls are always present (fixes edge gaps)
 	_ensure_perimeter_walls(layout)
 	
+	# Fix diagonal wall gaps (corner-to-corner walls)
+	_fix_diagonal_gaps(layout)
+	
 	# Store layout for spawn position validation
 	_layout = layout
 	return layout
@@ -802,6 +805,81 @@ func _ensure_perimeter_walls(layout: Dictionary) -> void:
 	for y in range(map_height):
 		layout[Vector2i(0, y)] = TileType.WALL
 		layout[Vector2i(map_width - 1, y)] = TileType.WALL
+
+
+## Post-processing to fix diagonal "corner-to-corner" wall gaps
+## Fills one of the floor tiles in a diagonal configuration to make it solid
+func _fix_diagonal_gaps(layout: Dictionary) -> void:
+	# Iterate through the map looking for diagonal patterns
+	# Pattern A: WALL  FLOOR
+	#            FLOOR WALL
+	#
+	# Pattern B: FLOOR WALL
+	#            WALL  FLOOR
+	
+	for x in range(map_width - 1):
+		for y in range(map_height - 1):
+			var tl_pos = Vector2i(x, y)
+			var tr_pos = Vector2i(x + 1, y)
+			var bl_pos = Vector2i(x, y + 1)
+			var br_pos = Vector2i(x + 1, y + 1)
+			
+			var tl = layout.get(tl_pos, TileType.WALL)
+			var tr = layout.get(tr_pos, TileType.WALL)
+			var bl = layout.get(bl_pos, TileType.WALL)
+			var br = layout.get(br_pos, TileType.WALL)
+			
+			var is_wall_tl = (tl == TileType.WALL)
+			var is_wall_tr = (tr == TileType.WALL)
+			var is_wall_bl = (bl == TileType.WALL)
+			var is_wall_br = (br == TileType.WALL)
+			
+			var connected_count = 0 
+			if is_wall_tl: connected_count += 1
+			if is_wall_tr: connected_count += 1
+			if is_wall_bl: connected_count += 1
+			if is_wall_br: connected_count += 1
+			
+			# We only care if there are exactly 2 walls in a diagonal configuration
+			if connected_count != 2:
+				continue
+				
+			var needs_fix = false
+			var candidates: Array[Vector2i] = []
+			
+			# Check Pattern A (TL and BR are walls)
+			if is_wall_tl and is_wall_br:
+				needs_fix = true
+				candidates = [tr_pos, bl_pos]
+			# Check Pattern B (TR and BL are walls)
+			elif is_wall_tr and is_wall_bl:
+				needs_fix = true
+				candidates = [tl_pos, br_pos]
+			
+			if needs_fix:
+				# Try to convert one of the floor tiles to a wall
+				# We prefer the one that results in better connectivity or just pick one
+				var fixed = false
+				
+				# Shuffle candidates to avoid directional bias
+				candidates.shuffle()
+				
+				for candidate in candidates:
+					# Temporarily set to wall
+					var original_type = layout[candidate]
+					layout[candidate] = TileType.WALL
+					
+					# Verify we didn't break map connectivity
+					if _check_map_connectivity(layout):
+						fixed = true
+						break
+					else:
+						# Revert and try next candidate
+						layout[candidate] = original_type
+				
+				# If we couldn't fix it (both candidates break connectivity), 
+				# we have to leave it as "corner to corner" to ensure playability.
+				# However, this is rare in reasonably dense maps.
 
 #endregion
 

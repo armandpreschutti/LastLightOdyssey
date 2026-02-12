@@ -6,7 +6,7 @@ extends Node
 @onready var star_map: Control = $ManagementLayer/StarMap
 @onready var event_scene_dialog: Control = $DialogLayer/EventSceneDialog
 @onready var event_dialog: Control = $DialogLayer/EventDialog
-@onready var trading_dialog: Control = $DialogLayer/TradingDialog
+
 @onready var mission_recap: Control = $DialogLayer/MissionRecap
 @onready var new_earth_scene: Control = $DialogLayer/NewEarthSceneDialog
 @onready var voyage_recap: Control = $DialogLayer/VoyageRecap
@@ -14,6 +14,7 @@ extends Node
 @onready var game_over_scene_dialog: Control = $DialogLayer/GameOverSceneDialog
 @onready var game_over_recap: Control = $DialogLayer/GameOverRecap
 @onready var team_select_dialog: Control = $DialogLayer/TeamSelectDialog
+@onready var trading_dialog: Control = $DialogLayer/TradingDialog
 @onready var mission_scene_dialog: Control = $DialogLayer/MissionSceneDialog
 @onready var colonist_loss_scene_dialog: Control = $DialogLayer/ColonistLossSceneDialog
 @onready var objective_complete_scene_dialog: Control = $DialogLayer/ObjectiveCompleteSceneDialog
@@ -43,6 +44,7 @@ var _first_node_clicked: bool = false
 var _first_event_seen: bool = false
 var _is_jump_animating: bool = false  # Track if jump animation is in progress
 var _suppress_fuel_warning: bool = false  # Track if player dismissed fuel warning
+var _wormhole_offered_at: int = -1  # Track if wormhole dialog was presented at current node
 
 
 func _ready() -> void:
@@ -69,9 +71,9 @@ func _ready() -> void:
 func _connect_signals() -> void:
 	event_scene_dialog.scene_dismissed.connect(_on_event_scene_dismissed)
 	event_dialog.event_choice_made.connect(_on_event_choice_made)
-	trading_dialog.trading_complete.connect(_on_trading_complete)
 	team_select_dialog.team_selected.connect(_on_team_selected)
 	team_select_dialog.cancelled.connect(_on_team_select_cancelled)
+	trading_dialog.trading_complete.connect(_on_trading_complete)
 	mission_scene_dialog.scene_dismissed.connect(_on_mission_scene_dismissed)
 	tactical_mode.mission_complete.connect(_on_mission_complete)
 	mission_recap.recap_dismissed.connect(_on_recap_dismissed)
@@ -133,18 +135,29 @@ func _on_node_clicked(node_id: int) -> void:
 	
 	var current_node = GameState.current_node_index
 	
-	# If clicking the current node (e.g., re-clicking an OUTPOST), skip jump and process directly
+	# If clicking the current node (e.g., re-clicking an SCAVENGER or WORMHOLE), skip jump and process directly
 	if node_id == current_node:
 		# Block interactions when tutorial is active
 		if tutorial_overlay and tutorial_overlay.is_showing():
 			return
 		
 		var node_type = star_map.get_node_type(node_id)
-		if node_type == EventManager.NodeType.TRADING_OUTPOST:
-			# Reopen trading interface without jumping
-			current_phase = GamePhase.TRADING
-			trading_dialog.show_trading()
+		if node_type == EventManager.NodeType.SCAVENGE_SITE:
+			# Only allow re-entry if mission was not already successful
+			if not GameState.successful_scavenge_nodes.has(node_id):
+				# Re-trigger mission flow (intro then team select)
+				pending_node_type = node_type
+				pending_biome_type = star_map.get_node_biome(node_id)
+				current_phase = GamePhase.EVENT_DISPLAY
+				mission_scene_dialog.show_scene(pending_biome_type)
 			return
+		elif node_type == EventManager.NodeType.WORMHOLE:
+			# Re-trigger wormhole dialog ONLY if it was offered at this node
+			if node_id == _wormhole_offered_at:
+				_show_wormhole_dialog()
+			return
+	
+
 	
 	# Tutorial: Notify that a node was clicked (first time only for intro step)
 	if not _first_node_clicked:
@@ -166,33 +179,22 @@ func _on_node_clicked(node_id: int) -> void:
 ## Show fuel warning dialog when player doesn't have enough fuel for the jump
 func _show_fuel_warning(from_node_id: int, to_node_id: int, fuel_cost: int) -> void:
 	var fuel_deficit = fuel_cost - GameState.fuel
-	var colonist_loss = GameState.COLONIST_LOSS_DRIFT_MODE * fuel_deficit
+	var colonist_loss = GameState.COLONIST_LOSS_DRIFT_MODE
 	var hull_loss = GameState.SHIP_INTEGRITY_LOSS_PER_JUMP * fuel_deficit
 	
-	var dialog_scene = load("res://scenes/ui/confirm_dialog.tscn")
+	var dialog_scene = load("res://scenes/ui/fuel_warning_dialog.tscn")
 	var dialog = dialog_scene.instantiate()
 	$DialogLayer.add_child(dialog)
 	
-	var message = "DRIFT MODE will engage.\n\nPenalties:\n• -%d COLONISTS\n• -%d HULL INTEGRITY\n\nProceed with jump?" % [colonist_loss, hull_loss]
-	dialog.setup("⚠ INSUFFICIENT FUEL", message, "JUMP", "CANCEL")
-	
-	# Add "Don't show again" checkbox
-	var checkbox = CheckBox.new()
-	checkbox.text = "Don't show again"
-	checkbox.add_theme_color_override("font_color", Color(0.5, 0.6, 0.7))
-	checkbox.add_theme_color_override("font_hover_color", Color(0.7, 0.85, 0.9))
-	checkbox.add_theme_font_size_override("font_size", 14)
-	var vbox = dialog.get_node("PanelContainer/MarginContainer/VBoxContainer")
-	vbox.add_child(checkbox)
-	
+	dialog.setup(colonist_loss, hull_loss)
 	dialog.show_dialog()
 	
 	# Play warning SFX
 	if SFXManager:
 		SFXManager.play_sfx_by_name("ui", "menu_open")
 	
-	dialog.confirmed.connect(func():
-		if checkbox.button_pressed:
+	dialog.confirmed.connect(func(suppress_warning: bool):
+		if suppress_warning:
 			_suppress_fuel_warning = true
 		_execute_jump_with_animation(from_node_id, to_node_id, fuel_cost)
 	)
@@ -252,14 +254,14 @@ func _process_node_after_jump(node_id: int) -> void:
 			# Show mission scene first, then team selection
 			current_phase = GamePhase.EVENT_DISPLAY
 			mission_scene_dialog.show_scene(pending_biome_type)
-		EventManager.NodeType.TRADING_OUTPOST:
-			# Play outpost arrival SFX
-			if SFXManager:
-				SFXManager.play_scene_sfx("res://assets/audio/sfx/scenes/common_scene/outpost_arrival.mp3")
-			
-			# Show trading interface
-			current_phase = GamePhase.TRADING
-			trading_dialog.show_trading()
+
+		EventManager.NodeType.WORMHOLE:
+			# Show wormhole interaction dialog
+			_wormhole_offered_at = node_id
+			_show_wormhole_dialog()
+
+		# Outpost logic removed (deprecated)
+
 		_:
 			# Empty space - roll random event
 			_trigger_random_event()
@@ -381,6 +383,9 @@ func _on_mission_scene_dismissed() -> void:
 		current_phase = GamePhase.TEAM_SELECT
 		team_select_dialog.show_dialog(pending_biome_type)
 		
+		# Reset wormhole offered state when entering a mission (edge case cleanup)
+		_wormhole_offered_at = -1
+		
 		# Tutorial: Trigger scavenge_intro after team select dialog is visible
 		if TutorialManager.is_active() and TutorialManager.is_at_step("scavenge_intro"):
 			# Wait a frame for dialog to become visible, then queue the step
@@ -416,6 +421,11 @@ func _on_mission_complete(_success: bool, stats: Dictionary) -> void:
 	else:
 		# No colonist loss milestone, show mission recap directly
 		mission_recap.show_recap(stats)
+	
+	# If mission was successful, mark node as completed (only for scavenge sites)
+	if stats.get("success", false) and pending_node_type == EventManager.NodeType.SCAVENGE_SITE:
+		if not GameState.successful_scavenge_nodes.has(GameState.current_node_index):
+			GameState.successful_scavenge_nodes.append(GameState.current_node_index)
 
 
 func _on_recap_dismissed() -> void:
@@ -429,6 +439,12 @@ func _on_recap_dismissed() -> void:
 	TutorialManager.notify_trigger("mission_complete")
 	
 	# Refresh the star map
+	star_map.refresh()
+
+
+func _on_trading_complete() -> void:
+	current_phase = GamePhase.IDLE
+	# Refresh the star map to update any changed states
 	star_map.refresh()
 
 
@@ -484,8 +500,7 @@ func _on_voyage_intro_scene_dismissed() -> void:
 		TutorialManager.trigger_first_step()
 
 
-func _on_trading_complete() -> void:
-	current_phase = GamePhase.IDLE
+
 
 
 ## Get the colonist loss threshold that the current colonist count has crossed
@@ -535,14 +550,14 @@ func _on_colonist_loss_scene_dismissed() -> void:
 				# Show mission scene first, then team selection
 				current_phase = GamePhase.EVENT_DISPLAY
 				mission_scene_dialog.show_scene(pending_biome_type)
-			EventManager.NodeType.TRADING_OUTPOST:
-				# Play outpost arrival SFX
-				if SFXManager:
-					SFXManager.play_scene_sfx("res://assets/audio/sfx/scenes/common_scene/outpost_arrival.mp3")
-				
-				# Show trading interface
-				current_phase = GamePhase.TRADING
-				trading_dialog.show_trading()
+
+			EventManager.NodeType.WORMHOLE:
+				# Show wormhole interaction dialog
+				_wormhole_offered_at = GameState.current_node_index
+				_show_wormhole_dialog()
+
+			# Outpost logic removed (deprecated)
+
 			_:
 				_trigger_random_event()
 	# Check if we have pending mission recap to show
@@ -596,6 +611,7 @@ func _on_restart_pressed() -> void:
 	_first_event_seen = false
 	_is_jump_animating = false
 	_suppress_fuel_warning = false
+	_wormhole_offered_at = -1
 	
 	# Ensure management UI is visible
 	management_layer.visible = true
@@ -617,3 +633,74 @@ func _on_restart_pressed() -> void:
 	
 	# Show voyage intro scene again
 	_show_voyage_intro()
+
+
+## Show wormhole detection dialog
+func _show_wormhole_dialog() -> void:
+	current_phase = GamePhase.EVENT_DISPLAY
+	
+	var dialog_scene = load("res://scenes/ui/wormhole_dialog.tscn")
+	var dialog = dialog_scene.instantiate()
+	$DialogLayer.add_child(dialog)
+	
+	dialog.setup()
+	
+	# Play alert SFX
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "alert_popup")
+	
+	dialog.confirmed.connect(_on_wormhole_enter_pressed)
+	dialog.cancelled.connect(_on_wormhole_cancel_pressed)
+	
+	dialog.show_dialog()
+
+
+## Handle entering wormhole
+func _on_wormhole_enter_pressed() -> void:
+	# Find all other wormhole nodes
+	var current_node_id = GameState.current_node_index
+	var other_wormholes = []
+	
+	for node_id in GameState.node_types.keys():
+		if node_id != current_node_id and GameState.node_types[node_id] == EventManager.NodeType.WORMHOLE:
+			other_wormholes.append(node_id)
+	
+	if other_wormholes.size() > 0:
+		# Pick a random destination
+		var target_node_id = other_wormholes.pick_random()
+		
+		# Teleport (no fuel cost for the jump itself)
+		# Mark source as visited to ensure sprite persists
+		if not GameState.visited_nodes.has(current_node_id):
+			GameState.visited_nodes.append(current_node_id)
+			
+		# Update current node directly
+		GameState.current_node_index = target_node_id
+		GameState.visited_nodes.append(target_node_id)
+		GameState.travel_history.append(target_node_id)
+		
+		# Play teleport SFX
+		if SFXManager:
+			SFXManager.play_sfx_by_name("ui", "warp_drive")
+		
+		# Refresh map and center on new node
+		star_map.refresh()
+		star_map.center_on_node(target_node_id, true)
+		
+		# Resume normal flow at new node (as if we just arrived there)
+		# But since we're arriving at a wormhole, we don't want to re-trigger the dialog immediately
+		# So we just go to IDLE
+		current_phase = GamePhase.IDLE
+		
+		# Ensure we don't offer re-entry for the new wormhole immediately (must jump to it normally)
+		_wormhole_offered_at = -1
+		
+		# Maybe trigger a small notification or log?
+	else:
+		# Should not happen given generation logic, but fallback just in case
+		current_phase = GamePhase.IDLE
+
+
+## Handle cancelling wormhole entry
+func _on_wormhole_cancel_pressed() -> void:
+	current_phase = GamePhase.IDLE

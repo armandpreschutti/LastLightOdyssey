@@ -28,6 +28,7 @@ const NODE_TEXTURES = {
 	EventManager.NodeType.EMPTY_SPACE: preload("res://assets/sprites/navigation/waypoint.png"),
 	EventManager.NodeType.SCAVENGE_SITE: preload("res://assets/sprites/navigation/asteroid.png"),
 	EventManager.NodeType.TRADING_OUTPOST: preload("res://assets/sprites/navigation/outpost.png"),
+	EventManager.NodeType.WORMHOLE: preload("res://assets/sprites/navigation/wormhole.png"),
 }
 
 # Planet variations no longer used - EMPTY_SPACE nodes now use waypoint sprite
@@ -190,6 +191,8 @@ func _update_sprite_texture() -> void:
 						sprite.texture = preload("res://assets/sprites/navigation/asteroid.png")
 			EventManager.NodeType.TRADING_OUTPOST:
 				sprite.texture = NODE_TEXTURES[EventManager.NodeType.TRADING_OUTPOST]
+			EventManager.NodeType.WORMHOLE:
+				sprite.texture = NODE_TEXTURES[EventManager.NodeType.WORMHOLE]
 			_:
 				sprite.texture = NODE_TEXTURES[EventManager.NodeType.EMPTY_SPACE]
 
@@ -224,6 +227,8 @@ func _update_label_text() -> void:
 				label.text = _get_biome_label()
 			EventManager.NodeType.TRADING_OUTPOST:
 				label.text = "OUTPOST"
+			EventManager.NodeType.WORMHOLE:
+				label.text = "WORMHOLE"
 			_:
 				label.text = "???"
 

@@ -5,7 +5,7 @@ extends Node
 signal event_triggered(event_data: Dictionary)
 signal event_resolved(result: String)
 
-enum NodeType { EMPTY_SPACE, SCAVENGE_SITE, TRADING_OUTPOST }
+enum NodeType { EMPTY_SPACE, SCAVENGE_SITE, TRADING_OUTPOST, WORMHOLE }
 
 # Event table - roll 1d10
 var random_events: Array[Dictionary] = [
@@ -213,10 +213,9 @@ func get_node_type(node_index: int = -1) -> NodeType:
 		return GameState.node_types[node_index]
 	
 	# Otherwise roll randomly (legacy behavior)
+	# 50% chance for Empty Space (1-5), 50% chance for Scavenge Site (6-10)
 	var roll = randi_range(1, 10)
-	if roll <= 4:
+	if roll <= 5:
 		return NodeType.EMPTY_SPACE
-	elif roll <= 8:
-		return NodeType.SCAVENGE_SITE
 	else:
-		return NodeType.TRADING_OUTPOST
+		return NodeType.SCAVENGE_SITE

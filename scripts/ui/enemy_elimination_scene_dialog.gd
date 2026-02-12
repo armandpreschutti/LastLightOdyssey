@@ -126,6 +126,9 @@ func _input(event: InputEvent) -> void:
 		return
 	
 	if event is InputEventKey and event.pressed and not event.is_echo():
+		if event.keycode in [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT]:
+			return
+			
 		if _input_ready:
 			_dismiss()
 		else:

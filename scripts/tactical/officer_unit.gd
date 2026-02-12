@@ -145,13 +145,19 @@ func _process(delta: float) -> void:
 	if _moving and _move_path.size() > 0:
 		var target = _move_path[0]
 		var direction = (target - position).normalized()
+		var old_pos = position
 		position += direction * _move_speed * delta
-
+		
+		# Debug every 60 frames or so (approx 1 sec) roughly to avoid spam, or just checking movement
+		# print("DEBUG: Unit moving. Pos: ", position, " Target: ", target, " Delta: ", delta)
+		
 		if position.distance_to(target) < 5:
+			print("DEBUG: Reached target waypoint: ", target)
 			position = target
 			_move_path.remove_at(0)
 
 			if _move_path.is_empty():
+				print("DEBUG: Movement path complete")
 				_moving = false
 				set_process(false)
 				movement_finished.emit()
@@ -172,6 +178,7 @@ func move_along_path(path: PackedVector2Array) -> void:
 	
 	_move_path = centered_path
 	_moving = true
+	print("DEBUG: OfficerUnit move_along_path started. Path size: ", _move_path.size(), " First target: ", _move_path[0] if _move_path.size() > 0 else "None", " Process Mode: ", process_mode, " Is Inside Tree: ", is_inside_tree())
 	set_process(true)
 
 	# Stop idle animation while moving

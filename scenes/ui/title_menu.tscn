@@ -215,6 +215,5 @@ vertical_alignment = 1
 
 [node name="FadeTransitionLayer" type="CanvasLayer" parent="." unique_id=1428451196]
 layer = 100
-visible = false
 
 [node name="FadeTransition" parent="FadeTransitionLayer" unique_id=1428451197 instance=ExtResource("3_fade")]

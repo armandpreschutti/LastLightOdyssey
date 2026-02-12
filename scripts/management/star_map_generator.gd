@@ -3,7 +3,7 @@ extends RefCounted
 ## Generates a semi-linear node graph for the star map
 ## Creates 50 nodes arranged in rows (bottom-to-top) with branching paths
 
-const TOTAL_NODES = 50
+
 const NUM_ROWS = 16
 
 # Node data structure
@@ -109,7 +109,8 @@ func _create_backward_connections() -> void:
 		var current_row = current_node.column  # column field stores row index
 		
 		# Don't add backward connections from start node (node 0) or last node (New Earth)
-		if current_node.id == 0 or current_node.id == TOTAL_NODES - 1:
+		if current_node.id == 0 or current_node.id == nodes.size() - 1:
+
 			continue
 		
 		# Don't add backward connections from first row
@@ -195,7 +196,8 @@ func _validate_and_repair_connections() -> void:
 	# Check and repair outgoing connections (every node except last must have at least 1)
 	for node in nodes:
 		# Last node (New Earth) doesn't need outgoing connections
-		if node.id == TOTAL_NODES - 1:
+		if node.id == nodes.size() - 1:
+
 			continue
 		
 		# Check if node has any outgoing connections
@@ -246,12 +248,14 @@ func _validate_and_repair_connections() -> void:
 					var source_node = prev_row_nodes[source_col]
 					# Only add connection if source node is not the last node (last node shouldn't have outgoing connections)
 					# Add connection if not already present
-					if source_node.id != TOTAL_NODES - 1 and not node.id in source_node.connections:
+					if source_node.id != nodes.size() - 1 and not node.id in source_node.connections:
 						source_node.connections.append(node.id)
+
 	
 	# CRITICAL: Ensure every node in the penultimate row connects to New Earth (last node)
 	# This guarantees New Earth is ALWAYS reachable as the final destination
-	var new_earth_id = TOTAL_NODES - 1
+	var new_earth_id = nodes.size() - 1
+
 	var penultimate_row_nodes = get_nodes_in_row(NUM_ROWS - 2)
 	for node in penultimate_row_nodes:
 		if not new_earth_id in node.connections:
@@ -282,24 +286,33 @@ func _assign_node_types() -> void:
 	var last_node_index = nodes.size() - 1
 	nodes[last_node_index].node_type = EventManager.NodeType.EMPTY_SPACE
 	
-	# Also set by TOTAL_NODES - 1 if different (belt-and-suspenders safety)
-	if TOTAL_NODES - 1 != last_node_index and TOTAL_NODES - 1 < nodes.size():
-		nodes[TOTAL_NODES - 1].node_type = EventManager.NodeType.EMPTY_SPACE
 	
 	# Assign types to remaining nodes with weighted distribution
+	# First, place exactly 10 wormholes randomly among available nodes (excluding first and last)
+	var available_indices = []
 	for i in range(1, last_node_index):
+		available_indices.append(i)
+	
+	available_indices.shuffle()
+	
+	# Place 10 wormholes
+	for i in range(min(10, available_indices.size())):
+		var idx = available_indices.pop_back()
+		nodes[idx].node_type = EventManager.NodeType.WORMHOLE
+		
+	# Assign types to remaining nodes
+	for i in available_indices:
 		nodes[i].node_type = _roll_node_type()
 
 
 ## Roll a random node type using EventManager's weighting
 func _roll_node_type() -> int:
+	# 50% chance for Empty Space (1-5), 50% chance for Scavenge Site (6-10)
 	var roll = randi_range(1, 10)
-	if roll <= 4:
+	if roll <= 5:
 		return EventManager.NodeType.EMPTY_SPACE
-	elif roll <= 8:
-		return EventManager.NodeType.SCAVENGE_SITE
 	else:
-		return EventManager.NodeType.TRADING_OUTPOST
+		return EventManager.NodeType.SCAVENGE_SITE
 
 
 ## Assign biome types to scavenge site nodes
@@ -399,4 +412,4 @@ func get_node_biome(node_id: int) -> int:
 
 ## Check if a node is the New Earth node (last node)
 func is_new_earth_node(node_id: int) -> bool:
-	return node_id == TOTAL_NODES - 1
+	return node_id == nodes.size() - 1

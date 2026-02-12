@@ -23,8 +23,11 @@ const RANDOMNESS = 25.0  # Maximum random offset for node positions
 const LINE_COLOR = Color(1.0, 0.69, 0.0, 0.25)  # Amber, transparent
 const LINE_COLOR_ACTIVE = Color(1.0, 0.75, 0.0, 0.5)  # Brighter amber for active connections
 const LINE_COLOR_DIMMED = Color(0.3, 0.3, 0.3, 0.15)  # Very dim for locked connections
+const LINE_COLOR_TRAVELED = Color(0.3, 0.7, 1.0, 0.8) # Light Blue (matches navigation accent)
+const LINE_COLOR_WORMHOLE = Color(1.0, 1.0, 1.0, 0.9) # Solid White for wormholes
 const LINE_WIDTH = 2.0
 const LINE_WIDTH_ACTIVE = 3.0
+const LINE_WIDTH_TRAVELED = 4.0
 
 var map_center_offset: Vector2 = Vector2.ZERO  # Calculated to center the map
 
@@ -270,9 +273,54 @@ func _draw_connection_lines() -> void:
 				else:
 					# Draw dimmer line for all other connections
 					_draw_line(from_pos, to_pos, true)
+	
+	# Draw the history of traveled paths on top
+	_draw_traveled_paths()
 
 
 ## Draw a single connection line
+## Draw the history of traveled paths
+func _draw_traveled_paths() -> void:
+	var history = GameState.travel_history
+	if history.size() < 2:
+		return
+		
+	for i in range(history.size() - 1):
+		var from_id = history[i]
+		var to_id = history[i+1]
+		
+		if not node_visuals.has(from_id) or not node_visuals.has(to_id):
+			continue
+			
+		var from_pos = node_visuals[from_id].position + Vector2(35, 35)
+		var to_pos = node_visuals[to_id].position + Vector2(35, 35)
+		
+		# Check if this was a standard connection or a wormhole jump
+		var is_neighbor = false
+		for node in node_graph:
+			if node.id == from_id:
+				if to_id in node.connections:
+					is_neighbor = true
+				break
+		
+		var line = Line2D.new()
+		line.add_point(from_pos)
+		line.add_point(to_pos)
+		line.antialiased = true
+		
+		if is_neighbor:
+			# Standard jump - Light Blue
+			line.default_color = LINE_COLOR_TRAVELED
+			line.width = LINE_WIDTH_TRAVELED
+		else:
+			# Wormhole jump - Solid White
+			line.default_color = LINE_COLOR_WORMHOLE
+			line.width = LINE_WIDTH_TRAVELED
+			# Optional: make it dashed or special? User said "solid white"
+		
+		lines_container.add_child(line)
+
+
 func _draw_line(from: Vector2, to: Vector2, dimmed: bool = false) -> void:
 	var line = Line2D.new()
 	line.add_point(from)
@@ -332,6 +380,9 @@ func _determine_initial_state(node_id: int) -> int:
 	if node_id == GameState.current_node_index:
 		return StarMapNode.NodeState.CURRENT
 	elif node_id < GameState.current_node_index or GameState.visited_nodes.has(node_id):
+		# Special case: Wormholes stay bright/available visually IF visited
+		if get_node_type(node_id) == EventManager.NodeType.WORMHOLE and GameState.visited_nodes.has(node_id):
+			return StarMapNode.NodeState.AVAILABLE
 		return StarMapNode.NodeState.VISITED
 	elif _is_node_reachable(node_id):
 		return StarMapNode.NodeState.AVAILABLE
@@ -369,10 +420,10 @@ func _update_node_states() -> void:
 func _on_node_clicked(node_id: int) -> void:
 	var current_node_id = GameState.current_node_index
 	
-	# Allow clicking the current node if it's a TRADING_OUTPOST (for reopening trading interface)
+	# Allow clicking the current node if it's a scavenger site or wormhole (for re-entry)
 	if node_id == current_node_id:
 		var node_type = get_node_type(node_id)
-		if node_type == EventManager.NodeType.TRADING_OUTPOST:
+		if node_type == EventManager.NodeType.SCAVENGE_SITE or node_type == EventManager.NodeType.WORMHOLE:
 			node_clicked.emit(node_id)
 			return
 	

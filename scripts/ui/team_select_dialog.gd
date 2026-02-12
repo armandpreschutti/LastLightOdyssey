@@ -25,6 +25,15 @@ var expanded_officers: Dictionary = {}  # officer_key -> bool (track expanded st
 var officer_detail_containers: Dictionary = {}  # officer_key -> VBoxContainer (detail sections)
 var officer_expand_buttons: Dictionary = {}  # officer_key -> Button (expand/collapse buttons)
 var current_objectives: Array[MissionObjective] = []  # Store the objectives selected for this mission
+const PORTRAIT_PATH = "res://assets/sprites/portraits/"
+const PORTRAIT_MAP = {
+	"captain": "captain_officer_portait.png", # with typo
+	"scout": "scout_officer_portrait.png",
+	"tech": "tech_officer_potrait.png", # with typo
+	"medic": "medic_officer_portrait.png",
+	"heavy": "heavy_officer_portait.png", # with typo
+	"sniper": "Gemini_Generated_Image_p6wuvwp6wuvwp6wu.png"
+}
 
 
 func _ready() -> void:
@@ -202,18 +211,53 @@ func _populate_officers() -> void:
 		if not GameState.is_officer_alive(officer_key):
 			continue
 
-		# Create main container for officer entry
-		var main_vbox = VBoxContainer.new()
-		main_vbox.add_theme_constant_override("separation", 8)
+		# --- NEW GLASSMORPHISM CARD ---
+		var glass_panel = PanelContainer.new()
+		var card_color = _get_officer_color(officer_key)
+		glass_panel.add_theme_stylebox_override("panel", _get_glass_style(card_color))
 		
+		# Add some margin inside the panel
+		var margin_container = MarginContainer.new()
+		margin_container.add_theme_constant_override("margin_left", 12)
+		margin_container.add_theme_constant_override("margin_right", 12)
+		margin_container.add_theme_constant_override("margin_top", 12)
+		margin_container.add_theme_constant_override("margin_bottom", 12)
+		glass_panel.add_child(margin_container)
+		
+		# Split card into Portrait (Left) and Info (Right)
+		var main_hbox = HBoxContainer.new()
+		main_hbox.add_theme_constant_override("separation", 15)
+		margin_container.add_child(main_hbox)
+		
+		# Portrait
+		var portrait_rect = TextureRect.new()
+		var portrait_file = PORTRAIT_MAP.get(officer_key, "")
+		if portrait_file != "":
+			var tex = load(PORTRAIT_PATH + portrait_file)
+			if tex:
+				portrait_rect.texture = tex
+				portrait_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				portrait_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				# Portraits are huge, scale them down for the card
+				portrait_rect.custom_minimum_size = Vector2(80, 80)
+				# Use a shader or bit of code to clip if needed, but for now just scale
+		main_hbox.add_child(portrait_rect)
+		
+		# Right side container for all text/buttons
+		var right_vbox = VBoxContainer.new()
+		right_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		right_vbox.add_theme_constant_override("separation", 8)
+		main_hbox.add_child(right_vbox)
+
 		# Header container with checkbox and expand button
 		var header_hbox = HBoxContainer.new()
 		header_hbox.add_theme_constant_override("separation", 8)
+		right_vbox.add_child(header_hbox)
 		
 		# Checkbox for selection
 		var check = CheckButton.new()
 		check.text = _get_officer_display_name(officer_key)
-		check.add_theme_color_override("font_color", _get_officer_color(officer_key))
+		check.add_theme_color_override("font_color", card_color)
 		check.add_theme_font_size_override("font_size", 18)
 		check.toggled.connect(_on_officer_toggled.bind(officer_key))
 		check.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -231,16 +275,14 @@ func _populate_officers() -> void:
 		header_hbox.add_child(expand_button)
 		officer_expand_buttons[officer_key] = expand_button
 		
-		main_vbox.add_child(header_hbox)
-		
-		# Brief description (always visible)
+		# Brief description
 		var brief_label = Label.new()
 		brief_label.text = _get_officer_brief_description(officer_key)
 		brief_label.add_theme_color_override("font_color", Color(0.5, 0.7, 0.8))
 		brief_label.add_theme_font_size_override("font_size", 14)
 		brief_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		brief_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		main_vbox.add_child(brief_label)
+		right_vbox.add_child(brief_label)
 		
 		# Detailed information container (expandable)
 		var detail_container = VBoxContainer.new()
@@ -252,15 +294,10 @@ func _populate_officers() -> void:
 		_build_detail_sections(detail_container, officer_key)
 		
 		officer_detail_containers[officer_key] = detail_container
-		main_vbox.add_child(detail_container)
+		right_vbox.add_child(detail_container)
 		
-		# Separator line
-		var separator = ColorRect.new()
-		separator.custom_minimum_size = Vector2(0, 1)
-		separator.color = Color(0.4, 0.9, 1, 0.2)
-		main_vbox.add_child(separator)
-		
-		officer_container.add_child(main_vbox)
+		# Add the whole glass card to the main container
+		officer_container.add_child(glass_panel)
 
 
 func _get_officer_display_name(key: String) -> String:
@@ -471,6 +508,28 @@ func _get_officer_color(key: String) -> Color:
 		"heavy": return Color(1.0, 0.4, 0.3)  # Red-orange
 		"sniper": return Color(0.6, 0.55, 0.7)  # Dark gray with purple tint
 		_: return Color.WHITE
+
+
+func _get_glass_style(accent_color: Color) -> StyleBoxFlat:
+	var sb = StyleBoxFlat.new()
+	# Glass background - semi-transparent dark teal/black
+	sb.bg_color = Color(0.02, 0.05, 0.08, 0.6)
+	
+	# Accent borders
+	sb.border_width_left = 2
+	sb.border_width_top = 1
+	sb.border_width_right = 1
+	sb.border_width_bottom = 1
+	sb.border_color = Color(accent_color.r, accent_color.g, accent_color.b, 0.4)
+	
+	# Rounded corners for premium feel
+	sb.set_corner_radius_all(4)
+	
+	# Subtle outer glow matching class color
+	sb.shadow_color = Color(accent_color.r, accent_color.g, accent_color.b, 0.15)
+	sb.shadow_size = 6
+	
+	return sb
 
 
 func _on_officer_toggled(pressed: bool, officer_key: String) -> void:

@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://cg8k2qaxnv5rl" path="res://scenes/ui/event_dialog.tscn" id="3_event"]
 [ext_resource type="PackedScene" uid="uid://dp8k7m6qv5n2w" path="res://scenes/management/star_map.tscn" id="3_starmap"]
 [ext_resource type="PackedScene" uid="uid://blam7n4qp2x5v" path="res://scenes/ui/team_select_dialog.tscn" id="4_team"]
-[ext_resource type="PackedScene" uid="uid://c5h7k8nan0p1q" path="res://scenes/ui/trading_dialog.tscn" id="4_trading"]
+
 [ext_resource type="PackedScene" uid="uid://dm8lan5qv3p6r" path="res://scenes/tactical/tactical_mode.tscn" id="5_tactical"]
 [ext_resource type="PackedScene" uid="uid://cjd5wailexeke" path="res://scenes/ui/event_scene_dialog.tscn" id="6_event_scene"]
 [ext_resource type="PackedScene" uid="uid://b8k2m5qv3n7x" path="res://scenes/ui/mission_scene_dialog.tscn" id="6_mission_scene"]
@@ -20,6 +20,8 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/fade_transition.tscn" id="14_fade"]
 [ext_resource type="PackedScene" uid="uid://b7k3m6qv4n8y" path="res://scenes/ui/objective_complete_scene_dialog.tscn" id="14_objective_complete"]
 [ext_resource type="PackedScene" uid="uid://c8k4m7qv5pa0" path="res://scenes/ui/enemy_elimination_scene_dialog.tscn" id="15_enemy_elimination"]
+[ext_resource type="PackedScene" uid="uid://c5h7k8nan0p1q" path="res://scenes/ui/trading_dialog.tscn" id="17_trading"]
+[ext_resource type="PackedScene" path="res://scenes/ui/trading_terminal.tscn" id="16_terminal"]
 
 [node name="Main" type="Node" unique_id=588289983]
 script = ExtResource("1_main")
@@ -156,6 +158,19 @@ offset_top = -278.0
 offset_right = 290.0
 offset_bottom = -38.0
 
+[node name="TradingTerminal" parent="ManagementLayer" unique_id=1428451196 instance=ExtResource("16_terminal")]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -580.0
+offset_top = -220.0
+offset_right = -280.0
+offset_bottom = -20.0
+grow_horizontal = 0
+grow_vertical = 0
+
 [node name="DialogLayer" type="CanvasLayer" parent="." unique_id=1428451193]
 layer = 10
 
@@ -168,8 +183,7 @@ visible = false
 [node name="EventDialog" parent="DialogLayer" unique_id=939277613 instance=ExtResource("3_event")]
 visible = false
 
-[node name="TradingDialog" parent="DialogLayer" unique_id=1428504120 instance=ExtResource("4_trading")]
-visible = false
+
 
 [node name="TeamSelectDialog" parent="DialogLayer" unique_id=1249424020 instance=ExtResource("4_team")]
 visible = false
@@ -199,6 +213,9 @@ visible = false
 visible = false
 
 [node name="EnemyEliminationSceneDialog" parent="DialogLayer" unique_id=1316561825 instance=ExtResource("15_enemy_elimination")]
+visible = false
+
+[node name="TradingDialog" parent="DialogLayer" unique_id=1316561826 instance=ExtResource("17_trading")]
 visible = false
 
 [node name="FadeTransitionLayer" type="CanvasLayer" parent="." unique_id=1428451194]

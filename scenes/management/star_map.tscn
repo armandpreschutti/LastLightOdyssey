@@ -6,8 +6,9 @@
 [ext_resource type="Texture2D" uid="uid://d2gx2j4l6lhjr" path="res://assets/sprites/navigation/asteroid.png" id="4_asteroid"]
 [ext_resource type="Texture2D" uid="uid://g27gvr7yp5kn" path="res://assets/sprites/navigation/station_trading.png" id="5_station"]
 [ext_resource type="Texture2D" uid="uid://hmgh553sxea0" path="res://assets/sprites/navigation/planet_gas.png" id="6_planet"]
-[ext_resource type="Texture2D" uid="uid://ukf6ay2w864f" path="res://assets/sprites/navigation/outpost.png" id="7_outpost"]
+
 [ext_resource type="Texture2D" uid="uid://b224xf2ekytgn" path="res://assets/sprites/navigation/question_mark.png" id="8_unknown"]
+[ext_resource type="Texture2D" uid="uid://dmwormholeid" path="res://assets/sprites/navigation/wormhole.png" id="9_wormhole"]
 
 [node name="StarMap" type="Control" unique_id=380385132]
 layout_mode = 3
@@ -149,26 +150,50 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 12
 text = "Planetary Mission"
 
-[node name="OutpostIcon" type="TextureRect" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=901000214]
+
+
+[node name="WormholeIcon" type="TextureRect" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=281929293]
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
-texture = ExtResource("7_outpost")
+texture = ExtResource("9_wormhole")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="OutpostLabel" type="Label" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=964002579]
+[node name="WormholeLabel" type="Label" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1664489924]
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
-text = "Trading Outpost"
+text = "Ancient Wormhole"
 
-[node name="UnknownIcon" type="TextureRect" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=281929293]
+[node name="PathTraveledIcon" type="ColorRect" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=2000000001]
+custom_minimum_size = Vector2(24, 4)
+layout_mode = 2
+size_flags_vertical = 4
+color = Color(0.3, 0.7, 1.0, 0.8)
+
+[node name="PathTraveledLabel" type="Label" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=2000000002]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Traveled Path"
+
+[node name="PathWormholeIcon" type="ColorRect" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=2000000003]
+custom_minimum_size = Vector2(24, 4)
+layout_mode = 2
+size_flags_vertical = 4
+color = Color(1, 1, 1, 0.9)
+
+[node name="PathWormholeLabel" type="Label" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=2000000004]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Wormhole Path"
+
+[node name="UnknownIcon" type="TextureRect" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1000000001]
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 texture = ExtResource("8_unknown")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="UnknownLabel" type="Label" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1664489924]
+[node name="UnknownLabel" type="Label" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1000000002]
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
 text = "Uncharted Node"

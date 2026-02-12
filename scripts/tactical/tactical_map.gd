@@ -1339,10 +1339,11 @@ func add_unit(unit: Node2D, grid_pos: Vector2i) -> void:
 		unit.position = grid_to_world(grid_pos)
 	
 	units_container.add_child(unit)
-	set_unit_position_solid(grid_pos, true)
+	# Removed: set_unit_position_solid(grid_pos, true) - Units are no longer solid
 	
 	# Mark all occupied tiles as solid for multi-tile units
 	if unit_size == Vector2i(2, 2):
+		pass # Multi-tile units are also traversable now
 		for dx in range(2):
 			for dy in range(2):
 				var occupied_pos = grid_pos + Vector2i(dx, dy)
@@ -1384,10 +1385,26 @@ func set_movement_range(center: Vector2i, move_range: int) -> void:
 					continue
 				
 				# Check if walkable (not solid terrain) and not visited
+				# Note: astar.is_point_solid now only checks terrain, not units
 				if not visited.has(next_pos) and not astar.is_point_solid(next_pos):
 					visited[next_pos] = true
 					distances[next_pos] = dist + 1
-					movement_range_tiles[next_pos] = true
+					
+					# Only mark as valid destination if NOT occupied by another unit or turret
+					# Self is okay (though effectively a no-op move)
+					var interactable = get_interactable_at(next_pos)
+					var unit_at_pos = get_unit_at(next_pos)
+					
+					# Valid destination if:
+					# 1. No unit at position OR unit is self
+					# 2. No turret at position (turrets are separate from units list)
+					# 3. No interactable that blocks movement (optional, but keep consistent)
+					var is_occupied = (unit_at_pos != null and unit_at_pos.get_grid_position() != center) or has_turret_at(next_pos)
+					
+					if not is_occupied:
+						movement_range_tiles[next_pos] = true
+					
+					# Always continue pathfinding through tiles (even occupied ones)
 					queue.append(next_pos)
 	
 	# Restore center solidity
