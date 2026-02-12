@@ -47,6 +47,29 @@ var hovered_tile: Vector2i = Vector2i(-1, -1)  # Currently hovered tile
 var pathfinding_path: PackedVector2Array = PackedVector2Array()  # Current pathfinding path
 var pathfinding_source: Vector2i = Vector2i(-1, -1)  # Source position for pathfinding (or -1, -1 if no source)
 
+# Mission Highlight Pulse Effect Variables
+var mission_pulse_alpha: float = 0.5
+var mission_pulse_direction: float = 1.0
+const PULSE_MIN_ALPHA: float = 0.2
+const PULSE_MAX_ALPHA: float = 0.7
+const PULSE_SPEED: float = 1.5
+
+
+func _process(delta: float) -> void:
+	if mission_highlight_tiles.is_empty():
+		return
+		
+	mission_pulse_alpha += mission_pulse_direction * PULSE_SPEED * delta
+	
+	if mission_pulse_alpha >= PULSE_MAX_ALPHA:
+		mission_pulse_alpha = PULSE_MAX_ALPHA
+		mission_pulse_direction = -1.0
+	elif mission_pulse_alpha <= PULSE_MIN_ALPHA:
+		mission_pulse_alpha = PULSE_MIN_ALPHA
+		mission_pulse_direction = 1.0
+		
+	queue_redraw()
+
 
 func _ready() -> void:
 	_setup_astar()
@@ -218,9 +241,12 @@ func _draw() -> void:
 				var tile_type = tile_data.get(pos, TileType.FLOOR)
 				_draw_tile(x, y, rect, tile_type)
 				
-				# Mission objective highlight (Gold)
+
+				# Mission objective highlight (Gold) with pulse effect
 				if mission_highlight_tiles.get(pos, false):
-					draw_rect(rect, COLOR_MISSION_HIGHLIGHT)
+					var highlight_color = COLOR_MISSION_HIGHLIGHT
+					highlight_color.a = mission_pulse_alpha
+					draw_rect(rect, highlight_color)
 				
 				# Movement range highlight
 				if movement_range_tiles.get(pos, false):

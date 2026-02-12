@@ -56,7 +56,7 @@ func _ready() -> void:
 
 ## Setup the legend panel styling to match the game's aesthetic
 func _setup_legend_style() -> void:
-	var legend_panel = get_node_or_null("UILayer/LegendContainer/PanelContainer")
+	var legend_panel = get_node_or_null("LegendContainer/PanelContainer")
 	if not legend_panel:
 		return
 		

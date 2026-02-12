@@ -1,5 +1,5 @@
 # Last Light Odyssey - Game Design Document
-**Version 3.4 | Engine: Godot 4.6 | Last Updated: February 2026**
+**Version 3.5 | Engine: Godot 4.6 | Last Updated: February 2026**
 
 > *"The last journey of the human race isn't a hero's quest; it's a survival marathon."*
 
@@ -57,8 +57,10 @@ A procedurally generated node graph with **50 nodes** leading to New Earth.
 - Each node connects to 1-3 nodes in adjacent rows (forward connections primary, backward connections at 30% chance)
 - Variable fuel costs: base 2 fuel, +2 for column distance (horizontal/diagonal movement), +4 for backward travel
 - Fuel costs are calculated per connection and saved with the star map
+- **Fuel Warning**: Attempting a jump with insufficient fuel triggers a confirmation prompt detailing the penalties (colonist loss and integrity damage).
 - If insufficient fuel for a jump, ship enters "Drift Mode" and loses 50 colonists per fuel deficit
-- **Navigation Penalties**: Each jump causes −1% ship integrity and −2% cryo-stability (harsh but necessary for tension)
+- **Navigation Legend**: A legend is available in the navigation menu to explain node types and connection costs.
+- **Goal Guarantee**: The "New Earth" node is programmatically guaranteed to be the final node (node 49) and cannot be bypassed.
 
 **Node Types:**
 
@@ -150,6 +152,9 @@ Flanking Bonus:
   - Cover only protects from the direction it faces
 
 Final Hit Chance = clamp(Base - DefenderCover + AttackerBonus, 20%, 95%)
+
+**LOS Forgiveness:**
+The Line of Sight algorithm includes "forgiveness" logic, allowing units to see slightly around corners and through adjacent cover to reduce frustration in tight tactical environments.
 ```
 
 **Class Accuracy Profiles:**
@@ -227,7 +232,7 @@ Snipers can **deliver devastating long-range shots** with perfect accuracy:
 1. If flanked (in ineffective cover) → **Reposition to effective cover**
 2. If exposed (no cover) → **Move to cover position**
 3. If target in range + LOS + has AP → **Shoot**
-4. If target visible + has AP → **Move to tactical position**
+4. If target visible + has AP → **Move to tactical position** (Visible enemies prioritize using all available AP for movement or attacks).
 5. Otherwise → **Idle**
 
 **Tactical Position Scoring:**
@@ -357,7 +362,8 @@ To prevent players from spending unlimited turns looting, the **Cryo-Stability T
 ### Extraction
 
 - Extraction zone marked on map
-- Mission ends when **all surviving officers** reach extraction tiles
+- Extraction zone marked on map
+- Mission ends when **all surviving officers** reach extraction tiles (Captain is no longer required to be in the zone personally for extraction to succeed).
 - Resources collected during mission are added to ship totals upon extraction
 
 ### Mission Abort
@@ -505,7 +511,11 @@ As colonists are lost throughout the voyage, the game displays **emotional miles
 **Mission Transitions:**
 - **Beam Down**: Officers descend from above with light beam effects, materialize with white flash
 - **Beam Up**: Officers float upward with extraction beam, fade out with white flash
-- Smooth camera transitions between management and tactical layers
+- **Mission Unit Pulse**: Mission-critical units (e.g., interactable objectives) feature a pulsing yellow highlight to draw player attention.
+- **Transition Fades**: 
+  - Smooth fade transitions between management and tactical layers.
+  - Slow, atmospheric fade-in sequence on the title screen (Black screen → Music → Title → UI).
+  - Fade effects correctly handle layering to ensure text/UI visibility during transitions.
 
 **Visual Feedback Systems:**
 - **Selection Ring**: Green pulsing ring around active officer
@@ -529,7 +539,8 @@ As colonists are lost throughout the voyage, the game displays **emotional miles
   - Scroll wheel zoom (0.4x to 3.0x range)
   - Middle mouse button pan/drag
   - Smooth interpolation for all camera movements
-- **Camera Focus**: Automatically centers on units at turn start, focuses on combat actions
+- **Camera Memory**: The camera maintains its current zoom level when transitioning between player and enemy turns.
+- **Camera Focus**: Automatically centers on units at turn start, focuses on combat actions, and includes a brief pause between consecutive turns of the same unit for better visual clarity.
 
 **Interactable Object Effects:**
 - **Hover Effect**: Brightness pulse when mouse hovers over items
@@ -549,14 +560,16 @@ As colonists are lost throughout the voyage, the game displays **emotional miles
 - **Animated Starfield**: 200 parallax stars with depth-based movement speed
 - **Typewriter Effect**: Subtitle text animates character-by-character
 - **Title Glow**: Pulsing glow effect on main title
-- **Button Animations**: Scale-up on hover, smooth transitions
-- **Fade Transitions**: Smooth fade between scenes (management ↔ tactical)
+- **Button Animations**: Scale-up on hover, smooth transitions, and hover sound effects (SFX) for all interactive buttons.
+- **Fade Transitions**: Smooth fade between scenes (management ↔ tactical) with consistent timing.
 
 ### UI Philosophy
 - **Diegetic/Retro**: 1980s monochrome CRT terminal aesthetic
 - Amber text on dark backgrounds
 - Minimal, functional displays
 - Resource icons for quick visual recognition
+- **Input Refinement**: Dialogue dismissal is protected against accidental mouse scroll wheel inputs.
+- **Legend Overlay**: Real-time legend available in navigation to explain node types.
 - Color-coded status indicators (HP bars, AP dots, stability warnings)
 
 ### Tutorial System
@@ -857,9 +870,9 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Navigation penalties (ship integrity and stability loss per jump)
 - [x] Drift mode penalty tuning (50 colonists per fuel deficit)
 - [x] Fuel cost system refinement (base 2, +2 row distance, +4 backward)
-- [ ] Fine-tuning event damage/impact balance
-- [ ] Resource economy refinement (fuel costs, scrap drops, objective rewards)
-- [ ] Combat damage/accuracy fine-tuning
+- [x] Combat damage/accuracy fine-tuning
+- [x] Music integration (Title, Navigation, Tactical)
+- [x] Audio ducking system during dialogue/events
 
 ---
 
@@ -873,6 +886,8 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Title glow pulsing effect
 - [x] Button hover scale animations
 - [x] New Game / Continue / Settings / Quit buttons
+- [x] Music: Title menu music with looping and volume control
+- [x] Transition Fades: Slow fade-in sequence on startup
 - [x] Continue button disabled when no save exists
 - [x] Confirmation dialog for new game when save exists
 - [x] Fade transitions between scenes
@@ -909,8 +924,10 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Button availability based on resources
 
 #### Additional UI
-- [x] Pause menu with abandon mission option (costs 20 colonists)
 - [x] Reusable confirmation dialog component
+- [x] Fuel Warning Prompt with "Don't show again" functionality
+- [x] Navigation Legend for node type identification
+- [x] Button Hover SFX across all UI elements
 
 #### Heavy Officer Class
 - [x] New officer type: Heavy
@@ -977,6 +994,10 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Attacker cover bonus (stable firing position: +5% half cover, +10% full cover)
 - [x] Pathfinding visualization (neon blue path line with glow and arrowhead)
 - [x] Cover bonus display in tactical HUD showing attacker accuracy bonus
+- [x] LOS Forgiveness: Lenient line-of-sight checks around obstacles
+- [x] Mission Unit Pulse: Visual pulsing for mission objectives
+- [x] Camera Zoom Persistence: Maintaining zoom level across turns
+- [x] Turn Interaction Pause: Brief delay between consecutive unit turns
 
 #### Mission Objectives System
 - [x] Mission objective system with binary and progress types

@@ -34,6 +34,7 @@ var mission_enemies_killed: int = 0  # Enemies killed during this mission
 var current_biome: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION
 var is_scavenger_mission: bool = false  # Track if this is a scavenger mission
 var mission_objectives: Array[MissionObjective] = []  # Current mission objectives
+var stored_player_zoom: Vector2 = Vector2(1.0, 1.0)  # Store player's zoom level between turns
 
 var FuelCrateScene: PackedScene
 var ScrapPileScene: PackedScene
@@ -1175,10 +1176,15 @@ func _on_end_turn_pressed() -> void:
 	
 	# Advance to next unit's turn
 	current_unit_index += 1
+	var came_from_enemy_phase: bool = false
 	
 	# If all units have had their turn, advance to next round
 	if current_unit_index >= deployed_officers.size():
+		came_from_enemy_phase = true
 		current_unit_index = 0
+		
+		# Store current zoom level before enemy turn (so we can restore it later)
+		stored_player_zoom = combat_camera.zoom
 		
 		# Disable end turn button during enemy turn and animations
 		_set_animating(true)
@@ -1231,8 +1237,16 @@ func _on_end_turn_pressed() -> void:
 			_set_animating(false)
 		
 		_select_unit(next_unit)
-		# Center camera on the active unit
-		_center_camera_on_unit(next_unit)
+		
+		if came_from_enemy_phase:
+			# Center camera on the active unit and restore player's previous zoom level
+			# (Important when coming from enemy phase where camera might be zoomed in)
+			var unit_pos = next_unit.get_grid_position()
+			var world_pos = tactical_map.grid_to_world(unit_pos)
+			combat_camera.center_on_position_with_zoom(world_pos, stored_player_zoom)
+		else:
+			# Just center camera (preserve zoom level) for player unit switching
+			_center_camera_on_unit(next_unit)
 
 
 func _is_current_unit_turn() -> bool:
@@ -1977,12 +1991,39 @@ func is_flanking_attack(shooter_pos: Vector2i, target_pos: Vector2i) -> bool:
 
 ## Check if shooter has line of sight to target
 func has_line_of_sight(shooter_pos: Vector2i, target_pos: Vector2i) -> bool:
-	# Use Bresenham's line algorithm to check each tile
-	var tiles = _get_line_tiles(shooter_pos, target_pos)
+	# 1. Check direct center-to-center line
+	if _check_line_clear(shooter_pos, target_pos):
+		return true
+	
+	# 2. If direct line is blocked, check "step-out" tiles (leaning around corners)
+	# Check adjacent tiles (up, down, left, right)
+	var neighbors = [
+		Vector2i(0, -1), Vector2i(0, 1), 
+		Vector2i(-1, 0), Vector2i(1, 0)
+	]
+	
+	for offset in neighbors:
+		var lean_pos = shooter_pos + offset
+		
+		# Can only lean into a tile if it doesn't block LOS itself (e.g. not a wall)
+		# We don't care if a unit is there, just if it's logically "open" for vision
+		if tactical_map.blocks_line_of_sight(lean_pos):
+			continue
+			
+		# Check LOS from the lean position to the target
+		if _check_line_clear(lean_pos, target_pos):
+			return true
+	
+	return false
+
+
+## Helper to check if a single line of sight path is clear
+func _check_line_clear(from: Vector2i, to: Vector2i) -> bool:
+	var tiles = _get_line_tiles(from, to)
 	
 	for tile_pos in tiles:
-		# Skip shooter and target positions
-		if tile_pos == shooter_pos or tile_pos == target_pos:
+		# Skip start and end positions
+		if tile_pos == from or tile_pos == to:
 			continue
 		
 		# Check if tile blocks LOS (only walls block, cover does not)
@@ -2220,8 +2261,9 @@ func _phase_resolution(shooter: Node2D) -> void:
 	# Hide combat message
 	tactical_hud.hide_combat_message()
 	
-	# Return camera to tactical view
-	combat_camera.return_to_tactical()
+	# Return camera to tactical view (only for player units, enemies stay focused on action)
+	if shooter in deployed_officers:
+		combat_camera.return_to_tactical()
 	
 	# Update HUD
 	if shooter in deployed_officers:

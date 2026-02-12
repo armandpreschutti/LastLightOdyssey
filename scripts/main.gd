@@ -313,6 +313,9 @@ func _on_team_selected(officer_keys: Array[String], objectives: Array[MissionObj
 	fade_transition.fade_out(0.6)
 	await fade_transition.fade_complete
 	
+	# Hide the team select dialog explicitly now that we are faded out
+	team_select_dialog.visible = false
+	
 	# Go directly to tactical mission (scene was already shown before team select)
 	current_phase = GamePhase.TACTICAL
 	
@@ -332,6 +335,9 @@ func _on_team_selected(officer_keys: Array[String], objectives: Array[MissionObj
 	# Start tactical music if this is a scavenger mission
 	if pending_node_type == EventManager.NodeType.SCAVENGE_SITE:
 		MusicManager.play_tactical_music()
+	
+	# Wait a frame to ensure map generation and rendering catch up before fading in
+	await get_tree().process_frame
 	
 	# Fade in from black
 	fade_transition.fade_in(0.6)

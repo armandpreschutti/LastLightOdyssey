@@ -53,11 +53,44 @@ func _ready() -> void:
 	
 	# Start with black screen, then fade in
 	fade_transition.set_black()
-	# Wait a frame to ensure everything is initialized
-	await get_tree().process_frame
-	fade_transition.fade_in(0.6)
 	
+	# Hide starfield initially
+	starfield.modulate.a = 0.0
+	scanline_overlay.modulate.a = 0.0
+	
+	# 1. Screen fade-in (2s)
+	# --- Z-INDEX ORDERING STRATEGY ---
+	# Move the global fade transition to be a local child so we can use Z-Index
+	# This avoids hiding/showing elements manually and relies on draw order
+	var fade_parent = fade_transition.get_parent()
+	if fade_parent:
+		fade_parent.remove_child(fade_transition)
+	add_child(fade_transition)
+	
+	# Set Z-Index so:
+	# 0 = Background, Starfield, Buttons (Default)
+	# 10 = Black Overlay (Covers the scene)
+	# 20 = Title & Subtitle (Floats on top of black overlay)
+	fade_transition.z_index = 10
+	title_label.z_index = 20
+	subtitle_label.z_index = 20
+	
+	# Ensure overlay covers the screen
+	fade_transition.visible = true
+	fade_transition.modulate.a = 1.0
+	fade_transition.set_black()
+	
+	# Ensure title starts invisible (but on top layer)
+	title_label.modulate.a = 0.0
+	
+	# Wait a bit to ensure the engine has rendered the black frame
+	await get_tree().process_frame
+	
+	# Start sequence immediately (User requested title fade at same time as black fade)
 	_animate_intro()
+	
+	# Start title music
+	MusicManager.play_title_music()
 	
 	# Connect starfield and scanline drawing
 	starfield.draw.connect(_draw_starfield)
@@ -183,17 +216,6 @@ func _check_save_exists() -> bool:
 
 
 func _animate_intro() -> void:
-	# Start with elements invisible
-	title_label.modulate.a = 0.0
-	subtitle_label.modulate.a = 0.0
-	subtitle_label.text = ""
-	new_game_button.modulate.a = 0.0
-	continue_button.modulate.a = 0.0
-	settings_button.modulate.a = 0.0
-	quit_button.modulate.a = 0.0
-	version_label.modulate.a = 0.0
-	no_save_message.visible = false
-	
 	# Disable buttons during intro
 	new_game_button.disabled = true
 	continue_button.disabled = true
@@ -204,34 +226,60 @@ func _animate_intro() -> void:
 	_title_tween.set_ease(Tween.EASE_OUT)
 	_title_tween.set_trans(Tween.TRANS_CUBIC)
 	
-	# Fade in title with slight scale effect
+	# Sequence:
+	# 1. Fade in Title (2s) - Happens immediately when called (after _ready 1s wait)
 	title_label.pivot_offset = title_label.size / 2
-	title_label.scale = Vector2(0.9, 0.9)
-	_title_tween.tween_property(title_label, "modulate:a", 1.0, 1.5)
-	_title_tween.parallel().tween_property(title_label, "scale", Vector2(1.0, 1.0), 1.5)
+	title_label.scale = Vector2(0.95, 0.95)
+	# Parallel scale and fade
+	_title_tween.parallel().tween_property(title_label, "modulate:a", 1.0, 2.0)
+	_title_tween.parallel().tween_property(title_label, "scale", Vector2(1.0, 1.0), 2.0)
 	
-	# Start typewriter effect for subtitle
-	_title_tween.tween_callback(_start_typewriter)
-	_title_tween.tween_property(subtitle_label, "modulate:a", 0.7, 0.5)
+	# Start glowing immediately after fade-in (User requested 3s earlier)
+	_title_tween.tween_callback(_start_title_glow)
 	
-	# Wait for typewriter to complete
-	_title_tween.tween_interval(SUBTITLE_TEXT.length() * 0.04 + 0.5)
+	# 2. Start Subtitle immediately after Title finishes (User requested 1s earlier)
+	# _title_tween.tween_interval(1.0) # Removed delay
 	
-	# Fade in buttons with stagger (0.15s apart)
-	_title_tween.tween_property(new_game_button, "modulate:a", 1.0, 0.4)
-	_title_tween.tween_interval(0.15)
-	_title_tween.tween_property(continue_button, "modulate:a", 0.7 if continue_button.disabled else 1.0, 0.4)
-	_title_tween.tween_interval(0.15)
-	_title_tween.tween_property(settings_button, "modulate:a", 1.0, 0.4)
-	_title_tween.tween_interval(0.15)
-	_title_tween.tween_property(quit_button, "modulate:a", 1.0, 0.4)
+	# 3. Subtitle (on top of black)
+	_title_tween.tween_callback(func(): _start_typewriter())
+	
+	# 4. Add 1.5 sec delay before Black Fade Out
+	_title_tween.tween_interval(1.5)
+	
+	# 5. Fade OUT Black Overlay to reveal Background/Buttons
+	_title_tween.tween_property(fade_transition, "modulate:a", 0.0, 2.0)
+	
+	# 6. Fade in buttons/UI (they are under the overlay so they will appear as overlay fades)
+	# But we need them to be technically visible (alpha 1) before the overlay fades?
+	# Or we can fade them in concurrently with the overlay fade out for extra smoothness.
+	
+	# Fade in starfield and scanlines to be ready when overlay fades
+	var bg_tween = create_tween()
+	# Wait for Title(2s) + Delay(1s) + Delay(1.5s) = 4.5s
+	# Actually, let's sync it with the overlay fade out
+	bg_tween.tween_interval(4.5) 
+	bg_tween.parallel().tween_property(starfield, "modulate:a", 1.0, 0.5)
+	bg_tween.parallel().tween_property(scanline_overlay, "modulate:a", 1.0, 0.5)
+	
+	# Fade in buttons with stagger (after overlay starts fading)
+	var btn_start_time = 4.5
+	var btn_tween = create_tween()
+	btn_tween.tween_interval(btn_start_time)
+	
+	btn_tween.tween_property(new_game_button, "modulate:a", 1.0, 0.4)
+	btn_tween.tween_interval(0.3)
+	btn_tween.tween_property(continue_button, "modulate:a", 0.7 if continue_button.disabled else 1.0, 0.4)
+	btn_tween.tween_interval(0.3)
+	btn_tween.tween_property(settings_button, "modulate:a", 1.0, 0.4)
+	btn_tween.tween_interval(0.3)
+	btn_tween.tween_property(quit_button, "modulate:a", 1.0, 0.4)
 	
 	# Fade in version
-	_title_tween.tween_property(version_label, "modulate:a", 0.5, 0.3)
+	btn_tween.tween_property(version_label, "modulate:a", 0.5, 0.3)
 	
 	# Enable buttons and start glow effect after animation
-	_title_tween.tween_callback(_enable_buttons)
-	_title_tween.tween_callback(_start_title_glow)
+	btn_tween.tween_callback(_enable_buttons)
+	# btn_tween.tween_callback(_start_title_glow) # Moved to start earlier
 
 
 func _start_typewriter() -> void:
@@ -314,6 +362,8 @@ func _on_new_game_pressed() -> void:
 func _show_new_game_confirmation() -> void:
 	var dialog_scene = load("res://scenes/ui/confirm_dialog.tscn")
 	var dialog = dialog_scene.instantiate()
+	# Ensure dialog is above title (Z=20)
+	dialog.z_index = 30
 	add_child(dialog)
 	
 	dialog.setup(
@@ -347,6 +397,7 @@ func _proceed_with_new_game() -> void:
 	# Fade to black and transition to game
 	fade_transition.fade_out(0.6)
 	await fade_transition.fade_complete
+	MusicManager.stop_music()
 	_start_new_game()
 
 
@@ -388,6 +439,7 @@ func _proceed_with_continue() -> void:
 	# Fade to black and transition to game (loaded state)
 	fade_transition.fade_out(0.6)
 	await fade_transition.fade_complete
+	MusicManager.stop_music()
 	_continue_game()
 
 
@@ -421,6 +473,8 @@ func _on_settings_pressed() -> void:
 	# Load and show settings menu
 	var settings_scene = load("res://scenes/ui/settings_menu.tscn")
 	var settings_instance = settings_scene.instantiate()
+	# Ensure settings menu is above title (Z=20)
+	settings_instance.z_index = 30
 	settings_instance.back_pressed.connect(_on_settings_back)
 	add_child(settings_instance)
 
@@ -446,6 +500,7 @@ func _on_quit_pressed() -> void:
 	# Fade to black then quit
 	fade_transition.fade_out(0.6)
 	await fade_transition.fade_complete
+	MusicManager.stop_music()
 	get_tree().quit()
 
 

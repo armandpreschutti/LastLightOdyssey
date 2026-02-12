@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://day2d8iwj6tdp" path="res://scripts/ui/title_menu.gd" id="1_menu"]
 [ext_resource type="FontFile" uid="uid://xqiy7ijtjsrv" path="res://assets/fonts/VT323-Regular.ttf" id="2_font"]
 [ext_resource type="PackedScene" path="res://scenes/ui/fade_transition.tscn" id="3_fade"]
+[ext_resource type="FontFile" uid="uid://cgdjky251gw3f" path="res://assets/fonts/BungeeShade-Regular.ttf" id="4_bungee"]
 
 [node name="TitleMenu" type="Control" unique_id=2119721125]
 layout_mode = 3
@@ -73,13 +74,13 @@ theme_override_constants/separation = 10
 
 [node name="TitleLabel" type="Label" parent="CenterContainer/VBoxContainer/TitleContainer" unique_id=284324007]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
-theme_override_colors/font_shadow_color = Color(0.2, 0.6, 1, 0.4)
-theme_override_colors/font_outline_color = Color(0.1, 0.5, 0.8, 0.6)
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/shadow_offset_x = 0
 theme_override_constants/shadow_offset_y = 4
 theme_override_constants/outline_size = 4
-theme_override_fonts/font = ExtResource("2_font")
+theme_override_fonts/font = ExtResource("4_bungee")
 theme_override_font_sizes/font_size = 96
 text = "LAST LIGHT ODYSSEY"
 horizontal_alignment = 1
@@ -110,7 +111,7 @@ mouse_filter = 2
 [node name="BackgroundGradient" type="ColorRect" parent="CenterContainer/VBoxContainer/ButtonPanelWrapper/ButtonPanel" unique_id=448011392]
 layout_mode = 2
 mouse_filter = 2
-color = Color(0.02, 0.04, 0.08, 0.95)
+color = Color(0.019607844, 0.039215688, 0.078431375, 0)
 
 [node name="MarginContainer" type="MarginContainer" parent="CenterContainer/VBoxContainer/ButtonPanelWrapper/ButtonPanel" unique_id=376019531]
 layout_mode = 2
@@ -191,25 +192,6 @@ text = "v0.1.0 Alpha"
 horizontal_alignment = 2
 vertical_alignment = 2
 
-[node name="FlavorText" type="Label" parent="." unique_id=304741720]
-layout_mode = 1
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -400.0
-offset_top = -80.0
-offset_right = 400.0
-offset_bottom = -40.0
-grow_horizontal = 2
-grow_vertical = 0
-theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 0.6)
-theme_override_fonts/font = ExtResource("2_font")
-theme_override_font_sizes/font_size = 18
-text = "\"In the vast darkness between stars, hope is our only fuel.\""
-horizontal_alignment = 1
-
 [node name="NoSaveMessage" type="Label" parent="." unique_id=355653201]
 visible = false
 layout_mode = 1
@@ -233,5 +215,6 @@ vertical_alignment = 1
 
 [node name="FadeTransitionLayer" type="CanvasLayer" parent="." unique_id=1428451196]
 layer = 100
+visible = false
 
 [node name="FadeTransition" parent="FadeTransitionLayer" unique_id=1428451197 instance=ExtResource("3_fade")]

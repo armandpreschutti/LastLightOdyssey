@@ -4,6 +4,7 @@ extends Node
 
 @onready var navigation_player: AudioStreamPlayer = null
 @onready var tactical_player: AudioStreamPlayer = null
+@onready var title_player: AudioStreamPlayer = null
 
 var current_track: AudioStreamPlayer = null
 const CONFIG_PATH: String = "user://settings.cfg"
@@ -13,6 +14,16 @@ var music_volume: float = 70.0  # 0-100
 
 
 func _ready() -> void:
+	# Create title music player
+	title_player = AudioStreamPlayer.new()
+	title_player.name = "TitlePlayer"
+	var title_stream = load("res://assets/audio/music/title_menu_music.mp3")
+	if title_stream:
+		title_stream.loop = true
+		title_player.stream = title_stream
+		title_player.autoplay = false
+		add_child(title_player)
+
 	# Create navigation music player
 	navigation_player = AudioStreamPlayer.new()
 	navigation_player.name = "NavigationPlayer"
@@ -38,6 +49,14 @@ func _ready() -> void:
 	# Load volume settings
 	_load_volume_settings()
 	_update_volume()
+
+
+## Play title music
+func play_title_music() -> void:
+	if current_track == title_player:
+		return  # Already playing
+	
+	_switch_track(title_player)
 
 
 ## Play navigation music
@@ -134,6 +153,9 @@ func _update_volume() -> void:
 	
 	if tactical_player:
 		tactical_player.volume_db = target_volume_db
+
+	if title_player:
+		title_player.volume_db = target_volume_db
 
 ## Calculate volume in dB from percentage values
 func _calculate_volume_db() -> float:
