@@ -35,6 +35,7 @@ var current_biome: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION
 var is_scavenger_mission: bool = false  # Track if this is a scavenger mission
 var mission_objectives: Array[MissionObjective] = []  # Current mission objectives
 var stored_player_zoom: Vector2 = Vector2(1.0, 1.0)  # Store player's zoom level between turns
+var mission_roster: Array[String] = []  # Track all officers who were deployed (including those who died)
 
 var FuelCrateScene: PackedScene
 var ScrapPileScene: PackedScene
@@ -165,6 +166,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	mission_enemies_killed = 0
 	deployed_officers.clear()
 	enemies.clear()
+	mission_roster = officer_keys.duplicate()  # Store initial roster
 	selected_target = Vector2i(-1, -1)
 
 	# Check if this is a scavenger mission
@@ -1551,14 +1553,35 @@ func _end_mission(success: bool) -> void:
 	# Clear attackable highlights
 	_clear_attackable_highlights()
 
-	# Collect officer stats BEFORE cleanup
+	# Collect officer stats from FULL ROSTER (including dead ones)
 	var officers_status: Array = []
-	for officer in deployed_officers:
+	
+	for officer_key in mission_roster:
+		var officer_node: Node2D = null
+		var officer_hp: int = 0
+		var officer_max_hp: int = 100  # Default fallback
+		
+		# Check if officer is still deployed (alive)
+		for deployed in deployed_officers:
+			if deployed.officer_key == officer_key:
+				officer_node = deployed
+				break
+		
+		if officer_node:
+			# Officer survived
+			officer_hp = officer_node.current_hp
+			officer_max_hp = officer_node.max_hp
+		else:
+			# Officer died (K.I.A.) or was left behind
+			officer_hp = 0
+			# We don't have the node reference anymore, but we can get max_hp from GameState if needed
+			# For now, 0 HP is enough to trigger K.I.A. status
+			
 		officers_status.append({
-			"name": officer.officer_key,
-			"alive": officer.current_hp > 0,
-			"hp": officer.current_hp,
-			"max_hp": officer.max_hp,
+			"name": officer_key,
+			"alive": officer_hp > 0,
+			"hp": officer_hp,
+			"max_hp": officer_max_hp,
 		})
 	
 	# Check objective completion and apply bonus rewards
@@ -2042,14 +2065,38 @@ func has_line_of_sight(shooter_pos: Vector2i, target_pos: Vector2i) -> bool:
 func _check_line_clear(from: Vector2i, to: Vector2i) -> bool:
 	var tiles = _get_line_tiles(from, to)
 	
-	for tile_pos in tiles:
-		# Skip start and end positions
-		if tile_pos == from or tile_pos == to:
-			continue
+	for i in range(tiles.size()):
+		var tile_pos = tiles[i]
 		
-		# Check if tile blocks LOS (only walls block, cover does not)
-		if tactical_map.blocks_line_of_sight(tile_pos):
-			return false
+		# Skip start and end positions for direct blocking check (units can see out of their tile and into target tile)
+		if tile_pos == from:
+			continue
+			
+		if tile_pos == to:
+			# Even for the target tile, we must check the diagonal entry if applicable
+			# But we don't check if the target tile itself blocks LOS
+			pass
+		else:
+			# Check if tile blocks LOS (only walls block, cover does not)
+			if tactical_map.blocks_line_of_sight(tile_pos):
+				return false
+		
+		# DIAGONAL SHOULDER CHECK
+		# If this tile is diagonal from the previous one, check the "shoulders"
+		if i > 0:
+			var prev_pos = tiles[i-1]
+			var dx = tile_pos.x - prev_pos.x
+			var dy = tile_pos.y - prev_pos.y
+			
+			# If we moved diagonally (both x and y changed)
+			if dx != 0 and dy != 0:
+				var shoulder1 = Vector2i(prev_pos.x + dx, prev_pos.y)
+				var shoulder2 = Vector2i(prev_pos.x, prev_pos.y + dy)
+				
+				# Check if BOTH shoulders are blocked
+				# If both are walls, you cannot see through the diagonal crack
+				if tactical_map.blocks_line_of_sight(shoulder1) and tactical_map.blocks_line_of_sight(shoulder2):
+					return false
 	
 	return true
 

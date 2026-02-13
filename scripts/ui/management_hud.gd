@@ -3,6 +3,7 @@ extends Control
 ## Retro sci-fi terminal aesthetic with cyan/amber accents
 
 signal quit_to_menu_pressed
+signal view_recap_pressed
 
 # Updated paths for new icon-based layout
 @onready var colonists_label: Label = $MarginContainer/VBoxContainer/StatsContainer/ColonistsRow/ColonistsLabel
@@ -58,3 +59,24 @@ func _on_integrity_changed(new_value: int) -> void:
 
 func _on_scrap_changed(new_value: int) -> void:
 	scrap_label.text = "SCRAP: %d" % new_value
+
+
+func set_view_recap_mode(enabled: bool) -> void:
+	# Disconnect existing connections to avoid duplicates/confusion
+	if quit_button.pressed.is_connected(_on_quit_pressed):
+		quit_button.pressed.disconnect(_on_quit_pressed)
+	if quit_button.pressed.is_connected(_on_view_recap_pressed):
+		quit_button.pressed.disconnect(_on_view_recap_pressed)
+		
+	if enabled:
+		quit_button.text = "[ VIEW RECAP ]"
+		quit_button.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2)) # Gold
+		quit_button.pressed.connect(_on_view_recap_pressed)
+	else:
+		quit_button.text = "[ QUIT TO MENU ]"
+		quit_button.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4)) # Reddish
+		quit_button.pressed.connect(_on_quit_pressed)
+
+
+func _on_view_recap_pressed() -> void:
+	view_recap_pressed.emit()

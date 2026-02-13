@@ -240,6 +240,7 @@ func _populate_officers() -> void:
 				portrait_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 				# Portraits are huge, scale them down for the card
 				portrait_rect.custom_minimum_size = Vector2(80, 80)
+				portrait_rect.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 				# Use a shader or bit of code to clip if needed, but for now just scale
 		main_hbox.add_child(portrait_rect)
 		

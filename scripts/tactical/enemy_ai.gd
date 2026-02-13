@@ -509,8 +509,19 @@ static func _get_reachable_positions(from: Vector2i, max_range: int, tactical_ma
 		var current = queue.pop_front()
 		var dist = distances[current]
 		
-		# Only add to reachable if not an extraction tile and not a turret tile
-		if not tactical_map.is_extraction_tile(current) and not tactical_map.has_turret_at(current):
+		# Only add to reachable if not an extraction tile, not a turret tile, and not occupied by another unit
+		# (We allow moving THROUGH occupied tiles, but not ENDING on them)
+		var is_occupied_by_other = false
+		if current != from and tactical_map.has_method("get_unit_at"):
+			var unit_at_pos = tactical_map.get_unit_at(current)
+			if unit_at_pos != null:
+				is_occupied_by_other = true
+		
+		# Also check if a unit is already targeting this tile (to prevent multiple enemies moving to same tile in same turn)
+		# But this function handles one unit. The higher level logic needs to reserve tiles.
+		# For now, just checking static occupancy handles the user request "2 enemy units are NOT allowed to be on the same tile".
+		
+		if not tactical_map.is_extraction_tile(current) and not tactical_map.has_turret_at(current) and not is_occupied_by_other:
 			reachable.append(current)
 		
 		if dist < max_range:

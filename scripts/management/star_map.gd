@@ -37,7 +37,7 @@ var _pan_start_pos: Vector2 = Vector2.ZERO
 var _content_start_pos: Vector2 = Vector2.ZERO
 
 # Zoom variables
-const MIN_ZOOM = 0.5
+const MIN_ZOOM = 0.2
 const MAX_ZOOM = 2.0
 const ZOOM_STEP = 0.1
 var _current_zoom: float = 1.0

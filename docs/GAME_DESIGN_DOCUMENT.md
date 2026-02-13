@@ -43,7 +43,7 @@ This layer simulates the grueling trek across the stars.
 | Statistic | Starting Value | Description |
 |-----------|----------------|-------------|
 | **Colonists** | 1,000 | The player's "health" and final score. Humanity's last survivors. |
-| **Fuel** | 10 | The clock. Each jump consumes fuel. At 0, ship enters "Drift Mode" (−50 colonists per fuel deficit). |
+| **Fuel** | 10 | The clock. Each jump consumes fuel. At 0, ship enters "Drift Mode" (−100 colonists per jump). |
 | **Ship Integrity** | 100% | Damaged by space hazards. At 0%, the ship is destroyed. Game Over. |
 | **Scrap** | 25 | Currency found on tactical maps. Used for repairs and trading. |
 
@@ -58,8 +58,9 @@ A procedurally generated node graph with **50 nodes** leading to New Earth.
 - Variable fuel costs: base 2 fuel, +2 for column distance (horizontal/diagonal movement), +4 for backward travel
 - Fuel costs are calculated per connection and saved with the star map
 - **Fuel Warning**: Attempting a jump with insufficient fuel triggers a confirmation prompt detailing the penalties (colonist loss and integrity damage).
-- If insufficient fuel for a jump, ship enters "Drift Mode" and loses 50 colonists per fuel deficit
+- If insufficient fuel for a jump, ship enters "Drift Mode" and loses 100 colonists (flat rate)
 - **Navigation Legend**: A legend is available in the navigation menu to explain node types and connection costs.
+- **Node Re-entry**: Scavenge sites and wormholes can be re-entered if the mission is cancelled or aborted, preventing soft-locks.
 - **Goal Guarantee**: The "New Earth" node is programmatically guaranteed to be the final node (node 49) and cannot be bypassed.
 
 **Node Types:**
@@ -125,7 +126,7 @@ When the ship docks at a Scavenge Site, the game switches to isometric turn-base
 
 **Action Point System:**
 - Each unit has **2 AP** per round
-- **Move**: 1 AP (distance up to move_range tiles)
+- **Move**: 1 AP (distance up to move_range tiles). Units can pass through other units but cannot end their turn on an occupied tile.
 - **Shoot**: 1 AP
 - **Use Ability**: 1-2 AP (varies by ability)
 - **Interact/Pickup**: Free (auto-pickup when stepping on items)
@@ -254,7 +255,7 @@ Snipers can **deliver devastating long-range shots** with perfect accuracy:
 |------|-----|--------|-----|------|-------|-------------|-----------------|------------|
 | Basic | 50 | 20 | 2 | 4 | 6 | 8 | 0 | 70-80% |
 | Heavy | 80 | 35 | 3 | 3 | 5 | 6 | 0 | 20-30% |
-| Sniper | 40 | 30 | 2 | 5 | 10 | 12 | 5 | Rare (difficulty-based) |
+| Sniper | 40 | 30 | 1 | 5 | 10 | 12 | 5 | Rare (difficulty-based) |
 | Elite | 100 | 40 | 3 | 4 | 7 | 9 | 0 | Rare (difficulty-based) |
 | Boss | 250* | 70* | 4 | 3 | 8 | 9 | 0 | Biome-specific |
 
@@ -402,6 +403,7 @@ Upon reaching New Earth, players are shown a comprehensive **Voyage Recap** scre
   - Missions completed
   - Tactical turns survived
   - Sectors traversed (nodes visited)
+- **View Map**: Option to review the fully revealed star map of the completed journey.
 
 ### Game Over Recap Screen
 Upon game over, players are shown a comprehensive **Game Over Recap** screen displaying:
@@ -568,7 +570,7 @@ As colonists are lost throughout the voyage, the game displays **emotional miles
 - Amber text on dark backgrounds
 - Minimal, functional displays
 - Resource icons for quick visual recognition
-- **Input Refinement**: Dialogue dismissal is protected against accidental mouse scroll wheel inputs.
+- **Input Refinement**: Dialogue dismissal is protected against accidental mouse scroll wheel inputs. "Press Any Key" prompts ignore function keys (F1-F12), navigation keys, and modifiers to prevent accidental skipping.
 - **Legend Overlay**: Real-time legend available in navigation to explain node types.
 - Color-coded status indicators (HP bars, AP dots, stability warnings)
 
@@ -602,6 +604,14 @@ The player's controllable units, each with distinct visual identity matching the
 |:-------:|:-----:|:----:|:-----:|:-----:|:------:|
 | ![Captain](../assets/sprites/characters/officer_captain.png) | ![Scout](../assets/sprites/characters/officer_scout.png) | ![Tech](../assets/sprites/characters/officer_tech.png) | ![Medic](../assets/sprites/characters/officer_medic.png) | ![Heavy](../assets/sprites/characters/officer_heavy.png) | ![Sniper](../assets/sprites/characters/officer_sniper.png) |
 | Command leader | Recon specialist | Engineer | Field medic | Tank/Defender | Long-range marksman |
+
+#### Unit Portraits (6 sprites)
+High-resolution pixel art portraits displayed in the new Team Select screen.
+
+| Captain | Scout | Tech | Medic | Heavy | Sniper |
+|:-------:|:-----:|:----:|:-----:|:-----:|:------:|
+| `captain_officer_portait.png` | `scout_officer_portrait.png` | `tech_officer_potrait.png` | `medic_officer_portrait.png` | `heavy_officer_portait.png` | `Gemini_Generated_Image...png` |
+| Stoic leader | Cyber-visored scout | Goggled engineer | Field medic gear | Armored helmet | Hooded marksman |
 
 #### Enemy Units — Station Biome (5 sprites)
 Default enemy sprites used in Station biome missions.

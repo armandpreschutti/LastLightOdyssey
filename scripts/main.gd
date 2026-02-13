@@ -85,9 +85,13 @@ func _connect_signals() -> void:
 	game_over_scene_dialog.scene_dismissed.connect(_on_game_over_scene_dismissed)
 	game_over_recap.main_menu_pressed.connect(_on_main_menu_pressed)
 	game_over_recap.restart_pressed.connect(_on_restart_pressed)
+	game_over_recap.view_map_requested.connect(_on_view_map_requested)
 	voyage_recap.main_menu_pressed.connect(_on_main_menu_pressed)
 	voyage_recap.restart_pressed.connect(_on_restart_pressed)
+	voyage_recap.view_map_requested.connect(_on_view_map_requested)
+	game_over_recap.view_map_requested.connect(_on_view_map_requested)
 	management_hud.quit_to_menu_pressed.connect(_on_quit_to_menu)
+	management_hud.view_recap_pressed.connect(_on_view_recap_from_map)
 	GameState.game_over.connect(_on_game_over)
 	GameState.game_won.connect(_on_game_won)
 
@@ -96,6 +100,10 @@ func _initialize_star_map() -> void:
 	# Generate the node graph
 	star_map_generator = StarMapGenerator.new()
 	var node_graph = star_map_generator.generate()
+	
+	# Update GameState with correct node count
+	GameState.nodes_to_new_earth = node_graph.size()
+
 	
 	# Store node types and biome types in GameState for consistency
 	for node_data in node_graph:
@@ -704,3 +712,38 @@ func _on_wormhole_enter_pressed() -> void:
 ## Handle cancelling wormhole entry
 func _on_wormhole_cancel_pressed() -> void:
 	current_phase = GamePhase.IDLE
+
+
+func _on_view_map_requested(show_map: bool) -> void:
+	if show_map:
+		# Ensure management layer is visible so map can be seen
+		management_layer.visible = true
+		management_background.visible = true
+		
+		# Switch HUD to view recap mode (replace Quit with View Recap)
+		management_hud.set_view_recap_mode(true)
+	else:
+		# Revert HUD to normal mode
+		management_hud.set_view_recap_mode(false)
+		
+		# If we came from game won, we might want to hide it, but standard is to leave it visible
+		# behind the recap. However, to match original game won state:
+		if current_phase == GamePhase.GAME_WON:
+			# Keep map hidden if we want to focus purely on the recap, 
+			# but technically the recap covers everything so it doesn't matter much.
+			# But for cleanliness/performance:
+			# management_layer.visible = false # Optional, but maybe safer to keep it consistent
+			pass
+
+
+func _on_view_recap_from_map() -> void:
+	# Determine which recap we came from based on current phase
+	if current_phase == GamePhase.GAME_WON:
+		# Return to voyage recap
+		voyage_recap._on_return_pressed()
+	elif current_phase == GamePhase.GAME_OVER:
+		# Return to game over recap
+		game_over_recap._on_return_pressed()
+	
+	# Reset HUD mode
+	management_hud.set_view_recap_mode(false)

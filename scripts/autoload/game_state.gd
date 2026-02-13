@@ -65,7 +65,7 @@ var officers: Dictionary = {
 
 # Game progression
 var current_node_index: int = 0
-var nodes_to_new_earth: int = 50
+var nodes_to_new_earth: int = 50 # Default, updated by map generation or load
 var visited_nodes: Array[int] = []  # Track which nodes have been visited
 var travel_history: Array[int] = [0] # Track exact sequence of nodes visited (v4)
 var successful_scavenge_nodes: Array[int] = [] # Track nodes where mission was successfully extracted
@@ -380,6 +380,10 @@ func load_game() -> bool:
 	
 	# Restore star map data
 	saved_star_map_data = save_data.get("star_map_data", {})
+	# Update nodes_to_new_earth based on loaded map data
+	if saved_star_map_data.has("nodes"):
+		nodes_to_new_earth = saved_star_map_data["nodes"].size()
+
 	
 	# Restore cumulative mission stats (v3+)
 	total_fuel_collected = int(save_data.get("total_fuel_collected", 0))
