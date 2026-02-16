@@ -415,12 +415,17 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 			continue
 		
 		var loot: Node2D
+		var difficulty = GameState.get_mission_difficulty()
 		if loot_data["type"] == "fuel":
 			loot = FuelCrateScene.instantiate()
+			if loot.has_method("set_amount"): # Assuming loot has a way to scale? If not, I'll just scale the pickup logic or spawn more
+				loot.amount = maxi(1, int(1 * difficulty))
 		elif loot_data["type"] == "health_pack":
 			loot = HealthPackScene.instantiate()
 		else:
 			loot = ScrapPileScene.instantiate()
+			if loot.has_method("set_amount"):
+				loot.amount = maxi(1, int(5 * difficulty))
 		_safe_add_interactable(loot, loot_pos)
 	
 	# Spawn enemies with difficulty-based scaling

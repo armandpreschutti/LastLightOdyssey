@@ -12,7 +12,7 @@ offset_bottom = 80.0
 pivot_offset = Vector2(40, 40)
 script = ExtResource("1_mapnode")
 
-[node name="GlowEffect" type="ColorRect" parent="."]
+[node name="GlowEffect" type="Panel" parent="."]
 visible = false
 layout_mode = 1
 anchors_preset = 15
@@ -66,7 +66,7 @@ horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
 
-[node name="CurrentIndicator" type="ColorRect" parent="."]
+[node name="CurrentIndicator" type="Panel" parent="."]
 visible = false
 layout_mode = 1
 anchors_preset = 5

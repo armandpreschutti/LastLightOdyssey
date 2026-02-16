@@ -12,7 +12,7 @@ const OFFICER_DATA: Dictionary = {
 	"scout": { "color": Color.GREEN, "move_range": 6, "sight_range": 8, "max_hp": 80 },
 	"tech": { "color": Color.CYAN, "move_range": 4, "sight_range": 5, "max_hp": 70 },
 	"medic": { "color": Color.MAGENTA, "move_range": 5, "sight_range": 5, "max_hp": 75 },
-	"heavy": { "color": Color.ORANGE_RED, "move_range": 3, "sight_range": 5, "max_hp": 120 },
+	"heavy": { "color": Color.ORANGE_RED, "move_range": 3, "sight_range": 9, "max_hp": 120 },
 	"sniper": { "color": Color(0.35, 0.35, 0.4), "move_range": 4, "sight_range": 7, "max_hp": 70 },
 }
 

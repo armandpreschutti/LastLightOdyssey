@@ -98,6 +98,7 @@ func generate_options(source_node: NodeData, incoming_vector: Vector2, override_
 		new_node.node_type = _roll_node_type()
 		if new_node.node_type == EventManager.NodeType.SCAVENGE_SITE:
 			new_node.biome_type = _roll_biome_type()
+			_assign_difficulty_grade(new_node)
 		
 		# Connect
 		source_node.connections.append(new_id)
@@ -106,6 +107,52 @@ func generate_options(source_node: NodeData, incoming_vector: Vector2, override_
 		new_nodes.append(new_node)
 		
 	return new_nodes
+
+## Assign a difficulty grade based on distance and randomized bias
+func _assign_difficulty_grade(node: NodeData) -> void:
+	var distance = node.position.length()
+	# avg step distance is ~400. Let's use that as a metric.
+	var steps = distance / 400.0
+	
+	# Randomized bias: distance increases probabilities of higher grades
+	# Probabilities: [Easy, Medium, Hard, Impossible]
+	var weights = [1.0, 0.0, 0.0, 0.0]
+	
+	if steps < 5:
+		weights = [0.7, 0.3, 0.0, 0.0]
+	elif steps < 10:
+		weights = [0.4, 0.4, 0.2, 0.0]
+	elif steps < 20:
+		weights = [0.2, 0.4, 0.3, 0.1]
+	else:
+		weights = [0.1, 0.2, 0.4, 0.3]
+	
+	var total_weight = 0.0
+	for w in weights:
+		total_weight += w
+		
+	var roll = rng.randf() * total_weight
+	var current_weight = 0.0
+	var selected_grade = NodeData.DifficultyGrade.EASY
+	
+	for i in range(weights.size()):
+		current_weight += weights[i]
+		if roll <= current_weight:
+			selected_grade = i as NodeData.DifficultyGrade
+			break
+			
+	node.difficulty_grade = selected_grade
+	
+	# Assign multiplier based on grade
+	match selected_grade:
+		NodeData.DifficultyGrade.EASY:
+			node.difficulty_multiplier = rng.randf_range(0.8, 1.2)
+		NodeData.DifficultyGrade.MEDIUM:
+			node.difficulty_multiplier = rng.randf_range(1.3, 2.0)
+		NodeData.DifficultyGrade.HARD:
+			node.difficulty_multiplier = rng.randf_range(2.1, 3.0)
+		NodeData.DifficultyGrade.IMPOSSIBLE:
+			node.difficulty_multiplier = rng.randf_range(3.1, 4.5)
 
 ## Roll node type
 func _roll_node_type() -> int:

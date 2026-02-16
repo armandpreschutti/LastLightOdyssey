@@ -371,19 +371,13 @@ func has_saved_star_map_data() -> bool:
 ## This gives: 1.0x at start (node 0), ~2.5x at end (node 49)
 ## Reduced scaling in final stages (nodes 35+) to decrease difficulty
 func get_mission_difficulty() -> float:
-	const _DIFFICULTY_SCALE_FACTOR: float = 1.5
-	const _FINAL_STAGE_START: int = 35  # Nodes 35+ get reduced scaling
-	const _FINAL_STAGE_SCALE_REDUCTION: float = 0.4  # Reduce scaling by 40% in final stages
-	
-	# New infinite map difficulty scaling
-	# Base off distance from origin (manhattan or euclidean)
 	var current_node = VoyageManager.get_current_node()
+	if current_node and current_node.difficulty_multiplier > 0:
+		return current_node.difficulty_multiplier
+		
+	# Fallback to old distance-based logic if node data is missing multiplier
 	var distance = current_node.position.length() if current_node else 0.0
-	
-	# Approximate steps (avg node distance ~400 units)
 	var steps = distance / 400.0
-	
-	# Roughly every 10 steps = +0.5 difficulty?
 	return 1.0 + (steps * 0.05)
 
 

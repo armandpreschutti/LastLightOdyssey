@@ -11,9 +11,10 @@ enum NodeState { LOCKED, AVAILABLE, CURRENT, VISITED }
 # Node references
 @onready var sprite: TextureRect = $Sprite
 @onready var label: Label = $Label
-@onready var glow_effect: ColorRect = $GlowEffect
-@onready var current_indicator: ColorRect = $CurrentIndicator
+@onready var glow_effect: Panel = $GlowEffect
+@onready var current_indicator: Panel = $CurrentIndicator
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
+@onready var skull_container: HBoxContainer = $SkullContainer # Need to add this to the scene/script
 
 var node_data: NodeData
 var current_state: NodeState = NodeState.LOCKED
@@ -41,14 +42,22 @@ const COLOR_LOCKED = Color(0.4, 0.4, 0.4, 1.0)
 const COLOR_AVAILABLE = Color(1.0, 0.69, 0.0, 1.0)  # Amber
 const COLOR_CURRENT = Color(0.2, 1.0, 0.2, 1.0)  # Green
 const COLOR_VISITED = Color(0.6, 0.6, 0.6, 1.0)  # Gray
+const COLOR_WAYPOINT_IN_RANGE = Color(1.0, 1.0, 1.0, 0.10) # Subtle white glow for waypoints
 const COLOR_HOVER = Color(1.0, 0.85, 0.3, 1.0)  # Brighter amber
 
 # Glow colors
-const GLOW_AVAILABLE = Color(1.0, 0.69, 0.0, 0.3)
-const GLOW_CURRENT = Color(0.2, 1.0, 0.2, 0.4)
+const GLOW_AVAILABLE = Color(1.0, 1.0, 1.0, 0.4) # Default white glow for reached waypoints
+const GLOW_CURRENT = Color(0.2, 1.0, 0.2, 0.0) # No glow for current node
+
+# Difficulty colors
+const COLOR_EASY = Color(0.2, 1.0, 0.2, 1.0)      # Green
+const COLOR_MEDIUM = Color(1.0, 0.69, 0.0, 1.0)    # Amber
+const COLOR_HARD = Color(1.0, 0.2, 0.2, 1.0)      # Red
+const COLOR_IMPOSSIBLE = Color(0.6, 0.0, 1.0, 1.0) # Purple/Black (Using Purple for visibility)
 
 # Question mark sprite for LOCKED nodes
 const QUESTION_MARK_TEXTURE = preload("res://assets/sprites/navigation/question_mark.png")
+const SKULL_TEXTURE = preload("res://assets/sprites/navigation/skull_icon.png")
 
 var is_hovered: bool = false
 var _pulse_tween: Tween = null
@@ -56,6 +65,7 @@ var _pulse_tween: Tween = null
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
+	_setup_circular_highlights()
 	_update_visual()
 	_setup_pulse_animation()
 
@@ -138,9 +148,19 @@ func _update_visual() -> void:
 		NodeState.AVAILABLE:
 			label.add_theme_color_override("font_color", COLOR_AVAILABLE)
 			sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)
-			if glow_effect:
-				glow_effect.visible = true
-				glow_effect.color = GLOW_AVAILABLE
+			# Waypoints get white glow if unvisited
+			if node_data.node_type == EventManager.NodeType.EMPTY_SPACE:
+				if glow_effect:
+					if node_data.state == NodeData.NodeState.UNVISITED:
+						glow_effect.visible = true
+						_apply_panel_color(glow_effect, COLOR_WAYPOINT_IN_RANGE)
+					else:
+						glow_effect.visible = false
+			else:
+				# Temporarily hide, difficulty visuals will show it if needed
+				if glow_effect:
+					glow_effect.visible = false
+			
 			if current_indicator:
 				current_indicator.visible = false
 				
@@ -148,10 +168,9 @@ func _update_visual() -> void:
 			label.add_theme_color_override("font_color", COLOR_CURRENT)
 			sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)
 			if glow_effect:
-				glow_effect.visible = true
-				glow_effect.color = GLOW_CURRENT
+				glow_effect.visible = false
 			if current_indicator:
-				current_indicator.visible = true
+				current_indicator.visible = false
 				
 		NodeState.VISITED:
 			label.add_theme_color_override("font_color", COLOR_VISITED)
@@ -160,6 +179,80 @@ func _update_visual() -> void:
 				glow_effect.visible = false
 			if current_indicator:
 				current_indicator.visible = false
+	
+	# Update difficulty highlights and skulls if it's a scavenge site and revealed
+	_update_difficulty_visuals()
+
+func _update_difficulty_visuals() -> void:
+	if not node_data or node_data.node_type != EventManager.NodeType.SCAVENGE_SITE:
+		if has_node("SkullContainer"):
+			$SkullContainer.visible = false
+		return
+		
+	# Revealed logic: user said "yes it should be revealed"
+	# We also check if the node is not LOCKED
+	var revealed = node_data.difficulty_revealed and current_state != NodeState.LOCKED
+	
+	if not revealed:
+		if has_node("SkullContainer"):
+			$SkullContainer.visible = false
+		return
+		
+	# Set highlights
+	var grade = node_data.difficulty_grade
+	var grade_color = COLOR_EASY
+	match grade:
+		NodeData.DifficultyGrade.EASY:
+			grade_color = COLOR_EASY
+		NodeData.DifficultyGrade.MEDIUM:
+			grade_color = COLOR_MEDIUM
+		NodeData.DifficultyGrade.HARD:
+			grade_color = COLOR_HARD
+		NodeData.DifficultyGrade.IMPOSSIBLE:
+			grade_color = COLOR_IMPOSSIBLE
+			
+	# Apply highlight to label or glow if available and unvisited
+	label.add_theme_color_override("font_color", grade_color)
+	
+	if glow_effect and current_state == NodeState.AVAILABLE:
+		if node_data.state == NodeData.NodeState.UNVISITED:
+			glow_effect.visible = true # Ensure it's visible for missions
+			_apply_panel_color(glow_effect, grade_color, 0.2)
+		else:
+			glow_effect.visible = false
+		
+	# Update skulls
+	_update_skulls(grade)
+
+func _update_skulls(grade: int) -> void:
+	# Grade is 0-3 (EASY-IMPOSSIBLE), so count is grade + 1
+	var skull_count = grade + 1
+	
+	# Dynamic check/creation of SkullContainer if it doesn't exist in the scene tree yet
+	# (Since I can't easily edit the .tscn file, I'll handle it programmatically)
+	var sc = get_node_or_null("SkullContainer")
+	if not sc:
+		sc = HBoxContainer.new()
+		sc.name = "SkullContainer"
+		add_child(sc)
+		sc.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+		sc.position.y += 20 # Offset below label
+		sc.alignment = BoxContainer.ALIGNMENT_CENTER
+	
+	sc.visible = true
+	
+	# Clear existing
+	for child in sc.get_children():
+		child.queue_free()
+		
+	# Add new skulls
+	for i in range(skull_count):
+		var tr = TextureRect.new()
+		tr.texture = SKULL_TEXTURE
+		tr.custom_minimum_size = Vector2(16, 16)
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		sc.add_child(tr)
 
 
 ## Update the sprite texture based on node type
@@ -307,6 +400,28 @@ func _is_new_earth_node() -> bool:
 
 
 
+
+
+func _setup_circular_highlights() -> void:
+	# Glow effect style
+	var glow_style = StyleBoxFlat.new()
+	glow_style.set_corner_radius_all(100) # Circle
+	glow_style.bg_color = Color(1, 1, 1, 1) # Modulate handles specific colors
+	glow_effect.add_theme_stylebox_override("panel", glow_style)
+	
+	# Current indicator style
+	var indicator_style = StyleBoxFlat.new()
+	indicator_style.set_corner_radius_all(100) # Circle
+	indicator_style.bg_color = COLOR_CURRENT
+	current_indicator.add_theme_stylebox_override("panel", indicator_style)
+
+func _apply_panel_color(panel: Panel, color: Color, alpha: float = -1.0) -> void:
+	var style = panel.get_theme_stylebox("panel").duplicate()
+	if style is StyleBoxFlat:
+		style.bg_color = color
+		if alpha >= 0.0:
+			style.bg_color.a = alpha
+		panel.add_theme_stylebox_override("panel", style)
 
 func _on_mouse_entered() -> void:
 	is_hovered = true

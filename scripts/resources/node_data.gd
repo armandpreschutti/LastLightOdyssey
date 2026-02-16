@@ -10,7 +10,16 @@ enum NodeState {
 	CLEARED = 1,   # Extracted successfully, safe to revisit but no rewards (maybe fuel cost)
 	VISITED = 2,   # Visited but not necessarily cleared (e.g. just passed through)
 	LOCKED = 3,    # Not reachable (visual only, logic handled by manager)
-	STORY = 4      # Special story node
+	STORY = 4,      # Special story node
+	TRADING = 5,    # Trading outpost
+}
+
+# Difficulty Grades
+enum DifficultyGrade {
+	EASY = 0,
+	MEDIUM = 1,
+	HARD = 2,
+	IMPOSSIBLE = 3
 }
 
 # Core Properties
@@ -23,6 +32,11 @@ enum NodeState {
 @export var biome_type: int = -1 # See BiomeConfig.BiomeType
 @export var state: NodeState = NodeState.UNVISITED
 @export var is_new_earth: bool = false
+
+# Difficulty Properties
+@export var difficulty_grade: DifficultyGrade = DifficultyGrade.EASY
+@export var difficulty_multiplier: float = 1.0
+@export var difficulty_revealed: bool = true # Per user request "yes it should be revealed"
 
 # UI Helper Properties
 @export var fuel_cost_to_enter: int = 1
