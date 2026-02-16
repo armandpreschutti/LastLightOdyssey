@@ -173,6 +173,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	mission_enemies_killed = 0
 	deployed_officers.clear()
 	enemies.clear()
+	active_turrets.clear()
 	mission_roster = officer_keys.duplicate()  # Store initial roster
 	selected_target = Vector2i(-1, -1)
 

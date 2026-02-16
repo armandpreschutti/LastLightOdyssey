@@ -829,6 +829,20 @@ func _draw_cover_tile(rect: Rect2, hash_val: int) -> void:
 	# Floor underneath
 	draw_rect(rect, current_theme["floor_base"])
 	
+	# Draw a consistent 'base' or 'foundation' for the cover
+	var base_rect = Rect2(rect.position.x + 4, rect.position.y + 4, TILE_SIZE - 8, TILE_SIZE - 8)
+	var base_color: Color
+	
+	match current_biome:
+		BiomeConfig.BiomeType.STATION:
+			base_color = current_theme.get("wall_shadow", Color(0.12, 0.14, 0.18))
+		BiomeConfig.BiomeType.ASTEROID:
+			base_color = current_theme.get("floor_accent", Color(0.12, 0.1, 0.08, 0.6))
+		BiomeConfig.BiomeType.PLANET:
+			base_color = current_theme.get("floor_accent", Color(0.08, 0.12, 0.06, 0.6))
+	
+	draw_rect(base_rect, base_color)
+	
 	# Draw biome-specific cover object
 	var center = rect.position + Vector2(TILE_SIZE / 2, TILE_SIZE / 2)
 	
@@ -910,340 +924,102 @@ func _draw_station_wall_details(rect: Rect2, hash_val: int, _above: bool, _below
 
 
 func _draw_station_cover(center: Vector2, hash_val: int) -> void:
-	var cover_type = hash_val % 4  # More variety
-	
-	# Stronger shadow underneath for depth
-	var shadow: PackedVector2Array = [
-		center + Vector2(-13, 9) + Vector2(3, 3),
-		center + Vector2(13, 9) + Vector2(3, 3),
-		center + Vector2(11, 14) + Vector2(3, 3),
-		center + Vector2(-11, 14) + Vector2(3, 3)
-	]
-	draw_polygon(shadow, [Color(0.0, 0.0, 0.02, 0.7)])
-	
-	# Black outline color for all crates
+	# Machinery / Crate theme - Unified look
+	var main_color = current_theme["cover_main"]
+	var dark_color = current_theme["cover_dark"]
+	var light_color = current_theme["cover_light"]
 	var outline_color = Color(0.02, 0.02, 0.04)
 	
-	match cover_type:
-		0:  # Brown/orange cargo crate - BRIGHTER
-			var main_color = current_theme["cover_main"]
-			var dark_color = current_theme["cover_dark"]
-			var light_color = current_theme["cover_light"]
-			
-			# Black outline/back
-			var outline: PackedVector2Array = [
-				center + Vector2(-12, -11),
-				center + Vector2(12, -11),
-				center + Vector2(13, 10),
-				center + Vector2(-13, 10)
-			]
-			draw_polygon(outline, [outline_color])
-			
-			# Front face
-			var front: PackedVector2Array = [
-				center + Vector2(-11, -10),
-				center + Vector2(11, -10),
-				center + Vector2(11, 8),
-				center + Vector2(-11, 8)
-			]
-			draw_polygon(front, [main_color])
-			
-			# Top face (bright highlight)
-			var top: PackedVector2Array = [
-				center + Vector2(-11, -10),
-				center + Vector2(11, -10),
-				center + Vector2(10, -7),
-				center + Vector2(-10, -7)
-			]
-			draw_polygon(top, [light_color])
-			
-			# Metal bands (darker)
-			draw_rect(Rect2(center.x - 11, center.y - 3, 22, 3), dark_color)
-			draw_rect(Rect2(center.x - 11, center.y + 3, 22, 3), dark_color)
-			
-			# Bright highlight lines on top
-			draw_line(center + Vector2(-11, -10), center + Vector2(11, -10), light_color.lightened(0.2), 2.0)
-			
-			# Label/marking
-			draw_rect(Rect2(center.x - 5, center.y - 8, 10, 4), Color(0.9, 0.85, 0.6))
-		
-		1:  # Green supply/ammo crate - MORE VIBRANT
-			var green_main = current_theme.get("cover_green", Color(0.35, 0.55, 0.30))
-			var green_dark = current_theme.get("cover_green_dark", Color(0.22, 0.38, 0.18))
-			var green_light = current_theme.get("cover_green_light", green_main.lightened(0.25))
-			
-			# Black outline
-			var outline: PackedVector2Array = [
-				center + Vector2(-11, -10),
-				center + Vector2(11, -10),
-				center + Vector2(11, 10),
-				center + Vector2(-11, 10)
-			]
-			draw_polygon(outline, [outline_color])
-			
-			# Main body
-			var body: PackedVector2Array = [
-				center + Vector2(-10, -9),
-				center + Vector2(10, -9),
-				center + Vector2(10, 9),
-				center + Vector2(-10, 9)
-			]
-			draw_polygon(body, [green_main])
-			
-			# Top highlight strip
-			draw_rect(Rect2(center.x - 10, center.y - 9, 20, 3), green_light)
-			
-			# Bottom shadow strip
-			draw_rect(Rect2(center.x - 10, center.y + 6, 20, 3), green_dark)
-			
-			# Left highlight edge
-			draw_line(center + Vector2(-10, -9), center + Vector2(-10, 9), green_light, 2.0)
-			# Right shadow edge
-			draw_line(center + Vector2(10, -9), center + Vector2(10, 9), green_dark, 2.0)
-			
-			# Military stencil marking (white star or marking)
-			draw_rect(Rect2(center.x - 5, center.y - 3, 10, 6), green_dark)
-			draw_rect(Rect2(center.x - 3, center.y - 1, 6, 2), Color(0.85, 0.85, 0.75))
-		
-		2:  # Gray metal container/barrier - LIGHTER GRAY
-			var metal_color = current_theme.get("cover_metal", Color(0.50, 0.55, 0.60))
-			var metal_dark = metal_color.darkened(0.35)
-			var metal_light = metal_color.lightened(0.25)
-			
-			# Black outline
-			var outline: PackedVector2Array = [
-				center + Vector2(-12, -11),
-				center + Vector2(12, -11),
-				center + Vector2(12, 9),
-				center + Vector2(-12, 9)
-			]
-			draw_polygon(outline, [outline_color])
-			
-			# Main body
-			var body: PackedVector2Array = [
-				center + Vector2(-11, -10),
-				center + Vector2(11, -10),
-				center + Vector2(11, 8),
-				center + Vector2(-11, 8)
-			]
-			draw_polygon(body, [metal_color])
-			
-			# Top highlight
-			draw_rect(Rect2(center.x - 11, center.y - 10, 22, 3), metal_light)
-			
-			# Vertical ridges (ribbed container)
-			for i in range(6):
-				var x_off = -9 + i * 4
-				draw_line(center + Vector2(x_off, -7), center + Vector2(x_off, 6), metal_dark, 2.0)
-			
-			# Bottom shadow
-			draw_line(center + Vector2(-11, 8), center + Vector2(11, 8), metal_dark, 2.0)
-		
-		3:  # Yellow/orange barrel cluster - HAZARD COLORS
-			var barrel_main = Color(0.75, 0.55, 0.15)  # Orange-yellow
-			var barrel_dark = Color(0.50, 0.35, 0.10)
-			var barrel_light = Color(0.90, 0.70, 0.25)
-			
-			# Black outline base
-			draw_circle(center + Vector2(0, 2), 12, outline_color)
-			
-			# Main barrel body
-			draw_circle(center + Vector2(0, 2), 11, barrel_main)
-			
-			# Inner darker ring
-			draw_circle(center + Vector2(0, 2), 8, barrel_dark)
-			
-			# Center highlight
-			draw_circle(center + Vector2(0, 2), 5, barrel_main.lightened(0.15))
-			
-			# Top rim highlight (arc)
-			for i in range(12):
-				var angle = PI + (float(i) / 11.0) * PI
-				var p1 = center + Vector2(0, 2) + Vector2(cos(angle) * 11, sin(angle) * 4)
-				var p2 = center + Vector2(0, 2) + Vector2(cos(angle + 0.3) * 11, sin(angle + 0.3) * 4)
-				draw_line(p1, p2, barrel_light, 2.0)
-			
-			# Hazard symbol (biohazard/radiation style)
-			draw_circle(center + Vector2(0, 0), 4, Color(0.1, 0.1, 0.1, 0.8))
-			draw_circle(center + Vector2(0, 0), 2, Color(0.9, 0.2, 0.1, 0.9))
+	# Draw a structured machinery/crate object
+	# Base machinery block
+	var body: PackedVector2Array = [
+		center + Vector2(-10, -8),
+		center + Vector2(10, -8),
+		center + Vector2(10, 10),
+		center + Vector2(-10, 10)
+	]
+	draw_polygon(body, [main_color])
+	
+	# Top plate
+	var top: PackedVector2Array = [
+		center + Vector2(-10, -8),
+		center + Vector2(10, -8),
+		center + Vector2(8, -5),
+		center + Vector2(-8, -5)
+	]
+	draw_polygon(top, [light_color])
+	
+	# Panel details (machinery look)
+	draw_rect(Rect2(center.x - 7, center.y - 2, 14, 8), dark_color)
+	draw_line(center + Vector2(-10, -8), center + Vector2(10, -8), outline_color, 1.0)
+	draw_line(center + Vector2(-10, 10), center + Vector2(10, 10), outline_color, 1.0)
+	
+	# Small accent light if hash allows
+	if hash_val % 4 == 0:
+		var accent = current_theme.get("accent_glow", Color(0.3, 0.9, 1.0))
+		draw_circle(center + Vector2(4, 2), 2, accent)
+	
+	# Military markings
+	draw_rect(Rect2(center.x - 4, center.y + 1, 8, 2), Color(0.9, 0.8, 0.2, 0.8))
 
 
 func _draw_asteroid_cover(center: Vector2, hash_val: int) -> void:
-	# Rock pile cover
-	var shadow_points: PackedVector2Array = []
-	for i in range(8):
-		var angle = (float(i) / 8.0) * TAU
-		var radius = 12.0 + (hash_val % 4)
-		shadow_points.append(center + Vector2(cos(angle) * radius + 2, sin(angle) * radius * 0.7 + 3))
-	draw_polygon(shadow_points, [Color(0.06, 0.05, 0.04, 0.5)])
+	# Structured rock formation
+	var rock_color = current_theme["cover_main"]
+	var rock_dark = current_theme["cover_dark"]
+	var rock_light = current_theme["cover_light"]
 	
-	# Large back rock
-	var rock1: PackedVector2Array = [
-		center + Vector2(-8, -6),
-		center + Vector2(-2, -10),
-		center + Vector2(6, -7),
-		center + Vector2(10, -2),
-		center + Vector2(8, 6),
-		center + Vector2(-4, 8),
-		center + Vector2(-10, 3)
+	# Main rocky pillar
+	var points: PackedVector2Array = [
+		center + Vector2(-8, 10),
+		center + Vector2(-10, 0),
+		center + Vector2(-4, -8),
+		center + Vector2(6, -10),
+		center + Vector2(10, 4),
+		center + Vector2(8, 10)
 	]
-	draw_polygon(rock1, [current_theme["cover_main"]])
-	draw_line(center + Vector2(-6, -5), center + Vector2(0, -9), current_theme["cover_light"], 2.0)
+	draw_polygon(points, [rock_color])
 	
-	# Medium front rock
-	var rock2: PackedVector2Array = [
-		center + Vector2(2, 0),
-		center + Vector2(8, -4),
-		center + Vector2(12, 2),
-		center + Vector2(9, 9),
-		center + Vector2(3, 10),
-		center + Vector2(-1, 6)
-	]
-	draw_polygon(rock2, [current_theme["cover_dark"].lightened(0.1)])
+	# Cracks and highlights
+	draw_line(center + Vector2(-4, -8), center + Vector2(0, 2), rock_dark, 1.5)
+	draw_line(center + Vector2(-10, 0), center + Vector2(-4, -8), rock_light, 2.0)
 	
-	# Blue mineral accent
+	# Accent mineral
 	if hash_val % 3 == 0:
-		draw_circle(center + Vector2(-3, 2), 3, Color(0.3, 0.4, 0.6, 0.4))
+		draw_circle(center + Vector2(3, -2), 3, Color(0.3, 0.5, 0.8, 0.4))
 
 
 func _draw_planet_cover(center: Vector2, hash_val: int) -> void:
-	var cover_type = hash_val % 4  # More variety for alien planet
-	
-	# Get alien colors
-	var cap_color = current_theme.get("cover_main", Color(0.35, 0.55, 0.58))
-	var cap_dark = current_theme.get("cover_dark", Color(0.22, 0.38, 0.42))
-	var cap_light = current_theme.get("cover_light", Color(0.50, 0.70, 0.72))
+	# Tree / Foliage theme
+	var foliage_color = current_theme.get("cover_main", Color(0.35, 0.55, 0.58))
+	var foliage_dark = current_theme.get("cover_dark", Color(0.22, 0.38, 0.42))
 	var stem_color = current_theme.get("cover_stem", Color(0.45, 0.40, 0.35))
-	var crystal_color = current_theme.get("cover_crystal", Color(0.55, 0.35, 0.60))
-	var crystal_glow = current_theme.get("cover_crystal_glow", Color(0.75, 0.50, 0.80))
-	var orange_color = current_theme.get("cover_orange", Color(0.85, 0.55, 0.20))
-	var orange_glow = current_theme.get("cover_orange_glow", Color(1.0, 0.70, 0.30))
 	var biolum_yellow = current_theme.get("biolum_yellow", Color(1.0, 0.85, 0.30, 0.85))
 	
-	# Dark shadow underneath
-	draw_circle(center + Vector2(2, 10), 10, Color(0.05, 0.08, 0.10, 0.6))
+	# Unified Tree formation
+	# Central Stem
+	draw_rect(Rect2(center.x - 3, center.y - 2, 6, 11), stem_color)
 	
-	# Black outline color
-	var outline_color = Color(0.08, 0.10, 0.12)
+	# Foliage Canopy (more uniform)
+	var canopy: PackedVector2Array = [
+		center + Vector2(-12, 0),
+		center + Vector2(-10, -8),
+		center + Vector2(0, -14),
+		center + Vector2(10, -8),
+		center + Vector2(12, 0),
+		center + Vector2(0, 2)
+	]
+	draw_polygon(canopy, [foliage_color])
 	
-	match cover_type:
-		0:  # Teal alien mushroom (like reference images)
-			# Stem
-			var stem_points: PackedVector2Array = [
-				center + Vector2(-4, 10),
-				center + Vector2(-3, -2),
-				center + Vector2(3, -2),
-				center + Vector2(4, 10)
-			]
-			draw_polygon(stem_points, [stem_color])
-			draw_line(center + Vector2(-3, -2), center + Vector2(-3, 8), stem_color.lightened(0.2), 1.5)
-			
-			# Mushroom cap (teal, curved top)
-			var cap_points: PackedVector2Array = [
-				center + Vector2(-12, 2),
-				center + Vector2(-10, -6),
-				center + Vector2(-4, -10),
-				center + Vector2(4, -10),
-				center + Vector2(10, -6),
-				center + Vector2(12, 2),
-				center + Vector2(8, 4),
-				center + Vector2(0, 2),
-				center + Vector2(-8, 4)
-			]
-			draw_polygon(cap_points, [cap_color])
-			
-			# Cap highlight (top curve)
-			draw_line(center + Vector2(-8, -8), center + Vector2(8, -8), cap_light, 3.0)
-			draw_line(center + Vector2(-10, -6), center + Vector2(10, -6), cap_color.lightened(0.15), 2.0)
-			
-			# Cap underside shadow
-			draw_line(center + Vector2(-10, 2), center + Vector2(10, 2), cap_dark, 2.0)
-			
-			# Bioluminescent spots on cap
-			draw_circle(center + Vector2(-5, -4), 2, biolum_yellow)
-			draw_circle(center + Vector2(4, -5), 1.5, biolum_yellow.darkened(0.2))
-		
-		1:  # Orange glowing mushroom cluster
-			# Main mushroom stem
-			draw_rect(Rect2(center.x - 3, center.y - 2, 6, 12), stem_color.darkened(0.1))
-			
-			# Main orange cap
-			draw_circle(center + Vector2(0, -6), 10, orange_color)
-			draw_circle(center + Vector2(0, -6), 7, orange_glow)
-			draw_circle(center + Vector2(0, -6), 4, biolum_yellow)  # Bright glow center
-			
-			# Small secondary mushroom
-			draw_rect(Rect2(center.x + 6, center.y + 2, 3, 6), stem_color)
-			draw_circle(center + Vector2(8, 0), 5, orange_color.darkened(0.2))
-			draw_circle(center + Vector2(8, 0), 3, orange_glow.darkened(0.15))
-			
-			# Outline for pop
-			draw_circle(center + Vector2(0, -6), 10, outline_color)
-		
-		2:  # Purple crystal formation
-			# Dark base
-			draw_polygon([
-				center + Vector2(-10, 10),
-				center + Vector2(-8, 4),
-				center + Vector2(8, 4),
-				center + Vector2(10, 10)
-			], [outline_color])
-			
-			# Main large crystal
-			var main_crystal: PackedVector2Array = [
-				center + Vector2(-6, 8),
-				center + Vector2(-2, -12),
-				center + Vector2(4, 8)
-			]
-			draw_polygon(main_crystal, [crystal_color])
-			draw_line(center + Vector2(-2, -12), center + Vector2(-1, 0), crystal_glow, 2.0)
-			
-			# Secondary crystal (leaning right)
-			var side_crystal: PackedVector2Array = [
-				center + Vector2(4, 8),
-				center + Vector2(8, -6),
-				center + Vector2(12, 8)
-			]
-			draw_polygon(side_crystal, [crystal_color.darkened(0.15)])
-			draw_line(center + Vector2(8, -6), center + Vector2(8, 2), crystal_glow.darkened(0.1), 1.5)
-			
-			# Small crystal
-			var small_crystal: PackedVector2Array = [
-				center + Vector2(-10, 8),
-				center + Vector2(-8, -2),
-				center + Vector2(-5, 8)
-			]
-			draw_polygon(small_crystal, [crystal_color.lightened(0.1)])
-			
-			# Glow at crystal tips
-			draw_circle(center + Vector2(-2, -10), 3, current_theme.get("wall_glow", Color(0.80, 0.50, 0.90, 0.6)))
-		
-		3:  # Alien plant/coral formation
-			var plant_color = current_theme.get("alien_plant", Color(0.30, 0.55, 0.50))
-			var plant_dark = current_theme.get("alien_plant_dark", Color(0.20, 0.40, 0.38))
-			
-			# Base/roots
-			draw_circle(center + Vector2(0, 6), 8, plant_dark)
-			
-			# Main stalks (branching)
-			# Left branch
-			draw_line(center + Vector2(-2, 6), center + Vector2(-8, -8), plant_color, 4.0)
-			draw_line(center + Vector2(-8, -8), center + Vector2(-12, -12), plant_color.lightened(0.1), 3.0)
-			draw_circle(center + Vector2(-12, -12), 4, plant_color.lightened(0.2))
-			
-			# Right branch
-			draw_line(center + Vector2(2, 6), center + Vector2(6, -6), plant_color, 4.0)
-			draw_line(center + Vector2(6, -6), center + Vector2(10, -10), plant_color.lightened(0.1), 3.0)
-			draw_circle(center + Vector2(10, -10), 3, plant_color.lightened(0.15))
-			
-			# Center stalk
-			draw_line(center + Vector2(0, 6), center + Vector2(0, -10), plant_color, 3.0)
-			draw_circle(center + Vector2(0, -10), 5, plant_color.lightened(0.25))
-			
-			# Bioluminescent tips
-			draw_circle(center + Vector2(-12, -12), 2, biolum_yellow)
-			draw_circle(center + Vector2(10, -10), 1.5, biolum_yellow.darkened(0.2))
-			draw_circle(center + Vector2(0, -10), 2.5, biolum_yellow)
+	# Canopy detail/shadow
+	draw_line(center + Vector2(-12, 0), center + Vector2(12, 0), foliage_dark, 2.0)
+	
+	# Bioluminescent spots
+	draw_circle(center + Vector2(-4, -6), 2, biolum_yellow)
+	draw_circle(center + Vector2(5, -4), 1.5, biolum_yellow)
+	
+	# Small companion shrub
+	draw_circle(center + Vector2(8, 6), 4, foliage_dark)
 
 
 func _unhandled_input(event: InputEvent) -> void:

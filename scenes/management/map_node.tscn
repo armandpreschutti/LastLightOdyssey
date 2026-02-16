@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://bb1nggh5w8f4u" path="res://scripts/management/map_node.gd" id="1_mapnode"]
 [ext_resource type="Texture2D" uid="uid://dxw3s2n4c5ph1" path="res://assets/sprites/navigation/planet_earth.png" id="2_planet"]
+[ext_resource type="Texture2D" uid="uid://bwj734jciysg0" path="res://assets/sprites/navigation/node_target.png" id="3_target"]
 
 [node name="MapNode" type="Control"]
 custom_minimum_size = Vector2(80, 80)
@@ -12,7 +13,7 @@ offset_bottom = 80.0
 pivot_offset = Vector2(40, 40)
 script = ExtResource("1_mapnode")
 
-[node name="GlowEffect" type="Panel" parent="."]
+[node name="GlowEffect" type="TextureRect" parent="."]
 visible = false
 layout_mode = 1
 anchors_preset = 15
@@ -25,7 +26,9 @@ offset_bottom = 8.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(1, 0.69, 0, 0.3)
+texture = ExtResource("3_target")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="Sprite" type="TextureRect" parent="."]
 layout_mode = 1

@@ -11,7 +11,7 @@ enum NodeState { LOCKED, AVAILABLE, CURRENT, VISITED }
 # Node references
 @onready var sprite: TextureRect = $Sprite
 @onready var label: Label = $Label
-@onready var glow_effect: Panel = $GlowEffect
+@onready var glow_effect: TextureRect = $GlowEffect
 @onready var current_indicator: Panel = $CurrentIndicator
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
 
@@ -420,7 +420,7 @@ func _stop_pulse() -> void:
 
 ## Check if node is clickable
 func is_clickable() -> bool:
-	return current_state == NodeState.AVAILABLE or current_state == NodeState.CURRENT or current_state == NodeState.VISITED
+	return current_state == NodeState.AVAILABLE or current_state == NodeState.VISITED
 
 
 ## Check if this is the New Earth node
@@ -436,11 +436,7 @@ func _is_new_earth_node() -> bool:
 
 
 func _setup_circular_highlights() -> void:
-	# Glow effect style
-	var glow_style = StyleBoxFlat.new()
-	glow_style.set_corner_radius_all(100) # Circle
-	glow_style.bg_color = Color(1, 1, 1, 1) # Modulate handles specific colors
-	glow_effect.add_theme_stylebox_override("panel", glow_style)
+	# Glow effect (TextureRect) no longer needs procedural stylebox
 	
 	# Current indicator style
 	var indicator_style = StyleBoxFlat.new()
@@ -448,17 +444,22 @@ func _setup_circular_highlights() -> void:
 	indicator_style.bg_color = COLOR_CURRENT
 	current_indicator.add_theme_stylebox_override("panel", indicator_style)
 
-func _apply_panel_color(panel: Panel, color: Color, alpha: float = -1.0) -> void:
-	var style = panel.get_theme_stylebox("panel").duplicate()
-	if style is StyleBoxFlat:
-		style.bg_color = color
+func _apply_panel_color(control: Control, color: Color, alpha: float = -1.0) -> void:
+	if control is TextureRect:
+		control.modulate = color
 		if alpha >= 0.0:
-			style.bg_color.a = alpha
-		panel.add_theme_stylebox_override("panel", style)
+			control.modulate.a = alpha
+	elif control is Panel:
+		var style = control.get_theme_stylebox("panel").duplicate()
+		if style is StyleBoxFlat:
+			style.bg_color = color
+			if alpha >= 0.0:
+				style.bg_color.a = alpha
+			control.add_theme_stylebox_override("panel", style)
 
 func _on_mouse_entered() -> void:
 	is_hovered = true
-	if current_state == NodeState.AVAILABLE or current_state == NodeState.CURRENT or current_state == NodeState.VISITED:
+	if current_state == NodeState.AVAILABLE or current_state == NodeState.VISITED:
 		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
 		# Scale up slightly on hover
 		var tween = create_tween()
