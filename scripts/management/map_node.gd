@@ -41,7 +41,7 @@ const COLOR_LOCKED = Color(0.4, 0.4, 0.4, 1.0)
 const COLOR_AVAILABLE = Color(1.0, 0.69, 0.0, 1.0)  # Amber
 const COLOR_CURRENT = Color(0.2, 1.0, 0.2, 1.0)  # Green
 const COLOR_VISITED = Color(0.6, 0.6, 0.6, 1.0)  # Gray
-const COLOR_WAYPOINT_IN_RANGE = Color(1.0, 1.0, 1.0, 0.10) # Subtle white glow for waypoints
+const COLOR_WAYPOINT_IN_RANGE = Color(1.0, 1.0, 1.0, 0.25) # Subtle white glow for waypoints
 const COLOR_HOVER = Color(1.0, 0.85, 0.3, 1.0)  # Brighter amber
 
 # Glow colors
@@ -150,11 +150,9 @@ func _update_visual() -> void:
 			# Waypoints get white glow if unvisited
 			if node_data.node_type == EventManager.NodeType.EMPTY_SPACE:
 				if glow_effect:
-					if node_data.state == NodeData.NodeState.UNVISITED:
-						glow_effect.visible = true
-						_apply_panel_color(glow_effect, COLOR_WAYPOINT_IN_RANGE)
-					else:
-						glow_effect.visible = false
+					# Always show glow for available waypoints, even if visited
+					glow_effect.visible = true
+					_apply_panel_color(glow_effect, COLOR_WAYPOINT_IN_RANGE)
 			else:
 				# Temporarily hide, difficulty visuals will show it if needed
 				if glow_effect:
@@ -181,6 +179,9 @@ func _update_visual() -> void:
 	
 	# Update difficulty highlights and skulls if it's a scavenge site and revealed
 	_update_difficulty_visuals()
+	
+	# Update cleared marker if it's a scavenge site
+	_update_cleared_marker()
 
 func _update_difficulty_visuals() -> void:
 	if not node_data or node_data.node_type != EventManager.NodeType.SCAVENGE_SITE:
@@ -214,11 +215,9 @@ func _update_difficulty_visuals() -> void:
 	label.add_theme_color_override("font_color", grade_color)
 	
 	if glow_effect and current_state == NodeState.AVAILABLE:
-		if node_data.state == NodeData.NodeState.UNVISITED:
-			glow_effect.visible = true # Ensure it's visible for missions
-			_apply_panel_color(glow_effect, grade_color, 0.2)
-		else:
-			glow_effect.visible = false
+		# Always show glow for available missions, even if visited/cleared
+		glow_effect.visible = true 
+		_apply_panel_color(glow_effect, grade_color, 0.35)
 		
 	# Update skulls
 	_update_skulls(grade)
@@ -252,6 +251,41 @@ func _update_skulls(grade: int) -> void:
 		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		sc.add_child(tr)
+
+
+func _update_cleared_marker() -> void:
+	# Only relevant for Scavenge Sites
+	if not node_data or node_data.node_type != EventManager.NodeType.SCAVENGE_SITE:
+		if has_node("ClearedLabel"):
+			$ClearedLabel.visible = false
+		return
+		
+	# Check if cleared
+	var is_cleared = node_data.state == NodeData.NodeState.CLEARED
+	
+	if not is_cleared:
+		if has_node("ClearedLabel"):
+			$ClearedLabel.visible = false
+		return
+		
+	# Create label if needed
+	var cl = get_node_or_null("ClearedLabel")
+	if not cl:
+		cl = Label.new()
+		cl.name = "ClearedLabel"
+		add_child(cl)
+		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cl.add_theme_font_size_override("font_size", 12)
+		cl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1.0)) # Grey
+		
+	# Reset position relative to top
+	cl.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	
+	# Move up above the node
+	cl.position.y -= 25 # Move up by 25 pixels
+	
+	cl.text = "[ CLEARED ]"
+	cl.visible = true
 
 
 ## Update the sprite texture based on node type

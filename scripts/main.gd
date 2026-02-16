@@ -171,13 +171,21 @@ func _on_node_clicked(node_data: NodeData) -> void:
 			# Start ship jump animation, then execute jump when animation completes
 			_execute_jump_with_animation(node_data, fuel_cost)
 	else:
-		# Attempt multi-node travel through visited nodes
-		var path = VoyageManager.find_path(current_node_id, node_data.id)
-		if path.size() > 1:
-			_execute_path_travel(path)
-		else:
-			# Not a neighbor and no path found through visited nodes
-			pass
+		# Attempt direct travel to visited nodes
+		# We check if a path exists first (VoyageManager.attempt_direct_travel does this too, but we can checks here for UX)
+		# Just call it directly, let VoyageManager handle validation
+		
+		# For direct travel, we want speed boost (1.25x faster than normal hopping? Or just faster?)
+		# User requested 25% faster.
+		# Note: attempt_direct_travel default speed_mult is 1.25.
+		
+		# Check if target is visited
+		if node_data.state == NodeData.NodeState.UNVISITED:
+			# Can't jump directly to unvisited non-neighbors
+			# (This case shouldn't be reachable via click usually unless we allow clicking deep into fog, but logic handles it)
+			return
+
+		_execute_direct_travel(node_data)
 
 
 ## Show fuel warning dialog when player doesn't have enough fuel for the jump
@@ -246,52 +254,22 @@ func _execute_jump_with_animation(node_data: NodeData, fuel_cost: int) -> void:
 		_is_jump_animating = false
 
 
-## Execute consecutive jumps along a path
-func _execute_path_travel(path: Array[NodeData]) -> void:
-	if path.size() <= 1:
-		return
-		
+func _execute_direct_travel(target_node: NodeData) -> void:
 	_is_jump_animating = true
 	management_hud.set_deploy_active(false)
 	
-	# Iterate through the path starting from the second node (first is current)
-	for i in range(1, path.size()):
-		var target_node = path[i]
-		var is_last_hop = (i == path.size() - 1)
-		var was_visited = target_node.state != NodeData.NodeState.UNVISITED
-		
-		var fuel_cost = VoyageManager.get_fuel_cost(target_node)
-		
-		# Check fuel warning only for the first hop of a chain? 
-		# Or just jump since we are traveling through visited nodes (usually 0 cost)
-		# For multi-hop, we skip the warning to avoid stopping the sequence
-		# unless we want to be strict. Let's be lenient for consecutive travel.
-		
-		var success = VoyageManager.attempt_jump(target_node)
-		if not success:
-			_is_jump_animating = false
-			return
-			
-		# Wait for animation
+	var success = VoyageManager.attempt_direct_travel(target_node, 3.0)
+	
+	if success:
 		await star_map.jump_animation_complete
+		_is_jump_animating = false
 		
-		# Check for game exit states
 		if current_phase == GamePhase.GAME_WON or current_phase == GamePhase.GAME_OVER:
-			_is_jump_animating = false
 			return
 			
-		# If it's the final destination, trigger arrival logic
-		if is_last_hop:
-			_is_jump_animating = false
-			_process_node_after_jump(target_node, was_visited)
-			return
-		
-		# Small delay between hops for smoothness? 
-		# StarMap already has animation time, so it might be okay.
-		# Let's add a tiny frame wait.
-		await get_tree().process_frame
-		
-	_is_jump_animating = false
+		_process_node_after_jump(target_node, true) # true = was_visited
+	else:
+		_is_jump_animating = false
 
 
 func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) -> void:

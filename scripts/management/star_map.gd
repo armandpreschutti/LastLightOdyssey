@@ -14,6 +14,7 @@ var MapNodeScene: PackedScene
 var node_visuals: Dictionary = {}  # String (ID) -> MapNode visual instance
 var ship_visual: TextureRect
 var _is_ship_animating: bool = false # Flag to prevent refresh from stomping animation
+const BASE_SPEED_PPS = 300.0 # Pixels per second base speed for ship movement
 
 const ZOOM_STEP = 0.1
 var _current_zoom: float = 1.0
@@ -129,13 +130,21 @@ func _draw_connections() -> void:
 				# Determine if this is a traveled path
 				var target_node = end_visual.node_data
 				var is_traveled = false
+				var is_potential = false
 				
 				# Check parent relationship and visited status
 				# Logic encapsulated in VoyageManager
 				if VoyageManager.is_path_traveled(source_node, target_node):
 					is_traveled = true
 				
-				_draw_line(start_point, end_point, is_traveled)
+				# Check if this is a potential path (Current -> Unvisited)
+				if not is_traveled:
+					var current_id = VoyageManager.current_node_id
+					if (source_id == current_id and target_node.state == NodeData.NodeState.UNVISITED) or \
+					   (target_id == current_id and source_node.state == NodeData.NodeState.UNVISITED):
+						is_potential = true
+				
+				_draw_line(start_point, end_point, is_traveled, is_potential)
 				processed_connections[key] = true
 
 func _get_connection_key(id1: String, id2: String) -> String:
@@ -144,7 +153,7 @@ func _get_connection_key(id1: String, id2: String) -> String:
 	else:
 		return id2 + "-" + id1
 
-func _draw_line(from: Vector2, to: Vector2, is_traveled: bool = false) -> void:
+func _draw_line(from: Vector2, to: Vector2, is_traveled: bool = false, is_potential: bool = false) -> void:
 	var line = Line2D.new()
 	line.add_point(from)
 	line.add_point(to)
@@ -155,12 +164,20 @@ func _draw_line(from: Vector2, to: Vector2, is_traveled: bool = false) -> void:
 	if is_traveled:
 		line.default_color = Color(1.0, 0.75, 0.0, 0.8) # Amber for traveled path
 		line.width = 4.0 # Slightly thicker
+	elif is_potential:
+		line.default_color = Color(0.4, 0.6, 0.8, 0.5) # Default start color
+		
+		# Pulse animation
+		var tween = line.create_tween()
+		tween.set_loops()
+		tween.tween_property(line, "default_color", Color(0.6, 0.9, 1.0, 0.9), 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tween.tween_property(line, "default_color", Color(0.4, 0.6, 0.8, 0.5), 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	else:
 		line.default_color = Color(0.4, 0.6, 0.8, 0.5) # Default blueish
 	
 	lines_container.add_child(line)
 
-func _input(event: InputEvent) -> void:
+func _gui_input(event: InputEvent) -> void:
 	if not visible or _input_locked:
 		return
 		
@@ -212,15 +229,15 @@ func _on_node_clicked(node_data: NodeData) -> void:
 		return
 	node_clicked.emit(node_data)
 
-func _on_ship_moved(new_pos: Vector2, node_data: NodeData) -> void:
+func _on_ship_moved(new_pos: Vector2, node_data: NodeData, speed_mult: float = 1.0) -> void:
 	_input_locked = true
 	# Animate ship movement
-	_update_ship_position(true, new_pos)
+	_update_ship_position(true, new_pos, speed_mult)
 	
 	# Animate camera centering
 	center_view_on_ship(true)
 
-func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO) -> void:
+func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO, speed_mult: float = 1.0) -> void:
 	if not ship_visual:
 		_create_ship_visual()
 		
@@ -243,13 +260,19 @@ func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO) -
 	if animated:
 		_is_ship_animating = true
 		
+		var distance = ship_visual.position.distance_to(visual_pos)
+		var duration = distance / (BASE_SPEED_PPS * speed_mult)
+		# Clamp minimum duration to avoid instant snaps on tiny movements, but allow fast direct travel
+		duration = max(duration, 0.1)
+
 		var tween = create_tween()
 		tween.set_parallel(true)
-		tween.tween_property(ship_visual, "position", visual_pos, 1.0).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+		tween.tween_property(ship_visual, "position", visual_pos, duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 		
-		# Rotate ship to face movement direction if we have a target
-		if target_pos != Vector2.ZERO:
-			var direction = (target_pos - ship_visual.position - Vector2(24,24)).normalized()
+		# Rotate ship to face movement direction if we have a significant move
+		if distance > 1.0:
+			# Calculate direction using visual positions (both are top-left, so vector is correct direction)
+			var direction = (visual_pos - ship_visual.position).normalized()
 			
 			# Calculate target rotation
 			var target_rot = direction.angle()
@@ -259,7 +282,10 @@ func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO) -
 			var diff = angle_difference(current_rot, target_rot)
 			
 			# Tween rotation
-			tween.tween_property(ship_visual, "rotation", current_rot + diff, 1.0).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+			# Tween rotation
+			# Tween rotation
+			var rot_duration = min(duration * 0.5, 0.4) # Rotate quickly, at most 0.4s
+			tween.tween_property(ship_visual, "rotation", current_rot + diff, rot_duration).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		
 		# Wait for completion to emit signal
 		tween.chain().tween_callback(func(): 
@@ -287,8 +313,3 @@ func center_view_on_ship(animated: bool) -> void:
 	else:
 		map_content.position = target_pos
 		_input_locked = false
-
-# ... Panning/Zooming logic ...
-func _gui_input(event: InputEvent) -> void:
-	# Keep existing Panning logic
-	pass

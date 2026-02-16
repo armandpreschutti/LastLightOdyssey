@@ -3,7 +3,7 @@ extends Node
 ## Manager for the Voyage 2.0 Progressive Graph Map System
 ## Handles navigation, generation, and node state management
 
-signal ship_moved(new_position: Vector2, node_data: NodeData)
+signal ship_moved(new_position: Vector2, node_data: NodeData, speed_mult: float)
 signal map_updated
 signal message_log_added(message: String)
 
@@ -11,6 +11,7 @@ signal message_log_added(message: String)
 var current_node_id: String = ""
 var nodes: Dictionary = {} # String (ID) -> NodeData
 var generator: ProgressiveMapGenerator
+var is_voyage_complete: bool = false
 
 # Constants
 const FUEL_COST_PER_JUMP: int = 1
@@ -22,8 +23,13 @@ func _ready() -> void:
 	if nodes.is_empty():
 		_initialize_voyage()
 
+	# Connect to GameState signals to track voyage end
+	GameState.game_over.connect(func(_reason): is_voyage_complete = true)
+	GameState.game_won.connect(func(_type): is_voyage_complete = true)
+
 ## Initialize a new voyage
 func _initialize_voyage() -> void:
+	is_voyage_complete = false
 	nodes.clear()
 	var result = generator.generate_start_node()
 	var start_node = result["start_node"]
@@ -41,6 +47,10 @@ func _initialize_voyage() -> void:
 ## Move the ship to a target node
 ## Returns true if move was successful
 func attempt_jump(target_node: NodeData) -> bool:
+	if is_voyage_complete:
+		message_log_added.emit("Voyage has ended. Navigation systems offline.")
+		return false
+
 	if not target_node:
 		return false
 	
@@ -82,7 +92,37 @@ func attempt_jump(target_node: NodeData) -> bool:
 		target_node.state = NodeData.NodeState.VISITED
 		_handle_arrival_generation(target_node, nodes[previous_node_id])
 	
-	ship_moved.emit(target_node.position, target_node)
+	ship_moved.emit(target_node.position, target_node, 1.0)
+	map_updated.emit()
+	
+	return true
+
+
+## Move the ship directly to a target visited node (skipping intermediates)
+func attempt_direct_travel(target_node: NodeData, speed_mult: float = 1.25) -> bool:
+	if is_voyage_complete:
+		return false
+		
+	if not target_node:
+		return false
+		
+	# Verify target is visited
+	if target_node.state == NodeData.NodeState.UNVISITED:
+		message_log_added.emit("Cannot direct travel to unvisited coordinates.")
+		return false
+		
+	# Verify path exists (connectivity check)
+	# We use find_path to ensure the node is actually reachable via the network
+	var path = find_path(current_node_id, target_node.id)
+	if path.size() <= 1:
+		message_log_added.emit("Target is not reachable or is current position.")
+		return false
+		
+	# Update Position immediately (teleport logic but with travel animation)
+	current_node_id = target_node.id
+	
+	# Emit signal with speed multiplier
+	ship_moved.emit(target_node.position, target_node, speed_mult)
 	map_updated.emit()
 	
 	return true

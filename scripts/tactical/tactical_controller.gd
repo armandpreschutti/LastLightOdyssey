@@ -3677,8 +3677,10 @@ func _perform_charge_melee_attack(attacker: Node2D, target: Node2D, damage: int,
 		# If enemy died, wait for death animation to complete
 		# Note: _on_enemy_died will handle playing the animation, but we need to wait for it
 		# Since signal handlers run asynchronously, we wait for the animation directly
-		if enemy_died and is_instance_valid(target) and target.has_method("play_death_animation"):
-			await target.play_death_animation()
+		# If enemy died, wait for it to be removed from the tree
+		# _on_enemy_died handles the animation and queue_free
+		if enemy_died and is_instance_valid(target):
+			await target.tree_exited
 	
 	# Validate sprite is still valid after all awaits
 	if not is_instance_valid(attacker_sprite):

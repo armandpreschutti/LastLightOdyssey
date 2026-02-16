@@ -56,6 +56,8 @@ func _connect_signals() -> void:
 	GameState.scrap_changed.connect(_on_scrap_changed)
 	market_button.pressed.connect(_on_market_pressed)
 	deploy_button.pressed.connect(_on_deploy_pressed)
+	deploy_button.mouse_entered.connect(_on_deploy_hover)
+	deploy_button.mouse_exited.connect(_on_deploy_unhover)
 	quit_button.pressed.connect(_on_quit_pressed)
 
 
@@ -71,6 +73,22 @@ func _on_market_pressed() -> void:
 
 func _on_deploy_pressed() -> void:
 	deploy_pressed.emit()
+
+
+func _on_deploy_hover() -> void:
+	# Stop pulse on hover and set to max glow for highlight
+	if _pulse_tween and _pulse_tween.is_valid():
+		_pulse_tween.kill()
+		
+	var glow_rect = deploy_button.get_node_or_null("GlowRect")
+	if glow_rect:
+		glow_rect.color.a = 0.8
+
+
+func _on_deploy_unhover() -> void:
+	# Resume pulse if button is active
+	if not deploy_button.disabled:
+		_start_pulse()
 
 
 func set_deploy_active(active: bool) -> void:
@@ -94,8 +112,8 @@ func _start_pulse() -> void:
 		return
 		
 	_pulse_tween = create_tween().set_loops()
-	_pulse_tween.tween_property(glow_rect, "color:a", 0.1, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_pulse_tween.tween_property(glow_rect, "color:a", 0.4, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_pulse_tween.tween_property(glow_rect, "color:a", 0.1, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_pulse_tween.tween_property(glow_rect, "color:a", 0.4, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
 func _stop_pulse() -> void:

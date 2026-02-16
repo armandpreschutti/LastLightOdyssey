@@ -272,17 +272,17 @@ text = "[ MARKET ]"
 [node name="DeployPanel" type="PanelContainer" parent="." unique_id=987654322]
 layout_mode = 0
 offset_left = -4.0
-offset_top = -177.0
+offset_top = -151.0
 offset_right = 275.99997
-offset_bottom = -127.0
-scale = Vector2(1.5758681, 1.5758681)
+offset_bottom = -101.0
+scale = Vector2(1.0483478, 1.0483478)
 
 [node name="DeployButton" type="Button" parent="DeployPanel" unique_id=987654321]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.69, 0, 1)
 theme_override_colors/font_pressed_color = Color(1, 0.6, 0, 1)
-theme_override_colors/font_hover_color = Color(1, 0.8, 0.2, 1)
-theme_override_colors/font_hover_pressed_color = Color(1, 0.8, 0.2, 1)
+theme_override_colors/font_hover_color = Color(1, 0.9, 0.6, 1)
+theme_override_colors/font_hover_pressed_color = Color(1, 0.9, 0.6, 1)
 theme_override_colors/font_disabled_color = Color(0.4, 0.4, 0.4, 1)
 theme_override_font_sizes/font_size = 20
 disabled = true
