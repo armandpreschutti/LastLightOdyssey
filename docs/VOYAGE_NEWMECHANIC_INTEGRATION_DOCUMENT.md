@@ -3,7 +3,7 @@
 **Target Engine:** Godot 4.6
 **Scope:** Management Layer, Economy, Progression, Map Generation
 
-## 1. Global Architecture & Economy (GameState.gd)
+## 1. Global Architecture & Economy (GameState.gd) [COMPLETED]
 
 ### 1.1 Deprecated Systems
 The following variables and logic must be stripped out of the GameState singleton:
@@ -29,7 +29,7 @@ Transactions: Implement functions that directly modify GameState.
 * **buy_scrap():** Check cash >= 10. If true: cash -= 10, scrap += 10.
 * **repair_hull():** Check cash >= 50. If true: cash -= 50, hull_integrity += 10.0 (Clamp at 100.0).
 
-## 2. The Infinite Map System (VoyageManager.gd)
+## 2. The Infinite Map System (VoyageManager.gd) [PARTIAL]
 
 ### 2.1 Coordinate-Based Generation
 Replace the linear array-based StarMapGenerator with an InfiniteGridGenerator.
@@ -62,7 +62,7 @@ Update the NodeData class to include a state Enum:
 
 **UI Feedback:** Spawn a "Signal Detected" arrow on the map UI pointing to the coordinate.
 
-## 3. Roster & Progression (OfficerData.gd)
+## 3. Roster & Progression (OfficerData.gd) [PENDING]
 
 ### 3.1 Data Structure Expansion
 Refactor the simple roster dictionary into a robust OfficerData class.
@@ -115,7 +115,7 @@ Create a UI for unlocking skills.
 
 **Action:** On confirm, append the selected Ability ID to unlocked_abilities and deduct Data Logs from GameState.
 
-## 4. Combat Integration (Unit.gd)
+## 4. Combat Integration (Unit.gd) [PENDING]
 
 ### 4.1 Ability Check System
 Modify the Unit class (Tactical Layer) to support the new dynamic abilities.
@@ -138,7 +138,7 @@ func get_damage_modifier(target: Unit) -> float:
     return 1.0
 ```
 
-## 5. Enemy Evolution (BiomeConfig.gd)
+## 5. Enemy Evolution (BiomeConfig.gd) [PENDING]
 
 ### 5.1 Tiered Scaling System
 Enemies scale based on GameState.total_jumps_made.
@@ -158,14 +158,14 @@ Determine the spawn list based on game depth.
 Bosses (Station, Asteroid, Planet) are no longer static.
 * **Formula:** BossHP = BaseHP * (1.0 + (Average_Squad_Level * 0.5)).
 
-## 6. Win/Loss Conditions
+## 6. Win/Loss Conditions [PARTIAL]
 * **Loss Condition 1 (Critical Failure):** hull_integrity <= 0.0.
 * **Loss Condition 2 (Crew Wipe):** roster.all(x => !x.alive).
 * **Win Condition:** Completion of the final Story Mission Chain (Triggered via specific Story Node).
 
 ## 7. Implementation Phases: Voyage 2.0 Update
 
-### Phase 1: Foundation & Economy Refactor
+### Phase 1: Foundation & Economy Refactor [COMPLETED]
 **Goal:** Establish the new data structures and remove legacy "Oregon Trail" systems to prevent logic conflicts.
 
 **GameState.gd Cleanup**
@@ -184,7 +184,7 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 **HUD Update**
 * Replace the "Colonist Count" display with Cash, Intel, and Data Logs counters in the top bar.
 
-### Phase 2: The Infinite Map System
+### Phase 2: The Infinite Map System [PARTIAL]
 **Goal:** Replace the linear node graph with the procedural, infinite web.
 
 **InfiniteGridGenerator.gd**
@@ -201,7 +201,7 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 * Update NodeData to track states: UNVISITED, CLEARED, STORY.
 * **Dead Zones:** If state is CLEARED, disable the "Scavenge" button (traversal only).
 
-### Phase 3: The RPG Layer (Officers)
+### Phase 3: The RPG Layer (Officers) [PENDING]
 **Goal:** Convert static units into evolving characters with persistent data.
 
 **OfficerData.gd Class**
@@ -220,7 +220,7 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 * **Recovery:** In `VoyageManager`, decrement `injury_jumps` on every jump.
 * **Roster Check:** Prevent selecting injured officers for missions.
 
-### Phase 4: Tactical Integration & Scaling
+### Phase 4: Tactical Integration & Scaling [PENDING]
 **Goal:** Connect the RPG layer to the actual combat gameplay.
 
 **Unit.gd Ability Update**
@@ -237,7 +237,7 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 * Define stats/sprites for Tier 2 (Veteran) and Tier 3 (Elite) enemies.
 * **Update MapGenerator** to select tiers based on `GameState.total_jumps_made`.
 
-### Phase 5: The Loop Closer
+### Phase 5: The Loop Closer [PENDING]
 **Goal:** Implement the winning conditions and story drivers.
 
 **Story Node Spawning**

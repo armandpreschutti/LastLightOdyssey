@@ -2,10 +2,9 @@
 
 [ext_resource type="Script" uid="uid://bhfsk44lrvrqc" path="res://scripts/ui/management_hud.gd" id="1_hud"]
 [ext_resource type="FontFile" uid="uid://xqiy7ijtjsrv" path="res://assets/fonts/VT323-Regular.ttf" id="2_font"]
-[ext_resource type="Texture2D" uid="uid://bogrtadpxsc8r" path="res://assets/sprites/ui/icons/icon_fuel.png" id="3_fuel"]
 [ext_resource type="Texture2D" uid="uid://cpy36v51jmkqa" path="res://assets/sprites/ui/icons/icon_hull.png" id="4_hull"]
 [ext_resource type="Texture2D" uid="uid://dlq4cvxnvfbg3" path="res://assets/sprites/ui/icons/icon_scrap.png" id="5_scrap"]
-[ext_resource type="Texture2D" uid="uid://bogrtadpxsc8r" path="res://assets/sprites/ui/icons/icon_cash.png" id="6_cash"]
+[ext_resource type="Texture2D" uid="uid://bogrtadpxsc8r" path="res://assets/sprites/ui/icons/icon_fuel.png" id="6_cash"]
 [ext_resource type="Texture2D" uid="uid://bk3gmmwsjrqqc" path="res://assets/sprites/ui/icons/icon_intel.png" id="7_intel"]
 [ext_resource type="Texture2D" uid="uid://dj64lypdgvvmo" path="res://assets/sprites/ui/icons/icon_data.png" id="8_data"]
 
@@ -193,7 +192,7 @@ theme_override_constants/separation = 10
 [node name="FuelIcon" type="TextureRect" parent="MarginContainer/VBoxContainer/StatsContainer/FuelRow" unique_id=1720426279]
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
-texture = ExtResource("3_fuel")
+texture = ExtResource("6_cash")
 expand_mode = 1
 stretch_mode = 5
 
@@ -269,6 +268,37 @@ theme_override_colors/font_pressed_color = Color(0.2, 0.6, 0.2, 1)
 theme_override_colors/font_hover_color = Color(0.6, 1, 0.6, 1)
 theme_override_font_sizes/font_size = 16
 text = "[ MARKET ]"
+
+[node name="DeployPanel" type="PanelContainer" parent="." unique_id=987654322]
+layout_mode = 0
+offset_left = 770.0
+offset_top = -57.0
+offset_right = 1050.0
+offset_bottom = -7.0
+scale = Vector2(1.5758681, 1.5758681)
+
+[node name="DeployButton" type="Button" parent="DeployPanel" unique_id=987654321]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+theme_override_colors/font_pressed_color = Color(1, 0.6, 0, 1)
+theme_override_colors/font_hover_color = Color(1, 0.8, 0.2, 1)
+theme_override_colors/font_hover_pressed_color = Color(1, 0.8, 0.2, 1)
+theme_override_colors/font_disabled_color = Color(0.4, 0.4, 0.4, 1)
+theme_override_font_sizes/font_size = 20
+disabled = true
+text = "[ DEPLOY TEAM ]"
+flat = true
+
+[node name="GlowRect" type="ColorRect" parent="DeployPanel/DeployButton" unique_id=987654323]
+show_behind_parent = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.698039, 0, 0)
 
 [node name="TopLeftPanel" type="PanelContainer" parent="." unique_id=1043406473]
 layout_mode = 0

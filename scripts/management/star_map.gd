@@ -4,7 +4,6 @@ extends Control
 
 signal node_clicked(node_data: NodeData)
 signal jump_animation_complete
-signal deploy_pressed
 
 @onready var map_content: Control = $MapContent
 @onready var nodes_container: Control = $MapContent/NodesContainer
@@ -12,10 +11,8 @@ signal deploy_pressed
 @onready var ship_container: Control = $MapContent/ShipContainer
 
 var MapNodeScene: PackedScene
-var DeployButtonScene: PackedScene
 var node_visuals: Dictionary = {}  # String (ID) -> MapNode visual instance
 var ship_visual: TextureRect
-var deploy_button_visual: Control = null
 var _is_ship_animating: bool = false # Flag to prevent refresh from stomping animation
 
 const ZOOM_STEP = 0.1
@@ -29,7 +26,6 @@ func _ready() -> void:
 		return
 		
 	MapNodeScene = load("res://scenes/management/map_node.tscn")
-	DeployButtonScene = load("res://scenes/ui/deploy_button.tscn")
 	
 	# Create ship visual
 	_create_ship_visual()
@@ -69,7 +65,6 @@ func _create_ship_visual() -> void:
 	ship_container.add_child(ship_visual)
 
 func refresh() -> void:
-	hide_deploy_button()
 	_clear_visuals()
 	_draw_nodes()
 	_draw_connections()
@@ -297,40 +292,3 @@ func center_view_on_ship(animated: bool) -> void:
 func _gui_input(event: InputEvent) -> void:
 	# Keep existing Panning logic
 	pass
-
-
-## Display the [DEPLOY] button above a specific node
-func show_deploy_button(node_data: NodeData) -> void:
-	if not node_data:
-		return
-		
-	# Remove existing if any
-	hide_deploy_button()
-	
-	if not DeployButtonScene:
-		return
-		
-	deploy_button_visual = DeployButtonScene.instantiate()
-	map_content.add_child(deploy_button_visual)
-	
-	# Position above the node
-	# Node center is at node_data.position
-	# Button pivot is center, so placing it at position centers it on node
-	# We want it slightly above. Node is 80x80 usually.
-	var offset = Vector2(0, -60) 
-	deploy_button_visual.position = node_data.position + offset
-	
-	# Connect signal
-	if deploy_button_visual.has_signal("pressed"):
-		deploy_button_visual.pressed.connect(func(): deploy_pressed.emit())
-	elif deploy_button_visual.has_node("Button"):
-		# Fallback if script not ready or signal not found directly
-		deploy_button_visual.get_node("Button").pressed.connect(func(): deploy_pressed.emit())
-
-
-## Hide the [DEPLOY] button
-func hide_deploy_button() -> void:
-	if deploy_button_visual:
-		if is_instance_valid(deploy_button_visual):
-			deploy_button_visual.queue_free()
-		deploy_button_visual = null

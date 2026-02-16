@@ -88,6 +88,7 @@ func _connect_signals() -> void:
 	management_hud.quit_to_menu_pressed.connect(_on_quit_to_menu)
 	management_hud.view_recap_pressed.connect(_on_view_recap_from_map)
 	management_hud.market_pressed.connect(_on_market_pressed)
+	management_hud.deploy_pressed.connect(_on_deploy_pressed)
 	GameState.game_over.connect(_on_game_over)
 	GameState.game_won.connect(_on_game_won)
 
@@ -103,10 +104,7 @@ func _initialize_star_map() -> void:
 	if star_map.node_clicked.is_connected(_on_node_clicked):
 		star_map.node_clicked.disconnect(_on_node_clicked)
 	star_map.node_clicked.connect(_on_node_clicked)
-	
-	if star_map.deploy_pressed.is_connected(_on_deploy_pressed):
-		star_map.deploy_pressed.disconnect(_on_deploy_pressed)
-	star_map.deploy_pressed.connect(_on_deploy_pressed)
+
 
 	# Ensure voyage manager is ready
 	if not VoyageManager:
@@ -212,6 +210,7 @@ func _execute_jump_with_animation(node_data: NodeData, fuel_cost: int) -> void:
 	
 	# Set flag to prevent multiple clicks during animation
 	_is_jump_animating = true
+	management_hud.set_deploy_active(false)
 	
 	# Start ship jump animation (StarMap handles visual)
 	# We might need to tell StarMap to animate first?
@@ -253,6 +252,7 @@ func _execute_path_travel(path: Array[NodeData]) -> void:
 		return
 		
 	_is_jump_animating = true
+	management_hud.set_deploy_active(false)
 	
 	# Iterate through the path starting from the second node (first is current)
 	for i in range(1, path.size()):
@@ -303,7 +303,9 @@ func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) ->
 		EventManager.NodeType.SCAVENGE_SITE:
 			if was_visited:
 				if node_data.state != NodeData.NodeState.CLEARED:
-					star_map.show_deploy_button(node_data)
+					management_hud.set_deploy_active(true)
+				else:
+					management_hud.set_deploy_active(false)
 				return
 			
 			# Tutorial: Trigger scavenge_intro if not shown yet
@@ -446,7 +448,7 @@ func _on_mission_scene_dismissed() -> void:
 		current_phase = GamePhase.IDLE # Allow clicking other nodes
 		var current_node = VoyageManager.get_current_node()
 		if current_node:
-			star_map.show_deploy_button(current_node)
+			management_hud.set_deploy_active(true)
 
 
 ## Handle [DEPLOY] button press
@@ -517,7 +519,9 @@ func _on_recap_dismissed() -> void:
 	# Re-show deploy button if we are still at a scavenger site and it's not cleared
 	var current_node = VoyageManager.get_current_node()
 	if current_node and current_node.node_type == EventManager.NodeType.SCAVENGE_SITE and current_node.state != NodeData.NodeState.CLEARED:
-		star_map.show_deploy_button(current_node)
+		management_hud.set_deploy_active(true)
+	else:
+		management_hud.set_deploy_active(false)
 
 
 
