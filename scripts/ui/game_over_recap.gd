@@ -12,7 +12,6 @@ signal view_map_requested(show_map: bool)
 @onready var reason_desc_label: Label = $PanelContainer/MarginContainer/VBoxContainer/ReasonDescLabel
 
 # Final state labels
-@onready var colonists_label: Label = $PanelContainer/MarginContainer/VBoxContainer/FinalStateContainer/ColonistsLabel
 @onready var fuel_label: Label = $PanelContainer/MarginContainer/VBoxContainer/FinalStateContainer/FuelLabel
 @onready var integrity_label: Label = $PanelContainer/MarginContainer/VBoxContainer/FinalStateContainer/IntegrityLabel
 @onready var scrap_label: Label = $PanelContainer/MarginContainer/VBoxContainer/FinalStateContainer/ScrapLabel
@@ -67,8 +66,10 @@ func show_recap(reason: String) -> void:
 	
 	# Set color based on reason
 	match reason:
-		"colonists_depleted":
+		"hull_depleted":
 			reason_label.add_theme_color_override("font_color", Color(0.8, 0.2, 0.3))
+		"fuel_depleted":
+			reason_label.add_theme_color_override("font_color", Color(0.8, 0.5, 0.2))
 		"ship_destroyed":
 			reason_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.2))
 		"captain_died":
@@ -77,13 +78,9 @@ func show_recap(reason: String) -> void:
 			reason_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2))
 	
 	# Set final state stats
-	colonists_label.text = "COLONISTS REMAINING: %d / %d" % [GameState.colonist_count, GameState.MAX_COLONISTS]
 	fuel_label.text = "FUEL RESERVES: %d" % GameState.fuel
 	integrity_label.text = "SHIP INTEGRITY: %d%%" % GameState.ship_integrity
 	scrap_label.text = "SCRAP STOCKPILE: %d" % GameState.scrap
-	
-	# Color colonists based on count (always red/dark for game over)
-	colonists_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2))
 	
 	# Clear old officer status labels
 	for child in officers_container.get_children():
@@ -100,12 +97,12 @@ func show_recap(reason: String) -> void:
 		if is_alive:
 			# Show different messages based on failure reason
 			match _reason:
-				"colonists_depleted":
-					# EXTINCTION: They survived but perished soon after
-					officer_label.text = "  %s - SURVIVED, BUT PARISHED SOON AFTER" % officer_name
-				"ship_destroyed":
+				"ship_destroyed", "hull_depleted":
 					# CATASTROPHIC FAILURE: They went down with the ship
 					officer_label.text = "  %s - WENT DOWN WITH THE SHIP" % officer_name
+				"fuel_depleted":
+					# DRIFT: Lost in the void
+					officer_label.text = "  %s - LOST TO THE VOID" % officer_name
 				_:
 					# Other failure reasons: Just show survived
 					officer_label.text = "  %s - SURVIVED" % officer_name
@@ -122,7 +119,7 @@ func show_recap(reason: String) -> void:
 	total_enemies_label.text = "TOTAL HOSTILES ELIMINATED: %d" % GameState.total_enemies_killed
 	total_missions_label.text = "MISSIONS COMPLETED: %d" % GameState.total_missions_completed
 	total_turns_label.text = "TACTICAL TURNS SURVIVED: %d" % GameState.total_tactical_turns
-	nodes_visited_label.text = "SECTORS TRAVERSED: %d" % (GameState.visited_nodes.size() + 1)
+	nodes_visited_label.text = "SECTORS TRAVERSED: %d" % (VoyageManager.nodes.size())
 	
 	# Animate in
 	_animate_recap_in()
@@ -140,7 +137,6 @@ func _animate_recap_in() -> void:
 	# Hide all stat labels initially
 	reason_label.modulate.a = 0.0
 	reason_desc_label.modulate.a = 0.0
-	colonists_label.modulate.a = 0.0
 	fuel_label.modulate.a = 0.0
 	integrity_label.modulate.a = 0.0
 	scrap_label.modulate.a = 0.0
@@ -169,8 +165,6 @@ func _animate_recap_in() -> void:
 	_stat_tween.tween_interval(0.4)
 	
 	# Reveal final state stats
-	_stat_tween.tween_property(colonists_label, "modulate:a", 1.0, 0.25)
-	_stat_tween.tween_interval(0.1)
 	_stat_tween.tween_property(fuel_label, "modulate:a", 1.0, 0.25)
 	_stat_tween.tween_interval(0.1)
 	_stat_tween.tween_property(integrity_label, "modulate:a", 1.0, 0.25)
@@ -257,7 +251,6 @@ func _skip_animation() -> void:
 	modulate.a = 1.0
 	reason_label.modulate.a = 1.0
 	reason_desc_label.modulate.a = 1.0
-	colonists_label.modulate.a = 1.0
 	fuel_label.modulate.a = 1.0
 	integrity_label.modulate.a = 1.0
 	scrap_label.modulate.a = 1.0

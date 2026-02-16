@@ -6,7 +6,7 @@ var _scene_stars: Array[Dictionary] = []
 var _scene_particles: Array[Dictionary] = []
 
 # Voyage intro description
-const VOYAGE_DESCRIPTION: String = "The last remnants of humanity embark on their final journey. Earth lies in ruins, but hope remains in the distant stars. One thousand souls rest in cryo-sleep, their fate in your hands. New Earth awaits, but the path is treacherous and unknown."
+const VOYAGE_DESCRIPTION: String = "The last remnants of humanity embark on their final journey. Earth lies in ruins, but hope remains in the distant stars. The Arkship carries the seeds of a new civilization, their fate in your hands. New Earth awaits, but the path is treacherous and unknown."
 
 # Color palette for voyage intro (epic, hopeful but somber)
 const VOYAGE_PALETTE: Dictionary = {

@@ -65,11 +65,16 @@ func show_scene(objective: MissionObjective, biome_type: int, alive_officers: Ar
 	title_label.text = "OBJECTIVE COMPLETE"
 	
 	# Set location/date flavor text
+	# Set location/date flavor text
+	var current_node = VoyageManager.get_current_node()
+	var cycle = int(current_node.position.length() / 400.0) if current_node else 0
+	
+	# Set location/date flavor text
 	location_label.text = "%s  |  SECTOR %d-%d  |  CYCLE %d" % [
 		biome_name.to_upper(),
 		randi_range(1, 9),
 		randi_range(100, 999),
-		GameState.current_node_index + 1
+		cycle
 	]
 	
 	# Determine objective type from description keywords

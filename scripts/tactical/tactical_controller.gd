@@ -170,8 +170,8 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	selected_target = Vector2i(-1, -1)
 
 	# Check if this is a scavenger mission
-	var current_node_type = GameState.node_types.get(GameState.current_node_index, -1)
-	is_scavenger_mission = (current_node_type == EventManager.NodeType.SCAVENGE_SITE)
+	var current_node = VoyageManager.get_current_node()
+	is_scavenger_mission = (current_node.node_type == EventManager.NodeType.SCAVENGE_SITE) if current_node else false
 
 	GameState.enter_tactical_mode()
 
@@ -195,7 +195,11 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	
 	var generator = MapGenerator.new()
 	# Pass voyage progression to scale map size
-	var layout = generator.generate(current_biome, GameState.current_node_index, GameState.nodes_to_new_earth)
+	var cycle = int(current_node.position.length() / 400.0) if current_node else 0
+	# Approximate deprecated nodes_to_new_earth with a fixed value for scaling reference, or update generator signature later.
+	# For now, let's pass cycle as current index and a fixed 'max' to simulate progression
+	var simulated_max_nodes = 50 
+	var layout = generator.generate(current_biome, cycle, simulated_max_nodes)
 	
 	# Set tactical map dimensions and biome theme
 	var map_dims = generator.get_map_dimensions()
@@ -480,7 +484,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 
 	# Update HUD
 	tactical_hud.update_turn(current_turn)
-	tactical_hud.update_stability(GameState.cryo_stability)
+	tactical_hud.update_integrity(GameState.ship_integrity)
 	tactical_hud.set_extract_visible(false)
 	tactical_hud.visible = true
 	ui_layer.visible = true
@@ -520,18 +524,20 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 ## Calculate boss spawn chance based on difficulty
 ## Currently set to 0% spawn rate
 func _calculate_boss_spawn_chance(_difficulty: float) -> float:
-	var current_node = GameState.current_node_index
+	var current_node = VoyageManager.get_current_node()
+	var cycle = int(current_node.position.length() / 400.0) if current_node else 0
 	
-	# Boss spawn only at nodes 40-49 (progress 0.8-0.98)
-	# Linear interpolation from 0% at node 40 to 10% at node 49
-	if current_node < 40:
+	# Boss spawn only after cycle 10 (approx node 40 equivalent?)
+	# Let's say Cycle 10+ has boss chance
+	
+	if cycle < 10:
 		return 0.0
 	
-	if current_node >= 49:
+	if cycle >= 15:
 		return 0.10
 	
-	# Interpolate between 0% and 10% for nodes 40-48
-	var progress_in_range = float(current_node - 40) / float(49 - 40)
+	# Interpolate between 0% and 10% for cycles 10-15
+	var progress_in_range = float(cycle - 10) / float(15 - 10)
 	return lerpf(0.0, 0.10, progress_in_range)
 
 
@@ -577,19 +583,19 @@ func _find_valid_boss_spawn_position(generator: MapGenerator) -> Vector2i:
 ## Early: 90% basic, 10% heavy, 0% sniper, 0% elite
 ## End: 25% basic, 30% heavy, 20% sniper, 15% elite
 func _select_enemy_type(difficulty: float) -> String:
-	var current_node = GameState.current_node_index
-	var total_nodes = GameState.nodes_to_new_earth
+	var current_node = VoyageManager.get_current_node()
+	var cycle = int(current_node.position.length() / 400.0) if current_node else 0
 	
-	# Calculate voyage progress (0.0 at start, 1.0 at end)
-	var progress = float(current_node) / float(total_nodes)
+	# Calculate voyage progress (0.0 at start, 1.0 at cycle 15)
+	var progress = clampf(float(cycle) / 15.0, 0.0, 1.0)
 	
-	# Define spawn chances at early stage (nodes 0-10, progress ~0.0-0.2)
+	# Define spawn chances at early stage (cycle 0)
 	var early_basic = 0.90
 	var early_heavy = 0.10
 	var early_sniper = 0.0
 	var early_elite = 0.0
 	
-	# Define spawn chances at end stage (nodes 40-49, progress ~0.8-0.98)
+	# Define spawn chances at end stage (cycle 15+)
 	var end_basic = 0.25
 	var end_heavy = 0.30
 	var end_sniper = 0.20
@@ -1234,11 +1240,11 @@ func _on_end_turn_pressed() -> void:
 		
 		# Update HUD
 		tactical_hud.update_turn(current_turn)
-		tactical_hud.update_stability(GameState.cryo_stability)
+		tactical_hud.update_integrity(GameState.ship_integrity)
 		
-		# Show cryo failure warning if stability is 0
-		if GameState.cryo_stability <= 0:
-			tactical_hud.show_cryo_warning()
+		# Show cryo failure warning if stability is 0 - Removed in V2
+		# if GameState.cryo_stability <= 0:
+		# 	tactical_hud.show_cryo_warning()
 		
 		turn_ended.emit(current_turn)
 		
@@ -1502,7 +1508,6 @@ func _on_officer_died(officer_key: String) -> void:
 		return
 	
 	# Clear position from map immediately
-	var pos = dying_officer.get_grid_position()
 	# Removed: tactical_map.set_unit_position_solid(pos, false)
 	
 	# Remove from deployed list before animation (so they can't be selected)
@@ -1587,7 +1592,6 @@ func _end_mission(success: bool) -> void:
 	# Check objective completion and apply bonus rewards
 	var bonus_fuel = 0
 	var bonus_scrap = 0
-	var bonus_colonists = 0
 	var bonus_hull_repair = 0
 	var objectives_data: Array = []
 	if is_scavenger_mission and not mission_objectives.is_empty():
@@ -1602,7 +1606,6 @@ func _end_mission(success: bool) -> void:
 				var bonuses = MissionObjective.ObjectiveManager.get_bonus_rewards(objective)
 				bonus_fuel += bonuses.get("fuel", 0)
 				bonus_scrap += bonuses.get("scrap", 0)
-				bonus_colonists += bonuses.get("colonists", 0)
 				bonus_hull_repair += bonuses.get("hull_repair", 0)
 		
 		# Note: Bonuses are tracked separately and applied to GameState separately
@@ -1634,7 +1637,6 @@ func _end_mission(success: bool) -> void:
 		"objective_completed": is_scavenger_mission and not mission_objectives.is_empty() and mission_objectives[0].completed,
 		"bonus_fuel": bonus_fuel,
 		"bonus_scrap": bonus_scrap,
-		"bonus_colonists": bonus_colonists,
 		"bonus_hull_repair": bonus_hull_repair,
 		"objectives": objectives_data,
 		"biome_type": current_biome,
@@ -1649,7 +1651,6 @@ func _end_mission(success: bool) -> void:
 		# Apply bonus rewards from completed objectives (separate from collected resources)
 		GameState.fuel += bonus_fuel
 		GameState.scrap += bonus_scrap
-		GameState.colonist_count += bonus_colonists
 		if bonus_hull_repair > 0:
 			GameState.repair_ship(bonus_hull_repair)
 		
@@ -2438,11 +2439,10 @@ func _execute_enemy_turn() -> void:
 					await get_tree().create_timer(0.3).timeout  # Small delay for visual feedback
 				
 				"move":
-					# Check enemy validity before movement
+					# check enemy validity before movement
 					if not is_instance_valid(enemy):
 						break
 					
-					var old_pos = enemy.get_grid_position()
 					var new_pos = decision["target_pos"]
 					
 					# Clear old position
@@ -4172,7 +4172,6 @@ func _process_turrets() -> void:
 	
 	# Remove expired turrets
 	for turret in turrets_to_remove:
-		var turret_pos = turret.get_grid_position()
 		active_turrets.erase(turret)
 		# Unmark turret tile as solid so units can move through it again
 		# Removed: tactical_map.set_unit_position_solid(turret_pos, false)

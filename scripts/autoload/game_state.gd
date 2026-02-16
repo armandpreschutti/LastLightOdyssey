@@ -1,27 +1,19 @@
 extends Node
 ## Global game state for Last Light Odyssey
-## Manages colonists, resources, officers, and game progression
+## Manages resources, officers, and game progression
 
-signal colonists_changed(new_value: int)
 signal fuel_changed(new_value: int)
 signal integrity_changed(new_value: int)
 signal scrap_changed(new_value: int)
-signal stability_changed(new_value: int)
+signal cash_changed(new_value: int)
+signal intel_changed(new_value: int)
+signal data_logs_changed(new_value: int)
 signal officer_died(officer_type: String)
 signal game_over(reason: String)
 signal game_won(ending_type: String)
 
-# Primary Statistics (Section 2.1 of GDD)
-const MAX_COLONISTS: int = 1000
-
-var colonist_count: int = 1000:
-	set(value):
-		colonist_count = clampi(value, 0, MAX_COLONISTS)
-		colonists_changed.emit(colonist_count)
-		if colonist_count <= 0:
-			_trigger_game_over("colonists_depleted")
-
-var fuel: int = 10:
+# Primary Statistics (Voyage 2.0 Economy)
+var fuel: int = 100000:
 	set(value):
 		fuel = maxi(0, value)
 		fuel_changed.emit(fuel)
@@ -38,21 +30,35 @@ var scrap: int = 25:
 		scrap = maxi(0, value)
 		scrap_changed.emit(scrap)
 
-# Cryo-Stability Timer (Section 4 of GDD)
-var cryo_stability: int = 100:
+var cash: int = 100:
 	set(value):
-		cryo_stability = clampi(value, 0, 100)
-		stability_changed.emit(cryo_stability)
+		cash = maxi(0, value)
+		cash_changed.emit(cash)
 
-const STABILITY_LOSS_PER_TURN: int = 5  # Base stability loss (used for early stages)
-const COLONIST_LOSS_AT_ZERO_STABILITY: int = 10
-const COLONIST_LOSS_DRIFT_MODE: int = 100  # Flat 100 loss for drift mode, regardless of fuel deficit
-const FINAL_STAGE_STABILITY_REDUCTION: int = 2  # Reduce stability loss by 2% in final stages (nodes 35+)
+var intel: int = 0:
+	set(value):
+		intel = maxi(0, value)
+		intel_changed.emit(intel)
+
+var data_logs: int = 0:
+	set(value):
+		data_logs = maxi(0, value)
+		data_logs_changed.emit(data_logs)
+
 const SHIP_INTEGRITY_LOSS_PER_JUMP: int = 1  # Ship takes minor damage from each jump
-const STABILITY_LOSS_PER_JUMP: int = 2  # Stability decreases slightly with each jump
+const HULL_DAMAGE_DRIFT_MODE: int = 5 # Extra damage when drafting without fuel
+const HULL_DAMAGE_PER_TURN: int = 1 # Ship takes damage each tactical turn
 
-# Officer Roster (Section 3.2 of GDD)
+# Officer Roster
 enum OfficerType { SCOUT, TECH, MEDIC }
+# ... (rest of officer logic skipped)
+
+# ...
+
+func process_tactical_turn() -> void:
+	tactical_turn_count += 1
+	# Ship takes structural damage over time during tactical missions
+	damage_ship(HULL_DAMAGE_PER_TURN)
 
 var officers: Dictionary = {
 	"captain": {"alive": true, "deployed": false},
@@ -64,13 +70,14 @@ var officers: Dictionary = {
 }
 
 # Game progression
-var current_node_index: int = 0
-var nodes_to_new_earth: int = 50 # Default, updated by map generation or load
-var visited_nodes: Array[int] = []  # Track which nodes have been visited
-var travel_history: Array[int] = [0] # Track exact sequence of nodes visited (v4)
-var successful_scavenge_nodes: Array[int] = [] # Track nodes where mission was successfully extracted
-var node_types: Dictionary = {}  # Pre-rolled node types (node_id -> NodeType)
-var node_biomes: Dictionary = {}  # Pre-rolled biome types for scavenge nodes (node_id -> BiomeType)
+# REFACTORED: Map state is now handled by VoyageManager (infinite graph system).
+# The following properties have been removed to prevent usage:
+# - current_node_index
+# - nodes_to_new_earth
+# - visited_nodes, travel_history
+# - node_types, node_biomes
+# Use VoyageManager.get_current_node() and related methods instead.
+
 var is_in_tactical_mode: bool = false
 var tactical_turn_count: int = 0
 
@@ -81,28 +88,18 @@ var total_enemies_killed: int = 0
 var total_missions_completed: int = 0
 var total_tactical_turns: int = 0
 
-# Colonist loss milestone tracking
-var shown_milestones: Array[int] = []
-
 
 func _ready() -> void:
 	pass
 
 
 func reset_game() -> void:
-	colonist_count = 1000
-	fuel = 10
+	fuel = 100000
 	ship_integrity = 100
 	scrap = 25
-	cryo_stability = 100
-	current_node_index = 0
-	visited_nodes.clear()
-	travel_history = [0]
-	successful_scavenge_nodes.clear()
-	node_types.clear()
-	node_biomes.clear()
-	tactical_turn_count = 0
-	is_in_tactical_mode = false
+	cash = 100
+	intel = 0
+	data_logs = 0
 	
 	# Reset cumulative stats
 	total_fuel_collected = 0
@@ -110,9 +107,10 @@ func reset_game() -> void:
 	total_enemies_killed = 0
 	total_missions_completed = 0
 	total_tactical_turns = 0
-	
-	# Reset milestone tracking
-	shown_milestones.clear()
+
+	# Reset Voyage Manager
+	if VoyageManager:
+		VoyageManager._initialize_voyage()
 
 	for officer_key in officers:
 		officers[officer_key]["alive"] = true
@@ -128,65 +126,14 @@ func add_mission_stats(fuel_collected: int, scrap_collected: int, enemies_killed
 	total_missions_completed += 1
 
 
-func jump_to_next_node() -> void:
-	# Legacy method - kept for compatibility, but prefer jump_to_node()
-	jump_to_node(current_node_index + 1)
-
-
-func jump_to_node(target_node_index: int, fuel_cost: int = 1) -> void:
-	# Consume variable fuel for the jump
-	if fuel >= fuel_cost:
-		fuel -= fuel_cost
-	else:
-		# Not enough fuel: consume what we have, then drift mode for the rest
-		var fuel_deficit = fuel_cost - fuel
-		fuel = 0
-		# Drift Mode: lose colonists due to life-support rationing (flat cost)
-		colonist_count -= COLONIST_LOSS_DRIFT_MODE
-		# Additional penalty: ship integrity loss during drift mode
-		ship_integrity -= SHIP_INTEGRITY_LOSS_PER_JUMP * fuel_deficit
-	
-	# Harsh navigation penalties: ship takes damage and stability decreases with each jump
-	ship_integrity -= SHIP_INTEGRITY_LOSS_PER_JUMP
-	cryo_stability -= STABILITY_LOSS_PER_JUMP
-	
-	# Mark current node as visited before moving
-	if current_node_index >= 0 and not visited_nodes.has(current_node_index):
-		visited_nodes.append(current_node_index)
-	
-	# Move to new node
-	current_node_index = target_node_index
-	travel_history.append(target_node_index)
-	
-	# Check win condition
-	if current_node_index >= nodes_to_new_earth - 1:  # Last node is New Earth
-		_check_win_condition()
-
-
-## Get stability loss per turn based on current node index
-## Reduces stability loss in final stages to give more turns
-func get_stability_loss_per_turn() -> int:
-	const FINAL_STAGE_START: int = 35  # Nodes 35+ get reduced stability loss
-	
-	if current_node_index >= FINAL_STAGE_START:
-		return STABILITY_LOSS_PER_TURN - FINAL_STAGE_STABILITY_REDUCTION
-	else:
-		return STABILITY_LOSS_PER_TURN
-
-
-func process_tactical_turn() -> void:
-	tactical_turn_count += 1
-	var stability_loss = get_stability_loss_per_turn()
-	cryo_stability -= stability_loss
-
-	if cryo_stability <= 0:
-		colonist_count -= COLONIST_LOSS_AT_ZERO_STABILITY
+func jump_to_node(_target_node_index: int, _fuel_cost: int = 1) -> void:
+	# DEPRECATED - Use VoyageManager.attempt_jump()
+	pass
 
 
 func enter_tactical_mode() -> void:
 	is_in_tactical_mode = true
 	tactical_turn_count = 0
-	cryo_stability = 100
 
 
 func exit_tactical_mode() -> void:
@@ -197,23 +144,22 @@ func kill_officer(officer_key: String) -> void:
 	if officers.has(officer_key):
 		officers[officer_key]["alive"] = false
 		officer_died.emit(officer_key)
+	
+	# Check for crew wipe game over
+	var any_alive = false
+	for key in officers:
+		if officers[key]["alive"]:
+			any_alive = true
+			break
+	
+	if not any_alive:
+		_trigger_game_over("crew_wipe") 
 
 
 func is_officer_alive(officer_key: String) -> bool:
 	if officers.has(officer_key):
 		return officers[officer_key]["alive"]
 	return false
-
-
-## Check if a colonist loss milestone has been shown
-func has_shown_milestone(threshold: int) -> bool:
-	return shown_milestones.has(threshold)
-
-
-## Mark a colonist loss milestone as shown
-func mark_milestone_shown(threshold: int) -> void:
-	if not shown_milestones.has(threshold):
-		shown_milestones.append(threshold)
 
 
 func damage_ship(amount: int) -> void:
@@ -225,12 +171,8 @@ func repair_ship(amount: int) -> void:
 
 
 func _check_win_condition() -> void:
-	if colonist_count >= 1000:
-		game_won.emit("perfect")  # The Golden Age
-	elif colonist_count >= 500:
-		game_won.emit("good")     # The Hard Foundation
-	elif colonist_count > 0:
-		game_won.emit("bad")      # The Endangered Species
+	# Placeholder for new Victory Condition (Story Mission)
+	game_won.emit("good")
 
 
 func _trigger_game_over(reason: String) -> void:
@@ -240,21 +182,21 @@ func _trigger_game_over(reason: String) -> void:
 func get_ending_text(ending_type: String) -> String:
 	match ending_type:
 		"perfect":
-			return "THE GOLDEN AGE\n1,000 colonists reached New Earth. Humanity will flourish."
+			return "THE GOLDEN AGE\nHumanity will flourish."
 		"good":
-			return "THE HARD FOUNDATION\nEnough survived to rebuild. The road ahead is difficult, but hope remains."
+			return "THE HARD FOUNDATION\nEnough survived to rebuild."
 		"bad":
-			return "THE ENDANGERED SPECIES\nA mere handful reached New Earth. Humanity clings to existence by a thread."
+			return "THE ENDANGERED SPECIES\nHumanity clings to existence."
 		_:
 			return ""
 
 
 func get_game_over_text(reason: String) -> String:
 	match reason:
-		"colonists_depleted":
-			return "EXTINCTION\nThe last colonist has perished. Humanity's light has been extinguished."
 		"ship_destroyed":
 			return "CATASTROPHIC FAILURE\nThe ship has been destroyed. All souls aboard are lost to the void."
+		"crew_wipe":
+			return "MISSION FAILED\nThe entire crew has been lost. The ship drifts silently in the dark."
 		"captain_died":
 			return "LEADERSHIP LOST\nThe Captain has fallen. Without leadership, the mission cannot continue."
 		_:
@@ -271,27 +213,22 @@ var saved_star_map_data: Dictionary = {}
 ## Save the current game state to disk
 func save_game() -> bool:
 	var save_data = {
-		"version": 3,
-		"colonist_count": colonist_count,
+		"version": 5, # Voyage 2.0 (Infinite Map)
 		"fuel": fuel,
 		"ship_integrity": ship_integrity,
 		"scrap": scrap,
-		"current_node_index": current_node_index,
-		"visited_nodes": visited_nodes,
-		"travel_history": travel_history,
-		"successful_scavenge_nodes": successful_scavenge_nodes,
-		"node_types": node_types,
-		"node_biomes": node_biomes,
+		"cash": cash,
+		"intel": intel,
+		"data_logs": data_logs,
 		"officers": officers,
-		"star_map_data": saved_star_map_data,
+		# VoyageManager Data
+		"voyage_data": VoyageManager.get_save_data(),
 		# Cumulative mission stats (v3)
 		"total_fuel_collected": total_fuel_collected,
 		"total_scrap_collected": total_scrap_collected,
 		"total_enemies_killed": total_enemies_killed,
 		"total_missions_completed": total_missions_completed,
 		"total_tactical_turns": total_tactical_turns,
-		# Milestone tracking
-		"shown_milestones": shown_milestones,
 	}
 	
 	var file = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -331,45 +268,27 @@ func load_game() -> bool:
 		push_error("Invalid save file format!")
 		return false
 	
-	# Restore game state (avoid triggering setters that emit signals during load)
-	colonist_count = int(save_data.get("colonist_count", 1000))
+
+	
+	# Version Check
+	var version = int(save_data.get("version", 0))
+	if version < 5:
+		# Wipe save for new version compatibility
+		print("Save version %d is too old (requires 5). Deleting save..." % version)
+		delete_save()
+		return false
+	
+	# Restore game state
 	fuel = int(save_data.get("fuel", 10))
 	ship_integrity = int(save_data.get("ship_integrity", 100))
 	scrap = int(save_data.get("scrap", 0))
-	current_node_index = int(save_data.get("current_node_index", 0))
+	cash = int(save_data.get("cash", 100))
+	intel = int(save_data.get("intel", 0))
+	data_logs = int(save_data.get("data_logs", 0))
 	
-	# Restore visited nodes (JSON parses arrays as generic arrays)
-	visited_nodes.clear()
-	var loaded_visited = save_data.get("visited_nodes", [])
-	for node_id in loaded_visited:
-		visited_nodes.append(int(node_id))
-	
-	# Restore travel history
-	travel_history.clear()
-	var loaded_history = save_data.get("travel_history", [])
-	if loaded_history.is_empty() and current_node_index >= 0:
-		travel_history = [current_node_index] # Fallback for old saves
-	else:
-		for node_id in loaded_history:
-			travel_history.append(int(node_id))
-	
-	# Restore successful scavenge nodes
-	successful_scavenge_nodes.clear()
-	var loaded_successful = save_data.get("successful_scavenge_nodes", [])
-	for node_id in loaded_successful:
-		successful_scavenge_nodes.append(int(node_id))
-	
-	# Restore node types
-	node_types.clear()
-	var loaded_types = save_data.get("node_types", {})
-	for key in loaded_types.keys():
-		node_types[int(key)] = int(loaded_types[key])
-	
-	# Restore node biomes
-	node_biomes.clear()
-	var loaded_biomes = save_data.get("node_biomes", {})
-	for key in loaded_biomes.keys():
-		node_biomes[int(key)] = int(loaded_biomes[key])
+	# Restore VoyageManager Data
+	if save_data.has("voyage_data"):
+		VoyageManager.load_save_data(save_data["voyage_data"])
 	
 	# Restore officers
 	var loaded_officers = save_data.get("officers", {})
@@ -378,28 +297,14 @@ func load_game() -> bool:
 			officers[officer_key]["alive"] = loaded_officers[officer_key].get("alive", true)
 			officers[officer_key]["deployed"] = loaded_officers[officer_key].get("deployed", false)
 	
-	# Restore star map data
-	saved_star_map_data = save_data.get("star_map_data", {})
-	# Update nodes_to_new_earth based on loaded map data
-	if saved_star_map_data.has("nodes"):
-		nodes_to_new_earth = saved_star_map_data["nodes"].size()
-
-	
-	# Restore cumulative mission stats (v3+)
+	# Restore cumulative mission stats
 	total_fuel_collected = int(save_data.get("total_fuel_collected", 0))
 	total_scrap_collected = int(save_data.get("total_scrap_collected", 0))
 	total_enemies_killed = int(save_data.get("total_enemies_killed", 0))
 	total_missions_completed = int(save_data.get("total_missions_completed", 0))
 	total_tactical_turns = int(save_data.get("total_tactical_turns", 0))
 	
-	# Restore milestone tracking
-	shown_milestones.clear()
-	var loaded_milestones = save_data.get("shown_milestones", [])
-	for milestone in loaded_milestones:
-		shown_milestones.append(int(milestone))
-	
 	# Reset tactical state
-	cryo_stability = 100
 	tactical_turn_count = 0
 	is_in_tactical_mode = false
 	
@@ -448,29 +353,20 @@ func has_saved_star_map_data() -> bool:
 ## This gives: 1.0x at start (node 0), ~2.5x at end (node 49)
 ## Reduced scaling in final stages (nodes 35+) to decrease difficulty
 func get_mission_difficulty() -> float:
-	const DIFFICULTY_SCALE_FACTOR: float = 1.5
-	const FINAL_STAGE_START: int = 35  # Nodes 35+ get reduced scaling
-	const FINAL_STAGE_SCALE_REDUCTION: float = 0.4  # Reduce scaling by 40% in final stages
+	const _DIFFICULTY_SCALE_FACTOR: float = 1.5
+	const _FINAL_STAGE_START: int = 35  # Nodes 35+ get reduced scaling
+	const _FINAL_STAGE_SCALE_REDUCTION: float = 0.4  # Reduce scaling by 40% in final stages
 	
-	var progress_ratio: float = float(current_node_index) / float(nodes_to_new_earth)
+	# New infinite map difficulty scaling
+	# Base off distance from origin (manhattan or euclidean)
+	var current_node = VoyageManager.get_current_node()
+	var distance = current_node.position.length() if current_node else 0.0
 	
-	# Reduce difficulty scaling in final stages
-	if current_node_index >= FINAL_STAGE_START:
-		# Calculate what the difficulty would be at node 35
-		var final_stage_progress: float = float(FINAL_STAGE_START) / float(nodes_to_new_earth)
-		var base_difficulty_at_35: float = 1.0 + (final_stage_progress * DIFFICULTY_SCALE_FACTOR)
-		
-		# Calculate remaining progress after node 35
-		var remaining_progress: float = progress_ratio - final_stage_progress
-		var remaining_scale_factor: float = DIFFICULTY_SCALE_FACTOR * (1.0 - FINAL_STAGE_SCALE_REDUCTION)
-		
-		# Apply reduced scaling for final stages
-		var difficulty: float = base_difficulty_at_35 + (remaining_progress * remaining_scale_factor)
-		return difficulty
-	else:
-		# Normal scaling for early/mid stages
-		var difficulty: float = 1.0 + (progress_ratio * DIFFICULTY_SCALE_FACTOR)
-		return difficulty
+	# Approximate steps (avg node distance ~400 units)
+	var steps = distance / 400.0
+	
+	# Roughly every 10 steps = +0.5 difficulty?
+	return 1.0 + (steps * 0.05)
 
 
 ## Recreate a StarMapGenerator from saved data

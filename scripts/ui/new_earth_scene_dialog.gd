@@ -47,18 +47,21 @@ func show_scene(ending_type: String) -> void:
 	title_label.text = "NEW EARTH"
 	
 	# Set location text
-	location_label.text = "DESTINATION REACHED  |  CYCLE %d" % (GameState.current_node_index + 1)
+	# Set location text
+	var current_node = VoyageManager.get_current_node()
+	var cycle = int(current_node.position.length() / 400.0) if current_node else 0
+	location_label.text = "DESTINATION REACHED  |  CYCLE %d" % cycle
 	
 	# Set description based on ending type
 	match ending_type:
 		"perfect":
-			_current_desc = "Against all odds, you have delivered humanity's last hope to their new home. All 1,000 colonists have survived the journey. A golden age awaits."
+			_current_desc = "Against all odds, the Arkship has arrived intact. The mission data is secure, and the genetic banks are stable. A golden age awaits."
 		"good":
-			_current_desc = "The journey was long and costly, but you have reached New Earth. Though many were lost along the way, enough remain to rebuild civilization."
+			_current_desc = "The journey was long and costly, but you have reached New Earth. The ship is damaged, but the core systems held. Rebuilding can begin."
 		"bad":
-			_current_desc = "You have reached New Earth, but at a terrible cost. Only a handful of colonists remain. Humanity's last hope hangs by a thread."
+			_current_desc = "You have reached New Earth, but at a terrible cost. The ship is a wreck, and critical systems are failing. Survival will be a struggle."
 		_:
-			_current_desc = "After a long journey through the void, you have reached your destination. A new home awaits the survivors."
+			_current_desc = "After a long journey through the void, you have reached your destination. A new home awaits."
 	
 	# Load scene image
 	var image_path = "res://assets/sprites/scenes/new_earth_%s.png" % ending_type

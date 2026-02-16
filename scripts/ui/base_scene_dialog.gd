@@ -6,8 +6,8 @@ class_name BaseSceneDialog
 
 signal scene_dismissed
 
-@onready var title_label: Label = $VBoxContainer/TitleLabel
-@onready var location_label: Label = $VBoxContainer/LocationLabel
+@onready var title_label: Label = $VBoxContainer/TitleBar/TitleLabel
+@onready var location_label: Label = $VBoxContainer/TitleBar/LocationLabel
 @onready var description_label: Label = $VBoxContainer/DescriptionLabel
 @onready var prompt_label: Label = $VBoxContainer/PromptLabel
 @onready var scene_canvas: Control = $VBoxContainer/ImageContainer/SceneCanvas

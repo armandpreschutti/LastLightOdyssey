@@ -16,9 +16,9 @@ signal ability_cancelled
 
 # Top bar elements - updated paths for icon-based layout
 @onready var turn_label: Label = $TopBar/HBox/TurnContainer/TurnRow/TurnLabel
-@onready var stability_container: VBoxContainer = $TopBar/HBox/StabilityContainer
-@onready var stability_label: Label = $TopBar/HBox/StabilityContainer/StabilityRow/StabilityLabel
-@onready var stability_bar: ProgressBar = $TopBar/HBox/StabilityContainer/StabilityBar
+@onready var integrity_container: VBoxContainer = $TopBar/HBox/StabilityContainer
+@onready var integrity_label: Label = $TopBar/HBox/StabilityContainer/StabilityRow/StabilityLabel
+@onready var integrity_bar: ProgressBar = $TopBar/HBox/StabilityContainer/StabilityBar
 @onready var haul_container: VBoxContainer = $TopBar/HBox/HaulContainer
 @onready var fuel_label: Label = $TopBar/HBox/HaulContainer/FuelRow/FuelLabel
 @onready var scrap_label: Label = $TopBar/HBox/HaulContainer/ScrapRow/ScrapLabel
@@ -89,9 +89,9 @@ func _setup_tooltips() -> void:
 	
 	# Top bar tooltips
 	turn_label.tooltip_text = "Current turn number. Each turn, cryo-stability decreases by 5%."
-	stability_container.tooltip_text = "Cryo-Stability: Colonist life support status.\nDecreases 5% per turn. At 0%, lose 10 colonists per turn."
-	stability_label.tooltip_text = "Cryo-Stability: Colonist life support status.\nDecreases 5% per turn. At 0%, lose 10 colonists per turn."
-	stability_bar.tooltip_text = "Cryo-Stability: Colonist life support status.\nDecreases 5% per turn. At 0%, lose 10 colonists per turn."
+	integrity_container.tooltip_text = "Ship Integrity: Structural health of the ship.\nDecreases 1% per tactical turn. At 0%, the ship is destroyed."
+	integrity_label.tooltip_text = "Ship Integrity: Structural health of the ship.\nDecreases 1% per tactical turn. At 0%, the ship is destroyed."
+	integrity_bar.tooltip_text = "Ship Integrity: Structural health of the ship.\nDecreases 1% per tactical turn. At 0%, the ship is destroyed."
 	haul_container.tooltip_text = "Resources collected during this mission.\nWalk over fuel crates and scrap piles to collect them."
 	
 	# Side panel tooltips
@@ -105,19 +105,19 @@ func update_turn(turn_number: int) -> void:
 	turn_label.text = "TURN: %d" % turn_number
 
 
-func update_stability(stability: int) -> void:
-	stability_bar.value = stability
-	stability_label.text = "CRYO: %d%%" % stability
+func update_integrity(integrity: int) -> void:
+	integrity_bar.value = integrity
+	integrity_label.text = "HULL: %d%%" % integrity
 
-	if stability <= 0:
-		stability_label.add_theme_color_override("font_color", Color(1, 0.2, 0.2))
-		stability_bar.modulate = Color(1, 0.3, 0.3)
-	elif stability <= 25:
-		stability_label.add_theme_color_override("font_color", Color(1, 1, 0.2))
-		stability_bar.modulate = Color(1, 1, 0.3)
+	if integrity <= 25:
+		integrity_label.add_theme_color_override("font_color", Color(1, 0.2, 0.2))
+		integrity_bar.modulate = Color(1, 0.3, 0.3)
+	elif integrity <= 50:
+		integrity_label.add_theme_color_override("font_color", Color(1, 1, 0.2))
+		integrity_bar.modulate = Color(1, 1, 0.3)
 	else:
-		stability_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.9))
-		stability_bar.modulate = Color(1, 1, 1)
+		integrity_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.9))
+		integrity_bar.modulate = Color(1, 1, 1)
 
 
 func update_selected_unit(officer_name: String, current_ap: int, max_ap: int) -> void:
@@ -214,14 +214,8 @@ func update_haul(fuel: int, scrap: int) -> void:
 
 
 func show_cryo_warning() -> void:
-	cryo_warning.visible = true
-	cryo_warning.text = "⚠ CRYO-FAILURE: LOSING 10 COLONISTS ⚠"
-
-	# Flash effect
-	var tween = create_tween()
-	tween.tween_property(cryo_warning, "modulate:a", 0.3, 0.3)
-	tween.tween_property(cryo_warning, "modulate:a", 1.0, 0.3)
-	tween.set_loops(3)
+	# Deprecated - repurposed for hull critical?
+	pass
 
 
 func hide_cryo_warning() -> void:

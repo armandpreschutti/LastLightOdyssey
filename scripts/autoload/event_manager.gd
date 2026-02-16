@@ -13,10 +13,8 @@ var random_events: Array[Dictionary] = [
 		"id": 1,
 		"name": "Solar Flare",
 		"description": "A massive solar flare threatens the ship's electronics.",
-		"colonist_loss": 70,
 		"integrity_loss": 15,
 		"specialist_mitigation": "tech",
-		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 5,
 		"mitigation_scrap_cost": 18,
 	},
@@ -24,10 +22,8 @@ var random_events: Array[Dictionary] = [
 		"id": 2,
 		"name": "Meteor Shower",
 		"description": "The ship passes through a dense meteor field.",
-		"colonist_loss": 50,
 		"integrity_loss": 25,
 		"specialist_mitigation": "scout",
-		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 10,
 		"mitigation_scrap_cost": 22,
 	},
@@ -35,10 +31,8 @@ var random_events: Array[Dictionary] = [
 		"id": 3,
 		"name": "Disease Outbreak",
 		"description": "A mysterious illness spreads through the cryo chambers.",
-		"colonist_loss": 100,
 		"integrity_loss": 0,
 		"specialist_mitigation": "medic",
-		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 0,
 		"mitigation_scrap_cost": 30,
 	},
@@ -46,10 +40,8 @@ var random_events: Array[Dictionary] = [
 		"id": 4,
 		"name": "System Malfunction",
 		"description": "Critical ship systems begin to fail.",
-		"colonist_loss": 40,
 		"integrity_loss": 20,
 		"specialist_mitigation": "tech",
-		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 10,
 		"mitigation_scrap_cost": 15,
 	},
@@ -57,10 +49,8 @@ var random_events: Array[Dictionary] = [
 		"id": 5,
 		"name": "Pirate Ambush",
 		"description": "Raiders emerge from a nearby asteroid field.",
-		"colonist_loss": 60,
 		"integrity_loss": 30,
 		"specialist_mitigation": "heavy",
-		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 15,
 		"mitigation_scrap_cost": 28,
 	},
@@ -68,10 +58,8 @@ var random_events: Array[Dictionary] = [
 		"id": 6,
 		"name": "Space Debris Field",
 		"description": "The ship navigates through a field of wreckage from past conflicts.",
-		"colonist_loss": 30,
 		"integrity_loss": 20,
 		"specialist_mitigation": "scout",
-		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 10,
 		"mitigation_scrap_cost": 20,
 	},
@@ -79,7 +67,6 @@ var random_events: Array[Dictionary] = [
 		"id": 7,
 		"name": "Sensor Ghost",
 		"description": "False readings on the sensors cause momentary alarm, but nothing materializes.",
-		"colonist_loss": 0,
 		"integrity_loss": 0,
 		"specialist_mitigation": "",
 		"mitigation_scrap_cost": 0,
@@ -88,10 +75,8 @@ var random_events: Array[Dictionary] = [
 		"id": 8,
 		"name": "Radiation Storm",
 		"description": "Intense radiation bombards the ship.",
-		"colonist_loss": 80,
 		"integrity_loss": 10,
 		"specialist_mitigation": "tech",
-		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 5,
 		"mitigation_scrap_cost": 25,
 	},
@@ -99,10 +84,8 @@ var random_events: Array[Dictionary] = [
 		"id": 9,
 		"name": "Cryo Pod Failure",
 		"description": "A section of cryo pods experiences catastrophic failure.",
-		"colonist_loss": 100,
 		"integrity_loss": 0,
 		"specialist_mitigation": "medic",
-		"mitigated_colonist_loss": 0,
 		"mitigated_integrity_loss": 0,
 		"mitigation_scrap_cost": 35,
 	},
@@ -110,7 +93,6 @@ var random_events: Array[Dictionary] = [
 		"id": 10,
 		"name": "Clear Skies",
 		"description": "The journey continues without incident.",
-		"colonist_loss": 0,
 		"integrity_loss": 0,
 		"specialist_mitigation": "",
 		"mitigation_scrap_cost": 0,
@@ -127,34 +109,24 @@ func roll_random_event() -> Dictionary:
 ## Returns a multiplier that scales from 1.0 at node 0 to ~2.5 at node 49
 ## Uses similar scaling pattern to mission difficulty
 func get_mitigation_cost_multiplier() -> float:
-	const COST_SCALE_FACTOR: float = 1.5
-	const FINAL_STAGE_START: int = 35  # Nodes 35+ get reduced scaling
-	const FINAL_STAGE_SCALE_REDUCTION: float = 0.4  # Reduce scaling by 40% in final stages
+	const COST_SCALE_FACTOR: float = 0.5
+	const DISTANCE_UNIT: float = 400.0
 	
-	var progress_ratio: float = float(GameState.current_node_index) / float(GameState.nodes_to_new_earth)
+	# Calculate progress based on distance cycles
+	var current_node = VoyageManager.get_current_node()
+	var distance = current_node.position.length() if current_node else 0.0
+	var cycle = distance / DISTANCE_UNIT
 	
-	# Reduce cost scaling in final stages
-	if GameState.current_node_index >= FINAL_STAGE_START:
-		# Calculate what the multiplier would be at node 35
-		var final_stage_progress: float = float(FINAL_STAGE_START) / float(GameState.nodes_to_new_earth)
-		var base_multiplier_at_35: float = 1.0 + (final_stage_progress * COST_SCALE_FACTOR)
-		
-		# Calculate remaining progress after node 35
-		var remaining_progress: float = progress_ratio - final_stage_progress
-		var remaining_scale_factor: float = COST_SCALE_FACTOR * (1.0 - FINAL_STAGE_SCALE_REDUCTION)
-		
-		# Apply reduced scaling for final stages
-		var multiplier: float = base_multiplier_at_35 + (remaining_progress * remaining_scale_factor)
-		return multiplier
-	else:
-		# Normal scaling for early/mid stages
-		var multiplier: float = 1.0 + (progress_ratio * COST_SCALE_FACTOR)
-		return multiplier
+	# Scale cost: Base 1.0 + (0.5 * cycle)
+	# e.g. Cycle 0 = 1.0x, Cycle 5 = 3.5x
+	# Adjust formula to match desired difficulty curve
+	var multiplier: float = 1.0 + (cycle * 0.1) # gentler slope: +10% cost per cycle
+	
+	return multiplier
 
 
 func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionary:
 	var result = {
-		"colonist_change": 0,
 		"integrity_change": 0,
 		"fuel_change": 0,
 		"scrap_change": 0,
@@ -166,7 +138,6 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
 
 	if can_mitigate:
 		result["mitigated"] = true
-		result["colonist_change"] = -event.get("mitigated_colonist_loss", event.get("colonist_loss", 0))
 		result["integrity_change"] = -event.get("mitigated_integrity_loss", event.get("integrity_loss", 0))
 		# Deduct scrap cost for mitigation (with dynamic scaling, capped at 15)
 		var base_cost = event.get("mitigation_scrap_cost", 0)
@@ -174,16 +145,13 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
 		var scrap_cost = mini(int(base_cost * cost_multiplier), 15)
 		result["scrap_change"] -= scrap_cost
 	else:
-		result["colonist_change"] = -event.get("colonist_loss", 0)
 		result["integrity_change"] = -event.get("integrity_loss", 0)
 
 	# Add any gains
-	result["colonist_change"] += event.get("colonist_gain", 0)
 	result["fuel_change"] = event.get("fuel_gain", 0)
 	result["scrap_change"] += event.get("scrap_gain", 0)
 
 	# Apply changes to game state
-	GameState.colonist_count += result["colonist_change"]
 	GameState.ship_integrity += result["integrity_change"]
 	GameState.fuel += result["fuel_change"]
 	GameState.scrap += result["scrap_change"]
@@ -208,9 +176,12 @@ func can_mitigate_event(event: Dictionary) -> bool:
 
 
 func get_node_type(node_index: int = -1) -> NodeType:
-	# If node_index is provided and we have a pre-rolled type, use it
-	if node_index >= 0 and GameState.node_types.has(node_index):
-		return GameState.node_types[node_index]
+	# If node_index is provided and refers to current node, we can get type from VoyageManager
+	var current_node = VoyageManager.get_current_node()
+	if node_index >= 0 and current_node and node_index == int(current_node.position.length() / 400.0): # Approximation
+		return current_node.node_type
+	
+	# If we can't determine it dynamically, fall back to random roll (legacy behavior)
 	
 	# Otherwise roll randomly (legacy behavior)
 	# 50% chance for Empty Space (1-5), 50% chance for Scavenge Site (6-10)

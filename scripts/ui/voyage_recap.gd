@@ -12,7 +12,6 @@ signal view_map_requested(show_map: bool)
 @onready var ending_desc_label: Label = $PanelContainer/MarginContainer/VBoxContainer/EndingDescLabel
 
 # Final state labels
-@onready var colonists_label: Label = $PanelContainer/MarginContainer/VBoxContainer/FinalStateContainer/ColonistsLabel
 @onready var fuel_label: Label = $PanelContainer/MarginContainer/VBoxContainer/FinalStateContainer/FuelLabel
 @onready var integrity_label: Label = $PanelContainer/MarginContainer/VBoxContainer/FinalStateContainer/IntegrityLabel
 @onready var scrap_label: Label = $PanelContainer/MarginContainer/VBoxContainer/FinalStateContainer/ScrapLabel
@@ -55,33 +54,24 @@ func show_recap(ending_type: String) -> void:
 		"perfect":
 			ending_label.text = "THE GOLDEN AGE"
 			ending_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
-			ending_desc_label.text = "All 1,000 colonists reached New Earth. Humanity will flourish."
+			ending_desc_label.text = "The Arkship arrived with all critical systems intact. The data archives are preserved."
 		"good":
 			ending_label.text = "THE HARD FOUNDATION"
 			ending_label.add_theme_color_override("font_color", Color(0.3, 0.9, 0.5))
-			ending_desc_label.text = "Enough survived to rebuild. The road ahead is difficult, but hope remains."
+			ending_desc_label.text = "The ship sustained damage, but the core mission data survived. Rebuilding can begin."
 		"bad":
 			ending_label.text = "THE ENDANGERED SPECIES"
 			ending_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.3))
-			ending_desc_label.text = "A mere handful reached New Earth. Humanity clings to existence by a thread."
+			ending_desc_label.text = "Critical failures plagued the journey. Verify mission parameters immediately."
 		_:
 			ending_label.text = "JOURNEY'S END"
 			ending_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.9))
 			ending_desc_label.text = "The voyage is complete."
 	
 	# Set final state stats
-	colonists_label.text = "COLONISTS REMAINING: %d / %d" % [GameState.colonist_count, GameState.MAX_COLONISTS]
 	fuel_label.text = "FUEL RESERVES: %d" % GameState.fuel
 	integrity_label.text = "SHIP INTEGRITY: %d%%" % GameState.ship_integrity
 	scrap_label.text = "SCRAP STOCKPILE: %d" % GameState.scrap
-	
-	# Color colonists based on count
-	if GameState.colonist_count >= 1000:
-		colonists_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
-	elif GameState.colonist_count >= 500:
-		colonists_label.add_theme_color_override("font_color", Color(0.3, 0.9, 0.5))
-	else:
-		colonists_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.3))
 	
 	# Clear old officer status labels
 	for child in officers_container.get_children():
@@ -110,7 +100,7 @@ func show_recap(ending_type: String) -> void:
 	total_enemies_label.text = "TOTAL HOSTILES ELIMINATED: %d" % GameState.total_enemies_killed
 	total_missions_label.text = "MISSIONS COMPLETED: %d" % GameState.total_missions_completed
 	total_turns_label.text = "TACTICAL TURNS SURVIVED: %d" % GameState.total_tactical_turns
-	nodes_visited_label.text = "SECTORS TRAVERSED: %d" % (GameState.visited_nodes.size() + 1)
+	nodes_visited_label.text = "SECTORS TRAVERSED: %d" % (VoyageManager.nodes.size())
 	
 	# Animate in
 	_animate_recap_in()
@@ -128,7 +118,6 @@ func _animate_recap_in() -> void:
 	# Hide all stat labels initially
 	ending_label.modulate.a = 0.0
 	ending_desc_label.modulate.a = 0.0
-	colonists_label.modulate.a = 0.0
 	fuel_label.modulate.a = 0.0
 	integrity_label.modulate.a = 0.0
 	scrap_label.modulate.a = 0.0
@@ -157,8 +146,6 @@ func _animate_recap_in() -> void:
 	_stat_tween.tween_interval(0.4)
 	
 	# Reveal final state stats
-	_stat_tween.tween_property(colonists_label, "modulate:a", 1.0, 0.25)
-	_stat_tween.tween_interval(0.1)
 	_stat_tween.tween_property(fuel_label, "modulate:a", 1.0, 0.25)
 	_stat_tween.tween_interval(0.1)
 	_stat_tween.tween_property(integrity_label, "modulate:a", 1.0, 0.25)
@@ -239,7 +226,6 @@ func _skip_animation() -> void:
 	modulate.a = 1.0
 	ending_label.modulate.a = 1.0
 	ending_desc_label.modulate.a = 1.0
-	colonists_label.modulate.a = 1.0
 	fuel_label.modulate.a = 1.0
 	integrity_label.modulate.a = 1.0
 	scrap_label.modulate.a = 1.0

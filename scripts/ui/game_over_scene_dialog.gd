@@ -25,21 +25,21 @@ var _scene_debris: Array[Dictionary] = []
 
 # Scene descriptions for each game over reason
 const SCENE_DESCRIPTIONS: Dictionary = {
-	"colonists_depleted": "The last cryosleeper has failed. All one thousand souls, lost to the void. The ship drifts silently through space, a tomb carrying the remains of humanity's last hope. The mission has failed. Extinction is complete.",
 	"ship_destroyed": "Critical systems failure. Hull breach detected. The ship tears apart under the strain, metal groaning and failing. Explosions rip through the vessel. All hands lost. The void claims another victim.",
 	"captain_died": "The Captain has fallen. Without leadership, the crew cannot continue. The ship drifts aimlessly, its mission abandoned. The chain of command is broken. Humanity's last hope fades into the darkness.",
+	"crew_wipe": "The entire landing party has been wiped out. With no one left to command the mission, the ship drifts silently into the void. Hope has been extinguished.",
 }
 
 # Scene titles for each game over reason
 const SCENE_TITLES: Dictionary = {
-	"colonists_depleted": "EXTINCTION",
 	"ship_destroyed": "CATASTROPHIC FAILURE",
 	"captain_died": "LEADERSHIP LOST",
+	"crew_wipe": "MISSION FAILED",
 }
 
 # Color palettes for each game over reason
 const REASON_PALETTES: Dictionary = {
-	"colonists_depleted": {
+	"crew_wipe": {
 		"bg": Color(0.01, 0.0, 0.02),
 		"accent": Color(0.3, 0.1, 0.2),
 		"detail": Color(0.5, 0.15, 0.25),
@@ -86,14 +86,18 @@ func show_scene(reason: String) -> void:
 	title_label.text = title
 	
 	# Set location/date flavor text
+	# Set location/date flavor text
+	var current_node = VoyageManager.get_current_node()
+	var cycle = int(current_node.position.length() / 400.0) if current_node else 0
+	
 	location_label.text = "SECTOR %d-%d  |  CYCLE %d  |  FINAL STATUS" % [
 		randi_range(1, 9), 
 		randi_range(100, 999), 
-		GameState.current_node_index + 1
+		cycle
 	]
 	
 	# Load scene image
-	var image_name = "game_over_" + reason.replace("colonists_depleted", "colonists").replace("ship_destroyed", "ship").replace("captain_died", "captain")
+	var image_name = "game_over_" + reason.replace("ship_destroyed", "ship").replace("captain_died", "captain")
 	var image_path = "res://assets/sprites/scenes/%s.png" % image_name
 	
 	if ResourceLoader.exists(image_path):
@@ -214,9 +218,9 @@ func _on_dismissed() -> void:
 func _play_game_over_sfx(reason: String) -> void:
 	# Map game over reasons to SFX file names
 	var sfx_files: Dictionary = {
-		"colonists_depleted": "extinction.mp3",
 		"ship_destroyed": "ship_destroyed.mp3",
 		"captain_died": "captain_died.mp3",
+		"crew_wipe": "extinction.mp3",
 	}
 	
 	var sfx_file = sfx_files.get(reason, "extinction.mp3")  # Default to extinction
@@ -248,7 +252,7 @@ func _generate_scene_elements(reason: String) -> void:
 	_scene_debris.clear()
 	
 	match reason:
-		"colonists_depleted":
+		"crew_wipe":
 			# Few stars, very dim
 			for i in range(30):
 				_scene_stars.append({
@@ -291,7 +295,7 @@ func _generate_scene_elements(reason: String) -> void:
 
 func _draw_procedural_scene() -> void:
 	var canvas_size = scene_canvas.size
-	var palette = REASON_PALETTES.get(_current_reason, REASON_PALETTES["colonists_depleted"])
+	var palette = REASON_PALETTES.get(_current_reason, REASON_PALETTES["crew_wipe"])
 	
 	# Draw background
 	scene_canvas.draw_rect(Rect2(Vector2.ZERO, canvas_size), palette.bg)
@@ -304,25 +308,25 @@ func _draw_procedural_scene() -> void:
 	
 	# Draw reason-specific scene
 	match _current_reason:
-		"colonists_depleted":
-			_draw_colonists_depleted_scene(canvas_size, palette)
 		"ship_destroyed":
 			_draw_ship_destroyed_scene(canvas_size, palette)
 		"captain_died":
 			_draw_captain_died_scene(canvas_size, palette)
+		"crew_wipe":
+			_draw_crew_wipe_scene(canvas_size, palette)
 
 
-func _draw_colonists_depleted_scene(canvas_size: Vector2, palette: Dictionary) -> void:
+func _draw_crew_wipe_scene(canvas_size: Vector2, palette: Dictionary) -> void:
 	var px = 4.0
 	var floor_y = canvas_size.y * 0.7
 	
 	# Floor
 	scene_canvas.draw_rect(Rect2(0, floor_y, canvas_size.x, canvas_size.y - floor_y), Color(0.05, 0.06, 0.08))
 	
-	# Empty cryo pods (all dark)
-	var total_pods = 10
+	# Empty cryo pods (all dark) - repurposed as "crew quarters"
+	var total_pods = 6 # Reduced for crew size
 	for i in range(total_pods):
-		var pod_x = canvas_size.x * (0.05 + i * 0.09)
+		var pod_x = canvas_size.x * (0.2 + i * 0.12)
 		
 		# Pod body (all dark/inactive)
 		scene_canvas.draw_rect(Rect2(pod_x - 6*px, floor_y - 14*px, 12*px, 14*px), palette.pod_dark)
@@ -333,16 +337,6 @@ func _draw_colonists_depleted_scene(canvas_size: Vector2, palette: Dictionary) -
 		
 		# Status light (off)
 		scene_canvas.draw_rect(Rect2(pod_x - 1*px, floor_y - 14*px, 2*px, 2*px), Color(0.1, 0.05, 0.05))
-	
-	# Memorial plaque in center
-	var memorial_x = canvas_size.x * 0.5
-	var memorial_y = canvas_size.y * 0.3
-	var memorial_color = palette.accent
-	memorial_color.a = 0.4
-	scene_canvas.draw_rect(Rect2(memorial_x - 40*px, memorial_y - 20*px, 80*px, 40*px), memorial_color)
-	# Cross symbol
-	scene_canvas.draw_rect(Rect2(memorial_x - 2*px, memorial_y - 15*px, 4*px, 30*px), palette.detail)
-	scene_canvas.draw_rect(Rect2(memorial_x - 10*px, memorial_y - 2*px, 20*px, 4*px), palette.detail)
 	
 	# Dark void overlay
 	var void_overlay = palette.void

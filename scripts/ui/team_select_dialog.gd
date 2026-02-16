@@ -124,8 +124,6 @@ func _build_objective_description(biome: BiomeConfig.BiomeType, objective: Missi
 		reward_parts.append("%d FUEL" % potential_rewards.get("fuel", 0))
 	if potential_rewards.get("scrap", 0) > 0:
 		reward_parts.append("%d SCRAP" % potential_rewards.get("scrap", 0))
-	if potential_rewards.get("colonists", 0) > 0:
-		reward_parts.append("%d COLONISTS" % potential_rewards.get("colonists", 0))
 	if potential_rewards.get("hull_repair", 0) > 0:
 		reward_parts.append("%d%% HULL REPAIR" % potential_rewards.get("hull_repair", 0))
 	
@@ -420,7 +418,7 @@ func _build_detail_sections(container: VBoxContainer, officer_key: String) -> vo
 	stats_label.text = "STATS:"
 	stats_label.add_theme_color_override("font_color", Color(0.4, 0.9, 1, 1))
 	stats_label.add_theme_font_size_override("font_size", 14)
-	stats_label.add_theme_font_override("font", null)  # Use bold if available
+	# stats_label.add_theme_font_override("font", null)  # Removed causing null error
 	container.add_child(stats_label)
 	
 	var stats = _get_officer_stats(officer_key)

@@ -78,10 +78,10 @@ func show_recap(stats: Dictionary) -> void:
 	objectives_border.visible = has_objectives
 	objectives_container.visible = has_objectives
 	
+	
 	# Get bonus rewards from stats
 	var bonus_fuel = stats.get("bonus_fuel", 0)
 	var bonus_scrap = stats.get("bonus_scrap", 0)
-	var bonus_colonists = stats.get("bonus_colonists", 0)
 	var bonus_hull_repair = stats.get("bonus_hull_repair", 0)
 	
 	# Add objective rows
@@ -106,8 +106,6 @@ func show_recap(stats: Dictionary) -> void:
 					reward_parts.append("+%d FUEL" % bonus_fuel)
 				if bonus_scrap > 0:
 					reward_parts.append("+%d SCRAP" % bonus_scrap)
-				if bonus_colonists > 0:
-					reward_parts.append("+%d COLONISTS" % bonus_colonists)
 				if bonus_hull_repair > 0:
 					reward_parts.append("+%d%% HULL" % bonus_hull_repair)
 				
@@ -120,8 +118,6 @@ func show_recap(stats: Dictionary) -> void:
 					reward_parts.append("%d FUEL" % potential_rewards.get("fuel", 0))
 				if potential_rewards.get("scrap", 0) > 0:
 					reward_parts.append("%d SCRAP" % potential_rewards.get("scrap", 0))
-				if potential_rewards.get("colonists", 0) > 0:
-					reward_parts.append("%d COLONISTS" % potential_rewards.get("colonists", 0))
 				if potential_rewards.get("hull_repair", 0) > 0:
 					reward_parts.append("%d%% HULL" % potential_rewards.get("hull_repair", 0))
 				

@@ -24,10 +24,10 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-func setup(colonist_loss: int, hull_loss: int) -> void:
+func setup(colonist_loss_ignored: int, hull_loss: int) -> void:
 	title_label.text = "⚠ INSUFFICIENT FUEL"
-	message_label.text = "DRIFT MODE will engage.\n\nPenalties:\n• -%d COLONISTS\n• -%d HULL INTEGRITY\n\nProceed with jump?" % [colonist_loss, hull_loss]
-	jump_button.text = "[ JUMP ]"
+	message_label.text = "DRIFT MODE will engage.\n\nPenalties:\n• -%d HULL INTEGRITY\n\nProceed with jump?" % [hull_loss]
+	jump_button.text = "[ DRIFT ]"
 	cancel_button.text = "[ CANCEL ]"
 
 

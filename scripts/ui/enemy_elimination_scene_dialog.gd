@@ -46,11 +46,15 @@ func show_scene(biome_type: int, alive_officers: Array[String]) -> void:
 	title_label.text = "ALL HOSTILES ELIMINATED"
 	
 	# Set location/date flavor text
+	# Set location/date flavor text
+	var current_node = VoyageManager.get_current_node()
+	var cycle = int(current_node.position.length() / 400.0) if current_node else 0
+	
 	location_label.text = "%s  |  SECTOR %d-%d  |  CYCLE %d" % [
 		biome_name.to_upper(),
 		randi_range(1, 9),
 		randi_range(100, 999),
-		GameState.current_node_index + 1
+		cycle
 	]
 	
 	# Load scene image

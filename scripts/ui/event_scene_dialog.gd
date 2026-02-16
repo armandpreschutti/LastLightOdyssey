@@ -67,7 +67,10 @@ func show_scene(event: Dictionary) -> void:
 	title_label.text = event_name.to_upper()
 	
 	# Set location/date flavor text
-	location_label.text = "SECTOR %d-%d  |  CYCLE %d" % [randi_range(1, 9), randi_range(100, 999), GameState.current_node_index + 1]
+	# Set location/date flavor text
+	var current_node = VoyageManager.get_current_node()
+	var cycle = int(current_node.position.length() / 400.0) + 1 if current_node else 1
+	location_label.text = "SECTOR %d-%d  |  CYCLE %d" % [randi_range(1, 9), randi_range(100, 999), cycle]
 	
 	# Load scene image if available, otherwise use procedural generation
 	var image_path = EVENT_SCENES.get(event_id, "")

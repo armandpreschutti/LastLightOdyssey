@@ -4,7 +4,7 @@ extends Control
 ## Represents a single node in the star map with visual states
 ## Now uses sprite-based graphics for planets and stations
 
-signal clicked(node_id: int)
+signal clicked(node_data: NodeData)
 
 enum NodeState { LOCKED, AVAILABLE, CURRENT, VISITED }
 
@@ -15,11 +15,8 @@ enum NodeState { LOCKED, AVAILABLE, CURRENT, VISITED }
 @onready var current_indicator: ColorRect = $CurrentIndicator
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
 
-var node_id: int = -1
-var node_type: int = -1  # EventManager.NodeType
-var biome_type: int = -1  # BiomeConfig.BiomeType (-1 if not scavenge)
+var node_data: NodeData
 var current_state: NodeState = NodeState.LOCKED
-var is_new_earth: bool = false  # Flag to identify New Earth node
 
 const NODE_SIZE = Vector2(80, 80)
 
@@ -66,8 +63,8 @@ func _ready() -> void:
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			if current_state == NodeState.AVAILABLE or current_state == NodeState.CURRENT:
-				clicked.emit(node_id)
+			if is_clickable():
+				clicked.emit(node_data)
 				accept_event()
 
 
@@ -79,13 +76,30 @@ func _notification(what: int) -> void:
 
 
 ## Initialize the node with data
-func initialize(p_node_id: int, p_node_type: int, p_state: NodeState = NodeState.LOCKED, p_biome_type: int = -1, p_is_new_earth: bool = false) -> void:
-	node_id = p_node_id
-	node_type = p_node_type
-	biome_type = p_biome_type
-	current_state = p_state
-	is_new_earth = p_is_new_earth
+func initialize(p_node_data: NodeData, is_current: bool, is_reachable: bool) -> void:
+	node_data = p_node_data
+	
+	# Map internal NodeData state to visual state
+	# We also need to consider if it's the CURRENT node or reachable
+	
+	if is_current:
+		current_state = NodeState.VISITED # Visually it's "Current" but state is simply visited
+		# But we use visual state enums locally
+		# Let's map it
+	
+	_update_visual_state(is_current, is_reachable)
 	_update_visual()
+
+func _update_visual_state(is_current: bool, is_reachable: bool) -> void:
+	if is_current:
+		set_state(StarMapNode.NodeState.CURRENT)
+	elif is_reachable:
+		# Reachable nodes are always AVAILABLE (interactive), even if visited
+		set_state(StarMapNode.NodeState.AVAILABLE)
+	elif node_data.state == NodeData.NodeState.VISITED or node_data.state == NodeData.NodeState.CLEARED:
+		set_state(StarMapNode.NodeState.VISITED)
+	else:
+		set_state(StarMapNode.NodeState.LOCKED)
 
 
 ## Set the node's state
@@ -154,32 +168,36 @@ func _update_sprite_texture() -> void:
 		return
 	
 	# Check if node has been visited, is current, or has an amber line
-	var is_visited = GameState.visited_nodes.has(node_id)
-	var is_current = current_state == NodeState.CURRENT
-	var has_amber_line = _has_amber_line()
+	# Check if node has been visited/revealed
+	# In Voyage 2.0, non-visited nodes might be hidden or shown as ?
+	# But if we can see them (in view radius), we generally know what they are?
+	# Let's say: If adjacent (reachable) or visited, we see type. Otherwise ?
 	
-	# Show question mark for unvisited nodes without amber lines
-	# Reveal if visited OR is current OR has amber line to it
-	if not is_visited and not is_current and not has_amber_line:
+	# For now, simplistic approach: If we are visualizing it, we see it.
+	# Or follow the logic:
+	var show_details = current_state != NodeState.LOCKED
+	
+	if not show_details:
 		sprite.texture = QUESTION_MARK_TEXTURE
 		return
 	
 	# Special cases for start and end nodes (always show actual type)
-	if node_id == 0:
-		# Start node - use Earth (red planet)
+	# Special cases for start and end nodes
+	if node_data.position == Vector2.ZERO:
+		# Start node - use Earth
 		sprite.texture = preload("res://assets/sprites/navigation/planet_red.png")
-	elif _is_new_earth_node():
-		# End node (New Earth) - use Earth sprite
+	elif node_data.is_new_earth:
+		# End node (New Earth)
 		sprite.texture = preload("res://assets/sprites/navigation/planet_earth.png")
 	else:
 		# Regular nodes - use type-based texture
-		match node_type:
+		match node_data.node_type:
 			EventManager.NodeType.EMPTY_SPACE:
 				# Use waypoint sprite
 				sprite.texture = NODE_TEXTURES[EventManager.NodeType.EMPTY_SPACE]
 			EventManager.NodeType.SCAVENGE_SITE:
 				# Use biome-based sprite
-				match biome_type:
+				match node_data.biome_type:
 					BiomeConfig.BiomeType.ASTEROID:
 						sprite.texture = preload("res://assets/sprites/navigation/asteroid.png")
 					BiomeConfig.BiomeType.STATION:
@@ -203,23 +221,22 @@ func _update_label_text() -> void:
 		return
 	
 	# Check if node has been visited, is current, or has an amber line
-	var is_visited = GameState.visited_nodes.has(node_id)
-	var is_current = current_state == NodeState.CURRENT
-	var has_amber_line = _has_amber_line()
+	# Check if node has been visited, is current, or has an amber line
+	var show_details = current_state != NodeState.LOCKED
 	
 	# Show no text for unvisited nodes without amber lines
 	# Reveal if visited OR is current OR has amber line to it
-	if not is_visited and not is_current and not has_amber_line:
+	if not show_details:
 		label.text = ""
 		return
 	
 	# Special cases for start and end nodes (always show actual type)
-	if node_id == 0:
+	if node_data.position == Vector2.ZERO:
 		label.text = "EARTH"
-	elif _is_new_earth_node():
+	elif node_data.is_new_earth:
 		label.text = "NEW EARTH"
 	else:
-		match node_type:
+		match node_data.node_type:
 			EventManager.NodeType.EMPTY_SPACE:
 				label.text = "WAYPOINT"
 			EventManager.NodeType.SCAVENGE_SITE:
@@ -235,7 +252,7 @@ func _update_label_text() -> void:
 
 ## Get the label text for scavenge sites based on biome
 func _get_biome_label() -> String:
-	match biome_type:
+	match node_data.biome_type:
 		BiomeConfig.BiomeType.STATION:
 			return "STATION"
 		BiomeConfig.BiomeType.ASTEROID:
@@ -277,38 +294,16 @@ func _stop_pulse() -> void:
 
 ## Check if node is clickable
 func is_clickable() -> bool:
-	return current_state == NodeState.AVAILABLE
+	return current_state == NodeState.AVAILABLE or current_state == NodeState.CURRENT
 
 
 ## Check if this is the New Earth node
 func _is_new_earth_node() -> bool:
-	return is_new_earth
+	return node_data.is_new_earth
 
 
 ## Check if this node has an amber line connecting to it (is reachable from current node)
-func _has_amber_line() -> bool:
-	# A node has an amber line if it's reachable from the current node
-	# This means it's in the current node's connections
-	var current_node_id = GameState.current_node_index
-	
-	# If we're the current node, we don't have a line to ourselves
-	if node_id == current_node_id:
-		return false
-	
-	# We need to check if this node is in the current node's connections
-	# Since we don't have direct access to the node graph, we can check if we're AVAILABLE
-	# AVAILABLE state means we're reachable, which means we have an amber line
-	# However, we also need to account for the fact that the state might not be updated yet
-	# So we'll use a more direct approach: check if we're reachable by checking the state
-	# But actually, the cleanest is to check if current_state is AVAILABLE
-	# However, that might not work if state hasn't been updated
-	
-	# Alternative: We can check if the node is reachable by looking at GameState
-	# But GameState doesn't store connections...
-	
-	# Simplest approach: If the node is AVAILABLE, it means it's reachable from current
-	# which means it has an amber line (since we only draw amber lines from current to reachable)
-	return current_state == NodeState.AVAILABLE
+
 
 
 

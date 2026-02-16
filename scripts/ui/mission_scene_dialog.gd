@@ -52,11 +52,15 @@ func show_scene(biome_type: int, objective_type: String = "") -> void:
 	title_label.text = "SCAVENGE MISSION"
 	
 	# Set location/date flavor text
+	var current_node = VoyageManager.get_current_node()
+	var cycle = int(current_node.position.length() / 400.0) + 1 if current_node else 1
+
+	# Set location/date flavor text
 	location_label.text = "%s  |  SECTOR %d-%d  |  CYCLE %d" % [
 		biome_name.to_upper(),
 		randi_range(1, 9),
 		randi_range(100, 999),
-		GameState.current_node_index + 1
+		cycle
 	]
 	
 	# Map objective type to image name
