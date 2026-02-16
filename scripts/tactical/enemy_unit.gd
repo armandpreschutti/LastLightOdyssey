@@ -666,7 +666,8 @@ func _play_basic_enemy_death() -> void:
 	if shadow:
 		_death_tween.parallel().tween_property(shadow, "modulate:a", 0.0, 0.2)
 	
-	await _death_tween.finished
+	if _death_tween.is_valid():
+		await _death_tween.finished
 
 
 ## Heavy Enemy Death - Slow heavy fall with orange flash, scale down, dramatic collapse
@@ -701,7 +702,8 @@ func _play_heavy_enemy_death() -> void:
 	if shadow:
 		_death_tween.parallel().tween_property(shadow, "modulate:a", 0.0, 0.3)
 	
-	await _death_tween.finished
+	if _death_tween.is_valid():
+		await _death_tween.finished
 
 
 ## Sniper Enemy Death - Quick precise collapse with blue flash, minimal drama
@@ -726,7 +728,8 @@ func _play_sniper_enemy_death() -> void:
 	if shadow:
 		_death_tween.parallel().tween_property(shadow, "modulate:a", 0.0, 0.15)
 	
-	await _death_tween.finished
+	if _death_tween.is_valid():
+		await _death_tween.finished
 
 
 ## Elite Enemy Death - Dramatic tech-enhanced death with purple/cyan flash, powerful collapse
@@ -762,6 +765,7 @@ func _play_elite_enemy_death() -> void:
 	if shadow:
 		_death_tween.parallel().tween_property(shadow, "modulate:a", 0.0, 0.25)
 	
-	await _death_tween.finished
+	if _death_tween.is_valid():
+		await _death_tween.finished
 
 #endregion

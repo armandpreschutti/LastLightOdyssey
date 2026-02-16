@@ -14,7 +14,6 @@ enum NodeState { LOCKED, AVAILABLE, CURRENT, VISITED }
 @onready var glow_effect: Panel = $GlowEffect
 @onready var current_indicator: Panel = $CurrentIndicator
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
-@onready var skull_container: HBoxContainer = $SkullContainer # Need to add this to the scene/script
 
 var node_data: NodeData
 var current_state: NodeState = NodeState.LOCKED

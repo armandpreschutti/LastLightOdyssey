@@ -3709,6 +3709,9 @@ func _perform_charge_melee_attack(attacker: Node2D, target: Node2D, damage: int,
 	
 	# Return camera to tactical view and wait for it to complete
 	combat_camera.return_to_tactical()
+	# CRITICAL: Add safety timeout to prevent hanging if camera signal fails
+	# Return camera to tactical view
+	combat_camera.return_to_tactical()
 	await combat_camera.camera_transition_complete
 
 

@@ -91,6 +91,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Cancel transition if user manually pans
 			if _transitioning:
 				_transitioning = false
+				_combat_transition = false
+				camera_transition_complete.emit()
 			get_viewport().set_input_as_handled()
 
 

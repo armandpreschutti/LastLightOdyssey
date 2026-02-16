@@ -24,7 +24,7 @@ A space-faring survival manager inspired by **The Oregon Trail**, featuring **Fa
 
 ### Core Loop
 ```
-Strategic Navigation → Random Event Resolution → Resource Scarcity → Tactical Scavenging → Repeat
+Infinite Exploration (Fuel) → Tactical Scavenging (Cash/Intel) → Officer Progression (XP/Tech) → Story Advancement
 ```
 
 ### Platform Target
@@ -34,48 +34,55 @@ Strategic Navigation → Random Event Resolution → Resource Scarcity → Tacti
 
 ---
 
-## 2. The Management Layer (The "Trail")
+## 2. The Management Layer (The "Voyage")
 
-This layer simulates the grueling trek across the stars.
+This layer simulates the command of the ship across an infinite procedurally generated star sector.
 
-### 2.1 Primary Statistics
+### 2.1 Economic & Survival Stats
 
-| Statistic | Starting Value | Description |
-|-----------|----------------|-------------|
-| **Ship Integrity** | 100% | The player's "health". Damaged by space hazards. At 0%, the voyage fails. |
-| **Fuel** | 10 | The clock. Each jump consumes fuel. At 0, ship enters "Drift Mode" (−15% integrity per jump). |
-| **Scrap** | 25 | Currency found on tactical maps. Used for repairs and trading at outposts. |
+The economy has been overhauled to support a non-linear "Voyage" loop.
 
-### 2.2 The Star Map (Node System)
+| Statistic | Initial | Description |
+|-----------|---------|-------------|
+| **Fuel** | 10 | Ship Stamina. Consumed per jump (1-3 based on distance). At 0, applies Hull Damage. |
+| **Scrap** | 25 | Material Resource. Used ONLY for: 1) Hull Repairs, 2) Event Mitigation. |
+| **Hull Integrity** | 100.0 | Ship Health. At 0.0, trigger Game Over (Ship Destruction). |
+| **Cash** | 100 | Liquid Assets. Primary currency. Used in the **Market** to buy Fuel/Scrap. |
+| **Intel** | 0 | Story Progress. Gained from tactical missions. **Threshold of 10** spawns a Story Node. |
+| **Data Logs** | 0 | Tech Currency. Shared resource used to purchase **Ability Tree** slots for Officers. |
 
-A procedurally generated node graph with **50 nodes** leading to New Earth.
+### 2.2 The Infinite Map System
+
+Replaces the linear "Oregon Trail" path with an **Infinite Grid System**.
 
 **Structure:**
-- 16 rows of nodes with layout: [1, 2, 3, 5, 5, 5, 5, 5, 5, 5, 3, 4, 3, 3, 2, 1] = 50 total nodes
-- Progression is bottom-to-top (start at bottom, New Earth at top)
-- Each node connects to 1-3 nodes in adjacent rows (forward connections primary, backward connections at 30% chance)
-- Variable fuel costs: base 2 fuel, +2 for column distance (horizontal/diagonal movement), +4 for backward travel
-- Fuel costs are calculated per connection and saved with the star map
-- **Fuel Warning**: Attempting a jump with insufficient fuel triggers a confirmation prompt detailing the penalties (integrity damage).
-- If insufficient fuel for a jump, ship enters "Drift Mode" and loses 15% integrity per jump.
-- **Navigation Legend**: A legend is available in the navigation menu to explain node types and connection costs.
-- **Node Re-entry**: Scavenge sites and wormholes can be re-entered if the mission is cancelled or aborted, preventing soft-locks.
-- **Goal Guarantee**: The "New Earth" node is programmatically guaranteed to be the final node (node 49) and cannot be bypassed.
+- **Coordinate-Based Generation**: The map is generated infinitely based on grid coordinates `Vector2(x, y)`.
+- **Exploration Logic**: Players can move to any of the 6 adjacent hex coordinates (or 4 grid coordinates) relative to their position.
+- **Node Discovery**: New nodes are generated as "Unvisited" when they come within range.
+- **Backtracking**: Players can revisit nodes, but "Cleared" nodes become "Dead Zones" (traversable but offer no rewards).
 
 **Node Types:**
-
 | Type | Frequency | Description |
 |------|-----------|-------------|
-| **Empty Space** | 40% | No tactical map, just a random event roll. |
-| **Scavenge Site** | 40% | Triggers Isometric Tactical Mode for resource gathering. Biome type pre-assigned. |
-| **Trading Outpost** | 20% | Menu-based screen to trade Scrap for Fuel (10→5) or repairs (15→10%). |
+| **Scavenge Site** | 40% | Triggers Isometric Tactical Mode for resource gathering. |
+| **Empty / Event** | 40% | No tactical map, triggers a Random Event roll. |
+| **Story Node** | Dynamic | Spawns automatically when **Intel >= 10**. Advances the narrative. |
+
+**Node States:**
+1.  **UNVISITED**: Default state. Clickable. Enters Tactical Mode or Event.
+2.  **CLEARED**: Set after mission success. Traversable but costs fuel with no reward.
+3.  **STORY**: Special state. Overrides standard behavior for plot progression.
+
+**Story Node Spawning:**
+-   **Trigger**: When `GameState.intel >= 10`.
+-   **Logic**: The system searches for an UNVISITED node within Range 3. If none, it generates one.
+-   **Effect**: Forces that node to be a Story Mission. Completing it resets Intel to 0.
 
 ### 2.3 Random Event System
 
-Upon entering a node, the game rolls **1d10** against the Random Event Table.
+Upon entering an "Empty / Event" node, the game rolls **1d10** against the Event Table.
 
-**Current Events:**
-
+**Events:**
 | Roll | Event | Base Loss | Specialist | Mitigated Loss | Mitigation Cost |
 |------|-------|-----------|------------|----------------|-----------------|
 | 1 | Solar Flare | −30% integrity | Tech | −10% integrity | 18 scrap |
@@ -89,23 +96,41 @@ Upon entering a node, the game rolls **1d10** against the Random Event Table.
 | 9 | Hull Malfunction | −25% integrity | Tech | −10% integrity | 20 scrap |
 | 10 | Clear Skies | No effect | — | — | — |
 
-**Mitigation Cost Scaling:** Base scrap cost scales with progress: `base_cost × (1.0 + progress_ratio × 1.5)`, with 40% reduction for nodes 35+.
+**Mitigation Cost Scaling:**
+Costs scale with `GameState.total_jumps_made` to maintain economic pressure as the player accumulates wealth.
 
-**Resolution:** Events display narrative text. If the required specialist is alive and the player has enough scrap, a "Mitigate" option becomes available.
+**Resolution:**
+If the required specialist is **Alive** and **Available** (not injured), and the player has enough Scrap, they can mitigate the damage.
+
+### 2.4 The Market System
+
+Accessible from the Management HUD, the Market is the primary resource sink and bailout mechanic.
+
+**Transactions:**
+- **Buy Fuel**: 10 Cash → +5 Fuel
+- **Buy Scrap**: 10 Cash → +10 Scrap
+- **Repair Hull**: 50 Cash → +10% Integrity (Max 100%)
 
 ---
 
 ## 3. The Tactical Layer (The "Search")
 
-When the ship docks at a Scavenge Site, the game switches to isometric turn-based combat.
+ When the ship docks at a Scavenge Site, the game switches to isometric turn-based combat.
 
-### 3.1 The Away Team
+### 3.1 The Crew (OfficerData)
 
-- Players select **3 Officers** from a roster of 6 (Captain, Scout, Tech, Medic, Heavy, Sniper)
-- **Permadeath**: Dead officers are removed permanently
-- Losing a specialist disables their event mitigation options
+Refactored from a simple roster to a persistent RPG system.
 
-### 3.2 Officer Archetypes
+**Officer Data Structure:**
+- **Identity**: ID (e.g., "captain"), Class, Alive Status.
+- **Progression**: Level (1-3), XP, Unlocked Abilities.
+- **Health**: Persistent HP across jumps.
+- **Status**: Injury Jumps (Cooldown if hurt).
+
+### 3.2 Officer Classes & Abilities
+
+**Base Archetypes:**
+(Abilities listed here are *Base* abilities. Upgrades are unlocked via Tech Tree).
 
 | Role | Passive Ability | Active Ability | HP | Move | Sight |
 |------|-----------------|----------------|-----|------|-------|
@@ -116,7 +141,29 @@ When the ship docks at a Scavenge Site, the game switches to isometric turn-base
 | **Heavy** | Armor Plating (−20% damage taken), +35 base damage | **Charge** (1 AP): Rush enemy within 4 tiles. Instant-kills basic enemies; deals 2x base damage to heavy enemies. 2-turn cooldown. | 120 | 3 | 5 |
 | **Sniper** | +2 sight range (base 7 + 2 = 9), +2 shoot range, +30 base damage | **Precision Shot** (1 AP): Guaranteed hit on any visible enemy. Deals 2x base damage (60). 2-turn cooldown. | 70 | 4 | 9 |
 
-### 3.3 Combat System
+### 3.3 Progression & Tech Tree (Barracks)
+
+Officers gain XP from missions to unlock new tiers of abilities.
+
+**XP Sources:**
+- **Kills**: +10 XP (Killer).
+- **Survival**: +20 XP (All living squad members).
+- **Objective**: +15% XP Multiplier (if successful).
+
+**Tech Tree Unlocks:**
+Purchased with **XP** + **Data Logs** in the Barracks.
+- **Level 2**: Requires 100 XP + 5 Data Logs. Unlocks Binary Choice (Trait A or B).
+- **Level 3**: Requires 300 XP + 10 Data Logs. Unlocks Trinary Choice (Trait A, B, or C).
+
+### 3.4 The Injury System
+
+Officers taking significant damage are sidelined for recovery.
+
+- **Trigger**: Tactical Mission ends with Officer HP < 50% (and Officer is Alive).
+- **Effect**: Officer gains **2 Injury Jumps**. They cannot be selected for deployment.
+- **Recovery**: -1 Injury Jump for every Voyage Jump made.
+
+### 3.5 Combat System
 
 **Turn Structure:**
 - Unit-by-unit turn order (not side-based)
