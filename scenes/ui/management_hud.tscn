@@ -271,10 +271,10 @@ text = "[ MARKET ]"
 
 [node name="DeployPanel" type="PanelContainer" parent="." unique_id=987654322]
 layout_mode = 0
-offset_left = 770.0
-offset_top = -57.0
-offset_right = 1050.0
-offset_bottom = -7.0
+offset_left = -4.0
+offset_top = -177.0
+offset_right = 275.99997
+offset_bottom = -127.0
 scale = Vector2(1.5758681, 1.5758681)
 
 [node name="DeployButton" type="Button" parent="DeployPanel" unique_id=987654321]
