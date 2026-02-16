@@ -107,6 +107,10 @@ func _initialize_star_map() -> void:
 	if star_map.node_clicked.is_connected(_on_node_clicked):
 		star_map.node_clicked.disconnect(_on_node_clicked)
 	star_map.node_clicked.connect(_on_node_clicked)
+	
+	if star_map.deploy_pressed.is_connected(_on_deploy_pressed):
+		star_map.deploy_pressed.disconnect(_on_deploy_pressed)
+	star_map.deploy_pressed.connect(_on_deploy_pressed)
 
 	# Ensure voyage manager is ready
 	if not VoyageManager:
@@ -145,15 +149,7 @@ func _on_node_clicked(node_data: NodeData) -> void:
 		
 		# Allow re-entry logic
 		var node_type = node_data.node_type
-		if node_type == EventManager.NodeType.SCAVENGE_SITE:
-			# Only allow re-entry if mission was not already successful
-			if node_data.state != NodeData.NodeState.CLEARED:
-				# Re-trigger mission flow (skip intro -> team select)
-				pending_node_type = node_type
-				pending_biome_type = node_data.biome_type
-				_transition_to_team_select()
-			return
-		elif node_type == EventManager.NodeType.WORMHOLE:
+		if node_type == EventManager.NodeType.WORMHOLE:
 			# Re-trigger wormhole dialog ONLY if it was offered at this node
 			# In infinite map, maybe just always offer?
 			_show_wormhole_dialog()
@@ -187,7 +183,7 @@ func _show_fuel_warning(node_data: NodeData, fuel_cost: int) -> void:
 	var dialog = dialog_scene.instantiate()
 	$DialogLayer.add_child(dialog)
 	
-	dialog.setup(0, hull_loss)
+	dialog.setup(hull_loss)
 	dialog.show_dialog()
 	
 	# Play warning SFX
@@ -251,7 +247,8 @@ func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) ->
 	match pending_node_type:
 		EventManager.NodeType.SCAVENGE_SITE:
 			if was_visited:
-				_transition_to_team_select()
+				if node_data.state != NodeData.NodeState.CLEARED:
+					star_map.show_deploy_button(node_data)
 				return
 			
 			# Tutorial: Trigger scavenge_intro if not shown yet
@@ -390,8 +387,20 @@ func _on_mission_scene_dismissed() -> void:
 		if pending_node_type == EventManager.NodeType.SCAVENGE_SITE:
 			MusicManager.play_tactical_music()
 	else:
-		# New flow - show team select dialog after scene
-		_transition_to_team_select()
+		# New flow - show deploy button after scene
+		current_phase = GamePhase.IDLE # Allow clicking other nodes
+		var current_node = VoyageManager.get_current_node()
+		if current_node:
+			star_map.show_deploy_button(current_node)
+
+
+## Handle [DEPLOY] button press
+func _on_deploy_pressed() -> void:
+	if current_phase != GamePhase.IDLE and current_phase != GamePhase.EVENT_DISPLAY:
+		return
+		
+	# Transition to team select
+	_transition_to_team_select()
 
 
 ## Transition to team select screen (skipping scene)
@@ -449,6 +458,11 @@ func _on_recap_dismissed() -> void:
 	# Refresh the star map
 	star_map.refresh()
 	star_map.center_view_on_ship(false)
+	
+	# Re-show deploy button if we are still at a scavenger site and it's not cleared
+	var current_node = VoyageManager.get_current_node()
+	if current_node and current_node.node_type == EventManager.NodeType.SCAVENGE_SITE and current_node.state != NodeData.NodeState.CLEARED:
+		star_map.show_deploy_button(current_node)
 
 
 

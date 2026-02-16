@@ -5,7 +5,7 @@ extends Control
 signal resume_pressed
 signal abandon_pressed
 
-const ABANDON_COLONIST_COST: int = 20
+
 
 @onready var panel: PanelContainer = $PanelContainer
 # Updated paths for new styled layout
@@ -16,11 +16,9 @@ const ABANDON_COLONIST_COST: int = 20
 @onready var abandon_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/AbandonButton
 
 # Ship status labels
-@onready var colonists_value: Label = $PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid/ColonistsValue
 @onready var fuel_value: Label = $PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid/FuelValue
 @onready var integrity_value: Label = $PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid/IntegrityValue
 @onready var scrap_value: Label = $PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid/ScrapValue
-@onready var stability_value: Label = $PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid/StabilityValue
 
 # Track resources collected during this mission (to forfeit on abandon)
 var mission_fuel_collected: int = 0
@@ -51,9 +49,6 @@ func _on_resume_pressed() -> void:
 func _on_abandon_pressed() -> void:
 	if SFXManager:
 		SFXManager.play_sfx_by_name("ui", "click")
-	# Apply colonist penalty
-	GameState.colonist_count -= ABANDON_COLONIST_COST
-	
 	# Resources are not added to GameState until successful extraction,
 	# so no forfeiture is needed - abandoning simply prevents rewards
 	
@@ -84,7 +79,7 @@ func set_mission_haul(fuel: int, scrap: int) -> void:
 
 
 func _update_cost_label() -> void:
-	var cost_text = "Abandoning costs %d colonists" % ABANDON_COLONIST_COST
+	var cost_text = "Abandoning mission forfeits rewards"
 	
 	# Add resource forfeiture warning if applicable
 	var forfeit_parts: Array[String] = []
@@ -100,20 +95,9 @@ func _update_cost_label() -> void:
 
 
 func _update_ship_status() -> void:
-	# Update all ship status values from GameState
-	colonists_value.text = str(GameState.colonist_count)
 	fuel_value.text = str(GameState.fuel)
 	integrity_value.text = "%d%%" % GameState.ship_integrity
 	scrap_value.text = str(GameState.scrap)
-	stability_value.text = "%d%%" % GameState.cryo_stability
-	
-	# Color code stability based on value (similar to tactical HUD)
-	if GameState.cryo_stability <= 0:
-		stability_value.add_theme_color_override("font_color", Color(1, 0.2, 0.2))
-	elif GameState.cryo_stability <= 25:
-		stability_value.add_theme_color_override("font_color", Color(1, 1, 0.2))
-	else:
-		stability_value.add_theme_color_override("font_color", Color(0.5, 0.8, 0.9))
 	
 	# Color code fuel if at 0 (drift mode)
 	if GameState.fuel == 0:

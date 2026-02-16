@@ -4,6 +4,7 @@ extends Control
 
 signal node_clicked(node_data: NodeData)
 signal jump_animation_complete
+signal deploy_pressed
 
 @onready var map_content: Control = $MapContent
 @onready var nodes_container: Control = $MapContent/NodesContainer
@@ -11,12 +12,16 @@ signal jump_animation_complete
 @onready var ship_container: Control = $MapContent/ShipContainer
 
 var MapNodeScene: PackedScene
+var DeployButtonScene: PackedScene
 var node_visuals: Dictionary = {}  # String (ID) -> MapNode visual instance
 var ship_visual: TextureRect
+var deploy_button_visual: Control = null
 var _is_ship_animating: bool = false # Flag to prevent refresh from stomping animation
 
 const ZOOM_STEP = 0.1
 var _current_zoom: float = 1.0
+var _input_locked: bool = false
+
 
 func _ready() -> void:
 	if not VoyageManager:
@@ -24,6 +29,7 @@ func _ready() -> void:
 		return
 		
 	MapNodeScene = load("res://scenes/management/map_node.tscn")
+	DeployButtonScene = load("res://scenes/ui/deploy_button.tscn")
 	
 	# Create ship visual
 	_create_ship_visual()
@@ -63,6 +69,7 @@ func _create_ship_visual() -> void:
 	ship_container.add_child(ship_visual)
 
 func refresh() -> void:
+	hide_deploy_button()
 	_clear_visuals()
 	_draw_nodes()
 	_draw_connections()
@@ -159,7 +166,7 @@ func _draw_line(from: Vector2, to: Vector2, is_traveled: bool = false) -> void:
 	lines_container.add_child(line)
 
 func _input(event: InputEvent) -> void:
-	if not visible:
+	if not visible or _input_locked:
 		return
 		
 	if event is InputEventMouseButton:
@@ -185,7 +192,7 @@ func _zoom_in(center_point: Vector2 = Vector2.ZERO) -> void:
 
 func _zoom_out(center_point: Vector2 = Vector2.ZERO) -> void:
 	var old_zoom = _current_zoom
-	_current_zoom = max(_current_zoom - ZOOM_STEP, 0.5)
+	_current_zoom = max(_current_zoom - ZOOM_STEP, 0.2)
 	_update_zoom(center_point, old_zoom)
 
 func _update_zoom(center_point: Vector2, old_zoom: float) -> void:
@@ -206,9 +213,12 @@ func _update_zoom(center_point: Vector2, old_zoom: float) -> void:
 
 
 func _on_node_clicked(node_data: NodeData) -> void:
+	if _input_locked:
+		return
 	node_clicked.emit(node_data)
 
 func _on_ship_moved(new_pos: Vector2, node_data: NodeData) -> void:
+	_input_locked = true
 	# Animate ship movement
 	_update_ship_position(true, new_pos)
 	
@@ -271,16 +281,56 @@ func center_view_on_ship(animated: bool) -> void:
 	if not current_node:
 		return
 		
-	var target_pos = -current_node.position
-	target_pos += size / 2.0 # Center on screen
+	# Calculate target position based on current zoom
+	# We want: (size / 2.0) = map_content.position + (current_node.position * _current_zoom)
+	var target_pos = (size / 2.0) - (current_node.position * _current_zoom)
 	
 	if animated:
 		var tween = create_tween()
 		tween.tween_property(map_content, "position", target_pos, 1.0).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+		tween.tween_callback(func(): _input_locked = false)
 	else:
 		map_content.position = target_pos
+		_input_locked = false
 
 # ... Panning/Zooming logic ...
 func _gui_input(event: InputEvent) -> void:
 	# Keep existing Panning logic
 	pass
+
+
+## Display the [DEPLOY] button above a specific node
+func show_deploy_button(node_data: NodeData) -> void:
+	if not node_data:
+		return
+		
+	# Remove existing if any
+	hide_deploy_button()
+	
+	if not DeployButtonScene:
+		return
+		
+	deploy_button_visual = DeployButtonScene.instantiate()
+	map_content.add_child(deploy_button_visual)
+	
+	# Position above the node
+	# Node center is at node_data.position
+	# Button pivot is center, so placing it at position centers it on node
+	# We want it slightly above. Node is 80x80 usually.
+	var offset = Vector2(0, -60) 
+	deploy_button_visual.position = node_data.position + offset
+	
+	# Connect signal
+	if deploy_button_visual.has_signal("pressed"):
+		deploy_button_visual.pressed.connect(func(): deploy_pressed.emit())
+	elif deploy_button_visual.has_node("Button"):
+		# Fallback if script not ready or signal not found directly
+		deploy_button_visual.get_node("Button").pressed.connect(func(): deploy_pressed.emit())
+
+
+## Hide the [DEPLOY] button
+func hide_deploy_button() -> void:
+	if deploy_button_visual:
+		if is_instance_valid(deploy_button_visual):
+			deploy_button_visual.queue_free()
+		deploy_button_visual = null

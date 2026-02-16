@@ -49,8 +49,6 @@ func show_scene(objective: MissionObjective, biome_type: int, alive_officers: Ar
 		reward_parts.append("+%d FUEL" % rewards.get("fuel", 0))
 	if rewards.get("scrap", 0) > 0:
 		reward_parts.append("+%d SCRAP" % rewards.get("scrap", 0))
-	if rewards.get("colonists", 0) > 0:
-		reward_parts.append("+%d COLONISTS" % rewards.get("colonists", 0))
 	if rewards.get("hull_repair", 0) > 0:
 		reward_parts.append("+%d%% HULL" % rewards.get("hull_repair", 0))
 	

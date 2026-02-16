@@ -71,8 +71,6 @@ func _update_objective_label(label: Label, objective: MissionObjective) -> void:
 		reward_parts.append("%d FUEL" % potential_rewards.get("fuel", 0))
 	if potential_rewards.get("scrap", 0) > 0:
 		reward_parts.append("%d SCRAP" % potential_rewards.get("scrap", 0))
-	if potential_rewards.get("colonists", 0) > 0:
-		reward_parts.append("%d COLONISTS" % potential_rewards.get("colonists", 0))
 	if potential_rewards.get("hull_repair", 0) > 0:
 		reward_parts.append("%d%% HULL" % potential_rewards.get("hull_repair", 0))
 	

@@ -85,10 +85,10 @@ func _ready() -> void:
 
 func _setup_tooltips() -> void:
 	# Pause button tooltip
-	pause_button.tooltip_text = "Pause the mission.\nYou can abandon the mission for a 20 colonist penalty."
+	pause_button.tooltip_text = "Pause the mission.\nYou can abandon the mission at the cost of forfeiting all collected resources."
 	
 	# Top bar tooltips
-	turn_label.tooltip_text = "Current turn number. Each turn, cryo-stability decreases by 5%."
+	turn_label.tooltip_text = "Current turn number. Each turn, the ship takes structural damage."
 	integrity_container.tooltip_text = "Ship Integrity: Structural health of the ship.\nDecreases 1% per tactical turn. At 0%, the ship is destroyed."
 	integrity_label.tooltip_text = "Ship Integrity: Structural health of the ship.\nDecreases 1% per tactical turn. At 0%, the ship is destroyed."
 	integrity_bar.tooltip_text = "Ship Integrity: Structural health of the ship.\nDecreases 1% per tactical turn. At 0%, the ship is destroyed."

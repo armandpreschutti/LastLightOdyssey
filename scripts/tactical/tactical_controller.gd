@@ -152,7 +152,7 @@ func _on_pause_abandon() -> void:
 		if has_survivors:
 			await _play_beam_up_animation()
 	
-	# End mission as failure (colonist cost already applied by pause menu)
+	# End mission as failure
 	_end_mission(false)
 
 
@@ -1223,7 +1223,7 @@ func _on_end_turn_pressed() -> void:
 		
 		current_turn += 1
 		
-		# Process turn (stability drain) - only once per round
+		# Process turn (hull damage) - only once per round
 		GameState.process_tactical_turn()
 		
 		# Reset AP and reduce cooldowns for all officers at start of new round
@@ -1242,9 +1242,7 @@ func _on_end_turn_pressed() -> void:
 		tactical_hud.update_turn(current_turn)
 		tactical_hud.update_integrity(GameState.ship_integrity)
 		
-		# Show cryo failure warning if stability is 0 - Removed in V2
-		# if GameState.cryo_stability <= 0:
-		# 	tactical_hud.show_cryo_warning()
+
 		
 		turn_ended.emit(current_turn)
 		
@@ -4090,8 +4088,6 @@ func _show_objective_complete_notification(objective: MissionObjective) -> void:
 		reward_parts.append("+%d FUEL" % bonuses.get("fuel", 0))
 	if bonuses.get("scrap", 0) > 0:
 		reward_parts.append("+%d SCRAP" % bonuses.get("scrap", 0))
-	if bonuses.get("colonists", 0) > 0:
-		reward_parts.append("+%d COLONISTS" % bonuses.get("colonists", 0))
 	if bonuses.get("hull_repair", 0) > 0:
 		reward_parts.append("+%d%% HULL" % bonuses.get("hull_repair", 0))
 	

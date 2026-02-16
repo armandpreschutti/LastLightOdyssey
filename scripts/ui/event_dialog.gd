@@ -35,14 +35,12 @@ func show_event(event: Dictionary) -> void:
 	description_label.text = event.get("description", "")
 
 	# Determine if event is positive (has gains, no losses) or negative (has losses)
-	var colonist_loss = event.get("colonist_loss", 0)
 	var integrity_loss = event.get("integrity_loss", 0)
-	var colonist_gain = event.get("colonist_gain", 0)
 	var fuel_gain = event.get("fuel_gain", 0)
 	var scrap_gain = event.get("scrap_gain", 0)
 	
-	var has_losses = colonist_loss > 0 or integrity_loss > 0
-	var has_gains = colonist_gain > 0 or fuel_gain > 0 or scrap_gain > 0
+	var has_losses = integrity_loss > 0
+	var has_gains = fuel_gain > 0 or scrap_gain > 0
 	var is_positive_event = has_gains and not has_losses
 	
 	# Update header label text based on event type
@@ -57,12 +55,7 @@ func show_event(event: Dictionary) -> void:
 	else:
 		accept_button.text = "[ ACCEPT LOSSES ]"
 	
-	# Update icon-based losses display
-	if colonist_loss > 0:
-		colonists_loss_label.text = "COLONISTS: -%d" % colonist_loss
-		colonists_loss_label.get_parent().visible = true
-	else:
-		colonists_loss_label.get_parent().visible = false
+
 	
 	if integrity_loss > 0:
 		hull_loss_label.text = "HULL: -%d%%" % integrity_loss
@@ -71,11 +64,7 @@ func show_event(event: Dictionary) -> void:
 		hull_loss_label.get_parent().visible = false
 	
 	# Update icon-based gains display
-	if colonist_gain > 0:
-		colonists_gain_label.text = "COLONISTS: +%d" % colonist_gain
-		colonists_gain_label.get_parent().visible = true
-	else:
-		colonists_gain_label.get_parent().visible = false
+
 	
 	if fuel_gain > 0:
 		fuel_gain_label.text = "FUEL: +%d" % fuel_gain
@@ -132,30 +121,18 @@ func show_event(event: Dictionary) -> void:
 func _build_losses_text(event: Dictionary, mitigated: bool) -> String:
 	var lines: Array[String] = []
 
-	var colonist_loss: int
 	var integrity_loss: int
 
 	if mitigated:
-		colonist_loss = event.get("mitigated_colonist_loss", event.get("colonist_loss", 0))
 		integrity_loss = event.get("mitigated_integrity_loss", event.get("integrity_loss", 0))
 	else:
-		colonist_loss = event.get("colonist_loss", 0)
 		integrity_loss = event.get("integrity_loss", 0)
 
-	var colonist_gain = event.get("colonist_gain", 0)
 	var fuel_gain = event.get("fuel_gain", 0)
 	var scrap_gain = event.get("scrap_gain", 0)
 	
-	var original_colonist_loss = event.get("colonist_loss", 0)
-
-	if colonist_loss > 0:
-		lines.append("COLONISTS: -%d" % colonist_loss)
-	elif mitigated and colonist_loss == 0 and original_colonist_loss > 0:
-		lines.append("COLONISTS: SAVED")
 	if integrity_loss > 0:
 		lines.append("HULL: -%d%%" % integrity_loss)
-	if colonist_gain > 0:
-		lines.append("COLONISTS: +%d" % colonist_gain)
 	if fuel_gain > 0:
 		lines.append("FUEL: +%d" % fuel_gain)
 	if scrap_gain > 0:
