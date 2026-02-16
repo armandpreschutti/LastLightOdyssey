@@ -308,17 +308,7 @@ def radiation_storm_gen(t, dur):
     return mix(geiger, rad_hum, warn, interference)
 
 
-def cryo_failure_gen(t, dur):
-    """Cryogenic system alarm, freezing sounds."""
-    # Cryo alarm (high-pitched pulsing)
-    cryo_alarm = sine_wave(t, 1100 + 100 * sine_wave(t, 3)) * 0.25 * (1 if (t * 4) % 1.0 < 0.6 else 0)
-    # Freezing/hissing
-    hiss = white_noise(0.3) * 0.3 * (0.5 + 0.5 * sine_wave(t, 0.5))
-    # Pod opening (low whoosh)
-    whoosh = sine_wave(t, 60 + 40 * (t / dur)) * 0.3
-    # Emergency beep
-    emergency = sine_wave(t, 800) * 0.2 * (1 if (t * 8) % 1.0 < 0.05 else 0)
-    return mix(cryo_alarm, hiss, whoosh, emergency)
+
 
 
 def clear_skies_gen(t, dur):
@@ -335,79 +325,7 @@ def clear_skies_gen(t, dur):
     return mix(hum, hum2, chime, chime2, ambience)
 
 
-# ============================================================================
-# COLONIST LOSS MILESTONE SFX GENERATORS
-# ============================================================================
 
-def casualties_mount_gen(t, dur):
-    """Warning tones, first crisis, growing concern."""
-    # Warning tone
-    warn = sine_wave(t, 500 + 100 * sine_wave(t, 1.5)) * 0.3
-    # Slow heartbeat
-    beat_phase = (t * 1.0) % 1.0
-    beat = sine_wave(t, 80) * max(0, 1.0 - beat_phase * 8) * 0.35
-    # Somber pad
-    pad = sine_wave(t, 220) * 0.15 + sine_wave(t, 330) * 0.1
-    return mix(warn, beat, pad)
-
-
-def weight_of_command_gen(t, dur):
-    """Heavy alarms, desperation building."""
-    # Heavier alarm
-    alarm = sine_wave(t, 400 + 150 * sine_wave(t, 2)) * 0.35
-    # Strained systems
-    strain = sine_wave(t, 60 + 20 * sine_wave(t, 0.8)) * 0.3
-    # Distorted heartbeat (faster)
-    beat_phase = (t * 1.5) % 1.0
-    beat = sine_wave(t, 70) * max(0, 1.0 - beat_phase * 6) * 0.3
-    # Dissonant tones
-    dissonance = sine_wave(t, 310) * 0.1 + sine_wave(t, 317) * 0.1
-    return mix(alarm, strain, beat, dissonance)
-
-
-def desperation_gen(t, dur):
-    """Critical warnings, failing systems."""
-    # Critical alarm (fast pulsing)
-    alarm = sine_wave(t, 700) * 0.3 * (1 if (t * 5) % 1.0 < 0.5 else 0)
-    # System dying
-    dying = sine_wave(t, 200 - 100 * (t / dur)) * 0.3
-    # Chaotic noise
-    chaos = white_noise(0.2) * (0.5 + 0.5 * sine_wave(t, 3))
-    # Deep bass dread
-    dread = sine_wave(t, 45) * 0.35
-    return mix(alarm, dying, chaos, dread)
-
-
-def all_hope_lost_gen(t, dur):
-    """Emergency sirens, near-total failure."""
-    # Wailing siren
-    siren_freq = 500 + 400 * sine_wave(t, 3)
-    siren = sine_wave(t, siren_freq) * 0.3
-    # Systems failing (descending)
-    failing = sine_wave(t, 300 - 200 * (t / dur)) * 0.25
-    # Noise/static building
-    static = white_noise(0.3) * (t / dur) * 0.4
-    # Dread bass
-    bass = sine_wave(t, 35) * 0.4
-    return mix(siren, failing, static, bass)
-
-
-def extinction_gen(t, dur):
-    """Final system shutdown, silence, end."""
-    # Systems powering down
-    progress = t / dur
-    powerdown = sine_wave(t, 300 * (1 - progress * 0.8)) * 0.3 * (1 - progress)
-    # Last heartbeat
-    if t < dur * 0.3:
-        beat_phase = (t * 0.8) % 1.0
-        beat = sine_wave(t, 60) * max(0, 1.0 - beat_phase * 8) * 0.4
-    else:
-        beat = 0
-    # Flatline
-    flatline = sine_wave(t, 1000) * 0.15 * max(0, progress - 0.6) / 0.4 if progress > 0.6 else 0
-    # Fading hum
-    hum = sine_wave(t, 100) * 0.2 * (1 - progress)
-    return mix(powerdown, beat, flatline, hum)
 
 
 # ============================================================================
@@ -672,23 +590,11 @@ def main():
         ("space_debris.mp3", space_debris_gen, 3.0),
         ("sensor_ghost.mp3", sensor_ghost_gen, 3.5),
         ("radiation_storm.mp3", radiation_storm_gen, 3.0),
-        ("cryo_failure.mp3", cryo_failure_gen, 3.0),
         ("clear_skies.mp3", clear_skies_gen, 3.0),
     ]
     for name, gen, dur in events:
         generate_sfx(name, "event_scene", dur, gen, attack=0.1, release=0.5)
 
-    # Colonist Loss Milestones
-    print("\n[2/8] Colonist Loss Milestones:")
-    milestones = [
-        ("casualties_mount.mp3", casualties_mount_gen, 3.0),
-        ("weight_of_command.mp3", weight_of_command_gen, 3.5),
-        ("desperation.mp3", desperation_gen, 3.5),
-        ("all_hope_lost.mp3", all_hope_lost_gen, 4.0),
-        ("extinction.mp3", extinction_gen, 4.0),
-    ]
-    for name, gen, dur in milestones:
-        generate_sfx(name, "colonist_loss_scene", dur, gen, attack=0.15, release=0.8)
 
     # Mission Scenes
     print("\n[3/8] Mission Scenes:")

@@ -294,7 +294,7 @@ func _stop_pulse() -> void:
 
 ## Check if node is clickable
 func is_clickable() -> bool:
-	return current_state == NodeState.AVAILABLE or current_state == NodeState.CURRENT
+	return current_state == NodeState.AVAILABLE or current_state == NodeState.CURRENT or current_state == NodeState.VISITED
 
 
 ## Check if this is the New Earth node
@@ -310,7 +310,7 @@ func _is_new_earth_node() -> bool:
 
 func _on_mouse_entered() -> void:
 	is_hovered = true
-	if current_state == NodeState.AVAILABLE or current_state == NodeState.CURRENT:
+	if current_state == NodeState.AVAILABLE or current_state == NodeState.CURRENT or current_state == NodeState.VISITED:
 		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
 		# Scale up slightly on hover
 		var tween = create_tween()

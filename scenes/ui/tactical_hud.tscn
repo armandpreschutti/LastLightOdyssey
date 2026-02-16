@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://5cjenw3gw7mt" path="res://scripts/ui/tactical_hud.gd" id="1_hud"]
 [ext_resource type="Texture2D" uid="uid://vo2viufuvim8" path="res://assets/sprites/ui/icons/icon_turn.png" id="2_turn"]
-[ext_resource type="Texture2D" uid="uid://4urc04o06ois" path="res://assets/sprites/ui/icons/icon_cryo.png" id="3_cryo"]
+[ext_resource type="Texture2D" uid="uid://cpy36v51jmkqa" path="res://assets/sprites/ui/icons/icon_hull.png" id="3_cryo"]
 [ext_resource type="Texture2D" uid="uid://bogrtadpxsc8r" path="res://assets/sprites/ui/icons/icon_fuel.png" id="4_fuel"]
 [ext_resource type="Texture2D" uid="uid://dlq4cvxnvfbg3" path="res://assets/sprites/ui/icons/icon_scrap.png" id="5_scrap"]
 [ext_resource type="Texture2D" uid="uid://cuktrpqwoxamb" path="res://assets/sprites/ui/icons/icon_health.png" id="6_health"]
@@ -134,34 +134,34 @@ theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 20
 text = "TURN: 1"
 
-[node name="StabilityContainer" type="VBoxContainer" parent="TopBar/HBox" unique_id=1235188831]
-custom_minimum_size = Vector2(200, 0)
+[node name="IntegrityContainer" type="VBoxContainer" parent="TopBar/HBox" unique_id=1199695057]
 layout_mode = 2
 
-[node name="StabilityHeader" type="Label" parent="TopBar/HBox/StabilityContainer" unique_id=51473067]
+[node name="IntegrityHeader" type="Label" parent="TopBar/HBox/IntegrityContainer" unique_id=1465797441]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
 theme_override_font_sizes/font_size = 12
-text = "COLONIST LIFE SUPPORT"
+text = "SHIP INTEGRITY"
 
-[node name="StabilityRow" type="HBoxContainer" parent="TopBar/HBox/StabilityContainer" unique_id=847595532]
+[node name="IntegrityRow" type="HBoxContainer" parent="TopBar/HBox/IntegrityContainer" unique_id=1199695058]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="CryoIcon" type="TextureRect" parent="TopBar/HBox/StabilityContainer/StabilityRow" unique_id=1051336586]
+[node name="IntegrityIcon" type="TextureRect" parent="TopBar/HBox/IntegrityContainer/IntegrityRow" unique_id=279119654]
 custom_minimum_size = Vector2(20, 20)
 layout_mode = 2
 texture = ExtResource("3_cryo")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="StabilityLabel" type="Label" parent="TopBar/HBox/StabilityContainer/StabilityRow" unique_id=1876371962]
+[node name="IntegrityLabel" type="Label" parent="TopBar/HBox/IntegrityContainer/IntegrityRow" unique_id=1731214028]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
-theme_override_font_sizes/font_size = 16
-text = "CRYO-STABILITY: 100%"
+theme_override_font_sizes/font_size = 20
+text = "HULL: 100%"
 
-[node name="StabilityBar" type="ProgressBar" parent="TopBar/HBox/StabilityContainer" unique_id=469118743]
+[node name="IntegrityBar" type="ProgressBar" parent="TopBar/HBox/IntegrityContainer" unique_id=1199695059]
+custom_minimum_size = Vector2(150, 6)
 layout_mode = 2
 mouse_filter = 1
 value = 100.0
@@ -209,25 +209,6 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
 theme_override_font_sizes/font_size = 14
 text = "SCRAP: +0"
-
-[node name="CryoWarning" type="Label" parent="." unique_id=165861564]
-visible = false
-layout_mode = 1
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -77.0
-offset_top = 11.0
-offset_right = 423.0
-offset_bottom = 46.0
-grow_horizontal = 2
-theme_override_colors/font_color = Color(1, 0.2, 0.2, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 3
-theme_override_font_sizes/font_size = 20
-text = "!! CRYO-FAILURE: LOSING 10 COLONISTS !!"
-horizontal_alignment = 1
-vertical_alignment = 1
 
 [node name="SidePanelGlow" type="ColorRect" parent="." unique_id=1812237233]
 layout_mode = 1

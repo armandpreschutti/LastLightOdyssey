@@ -16,7 +16,6 @@ extends Node
 @onready var team_select_dialog: Control = $DialogLayer/TeamSelectDialog
 # @onready var trading_dialog: Control = $DialogLayer/TradingDialog - Removed in V2
 @onready var mission_scene_dialog: Control = $DialogLayer/MissionSceneDialog
-# @onready var colonist_loss_scene_dialog: Control = $DialogLayer/ColonistLossSceneDialog - Removed in V2
 @onready var objective_complete_scene_dialog: Control = $DialogLayer/ObjectiveCompleteSceneDialog
 @onready var enemy_elimination_scene_dialog: Control = $DialogLayer/EnemyEliminationSceneDialog
 @onready var tactical_mode: Node2D = $TacticalMode
@@ -27,8 +26,6 @@ extends Node
 var _pending_ending_type: String = ""  # Store ending type for the win sequence
 var _pending_officer_keys: Array[String] = []  # Store selected officers for mission start
 var _pending_objectives: Array[MissionObjective] = []  # Store selected objectives for mission start
-# var _pending_node_after_colonist_loss: int = -1 - Removed in V2
-# var _pending_biome_after_colonist_loss: int = -1 - Removed in V2
 var _pending_mission_recap_stats: Dictionary = {}
 var _pending_game_over_reason: String = ""  # Store game over reason for the sequence
 
@@ -79,7 +76,6 @@ func _connect_signals() -> void:
 	mission_recap.recap_dismissed.connect(_on_recap_dismissed)
 	new_earth_scene.scene_dismissed.connect(_on_new_earth_scene_dismissed)
 	voyage_intro_scene_dialog.scene_dismissed.connect(_on_voyage_intro_scene_dismissed)
-	# colonist_loss_scene_dialog.scene_dismissed.connect(_on_colonist_loss_scene_dismissed) - Removed in V2
 	objective_complete_scene_dialog.scene_dismissed.connect(_on_objective_complete_scene_dismissed)
 	enemy_elimination_scene_dialog.scene_dismissed.connect(_on_enemy_elimination_scene_dismissed)
 	game_over_scene_dialog.scene_dismissed.connect(_on_game_over_scene_dismissed)
@@ -163,15 +159,27 @@ func _on_node_clicked(node_data: NodeData) -> void:
 		TutorialManager.notify_trigger("node_clicked")
 	
 	# Get fuel cost for this jump
-	# In infinite grid, adjacent jump costs 1, unless traveled
 	var fuel_cost = VoyageManager.get_fuel_cost(node_data)
 	
-	# Check if player has enough fuel - warn about drift mode if not
-	if GameState.fuel < fuel_cost and not _suppress_fuel_warning:
-		_show_fuel_warning(node_data, fuel_cost)
+	# Determine if this is a neighbor or requires a path
+	var current_node = VoyageManager.get_current_node()
+	var is_neighbor = current_node and node_data.id in current_node.connections
+
+	if is_neighbor:
+		# Check if player has enough fuel - warn about drift mode if not
+		if GameState.fuel < fuel_cost and not _suppress_fuel_warning:
+			_show_fuel_warning(node_data, fuel_cost)
+		else:
+			# Start ship jump animation, then execute jump when animation completes
+			_execute_jump_with_animation(node_data, fuel_cost)
 	else:
-		# Start ship jump animation, then execute jump when animation completes
-		_execute_jump_with_animation(node_data, fuel_cost)
+		# Attempt multi-node travel through visited nodes
+		var path = VoyageManager.find_path(current_node_id, node_data.id)
+		if path.size() > 1:
+			_execute_path_travel(path)
+		else:
+			# Not a neighbor and no path found through visited nodes
+			pass
 
 
 ## Show fuel warning dialog when player doesn't have enough fuel for the jump
@@ -237,6 +245,53 @@ func _execute_jump_with_animation(node_data: NodeData, fuel_cost: int) -> void:
 		_process_node_after_jump(node_data, was_visited)
 	else:
 		_is_jump_animating = false
+
+
+## Execute consecutive jumps along a path
+func _execute_path_travel(path: Array[NodeData]) -> void:
+	if path.size() <= 1:
+		return
+		
+	_is_jump_animating = true
+	
+	# Iterate through the path starting from the second node (first is current)
+	for i in range(1, path.size()):
+		var target_node = path[i]
+		var is_last_hop = (i == path.size() - 1)
+		var was_visited = target_node.state != NodeData.NodeState.UNVISITED
+		
+		var fuel_cost = VoyageManager.get_fuel_cost(target_node)
+		
+		# Check fuel warning only for the first hop of a chain? 
+		# Or just jump since we are traveling through visited nodes (usually 0 cost)
+		# For multi-hop, we skip the warning to avoid stopping the sequence
+		# unless we want to be strict. Let's be lenient for consecutive travel.
+		
+		var success = VoyageManager.attempt_jump(target_node)
+		if not success:
+			_is_jump_animating = false
+			return
+			
+		# Wait for animation
+		await star_map.jump_animation_complete
+		
+		# Check for game exit states
+		if current_phase == GamePhase.GAME_WON or current_phase == GamePhase.GAME_OVER:
+			_is_jump_animating = false
+			return
+			
+		# If it's the final destination, trigger arrival logic
+		if is_last_hop:
+			_is_jump_animating = false
+			_process_node_after_jump(target_node, was_visited)
+			return
+		
+		# Small delay between hops for smoothness? 
+		# StarMap already has animation time, so it might be okay.
+		# Let's add a tiny frame wait.
+		await get_tree().process_frame
+		
+	_is_jump_animating = false
 
 
 func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) -> void:
@@ -434,7 +489,7 @@ func _on_mission_complete(_success: bool, stats: Dictionary) -> void:
 	# Fade in from black
 	fade_transition.fade_in(0.6)
 	
-	# No colonist loss milestone, show mission recap directly
+	# No milestone, show mission recap directly
 	mission_recap.show_recap(stats)
 	
 	# If mission was successful, mark node as completed (only for scavenge sites)
@@ -529,14 +584,6 @@ func _on_voyage_intro_scene_dismissed() -> void:
 
 
 
-# func _get_colonist_loss_threshold() -> int: - Removed in V2
-# 	return -1
-
-# func _check_colonist_loss_milestones() -> int: - Removed in V2
-# 	return -1
-
-# func _on_colonist_loss_scene_dismissed() -> void: - Removed in V2
-# 	pass
 
 
 
@@ -706,16 +753,15 @@ func _on_view_map_requested(show_map: bool) -> void:
 
 
 func _on_view_recap_from_map() -> void:
-	# Determine which recap we came from based on current phase
-	if current_phase == GamePhase.GAME_WON:
-		# Return to voyage recap
+	# Determine which recap we came from based on which one is active
+	# We check visibility of the recap nodes as they persist while viewing map
+	if voyage_recap.visible:
 		voyage_recap._on_return_pressed()
-	elif current_phase == GamePhase.GAME_OVER:
-		# Return to game over recap
+	elif game_over_recap.visible:
 		game_over_recap._on_return_pressed()
 	
-	# Reset HUD mode
-	management_hud.set_view_recap_mode(false)
+	# Note: management_hud.set_view_recap_mode(false) is called automatically
+	# via the voyage_recap/game_over_recap signal connected to _on_view_map_requested(false)
 
 
 func _on_market_pressed() -> void:

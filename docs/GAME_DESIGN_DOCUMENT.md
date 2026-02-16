@@ -42,10 +42,9 @@ This layer simulates the grueling trek across the stars.
 
 | Statistic | Starting Value | Description |
 |-----------|----------------|-------------|
-| **Colonists** | 1,000 | The player's "health" and final score. Humanity's last survivors. |
-| **Fuel** | 10 | The clock. Each jump consumes fuel. At 0, ship enters "Drift Mode" (−100 colonists per jump). |
-| **Ship Integrity** | 100% | Damaged by space hazards. At 0%, the ship is destroyed. Game Over. |
-| **Scrap** | 25 | Currency found on tactical maps. Used for repairs and trading. |
+| **Ship Integrity** | 100% | The player's "health". Damaged by space hazards. At 0%, the voyage fails. |
+| **Fuel** | 10 | The clock. Each jump consumes fuel. At 0, ship enters "Drift Mode" (−15% integrity per jump). |
+| **Scrap** | 25 | Currency found on tactical maps. Used for repairs and trading at outposts. |
 
 ### 2.2 The Star Map (Node System)
 
@@ -57,8 +56,8 @@ A procedurally generated node graph with **50 nodes** leading to New Earth.
 - Each node connects to 1-3 nodes in adjacent rows (forward connections primary, backward connections at 30% chance)
 - Variable fuel costs: base 2 fuel, +2 for column distance (horizontal/diagonal movement), +4 for backward travel
 - Fuel costs are calculated per connection and saved with the star map
-- **Fuel Warning**: Attempting a jump with insufficient fuel triggers a confirmation prompt detailing the penalties (colonist loss and integrity damage).
-- If insufficient fuel for a jump, ship enters "Drift Mode" and loses 100 colonists (flat rate)
+- **Fuel Warning**: Attempting a jump with insufficient fuel triggers a confirmation prompt detailing the penalties (integrity damage).
+- If insufficient fuel for a jump, ship enters "Drift Mode" and loses 15% integrity per jump.
 - **Navigation Legend**: A legend is available in the navigation menu to explain node types and connection costs.
 - **Node Re-entry**: Scavenge sites and wormholes can be re-entered if the mission is cancelled or aborted, preventing soft-locks.
 - **Goal Guarantee**: The "New Earth" node is programmatically guaranteed to be the final node (node 49) and cannot be bypassed.
@@ -79,15 +78,15 @@ Upon entering a node, the game rolls **1d10** against the Random Event Table.
 
 | Roll | Event | Base Loss | Specialist | Mitigated Loss | Mitigation Cost |
 |------|-------|-----------|------------|----------------|-----------------|
-| 1 | Solar Flare | −70 colonists, −15% integrity | Tech | 0 colonists, −5% integrity | 18 scrap |
-| 2 | Meteor Shower | −50 colonists, −25% integrity | Scout | 0 colonists, −10% integrity | 22 scrap |
-| 3 | Disease Outbreak | −100 colonists | Medic | 0 colonists | 30 scrap |
-| 4 | System Malfunction | −40 colonists, −20% integrity | Tech | 0 colonists, −10% integrity | 15 scrap |
-| 5 | Pirate Ambush | −60 colonists, −30% integrity | Heavy | 0 colonists, −15% integrity | 28 scrap |
-| 6 | Space Debris Field | −30 colonists, −20% integrity | Scout | 0 colonists, −10% integrity | 20 scrap |
-| 7 | Sensor Ghost | No effect | — | — | — |
-| 8 | Radiation Storm | −80 colonists, −10% integrity | Tech | 0 colonists, −5% integrity | 25 scrap |
-| 9 | Cryo Pod Failure | −100 colonists | Medic | 0 colonists | 35 scrap |
+| 1 | Solar Flare | −30% integrity | Tech | −10% integrity | 18 scrap |
+| 2 | Meteor Shower | −40% integrity | Scout | −15% integrity | 22 scrap |
+| 3 | System Critical | −25% integrity | Tech | −5% integrity | 15 scrap |
+| 4 | Pirate Ambush | −50% integrity | Heavy | −20% integrity | 28 scrap |
+| 5 | Space Debris | −20% integrity | Scout | −10% integrity | 20 scrap |
+| 6 | Sensor Ghost | No effect | — | — | — |
+| 7 | Radiation Storm | −35% integrity | Tech | −15% integrity | 25 scrap |
+| 8 | Void Rift | −45% integrity | Scout | −20% integrity | 30 scrap |
+| 9 | Hull Malfunction | −25% integrity | Tech | −10% integrity | 20 scrap |
 | 10 | Clear Skies | No effect | — | — | — |
 
 **Mitigation Cost Scaling:** Base scrap cost scales with progress: `base_cost × (1.0 + progress_ratio × 1.5)`, with 40% reduction for nodes 35+.
@@ -321,9 +320,9 @@ Scavenge missions now feature **biome-specific objectives** that provide bonus r
 | **Asteroid** | clear_passages | Clear cave passages | Progress | 4 | +20 Scrap |
 | | activate_mining | Activate mining equipment | Binary | 1 | +22 Scrap |
 | | extract_minerals | Extract rare minerals | Progress | 2 | +30 Scrap |
-| **Planet** | collect_samples | Collect alien samples | Progress | 5 | +20 Colonists |
-| | activate_beacons | Activate beacons | Progress | 3 | +18 Colonists |
-| | clear_nests | Clear hostile nests | Binary | 1 | +25 Colonists |
+| Planet | collect_samples | Collect alien data | Progress | 5 | +20 Scrap |
+| | activate_beacons | Activate beacons | Progress | 3 | +18 Scrap |
+| | clear_nests | Clear hostile nests | Binary | 1 | +25 Scrap |
 
 **Objective Interactables:**
 Each objective requires interacting with specific objects on the tactical map:
@@ -356,7 +355,7 @@ To prevent players from spending unlimited turns looting, the **Cryo-Stability T
 | **100%** | Mission start |
 | **100% → 0%** | Decreases by **5%** every round (reduced to **3%** in final stages - nodes 35+) |
 | **0% (Collapse)** | "CRYO-FAILURE" warning displays |
-| **Each round at 0%** | −10 colonists immediately |
+| **Each round at 0%** | Ship sustains structural damage (−5% integrity) |
 
 **Final Stage Balancing:** In nodes 35+ (final 15 nodes), stability loss per turn is reduced by 2% (from 5% to 3%) to give players more tactical turns in the critical final stretch.
 
@@ -370,11 +369,11 @@ To prevent players from spending unlimited turns looting, the **Cryo-Stability T
 ### Mission Abort
 
 Players can pause during tactical missions and choose to **Abandon Mission**:
-- Costs **20 colonists** as penalty
+- Costs **15% Ship Integrity** as penalty
 - All deployed officers return safely (even if surrounded)
 - No resources are gained from the mission (all collected fuel and scrap are forfeited)
 - Pause menu displays current mission haul and warns about resource forfeiture
-- Ship status display shows current colonists, fuel, integrity, scrap, and stability with color-coded indicators
+- Ship status display shows current fuel, integrity, scrap, and stability with color-coded indicators
 - Useful when a mission goes badly wrong
 
 ---
@@ -382,19 +381,19 @@ Players can pause during tactical missions and choose to **Abandon Mission**:
 ## 5. Win/Loss Logic
 
 ### Win Condition
-Reach the **"New Earth"** node (node 49, the final node) with **Colonists > 0**.
+Reach the **"New Earth"** node (node 49, the final node) with **Ship Integrity > 0%**.
 
 ### Ending Tiers
 
-| Colonists | Ending | Title |
+| Integrity | Ending | Title |
 |-----------|--------|-------|
-| 1,000 | Perfect | "The Golden Age" |
-| 500–999 | Good | "The Hard Foundation" |
-| 1–499 | Bad | "The Endangered Species" |
+| 100% | Perfect | "The Golden Age" |
+| 50–99% | Good | "The Hard Foundation" |
+| 1–49% | Bad | "The Endangered Species" |
 
 ### Voyage Recap Screen
 Upon reaching New Earth, players are shown a comprehensive **Voyage Recap** screen displaying:
-- **Final State**: Colonists remaining, fuel reserves, ship integrity, scrap stockpile
+- **Final State**: Fuel reserves, ship integrity, scrap stockpile
 - **Officer Status**: Survival status for all 6 officers (alive or K.I.A.)
 - **Cumulative Statistics** (tracked across entire voyage):
   - Total fuel collected from missions
@@ -408,7 +407,7 @@ Upon reaching New Earth, players are shown a comprehensive **Voyage Recap** scre
 ### Game Over Recap Screen
 Upon game over, players are shown a comprehensive **Game Over Recap** screen displaying:
 - **Failure Reason**: Specific game over message (extinction, ship destroyed, captain lost)
-- **Final State**: Colonists remaining, fuel reserves, ship integrity, scrap stockpile
+- **Final State**: Fuel reserves, ship integrity, scrap stockpile
 - **Officer Status**: Survival status for all 6 officers (alive, K.I.A., or contextual messages based on failure type)
 - **Cumulative Statistics** (tracked across entire voyage):
   - Total fuel collected from missions
@@ -420,9 +419,6 @@ Upon game over, players are shown a comprehensive **Game Over Recap** screen dis
 
 ### Loss Conditions
 
-| Condition | Message |
-|-----------|---------|
-| Colonists = 0 | "EXTINCTION: Humanity's light has been extinguished." |
 | Ship Integrity = 0% | "CATASTROPHIC FAILURE: The ship has been destroyed." |
 | Captain dies | "LEADERSHIP LOST: Without leadership, the mission cannot continue." |
 
@@ -434,22 +430,8 @@ When starting a new game, players are shown an **Oregon Trail-style intro scene*
 - **Visual Style**: Epic, hopeful but somber color palette with scanline overlay
 - **Timing**: Shown before tutorial begins, blocks interaction until dismissed
 
-### Colonist Loss Milestone System
-As colonists are lost throughout the voyage, the game displays **emotional milestone scenes** when crossing critical thresholds:
-
-**Milestone Thresholds:**
-- **750 colonists** (250 lost): "CASUALTIES MOUNT" - The weight of command grows heavier
-- **500 colonists** (500 lost): "THE WEIGHT OF COMMAND" - Half the mission is gone
-- **250 colonists** (750 lost): "DESPERATION" - Only a quarter remain
-- **100 colonists** (900 lost): "ALL HOPE LOST" - One hundred souls remain
-- **0 colonists** (1000 lost): "EXTINCTION" - The last cryosleeper has failed
-
-**Scene Features:**
-- **Procedural Scene Generation**: Each threshold has unique visual elements and color palette (getting darker/more desperate)
-- **Narrative Text**: Emotional descriptions of the psychological impact on the ship's commander
-- **Typewriter Effect**: Description animates character-by-character
-- **Timing**: Shown after node events or mission completion when thresholds are crossed
-- **One-Time Display**: Each milestone is shown only once per playthrough
+### Milestone System
+As the mission progresses throughout the voyage, the game displays **emotional scenes** when crossing critical journey milestones.
 
 ---
 
@@ -577,14 +559,13 @@ As colonists are lost throughout the voyage, the game displays **emotional miles
 ### Tutorial System
 First-time players receive a **9-step guided tutorial** that covers:
 
-1. **Star Map Navigation** - How to plot course and fuel costs
-2. **Resource Management** - Understanding colonists, fuel, hull, and scrap
+2. **Resource Management** - Understanding fuel, hull, and scrap
 3. **Random Events** - How events work and specialist mitigation
 4. **Scavenge Missions** - Team selection and permadeath warning
 5. **Tactical Movement** - Action points and movement
 6. **Combat** - Attacking enemies and cover mechanics
 7. **Abilities** - Specialist unique abilities (Scout Overwatch, Tech Turret, Medic Patch, Heavy Charge, Captain Execute, Sniper Precision Shot)
-8. **Cryo-Stability** - Time pressure and colonist loss
+8. **Cryo-Stability** - Time pressure and ship protection
 9. **Extraction** - Completing missions
 
 Tutorial can be skipped at any time and reset from the Settings menu.
@@ -729,9 +710,9 @@ Visual elements for the management layer star map.
 Interface icons used throughout the game for resource displays, combat info, and settings.
 
 **Resource Icons**
-| Colonists | Fuel | Hull | Scrap | Cryo Stability |
-|:---------:|:----:|:----:|:-----:|:--------------:|
-| ![Colonists](../assets/sprites/ui/icons/icon_colonists.png) | ![Fuel](../assets/sprites/ui/icons/icon_fuel.png) | ![Hull](../assets/sprites/ui/icons/icon_hull.png) | ![Scrap](../assets/sprites/ui/icons/icon_scrap.png) | ![Cryo](../assets/sprites/ui/icons/icon_cryo.png) |
+| Fuel | Hull | Scrap | Cryo Stability |
+|:----:|:----:|:-----:|:--------------:|
+| ![Fuel](../assets/sprites/ui/icons/icon_fuel.png) | ![Hull](../assets/sprites/ui/icons/icon_hull.png) | ![Scrap](../assets/sprites/ui/icons/icon_scrap.png) | ![Cryo](../assets/sprites/ui/icons/icon_cryo.png) |
 
 **Combat & HUD Icons**
 | Health | Action Points | Movement | Turn | Enemies |
@@ -808,7 +789,7 @@ Interface icons used throughout the game for resource displays, combat info, and
 ### ✅ Phase 6: Pressure Mechanic (COMPLETE)
 - [x] Cryo-Stability bar and display
 - [x] Stability drain per round (5%)
-- [x] Colonist loss at 0% stability
+- [x] Integrity damage at 0% stability
 - [x] Warning messages and visual feedback
 - [x] Extraction zone system
 
@@ -846,11 +827,11 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Resource forfeiture warning in pause menu when abandoning missions
 
 ### ✅ Phase 9: Save/Load System (COMPLETE)
-- [x] Save game state to JSON file (colonists, fuel, integrity, scrap, officers)
+- [x] Save game state to JSON file (fuel, integrity, scrap, officers)
 - [x] Save star map layout and node progress
 - [x] Save node types and biome assignments
 - [x] Save cumulative mission statistics (fuel collected, scrap collected, enemies killed, missions completed, tactical turns)
-- [x] Save colonist loss milestone tracking
+- [x] Save milestone tracking
 - [x] Load game state on continue
 - [x] Continue button on title menu (disabled if no save)
 - [x] New game confirmation dialog when save exists
@@ -868,7 +849,7 @@ Interface icons used throughout the game for resource displays, combat info, and
 
 ### ✅ Phase 12: Narrative & Feedback Systems (COMPLETE)
 - [x] Voyage intro scene with procedural generation and typewriter effect
-- [x] Colonist loss milestone system with emotional scenes at thresholds (750, 500, 250, 100, 0)
+- [x] Milestone system with emotional scenes
 - [x] Procedural scene generation for milestone scenes with threshold-specific color palettes
 - [x] Game Over Recap screen with cumulative statistics and officer status
 - [x] Unit stats tooltip system (hover to display HP, AP, ranges, damage)
@@ -878,7 +859,7 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Mission difficulty scaling system (1.0x to ~2.5x based on progress)
 - [x] Final stage balancing (reduced stability loss and difficulty scaling in nodes 35+)
 - [x] Navigation penalties (ship integrity and stability loss per jump)
-- [x] Drift mode penalty tuning (50 colonists per fuel deficit)
+- [x] Drift mode penalty tuning (15% integrity per fuel deficit)
 - [x] Fuel cost system refinement (base 2, +2 row distance, +4 backward)
 - [x] Combat damage/accuracy fine-tuning
 - [x] Music integration (Title, Navigation, Tactical)
@@ -905,7 +886,7 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] Victory screen with ending tier text
 
 #### Save/Load System
-- [x] Full game state persistence (colonists, fuel, integrity, scrap)
+- [x] Full game state persistence (fuel, integrity, scrap)
 - [x] Officer status persistence (alive/deployed state)
 - [x] Star map layout persistence (nodes, connections, types, fuel costs)
 - [x] Node progress persistence (current node, visited nodes)
@@ -981,7 +962,7 @@ Interface icons used throughout the game for resource displays, combat info, and
 
 #### Navigation & Balance Improvements
 - [x] Increased star map to 50 nodes (16 columns) for longer journey
-- [x] Increased drift mode penalty to 50 colonists per fuel deficit (harsher consequences)
+- [x] Increased drift mode penalty (15% integrity per deficit)
 - [x] Navigation penalties: −1% ship integrity and −2% stability per jump
 - [x] Updated fuel costs: base 2, +2 for row distance, +4 for backward travel
 - [x] Final stage stability reduction (3% per turn instead of 5% in nodes 35+)
@@ -1026,8 +1007,8 @@ Interface icons used throughout the game for resource displays, combat info, and
 
 #### Narrative & Feedback Systems
 - [x] Voyage intro scene with Oregon Trail-style presentation
-- [x] Procedural scene generation for intro and milestone scenes
-- [x] Colonist loss milestone system (triggers at 750, 500, 250, 100, 0 colonists)
+- [x] Procedural scene| **Narrative** | Intro scene & Milestone events |
+- [x] Milestone system implemented
 - [x] Emotional milestone scenes with threshold-specific narratives and color palettes
 - [x] Game Over Recap screen with failure-specific messaging
 - [x] Unit stats tooltip on hover (HP, AP, ranges, damage, unit type)
@@ -1146,7 +1127,7 @@ Last Light Odyssey/
 > *"Start with Gray Boxes."* Don't polish art until the mechanics feel fun. If the game is stressful and addictive with just squares and numbers, it will be a masterpiece once polish is added.
 
 The core tension should come from:
-1. **Resource scarcity** - Never enough fuel, always losing colonists
+1. **Resource scarcity** - Never enough fuel, always fighting for integrity
 2. **Time pressure** - Cryo-Stability forces mission exits
 3. **Meaningful choices** - Trade-offs between risk and reward
 4. **Permanent consequences** - Dead officers stay dead

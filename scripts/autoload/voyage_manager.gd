@@ -146,6 +146,47 @@ func get_visible_nodes() -> Array[NodeData]:
 		visible_nodes.append(nodes[id])
 	return visible_nodes
 
+## Find a path between two nodes using Breadth-First Search
+## Only traverses VISITED or CLEARED nodes
+## Returns an array of NodeData representing the path (including start and end)
+func find_path(start_id: String, target_id: String) -> Array[NodeData]:
+	if not nodes.has(start_id) or not nodes.has(target_id):
+		return []
+		
+	if start_id == target_id:
+		return [nodes[start_id]]
+		
+	var queue = [[start_id]]
+	var visited = {start_id: true}
+	
+	while queue.size() > 0:
+		var path = queue.pop_front()
+		var current_id = path[-1]
+		
+		if current_id == target_id:
+			# Convert IDs back to NodeData
+			var node_path: Array[NodeData] = []
+			for id in path:
+				node_path.append(nodes[id])
+			return node_path
+			
+		var current_node = nodes[current_id]
+		for neighbor_id in current_node.connections:
+			if not nodes.has(neighbor_id):
+				continue
+				
+			var neighbor = nodes[neighbor_id]
+			# Only traverse visited nodes (except target, though target should be visited too per requirement)
+			var can_traverse = neighbor.state != NodeData.NodeState.UNVISITED
+			
+			if not visited.has(neighbor_id) and can_traverse:
+				visited[neighbor_id] = true
+				var new_path = path.duplicate()
+				new_path.append(neighbor_id)
+				queue.push_back(new_path)
+				
+	return [] # No path found
+
 ## Enter Logic (Trigger Event/Tactical)
 func _enter_node(node: NodeData) -> void:
 	# This would trigger the standard event processing

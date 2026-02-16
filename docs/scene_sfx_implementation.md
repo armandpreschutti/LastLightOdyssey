@@ -23,7 +23,6 @@ Updated `BaseSceneDialog` to automatically call `SFXManager.stop_scene_sfx()` wh
 Affected Scenes:
 - Event Scene (`event_scene_dialog.gd`)
 - Mission Scene (`mission_scene_dialog.gd`)
-- Colonist Loss Scene (`colonist_loss_scene_dialog.gd`)
 - Objective Complete Scene (`objective_complete_scene_dialog.gd`)
 - Enemy Elimination Scene (`enemy_elimination_scene_dialog.gd`)
 - New Earth Scene (`new_earth_scene_dialog.gd`)

@@ -13,7 +13,6 @@
 [ext_resource type="PackedScene" uid="uid://c4meqewcdr3ey" path="res://scenes/ui/voyage_recap.tscn" id="9_voyage_recap"]
 [ext_resource type="PackedScene" uid="uid://c7k3n6rw4o8y" path="res://scenes/ui/voyage_intro_scene_dialog.tscn" id="10_voyage_intro"]
 [ext_resource type="Script" uid="uid://c7c8g07jnk3pv" path="res://scripts/tactical/biome_background.gd" id="11_background"]
-[ext_resource type="PackedScene" path="res://scenes/ui/colonist_loss_scene_dialog.tscn" id="11_colonist_loss"]
 [ext_resource type="PackedScene" path="res://scenes/ui/game_over_scene_dialog.tscn" id="12_game_over_scene"]
 [ext_resource type="PackedScene" path="res://scenes/ui/game_over_recap.tscn" id="13_game_over_recap"]
 [ext_resource type="PackedScene" path="res://scenes/ui/fade_transition.tscn" id="14_fade"]
@@ -183,9 +182,6 @@ visible = false
 visible = false
 
 [node name="VoyageIntroSceneDialog" parent="DialogLayer" unique_id=1316561820 instance=ExtResource("10_voyage_intro")]
-visible = false
-
-[node name="ColonistLossSceneDialog" parent="DialogLayer" unique_id=1316561821 instance=ExtResource("11_colonist_loss")]
 visible = false
 
 [node name="GameOverSceneDialog" parent="DialogLayer" unique_id=1316561822 instance=ExtResource("12_game_over_scene")]

@@ -24,7 +24,7 @@ var tutorial_steps: Array[Dictionary] = [
 	},
 	{
 		"id": "resources_intro",
-		"text": "Monitor your resources carefully:\n- COLONISTS: Your score and humanity's future\n- FUEL: Required for each jump\n- HULL: Ship integrity - reaches 0 and you're lost\n- SCRAP: Trade currency",
+		"text": "Monitor your resources carefully:\n- FUEL: Required for each jump\n- HULL: Ship integrity - reaches 0 and you're lost\n- SCRAP: Trade currency",
 		"target": "management_hud",
 		"trigger": "acknowledged",
 		"position": "right",
@@ -76,16 +76,6 @@ var tutorial_steps: Array[Dictionary] = [
 		"id": "tactical_abilities",
 		"text": "Each specialist has a UNIQUE ABILITY:\n- SCOUT: Overwatch (reaction shot)\n- TECH: Breach (destroy cover)\n- MEDIC: Patch (heal ally)",
 		"target": "ability_container",
-		"trigger": "acknowledged",
-		"position": "left",
-		"delay_after_trigger": 1.0,
-		"wait_for_context": "",
-		"blocking": true
-	},
-	{
-		"id": "cryo_stability",
-		"text": "WARNING: CRYO-STABILITY decreases each turn!\n\nAt 0%, you lose COLONISTS every turn. Extract before it's too late!",
-		"target": "stability_bar",
 		"trigger": "acknowledged",
 		"position": "left",
 		"delay_after_trigger": 1.0,
@@ -544,7 +534,6 @@ func _check_ui_blocking() -> bool:
 		"DialogLayer/VoyageIntroSceneDialog",
 		"DialogLayer/EventSceneDialog",
 		"DialogLayer/MissionSceneDialog",
-		"DialogLayer/ColonistLossSceneDialog",
 		"DialogLayer/GameOverSceneDialog",
 		"DialogLayer/NewEarthSceneDialog"
 	]

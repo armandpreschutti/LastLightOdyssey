@@ -121,7 +121,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.3, 0.2, 1)
 theme_override_font_sizes/font_size = 14
 text = "WARNING: Abandoning mission will
-result in colonist casualties!"
+result in mission failure!"
 horizontal_alignment = 1
 autowrap_mode = 2
 
@@ -129,10 +129,9 @@ autowrap_mode = 2
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
 theme_override_font_sizes/font_size = 16
-text = "Abandoning costs 20 colonists"
+text = "Abandoning mission forfeits rewards"
 horizontal_alignment = 1
 
-[node name="HSeparator2" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1611034594]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
@@ -154,19 +153,6 @@ layout_mode = 2
 theme_override_constants/h_separation = 16
 theme_override_constants/v_separation = 6
 columns = 2
-
-[node name="ColonistsLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid" unique_id=333333333]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
-theme_override_font_sizes/font_size = 12
-text = "COLONISTS:"
-
-[node name="ColonistsValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid" unique_id=444444444]
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 12
-text = "1000"
-horizontal_alignment = 2
 
 [node name="FuelLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid" unique_id=555555555]
 layout_mode = 2
@@ -205,19 +191,6 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 12
 text = "25"
-horizontal_alignment = 2
-
-[node name="StabilityLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid" unique_id=121212121]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
-theme_override_font_sizes/font_size = 12
-text = "CRYO-STABILITY:"
-
-[node name="StabilityValue" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid" unique_id=131313131]
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 12
-text = "100%"
 horizontal_alignment = 2
 
 [node name="HSeparator3" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=141414141]

@@ -25,6 +25,7 @@ const RESOLUTIONS: Array[Vector2i] = [
 @onready var music_value: Label = $PanelContainer/MarginContainer/VBoxContainer/AudioSection/MusicContainer/MusicValue
 @onready var reset_settings_button: Button = $PanelContainer/MarginContainer/VBoxContainer/AudioSection/ResetSettingsButton
 @onready var reset_tutorial_button: Button = $PanelContainer/MarginContainer/VBoxContainer/TutorialSection/ResetTutorialButton
+@onready var developer_toggle: CheckButton = $PanelContainer/MarginContainer/VBoxContainer/DeveloperSection/DeveloperContainer/DeveloperToggle
 @onready var apply_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/ApplyButton
 @onready var back_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/BackButton
 
@@ -35,6 +36,7 @@ var _pending_master: float = 80.0
 var _pending_sfx: float = 100.0
 var _pending_scene: float = 100.0
 var _pending_music: float = 70.0
+var _pending_developer_mode: bool = false
 
 
 func _ready() -> void:
@@ -94,6 +96,11 @@ func _connect_signals() -> void:
 	else:
 		reset_tutorial_button.pressed.connect(_on_reset_tutorial_pressed)
 		
+	if not developer_toggle:
+		push_error("SettingsMenu: developer_toggle is null!")
+	else:
+		developer_toggle.toggled.connect(_on_developer_toggled)
+		
 	if not apply_button:
 		push_error("SettingsMenu: apply_button is null!")
 	else:
@@ -117,6 +124,7 @@ func _load_settings() -> void:
 		_pending_sfx = 100.0
 		_pending_scene = 100.0
 		_pending_music = 70.0
+		_pending_developer_mode = false
 		return
 	
 	# Load display settings
@@ -128,6 +136,11 @@ func _load_settings() -> void:
 	_pending_sfx = config.get_value("audio", "sfx", 100.0)
 	_pending_scene = config.get_value("audio", "scene", 100.0)
 	_pending_music = config.get_value("audio", "music", 70.0)
+	
+	# Load developer settings
+	_pending_developer_mode = config.get_value("developer", "developer_mode", false)
+	# Apply immediately to GameState so it's consistent with loaded settings
+	GameState.developer_mode = _pending_developer_mode
 
 
 func _save_settings() -> void:
@@ -146,6 +159,9 @@ func _save_settings() -> void:
 	config.set_value("audio", "scene", _pending_scene)
 	config.set_value("audio", "music", _pending_music)
 	
+	# Save developer settings
+	config.set_value("developer", "developer_mode", _pending_developer_mode)
+	
 	config.save(CONFIG_PATH)
 
 
@@ -156,6 +172,7 @@ func _update_ui_from_pending() -> void:
 	sfx_slider.value = _pending_sfx
 	scene_slider.value = _pending_scene
 	music_slider.value = _pending_music
+	developer_toggle.button_pressed = _pending_developer_mode
 	
 	_update_volume_labels()
 
@@ -191,6 +208,10 @@ func _apply_audio_settings() -> void:
 	if MusicManager:
 		MusicManager.set_master_volume(_pending_master)
 		MusicManager.set_music_volume(_pending_music)
+
+
+func _apply_developer_settings() -> void:
+	GameState.developer_mode = _pending_developer_mode
 
 
 func _on_fullscreen_toggled(toggled: bool) -> void:
@@ -235,6 +256,10 @@ func _on_music_changed(value: float) -> void:
 		MusicManager.set_music_volume(value)
 
 
+func _on_developer_toggled(toggled: bool) -> void:
+	_pending_developer_mode = toggled
+
+
 func _on_reset_settings_pressed() -> void:
 	if SFXManager:
 		SFXManager.play_sfx_by_name("ui", "click")
@@ -246,6 +271,7 @@ func _on_reset_settings_pressed() -> void:
 	_pending_sfx = 100.0
 	_pending_scene = 100.0
 	_pending_music = 70.0
+	_pending_developer_mode = false
 	
 	# Update UI to reflect defaults
 	_update_ui_from_pending()
@@ -293,6 +319,7 @@ func _on_apply_pressed() -> void:
 	_save_settings()
 	_apply_display_settings()
 	_apply_audio_settings()
+	_apply_developer_settings()
 	
 	# Visual feedback
 	apply_button.text = "[ APPLIED! ]"

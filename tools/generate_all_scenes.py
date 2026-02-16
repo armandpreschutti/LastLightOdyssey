@@ -23,18 +23,10 @@ EVENT_PALETTES = {
     6: {"bg": (5, 13, 26), "accent": (102, 230, 255), "detail": (255, 179, 51), "name": "supply_cache"},
     7: {"bg": (5, 5, 20), "accent": (51, 153, 255), "detail": (204, 230, 255), "name": "distress_signal"},
     8: {"bg": (26, 13, 26), "accent": (204, 77, 255), "detail": (102, 255, 102), "name": "radiation_storm"},
-    9: {"bg": (8, 15, 26), "accent": (77, 179, 255), "detail": (255, 77, 51), "name": "cryo_pod_failure"},
-    10: {"bg": (5, 5, 15), "accent": (77, 128, 179), "detail": (204, 230, 255), "name": "clear_skies"},
+    9: {"bg": (5, 5, 15), "accent": (77, 128, 179), "detail": (204, 230, 255), "name": "clear_skies"},
 }
 
-# --- 2. COLONIST LOSS ---
-LOSS_THRESHOLDS = {
-    750: {"bg": (13, 13, 26), "accent": (102, 153, 204), "warning": (255, 128, 51), "pods_active": 8, "name": "loss_750"},
-    500: {"bg": (10, 10, 20), "accent": (128, 102, 77), "warning": (255, 102, 26), "pods_active": 5, "name": "loss_500"},
-    250: {"bg": (8, 5, 15), "accent": (153, 77, 51), "warning": (255, 77, 26), "pods_active": 2, "name": "loss_250"},
-    100: {"bg": (5, 3, 10), "accent": (179, 51, 26), "warning": (255, 51, 0), "pods_active": 1, "name": "loss_100"},
-    0: {"bg": (3, 0, 5), "accent": (77, 26, 26), "warning": (204, 26, 0), "pods_active": 0, "name": "loss_0"},
-}
+
 
 # --- 3. ENEMY ELIMINATION ---
 ELIMINATION_BIOMES = {
@@ -45,7 +37,6 @@ ELIMINATION_BIOMES = {
 
 # --- 4. GAME OVER ---
 GAME_OVER_REASONS = {
-    "colonists_depleted": {"bg": (3, 0, 5), "accent": (77, 26, 51), "detail": (128, 38, 64), "name": "game_over_colonists"},
     "ship_destroyed": {"bg": (5, 0, 0), "accent": (204, 51, 26), "detail": (255, 102, 51), "name": "game_over_ship"},
     "captain_died": {"bg": (3, 3, 8), "accent": (51, 64, 89), "detail": (77, 89, 115), "name": "game_over_captain"},
 }
@@ -124,31 +115,7 @@ def generate_event_scene(event_id, palette):
         
     return img
 
-def generate_colonist_loss(threshold, data):
-    img, draw = create_base_image(data["bg"])
-    floor_y = int(HEIGHT * 0.8)
-    draw.rectangle([0, floor_y, WIDTH, HEIGHT], fill=(20, 25, 30))
-    
-    total_pods = 10
-    active_pods = data["pods_active"]
-    
-    for i in range(total_pods):
-        px = int(WIDTH * (0.05 + i * 0.09))
-        pod_color = (40, 60, 90) if i < active_pods else (10, 15, 20)
-        draw.rectangle([px-6, floor_y-14, px+6, floor_y], fill=pod_color)
-        
-        # Status light
-        light_color = (80, 200, 80) if i < active_pods else (80, 20, 20)
-        draw.rectangle([px-1, floor_y-14, px+1, floor_y-12], fill=light_color)
-        
-    # Warning lights
-    if threshold < 750:
-         for _ in range(5):
-            x = random.randint(0, WIDTH)
-            y = random.randint(0, int(HEIGHT*0.7))
-            draw.rectangle([x, y, x+2, y+2], fill=data["warning"])
-            
-    return img
+
 
 def generate_elimination(biome, data):
     img, draw = create_base_image(data["bg"])
@@ -178,13 +145,6 @@ def generate_game_over(reason, data):
         # Empty chair
         draw.rectangle([cx-10, cy+10, cx+10, cy+40], fill=data["accent"])
         draw.rectangle([cx-10, cy-10, cx+10, cy+10], fill=data["accent"])
-    else: # colonists depleted
-        # Dark pods
-        floor_y = int(HEIGHT * 0.8)
-        draw.rectangle([0, floor_y, WIDTH, HEIGHT], fill=(10, 10, 10))
-        for i in range(10):
-            px = int(WIDTH * (0.05 + i * 0.09))
-            draw.rectangle([px-6, floor_y-14, px+6, floor_y], fill=(20, 10, 10))
             
     return img
 
@@ -258,12 +218,7 @@ def main():
         img = img.resize((WIDTH * SCALE, HEIGHT * SCALE), Image.NEAREST)
         img.save(os.path.join(EVENTS_DIR, f"{data['name']}.png"))
 
-    # 2. COLONIST LOSS
-    for thresh, data in LOSS_THRESHOLDS.items():
-        print(f"Generating Loss: {data['name']}")
-        img = generate_colonist_loss(thresh, data)
-        img = img.resize((WIDTH * SCALE, HEIGHT * SCALE), Image.NEAREST)
-        img.save(os.path.join(SCENES_DIR, f"{data['name']}.png"))
+
 
     # 3. ENEMY ELIMINATION
     for biome, data in ELIMINATION_BIOMES.items():

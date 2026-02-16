@@ -11,15 +11,25 @@ signal data_logs_changed(new_value: int)
 signal officer_died(officer_type: String)
 signal game_over(reason: String)
 signal game_won(ending_type: String)
+signal developer_mode_changed(enabled: bool)
+
+var developer_mode: bool = false:
+	set(value):
+		developer_mode = value
+		developer_mode_changed.emit(developer_mode)
 
 # Primary Statistics (Voyage 2.0 Economy)
-var fuel: int = 100000:
+var fuel: int = 10:
 	set(value):
+		if developer_mode and value < fuel:
+			value = fuel
 		fuel = maxi(0, value)
 		fuel_changed.emit(fuel)
 
 var ship_integrity: int = 100:
 	set(value):
+		if developer_mode and value < ship_integrity:
+			value = ship_integrity
 		ship_integrity = clampi(value, 0, 100)
 		integrity_changed.emit(ship_integrity)
 		if ship_integrity <= 0:
@@ -27,21 +37,29 @@ var ship_integrity: int = 100:
 
 var scrap: int = 25:
 	set(value):
+		if developer_mode and value < scrap:
+			value = scrap
 		scrap = maxi(0, value)
 		scrap_changed.emit(scrap)
 
 var cash: int = 100:
 	set(value):
+		if developer_mode and value < cash:
+			value = cash
 		cash = maxi(0, value)
 		cash_changed.emit(cash)
 
 var intel: int = 0:
 	set(value):
+		if developer_mode and value < intel:
+			value = intel
 		intel = maxi(0, value)
 		intel_changed.emit(intel)
 
 var data_logs: int = 0:
 	set(value):
+		if developer_mode and value < data_logs:
+			value = data_logs
 		data_logs = maxi(0, value)
 		data_logs_changed.emit(data_logs)
 
@@ -94,7 +112,7 @@ func _ready() -> void:
 
 
 func reset_game() -> void:
-	fuel = 100000
+	fuel = 10
 	ship_integrity = 100
 	scrap = 25
 	cash = 100

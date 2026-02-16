@@ -1,9 +1,9 @@
-[gd_scene format=3 uid="uid://colonist_loss_scene_dialog"]
+[gd_scene format=3 uid="uid://ddfeihxoqdxyd"]
 
 [ext_resource type="Script" path="res://scripts/ui/colonist_loss_scene_dialog.gd" id="1_scene"]
 [ext_resource type="FontFile" uid="uid://xqiy7ijtjsrv" path="res://assets/fonts/VT323-Regular.ttf" id="2_font"]
 
-[node name="ColonistLossSceneDialog" type="Control"]
+[node name="ColonistLossSceneDialog" type="Control" unique_id=2078800572]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -13,7 +13,7 @@ grow_vertical = 2
 mouse_filter = 1
 script = ExtResource("1_scene")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=402086858]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -23,7 +23,7 @@ grow_vertical = 2
 mouse_filter = 1
 color = Color(0.01, 0.01, 0.05, 1)
 
-[node name="VBoxContainer" type="VBoxContainer" parent="."]
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=420752701]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -39,28 +39,28 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_constants/separation = 0
 
-[node name="TopBorder" type="ColorRect" parent="VBoxContainer"]
+[node name="TopBorder" type="ColorRect" parent="VBoxContainer" unique_id=134347376]
 custom_minimum_size = Vector2(0, 3)
 layout_mode = 2
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.8)
+color = Color(0.4, 0.9, 1, 0.8)
 
-[node name="TitleBar" type="HBoxContainer" parent="VBoxContainer"]
+[node name="TitleBar" type="HBoxContainer" parent="VBoxContainer" unique_id=1181296388]
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 20
 
-[node name="TitleLabel" type="Label" parent="VBoxContainer/TitleBar"]
+[node name="TitleLabel" type="Label" parent="VBoxContainer/TitleBar" unique_id=749934923]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.4, 0.9, 1.0, 1)
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 28
 text = "MILESTONE TITLE"
 vertical_alignment = 1
 
-[node name="LocationLabel" type="Label" parent="VBoxContainer/TitleBar"]
+[node name="LocationLabel" type="Label" parent="VBoxContainer/TitleBar" unique_id=905758431]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
 theme_override_fonts/font = ExtResource("2_font")
@@ -69,67 +69,64 @@ text = "SECTOR 4-127  |  CYCLE 3"
 horizontal_alignment = 2
 vertical_alignment = 1
 
-[node name="TitleBorder" type="ColorRect" parent="VBoxContainer"]
+[node name="TitleBorder" type="ColorRect" parent="VBoxContainer" unique_id=1043276643]
 custom_minimum_size = Vector2(0, 2)
 layout_mode = 2
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.4)
+color = Color(0.4, 0.9, 1, 0.4)
 
-[node name="ImageContainer" type="PanelContainer" parent="VBoxContainer"]
+[node name="ImageContainer" type="PanelContainer" parent="VBoxContainer" unique_id=1030060472]
 custom_minimum_size = Vector2(800, 400)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="ImageBackground" type="ColorRect" parent="VBoxContainer/ImageContainer"]
+[node name="ImageBackground" type="ColorRect" parent="VBoxContainer/ImageContainer" unique_id=1864062755]
 layout_mode = 2
 mouse_filter = 2
 color = Color(0.02, 0.02, 0.06, 1)
 
-[node name="SceneImage" type="TextureRect" parent="VBoxContainer/ImageContainer"]
+[node name="SceneImage" type="TextureRect" parent="VBoxContainer/ImageContainer" unique_id=356719887]
 layout_mode = 2
 mouse_filter = 2
 expand_mode = 1
 stretch_mode = 5
 
-[node name="SceneCanvas" type="Control" parent="VBoxContainer/ImageContainer"]
+[node name="SceneCanvas" type="Control" parent="VBoxContainer/ImageContainer" unique_id=1404980676]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="ScanlineOverlay" type="Control" parent="VBoxContainer/ImageContainer"]
+[node name="ScanlineOverlay" type="Control" parent="VBoxContainer/ImageContainer" unique_id=446646309]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="BottomBorder" type="ColorRect" parent="VBoxContainer"]
+[node name="BottomBorder" type="ColorRect" parent="VBoxContainer" unique_id=511457371]
 custom_minimum_size = Vector2(0, 2)
 layout_mode = 2
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.4)
+color = Color(0.4, 0.9, 1, 0.4)
 
-[node name="DescriptionLabel" type="Label" parent="VBoxContainer"]
+[node name="DescriptionLabel" type="Label" parent="VBoxContainer" unique_id=183737355]
 custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 22
-text = ""
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
 
-[node name="PromptLabel" type="Label" parent="VBoxContainer"]
+[node name="PromptLabel" type="Label" parent="VBoxContainer" unique_id=1215433150]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
-mouse_filter = 2
-theme_override_colors/font_color = Color(1.0, 0.7, 0.2, 1)
+theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 18
 text = "Press any key to continue..."
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="BottomBorder2" type="ColorRect" parent="VBoxContainer"]
+[node name="BottomBorder2" type="ColorRect" parent="VBoxContainer" unique_id=179008823]
 custom_minimum_size = Vector2(0, 3)
 layout_mode = 2
 mouse_filter = 2
-color = Color(0.4, 0.9, 1.0, 0.8)
+color = Color(0.4, 0.9, 1, 0.8)

@@ -32,33 +32,7 @@ def create_icon(size=24):
     """Create a new transparent icon canvas"""
     return Image.new('RGBA', (size, size), COLORS['transparent'])
 
-def draw_colonists_icon():
-    """Person/group silhouette icon for colonists"""
-    img = create_icon()
-    draw = ImageDraw.Draw(img)
-    
-    # Main person (center)
-    # Head
-    draw.ellipse([10, 3, 14, 7], fill=COLORS['cyan'])
-    # Body
-    draw.rectangle([9, 8, 15, 16], fill=COLORS['cyan'])
-    # Legs
-    draw.rectangle([9, 16, 11, 21], fill=COLORS['cyan_dark'])
-    draw.rectangle([13, 16, 15, 21], fill=COLORS['cyan_dark'])
-    
-    # Left person (smaller, background)
-    draw.ellipse([3, 6, 6, 9], fill=COLORS['cyan_dark'])
-    draw.rectangle([3, 10, 6, 15], fill=COLORS['cyan_dark'])
-    draw.rectangle([3, 15, 4, 19], fill=COLORS['gray'])
-    draw.rectangle([5, 15, 6, 19], fill=COLORS['gray'])
-    
-    # Right person (smaller, background)
-    draw.ellipse([18, 6, 21, 9], fill=COLORS['cyan_dark'])
-    draw.rectangle([18, 10, 21, 15], fill=COLORS['cyan_dark'])
-    draw.rectangle([18, 15, 19, 19], fill=COLORS['gray'])
-    draw.rectangle([20, 15, 21, 19], fill=COLORS['gray'])
-    
-    return img
+
 
 def draw_fuel_icon():
     """Fuel cell/energy symbol"""
@@ -378,7 +352,6 @@ def main():
     
     # Generate all icons
     icons = {
-        'icon_colonists.png': draw_colonists_icon(),
         'icon_fuel.png': draw_fuel_icon(),
         'icon_hull.png': draw_hull_icon(),
         'icon_scrap.png': draw_scrap_icon(),

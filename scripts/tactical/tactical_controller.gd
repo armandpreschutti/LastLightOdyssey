@@ -69,6 +69,13 @@ const FLANK_DAMAGE_BONUS: float = 0.50  # 50% bonus damage when flanking
 const FULL_COVER_ATTACK_BONUS: float = 10.0   # +10% hit chance when firing from full cover
 const HALF_COVER_ATTACK_BONUS: float = 5.0   # +5% hit chance when firing from half cover
 
+# Reward constants
+const BASE_REWARD_CASH: int = 50
+const OBJECTIVE_REWARD_CASH: int = 25
+const FULL_CLEAR_REWARD_CASH: int = 40
+const NO_CASUALTIES_REWARD_CASH: int = 30
+
+
 
 func _ready() -> void:
 	FuelCrateScene = load("res://scenes/tactical/fuel_crate.tscn")
@@ -1624,6 +1631,33 @@ func _end_mission(success: bool) -> void:
 				"potential_rewards": potential_rewards
 			})
 	
+	# Calculate cash rewards only on success
+	var base_cash = 0
+	var objective_cash = 0
+	var full_clear_bonus = 0
+	var no_casualties_bonus = 0
+	
+	if success:
+		base_cash = int(BASE_REWARD_CASH * GameState.get_mission_difficulty())
+		
+		# Objective bonuses
+		for objective in mission_objectives:
+			if objective.completed:
+				objective_cash += OBJECTIVE_REWARD_CASH
+		
+		# Full Clear bonus (all enemies eliminated)
+		if enemies.is_empty():
+			full_clear_bonus = FULL_CLEAR_REWARD_CASH
+		
+		# No Casualties bonus
+		var casualties = false
+		for officer in officers_status:
+			if not officer.alive:
+				casualties = true
+				break
+		if not casualties:
+			no_casualties_bonus = NO_CASUALTIES_REWARD_CASH
+
 	# Build stats dictionary
 	var mission_stats: Dictionary = {
 		"success": success,
@@ -1638,6 +1672,11 @@ func _end_mission(success: bool) -> void:
 		"bonus_hull_repair": bonus_hull_repair,
 		"objectives": objectives_data,
 		"biome_type": current_biome,
+		"cash_reward": base_cash,
+		"cash_objective_bonus": objective_cash,
+		"cash_full_clear_bonus": full_clear_bonus,
+		"cash_no_casualties_bonus": no_casualties_bonus,
+		"total_cash": base_cash + objective_cash + full_clear_bonus + no_casualties_bonus
 	}
 	
 	# Apply all resources and rewards to GameState only on successful extraction
@@ -1652,8 +1691,12 @@ func _end_mission(success: bool) -> void:
 		if bonus_hull_repair > 0:
 			GameState.repair_ship(bonus_hull_repair)
 		
+		# Apply cash rewards
+		GameState.cash += mission_stats["total_cash"]
+		
 		# Accumulate stats to GameState for voyage recap
 		GameState.add_mission_stats(mission_fuel_collected, mission_scrap_collected, mission_enemies_killed, current_turn)
+
 
 	# Play beam-up animation on successful extraction
 	if success and deployed_officers.size() > 0:

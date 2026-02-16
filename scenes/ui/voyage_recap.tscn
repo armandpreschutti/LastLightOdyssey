@@ -74,7 +74,7 @@ mouse_filter = 2
 theme_override_colors/font_color = Color(0.6, 0.8, 0.7, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 14
-text = "All 1,000 colonists reached New Earth. Humanity will flourish."
+text = "Humanity has reached New Earth. A new chapter begins."
 horizontal_alignment = 1
 autowrap_mode = 2
 
@@ -96,14 +96,6 @@ text = "FINAL STATE"
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 4
-
-[node name="ColonistsLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/FinalStateContainer"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_colors/font_color = Color(0.5, 0.9, 0.7, 1)
-theme_override_fonts/font = ExtResource("2_font")
-theme_override_font_sizes/font_size = 18
-text = "COLONISTS REMAINING: 1000 / 1000"
 
 [node name="FuelLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/FinalStateContainer"]
 layout_mode = 2

@@ -23,14 +23,46 @@ signal recap_dismissed
 @onready var scrap_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/ScrapRow
 @onready var enemies_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/EnemiesRow
 @onready var turns_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/TurnsRow
+@onready var stats_container: VBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer
 
+var cash_row: HBoxContainer
+var cash_label: Label
 var _stat_tween: Tween = null
+
 var _objective_labels: Array[Label] = []
 
 
 func _ready() -> void:
 	visible = false
 	continue_button.pressed.connect(_on_continue_pressed)
+	
+	# Create CashRow programmatically if not in scene
+	if not stats_container.has_node("CashRow"):
+		cash_row = HBoxContainer.new()
+		cash_row.name = "CashRow"
+		cash_row.add_theme_constant_override("separation", 10)
+		
+		var cash_icon = TextureRect.new()
+		cash_icon.custom_minimum_size = Vector2(24, 24)
+		cash_icon.texture = load("res://assets/sprites/ui/icons/icon_cash.png")
+		cash_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		cash_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		cash_row.add_child(cash_icon)
+		
+		cash_label = Label.new()
+		cash_label.name = "CashLabel"
+		cash_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5)) # Green
+		cash_label.add_theme_font_override("font", load("res://assets/fonts/VT323-Regular.ttf"))
+		cash_label.add_theme_font_size_override("font_size", 20)
+		cash_row.add_child(cash_label)
+		
+		stats_container.add_child(cash_row)
+		# Position it after scrap (fuel is 0, scrap is 1)
+		stats_container.move_child(cash_row, 2)
+	else:
+		cash_row = stats_container.get_node("CashRow")
+		cash_label = cash_row.get_node("CashLabel")
+
 
 
 func show_recap(stats: Dictionary) -> void:
@@ -41,6 +73,15 @@ func show_recap(stats: Dictionary) -> void:
 	var turns_taken: int = stats.get("turns_taken", 0)
 	var officers_status: Array = stats.get("officers_status", [])
 	var objectives: Array = stats.get("objectives", [])
+
+	
+	# Cash rewards
+	var total_cash: int = stats.get("total_cash", 0)
+	var cash_reward: int = stats.get("cash_reward", 0)
+	var cash_objective_bonus: int = stats.get("cash_objective_bonus", 0)
+	var cash_full_clear_bonus: int = stats.get("cash_full_clear_bonus", 0)
+	var cash_no_casualties_bonus: int = stats.get("cash_no_casualties_bonus", 0)
+
 	
 	# Set outcome
 	# Set outcome
@@ -69,8 +110,22 @@ func show_recap(stats: Dictionary) -> void:
 	# Set stats (initially hidden for animation)
 	fuel_label.text = "FUEL COLLECTED: +%d" % fuel_collected
 	scrap_label.text = "SCRAP COLLECTED: +%d" % scrap_collected
+	cash_label.text = "CASH EARNED: +%d CR" % total_cash
+	
+	# Add cash breakdown tooltip-like text or modify label to show breakdown if successful
+	if total_cash > 0:
+		var breakdown = []
+		if cash_reward > 0: breakdown.append("BASE: %d" % cash_reward)
+		if cash_objective_bonus > 0: breakdown.append("OBJ: %d" % cash_objective_bonus)
+		if cash_full_clear_bonus > 0: breakdown.append("CLEAR: %d" % cash_full_clear_bonus)
+		if cash_no_casualties_bonus > 0: breakdown.append("SURVIVAL: %d" % cash_no_casualties_bonus)
+		
+		if breakdown.size() > 0:
+			cash_label.text += " (" + "/".join(breakdown) + ")"
+			
 	enemies_label.text = "HOSTILES ELIMINATED: %d" % enemies_killed
 	turns_label.text = "TURNS SURVIVED: %d" % turns_taken
+
 	
 	# Show/hide objectives section based on whether objectives exist
 	var has_objectives = objectives.size() > 0
@@ -179,8 +234,10 @@ func _animate_recap_in() -> void:
 	# Fade rows (with icons)
 	fuel_row.modulate.a = 0.0
 	scrap_row.modulate.a = 0.0
+	cash_row.modulate.a = 0.0
 	enemies_row.modulate.a = 0.0
 	turns_row.modulate.a = 0.0
+
 	
 	# Fade objectives section if visible
 	if objectives_header.visible:
@@ -205,10 +262,13 @@ func _animate_recap_in() -> void:
 	_stat_tween.tween_interval(0.15)
 	_stat_tween.tween_property(scrap_row, "modulate:a", 1.0, 0.3)
 	_stat_tween.tween_interval(0.15)
+	_stat_tween.tween_property(cash_row, "modulate:a", 1.0, 0.3)
+	_stat_tween.tween_interval(0.15)
 	_stat_tween.tween_property(enemies_row, "modulate:a", 1.0, 0.3)
 	_stat_tween.tween_interval(0.15)
 	_stat_tween.tween_property(turns_row, "modulate:a", 1.0, 0.3)
 	_stat_tween.tween_interval(0.3)
+
 	
 	# Reveal objectives section if visible
 	if objectives_header.visible:
@@ -261,8 +321,10 @@ func _input(event: InputEvent) -> void:
 			modulate.a = 1.0
 			fuel_row.modulate.a = 1.0
 			scrap_row.modulate.a = 1.0
+			cash_row.modulate.a = 1.0
 			enemies_row.modulate.a = 1.0
 			turns_row.modulate.a = 1.0
+
 			if objectives_header.visible:
 				objectives_header.modulate.a = 1.0
 				objectives_border.modulate.a = 1.0

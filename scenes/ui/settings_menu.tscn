@@ -372,8 +372,45 @@ theme_override_font_sizes/font_size = 18
 text = "[ RESET TUTORIAL ]"
 
 [node name="HSeparator4" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1855547981]
-custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
+custom_minimum_size = Vector2(0, 1)
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.2)
+
+[node name="DeveloperSection" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 12
+
+[node name="DeveloperLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/DeveloperSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.2, 0.2, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 22
+text = "DEVELOPER"
+
+[node name="DeveloperContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/DeveloperSection"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 20
+
+[node name="DeveloperModeLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/DeveloperSection/DeveloperContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 20
+text = "[ DEVELOPER MODE ]"
+
+[node name="DeveloperToggle" type="CheckButton" parent="PanelContainer/MarginContainer/VBoxContainer/DeveloperSection/DeveloperContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 18
+
+[node name="HSeparator5" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 1)
 mouse_filter = 2
 color = Color(0.4, 0.9, 1, 0.2)
 

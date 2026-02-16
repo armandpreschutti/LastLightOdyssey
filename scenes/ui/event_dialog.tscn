@@ -1,7 +1,6 @@
 [gd_scene load_steps=6 format=3 uid="uid://cg8k2qaxnv5rl"]
 
 [ext_resource type="Script" path="res://scripts/ui/event_dialog.gd" id="1_event"]
-[ext_resource type="Texture2D" uid="uid://icon_colonists" path="res://assets/sprites/ui/icons/icon_colonists.png" id="2_colonists"]
 [ext_resource type="Texture2D" uid="uid://icon_hull" path="res://assets/sprites/ui/icons/icon_hull.png" id="3_hull"]
 [ext_resource type="Texture2D" uid="uid://icon_fuel" path="res://assets/sprites/ui/icons/icon_fuel.png" id="4_fuel"]
 [ext_resource type="Texture2D" uid="uid://icon_scrap" path="res://assets/sprites/ui/icons/icon_scrap.png" id="5_scrap"]
@@ -149,24 +148,6 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 20
 
-[node name="ColonistsLoss" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow"]
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="ColonistsIcon" type="TextureRect" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ColonistsLoss"]
-custom_minimum_size = Vector2(20, 20)
-layout_mode = 2
-texture = ExtResource("2_colonists")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="ColonistsLossLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ColonistsLoss"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_colors/font_color = Color(1.0, 0.7, 0.2, 1)
-theme_override_font_sizes/font_size = 16
-text = "COLONISTS: -50"
-
 [node name="HullLoss" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow"]
 layout_mode = 2
 theme_override_constants/separation = 6
@@ -223,33 +204,13 @@ theme_override_colors/font_color = Color(0.2, 1.0, 0.5, 1)
 theme_override_font_sizes/font_size = 16
 text = "SCRAP: +15"
 
-[node name="ColonistsGain" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow"]
-visible = false
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="ColonistsGainIcon" type="TextureRect" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ColonistsGain"]
-custom_minimum_size = Vector2(20, 20)
-layout_mode = 2
-texture = ExtResource("2_colonists")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="ColonistsGainLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ColonistsGain"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_colors/font_color = Color(0.2, 1.0, 0.5, 1)
-theme_override_font_sizes/font_size = 16
-text = "COLONISTS: +50"
-
 [node name="LossesLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer"]
 visible = false
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(1.0, 0.7, 0.2, 1)
 theme_override_font_sizes/font_size = 16
-text = "COLONISTS: -50
-HULL: -10%"
+text = "HULL: -25%"
 
 [node name="MitigatedLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer"]
 layout_mode = 2
@@ -257,8 +218,7 @@ mouse_filter = 2
 theme_override_colors/font_color = Color(0.2, 1.0, 0.5, 1)
 theme_override_font_sizes/font_size = 16
 text = "WITH SPECIALIST:
-COLONISTS: -10
-HULL: 0%"
+HULL: -5%"
 autowrap_mode = 2
 
 [node name="HSeparator2" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer"]

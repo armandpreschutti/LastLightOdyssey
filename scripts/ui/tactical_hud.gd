@@ -16,15 +16,12 @@ signal ability_cancelled
 
 # Top bar elements - updated paths for icon-based layout
 @onready var turn_label: Label = $TopBar/HBox/TurnContainer/TurnRow/TurnLabel
-@onready var integrity_container: VBoxContainer = $TopBar/HBox/StabilityContainer
-@onready var integrity_label: Label = $TopBar/HBox/StabilityContainer/StabilityRow/StabilityLabel
-@onready var integrity_bar: ProgressBar = $TopBar/HBox/StabilityContainer/StabilityBar
+@onready var integrity_container: VBoxContainer = $TopBar/HBox/IntegrityContainer
+@onready var integrity_label: Label = $TopBar/HBox/IntegrityContainer/IntegrityRow/IntegrityLabel
+@onready var integrity_bar: ProgressBar = $TopBar/HBox/IntegrityContainer/IntegrityBar
 @onready var haul_container: VBoxContainer = $TopBar/HBox/HaulContainer
 @onready var fuel_label: Label = $TopBar/HBox/HaulContainer/FuelRow/FuelLabel
 @onready var scrap_label: Label = $TopBar/HBox/HaulContainer/ScrapRow/ScrapLabel
-
-# Warning overlay
-@onready var cryo_warning: Label = $CryoWarning
 
 # Side panel elements - updated paths for icon-based layout
 @onready var side_panel: PanelContainer = $SidePanel
@@ -69,7 +66,6 @@ func _ready() -> void:
 	extract_button.pressed.connect(_on_extract_pressed)
 	ability_button.pressed.connect(_on_ability_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
-	cryo_warning.visible = false
 	extract_button.visible = false
 	ability_container.visible = false
 	cancel_button.visible = false
@@ -88,10 +84,10 @@ func _setup_tooltips() -> void:
 	pause_button.tooltip_text = "Pause the mission.\nYou can abandon the mission at the cost of forfeiting all collected resources."
 	
 	# Top bar tooltips
-	turn_label.tooltip_text = "Current turn number. Each turn, the ship takes structural damage."
-	integrity_container.tooltip_text = "Ship Integrity: Structural health of the ship.\nDecreases 1% per tactical turn. At 0%, the ship is destroyed."
-	integrity_label.tooltip_text = "Ship Integrity: Structural health of the ship.\nDecreases 1% per tactical turn. At 0%, the ship is destroyed."
-	integrity_bar.tooltip_text = "Ship Integrity: Structural health of the ship.\nDecreases 1% per tactical turn. At 0%, the ship is destroyed."
+	turn_label.tooltip_text = "Current turn number. Each turn, the ship takes structural damage (−1% Integrity)."
+	integrity_container.tooltip_text = "Ship Integrity: Structural health of the ship.\nDecreases 1% per tactical turn. At 0%, the voyage fails."
+	integrity_label.tooltip_text = "Ship Integrity: Structural health of the ship.\nDecreases 1% per tactical turn. At 0%, the voyage fails."
+	integrity_bar.tooltip_text = "Ship Integrity: Structural health of the ship.\nDecreases 1% per tactical turn. At 0%, the voyage fails."
 	haul_container.tooltip_text = "Resources collected during this mission.\nWalk over fuel crates and scrap piles to collect them."
 	
 	# Side panel tooltips
@@ -213,13 +209,6 @@ func update_haul(fuel: int, scrap: int) -> void:
 	scrap_label.tooltip_text = "Scrap collected this mission.\nScrap can be traded for repairs and supplies."
 
 
-func show_cryo_warning() -> void:
-	# Deprecated - repurposed for hull critical?
-	pass
-
-
-func hide_cryo_warning() -> void:
-	cryo_warning.visible = false
 
 
 @warning_ignore("shadowed_variable_base_class")
