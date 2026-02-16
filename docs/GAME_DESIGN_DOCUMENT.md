@@ -211,7 +211,7 @@ The Line of Sight algorithm includes "forgiveness" logic, allowing units to see 
 - **Heavy**: Good close-mid range, weaker at distance (45% at 8+ tiles), 35 base damage
 - **Tech/Medic**: Support-focused, weaker at range (40% at 8+ tiles)
 
-### 3.4 Cover & Destruction
+### 3.6 Cover & Destruction
 
 | Cover Type | Defender Penalty | Attacker Bonus | Destructible |
 |------------|------------------|----------------|--------------|
@@ -224,7 +224,7 @@ When cover is destroyed, it becomes rubble (0% cover value).
 **Flanking System:**
 Cover only protects from the direction it faces. Attacking from an unprotected angle (flanking) bypasses cover AND deals **+50% bonus damage**. Tactical positioning is crucial!
 
-### 3.5 Specialist Abilities Detail
+### 3.7 Specialist Abilities Detail
 
 #### Turret System (Tech Ability)
 Tech officers can deploy **auto-firing sentry turrets** on tactical maps:
@@ -267,13 +267,13 @@ Snipers can **deliver devastating long-range shots** with perfect accuracy:
 - **Cooldown**: 2-turn cooldown after use
 - **Visual**: Cinematic precision aiming sequence with camera focus, "TAKING AIM..." message
 
-### 3.6 Fog of War
+### 3.8 Fog of War
 
 - Map starts blacked out
 - Reveals in radius around each officer (sight_range)
 - Enemies are only visible when in revealed areas AND within sight range
 
-### 3.7 Enemy AI
+### 3.9 Enemy AI
 
 **Smart AI Behavior Priority:**
 1. If flanked (in ineffective cover) → **Reposition to effective cover**
@@ -309,7 +309,14 @@ Snipers can **deliver devastating long-range shots** with perfect accuracy:
 
 *Note: Spawn rates vary by biome (see Section 3.8 Biome System). Sniper and Elite enemies appear more frequently as mission difficulty increases.*
 
-### 3.8 Biome System
+#### 3.9.1 Enemy Tiers (Evolution)
+
+Enemies scale based on `GameState.total_jumps_made`:
+- **Tier 1 (Standard)**: Base Stats.
+- **Tier 2 (Veteran)**: +30% HP, +Damage. Visual: Red Tint. Spawns more frequently after Jump 15.
+- **Tier 3 (Elite)**: +60% HP, New Passives. Visual: Black/Gold Tint. Spawns after Jump 30.
+
+### 3.10 Biome System
 
 Scavenge sites have one of three procedurally-assigned biome types, each with unique map generation, visuals, and enemy distribution.
 
@@ -329,7 +336,7 @@ Scavenge sites have one of three procedurally-assigned biome types, each with un
 - Variety balancing ensures all three biome types appear across the journey
 - Each biome has distinct visual themes and color palettes
 
-### 3.9 Mission Difficulty Scaling
+### 3.11 Mission Difficulty Scaling
 
 The game implements a dynamic difficulty system that scales mission challenges based on player progress through the star map.
 
@@ -349,7 +356,7 @@ The game implements a dynamic difficulty system that scales mission challenges b
 - Mid missions (nodes 21-34): Increasing difficulty, tactical depth required
 - Final missions (nodes 35-49): Reduced scaling prevents frustration while maintaining challenge
 
-### 3.10 Mission Objectives System
+### 3.12 Mission Objectives System
 
 Scavenge missions now feature **biome-specific objectives** that provide bonus rewards upon completion. Each mission randomly selects one objective from the biome's available options.
 
@@ -391,46 +398,48 @@ Each objective requires interacting with specific objects on the tactical map:
 
 ---
 
-## 4. The "Oregon Trail" Pressure Mechanic
+## 4. Survival Mechanics
 
-To prevent players from spending unlimited turns looting, the **Cryo-Stability Timer** creates urgency.
+### 4.1 Fuel & Drift Mode
+- **Consumption**: 1-3 Fuel per jump (based on distance/route).
+- **Drift Mode**: If Fuel reaches **0**, the ship enters Drift Mode.
+    - **Effect**: Jumps remain possible but cost **Hull Integrity** instead of Fuel.
+    - **Penalty**: -15% Hull Integrity per jump.
 
-### Stability System
+### 4.2 Hull Integrity
+The ship's structural health.
+- **Damage Sources**: Events, Drift Mode jumps.
+- **Critical Failure**: At **0%**, the ship is destroyed (Game Over).
+- **Repairs**: Available in the **Market** (50 Cash for +10%).
 
-| Phase | Effect |
-|-------|--------|
-| **100%** | Mission start |
-| **100% → 0%** | Decreases by **5%** every round (reduced to **3%** in final stages - nodes 35+) |
-| **0% (Collapse)** | "CRYO-FAILURE" warning displays |
-| **Each round at 0%** | Ship sustains structural damage (−5% integrity) |
+### 4.3 Extraction Policy
+- **Success**: All living officers must reach the Extraction Zone.
+- **Loot**: Resources collected are banked only upon successful extraction.
 
-**Final Stage Balancing:** In nodes 35+ (final 15 nodes), stability loss per turn is reduced by 2% (from 5% to 3%) to give players more tactical turns in the critical final stretch.
-
-### Extraction
-
-- Extraction zone marked on map
-- Extraction zone marked on map
-- Mission ends when **all surviving officers** reach extraction tiles (Captain is no longer required to be in the zone personally for extraction to succeed).
-- Resources collected during mission are added to ship totals upon extraction
-
-### Mission Abort
+### 4.4 Mission Abort
 
 Players can pause during tactical missions and choose to **Abandon Mission**:
-- Costs **15% Ship Integrity** as penalty
-- All deployed officers return safely (even if surrounded)
-- No resources are gained from the mission (all collected fuel and scrap are forfeited)
-- Pause menu displays current mission haul and warns about resource forfeiture
-- Ship status display shows current fuel, integrity, scrap, and stability with color-coded indicators
-- Useful when a mission goes badly wrong
+- Costs **15% Ship Integrity** as penalty.
+- All deployed officers return safely (even if surrounded).
+- No resources are gained from the mission (all collected fuel and scrap are forfeited).
+- Useful when a mission goes badly wrong to prevent Officer death.
 
 ---
 
 ## 5. Win/Loss Logic
 
-### Win Condition
-Reach the **"New Earth"** node (node 49, the final node) with **Ship Integrity > 0%**.
+### 5.1 Win Condition
+**The Final Signal**: The voyage concludes when the player completes the **Final Story Mission**.
+- **Progression**: Collecting **Intel** spawns Story Nodes.
+- **Victory**: The final Story Node in the chain triggers the Victory Screen.
 
-### Ending Tiers
+### 5.2 Loss Conditions
+The voyage ends in failure if:
+1.  **Critical Hull Failure**: `hull_integrity` reaches **0.0**.
+2.  **Total Party Kill (TPK)**: All 6 Officers are confirmed **Dead (K.I.A.)**.
+
+### 5.3 Ending Tiers
+(Based on Hull Integrity remaining)
 
 | Integrity | Ending | Title |
 |-----------|--------|-------|
@@ -438,36 +447,11 @@ Reach the **"New Earth"** node (node 49, the final node) with **Ship Integrity >
 | 50–99% | Good | "The Hard Foundation" |
 | 1–49% | Bad | "The Endangered Species" |
 
-### Voyage Recap Screen
-Upon reaching New Earth, players are shown a comprehensive **Voyage Recap** screen displaying:
-- **Final State**: Fuel reserves, ship integrity, scrap stockpile
-- **Officer Status**: Survival status for all 6 officers (alive or K.I.A.)
-- **Cumulative Statistics** (tracked across entire voyage):
-  - Total fuel collected from missions
-  - Total scrap collected from missions
-  - Total hostiles eliminated
-  - Missions completed
-  - Tactical turns survived
-  - Sectors traversed (nodes visited)
-- **View Map**: Option to review the fully revealed star map of the completed journey.
-
-### Game Over Recap Screen
-Upon game over, players are shown a comprehensive **Game Over Recap** screen displaying:
-- **Failure Reason**: Specific game over message (extinction, ship destroyed, captain lost)
-- **Final State**: Fuel reserves, ship integrity, scrap stockpile
-- **Officer Status**: Survival status for all 6 officers (alive, K.I.A., or contextual messages based on failure type)
-- **Cumulative Statistics** (tracked across entire voyage):
-  - Total fuel collected from missions
-  - Total scrap collected from missions
-  - Total hostiles eliminated
-  - Missions completed
-  - Tactical turns survived
-  - Sectors traversed (nodes visited)
-
-### Loss Conditions
-
-| Ship Integrity = 0% | "CATASTROPHIC FAILURE: The ship has been destroyed." |
-| Captain dies | "LEADERSHIP LOST: Without leadership, the mission cannot continue." |
+### 5.4 Game Over Recap
+Uppon failure, the player sees:
+- **Failure Reason**: (Hull Destroyed / Crew Wiped).
+- **Final Stats**: Jumps Survived, Enemies Killed, Resources Banked.
+- **Roster Status**: List of survivors vs K.I.A.
 
 ### Voyage Intro Scene
 When starting a new game, players are shown an **Oregon Trail-style intro scene** that sets the narrative tone:
@@ -773,361 +757,42 @@ Interface icons used throughout the game for resource displays, combat info, and
 
 ---
 
-## 7. Implementation Status
+## 7. Implementation Phases: Voyage 2.0 Update
 
-### ✅ Phase 1: Core Systems (COMPLETE)
-- [x] Global game state management (`GameState` autoload)
-- [x] Primary statistics tracking with signals
-- [x] Win/loss condition checking
-- [x] Officer roster with alive/deployed states
-- [x] Jump logic with fuel consumption and drift mode
+### Phase 1: Foundation & Economy Refactor
+**Goal:** Establish the new data structures and remove legacy "Oregon Trail" systems to prevent logic conflicts.
 
-### ✅ Phase 2: Star Map & Events (COMPLETE)
-- [x] Procedural star map generator (16 columns, 50 total nodes)
-- [x] Node connection system with variable fuel costs
-- [x] Visual node graph with clickable navigation
-- [x] Node type system (Empty, Scavenge, Trading)
-- [x] Biome type pre-assignment for scavenge sites
-- [x] Random event system with 10 events
-- [x] Specialist mitigation for events (including Heavy)
-- [x] Event dialog UI
+- [ ] **GameState.gd Cleanup**: Remove `colonists` and `cryo_stability` (management). Add `cash`, `intel`, `data_logs`.
+- [ ] **MarketMenu.tscn**: Implement static transactions (Buy Fuel/Scrap, Repair Hull).
+- [ ] **HUD Update**: Replace Colonist counter with Economy counters.
 
-### ✅ Phase 3: Tactical Framework (COMPLETE)
-- [x] Grid-based tilemap system (variable size per biome)
-- [x] A* pathfinding for movement
-- [x] Point-and-click movement with path visualization
-- [x] Visual pathfinding path line with glow effects and arrowhead
-- [x] Fog of war with per-unit reveal radius
-- [x] Interactable objects (Fuel Crates, Scrap Piles, Health Packs)
-- [x] Objective-specific interactable objects (Terminals, Logs, Cores, Equipment, Collectors, Beacons, Nests)
-- [x] Auto-pickup system
-- [x] Health Packs spawn on tactical maps (1-2 per map) and restore 62.5% max HP when picked up
-- [x] Procedural map generation with three biome types
-- [x] BSP room generation (Station biome)
-- [x] Cellular automata cave generation (Asteroid biome)
-- [x] Open field generation (Planet biome)
+### Phase 2: The Infinite Map System
+**Goal:** Replace the linear node graph with the procedural, infinite web.
 
-### ✅ Phase 4: Combat System (COMPLETE)
-- [x] Turn-based unit-by-unit system
-- [x] Action Point management
-- [x] Line-of-sight calculations (Bresenham's algorithm)
-- [x] Cover system with hit chance modifiers
-- [x] Flanking system with directional cover
-- [x] Class-based accuracy profiles
-- [x] Shooting with hit/miss resolution
-- [x] Damage calculation and HP bars
-- [x] Smart Enemy AI with flanking awareness and repositioning
-- [x] Enemy visibility tied to fog of war
-- [x] Attackable target highlighting with hit chance display
-- [x] Cover indicators on units showing protection level
+- [ ] **InfiniteGridGenerator.gd**: Implement coordinate-based generation (40% Scavenge / 40% Empty).
+- [ ] **VoyageManager.gd**: Add grid tracking `Vector2`, movement logic (adjacent nodes), and fuel consumption.
+- [ ] **Node State System**: Implement UNVISITED, CLEARED, STORY states.
 
-### ✅ Phase 5: Specialist Abilities (COMPLETE)
-- [x] Scout: Overwatch (reaction shots, guaranteed hit)
-- [x] Tech: Turret (deploy auto-firing sentry, 3 turns)
-- [x] Medic: Patch (heal allies)
-- [x] Heavy: Charge (rush and devastate enemies)
-- [x] Heavy: Armor Plating passive (20% damage reduction)
-- [x] Heavy: Increased base damage (35 vs standard 25)
-- [x] Captain: Execute (guaranteed kill on low-HP enemies)
-- [x] Ability cooldown system (2-turn cooldown after use)
-- [x] Ability buttons in HUD
-- [x] AP cost validation
+### Phase 3: The RPG Layer (Officers)
+**Goal:** Convert static units into evolving characters with persistent data.
 
-### ✅ Phase 6: Pressure Mechanic (COMPLETE)
-- [x] Cryo-Stability bar and display
-- [x] Stability drain per round (5%)
-- [x] Integrity damage at 0% stability
-- [x] Warning messages and visual feedback
-- [x] Extraction zone system
+- [ ] **OfficerData.gd**: Create class with `level`, `xp`, `unlocked_abilities`, `injury_jumps`.
+- [ ] **BarracksMenu.tscn**: Create tech tree UI and unlock logic (XP + Logs).
+- [ ] **Injury Mechanics**: Implement <50% HP check triggers Injury.
 
-### ✅ Phase 7: Visual Polish (COMPLETE)
-- [x] Character sprites for all officer types
-- [x] Enemy sprites (basic, heavy, sniper, elite)
-- [x] Environment tileset
-- [x] Selection indicators and HP bars
-- [x] Damage popup numbers
-- [x] Combat camera focus during attacks
-- [x] Projectile visual effects
-- [x] Idle animations for units
-- [x] Cover indicators (half/full cover visual feedback)
-- [x] Hit chance display on targetable enemies
-- [x] Biome-specific visual themes and backgrounds
+### Phase 4: Tactical Integration & Scaling
+**Goal:** Connect the RPG layer to combat.
 
-### ✅ Phase 8: UI & UX Polish (COMPLETE)
-- [x] Tactical HUD with unit info
-- [x] Objectives Panel in tactical HUD (displays mission objectives and progress)
-- [x] Management HUD with ship stats
-- [x] Team selection dialog with objective preview and potential rewards
-- [x] Trading dialog with fuel purchase and hull repair
-- [x] Event dialog with choices
-- [x] Title menu with animated starfield, typewriter subtitle, and polish
-- [x] Settings menu (display, tutorial reset)
-- [x] Tutorial system with 9-step guided onboarding
-- [x] Pause menu with abandon mission option, mission haul tracking, and ship status display
-- [x] Confirmation dialog for destructive actions
-- [x] Game over and victory screens with ending text
-- [x] Restart game functionality
-- [x] Comprehensive tooltip system for all UI elements
-- [x] Cover bonus display in tactical HUD (+5% half cover, +10% full cover)
-- [x] Dynamic status label system (WAITING, NO ACTIONS, CRITICAL, READY)
-- [x] Color-coded ship status indicators in pause menu (stability, fuel, integrity)
-- [x] Resource forfeiture warning in pause menu when abandoning missions
+- [ ] **Unit.gd**: Modify ability/damage logic to check `OfficerData.unlocked_abilities`.
+- [ ] **MissionManager**: Add XP/Cash/Intel rewards on completion.
+- [ ] **Enemy Tiers**: Implement Veteran (Tier 2) and Elite (Tier 3) scaling based on Jumps.
 
-### ✅ Phase 9: Save/Load System (COMPLETE)
-- [x] Save game state to JSON file (fuel, integrity, scrap, officers)
-- [x] Save star map layout and node progress
-- [x] Save node types and biome assignments
-- [x] Save cumulative mission statistics (fuel collected, scrap collected, enemies killed, missions completed, tactical turns)
-- [x] Save milestone tracking
-- [x] Load game state on continue
-- [x] Continue button on title menu (disabled if no save)
-- [x] New game confirmation dialog when save exists
-- [x] Delete save functionality
-- [x] Settings persistence (display, tutorial state)
+### Phase 5: The Loop Closer
+**Goal:** Implement winning conditions and story drivers.
 
-### ✅ Phase 11: Mission Objectives System (COMPLETE)
-- [x] Mission objective system with binary and progress objective types
-- [x] Biome-specific objective definitions (Station, Asteroid, Planet)
-- [x] Objective interactable objects (Terminals, Logs, Cores, Equipment, Collectors, Beacons, Nests)
-- [x] Objectives Panel UI for tracking mission progress
-- [x] Bonus reward system for objective completion
-- [x] Objective preview in team selection dialog
-- [x] Objective completion notifications
+- [ ] **Story Spawning**: VoyageManager logic to spawn Story Node when `Intel >= 10`.
+- [ ] **Win/Loss**: Trigger Game Over on Hull 0 or TPK. Trigger Win on Final Story Mission.
 
-### ✅ Phase 12: Narrative & Feedback Systems (COMPLETE)
-- [x] Voyage intro scene with procedural generation and typewriter effect
-- [x] Milestone system with emotional scenes
-- [x] Procedural scene generation for milestone scenes with threshold-specific color palettes
-- [x] Game Over Recap screen with cumulative statistics and officer status
-- [x] Unit stats tooltip system (hover to display HP, AP, ranges, damage)
-- [x] Milestone tracking persistence in save system
-
-### ⏳ Phase 13: Game Feel & Balance (IN PROGRESS)
-- [x] Mission difficulty scaling system (1.0x to ~2.5x based on progress)
-- [x] Final stage balancing (reduced stability loss and difficulty scaling in nodes 35+)
-- [x] Navigation penalties (ship integrity and stability loss per jump)
-- [x] Drift mode penalty tuning (15% integrity per fuel deficit)
-- [x] Fuel cost system refinement (base 2, +2 row distance, +4 backward)
-- [x] Combat damage/accuracy fine-tuning
-- [x] Music integration (Title, Navigation, Tactical)
-- [x] Audio ducking system during dialogue/events
-
----
-
-## 8. Next Steps & Roadmap
-
-### ✅ Recently Completed
-
-#### Title Menu & Game Flow
-- [x] Animated starfield background with 200 parallax stars
-- [x] Typewriter subtitle animation ("The final journey of humanity begins")
-- [x] Title glow pulsing effect
-- [x] Button hover scale animations
-- [x] New Game / Continue / Settings / Quit buttons
-- [x] Music: Title menu music with looping and volume control
-- [x] Transition Fades: Slow fade-in sequence on startup
-- [x] Continue button disabled when no save exists
-- [x] Confirmation dialog for new game when save exists
-- [x] Fade transitions between scenes
-- [x] Game over screen with restart option
-- [x] Victory screen with ending tier text
-
-#### Save/Load System
-- [x] Full game state persistence (fuel, integrity, scrap)
-- [x] Officer status persistence (alive/deployed state)
-- [x] Star map layout persistence (nodes, connections, types, fuel costs)
-- [x] Node progress persistence (current node, visited nodes)
-- [x] Continue game from title menu
-- [x] Delete save when starting new game
-
-#### Settings Menu
-- [x] Display settings (fullscreen toggle, resolution: 720p/900p/1080p)
-- [x] Reset Tutorial button with visual feedback
-- [x] Settings persistence to user://settings.cfg
-- [x] Apply button with confirmation feedback
-
-#### Tutorial System
-- [x] TutorialManager autoload singleton
-- [x] 9-step guided onboarding sequence
-- [x] Tutorial overlay with animated prompts
-- [x] Directional arrow indicators
-- [x] Skip tutorial option
-- [x] Tutorial state persistence
-- [x] Reset tutorial from settings
-
-#### Trading System Enhancement
-- [x] Buy fuel: 10 scrap → 5 fuel
-- [x] Repair hull: 15 scrap → 10% integrity
-- [x] Status feedback on transactions
-- [x] Button availability based on resources
-
-#### Additional UI
-- [x] Reusable confirmation dialog component
-- [x] Fuel Warning Prompt with "Don't show again" functionality
-- [x] Navigation Legend for node type identification
-- [x] Button Hover SFX across all UI elements
-
-#### Heavy Officer Class
-- [x] New officer type: Heavy
-- [x] Armor Plating passive ability (20% damage reduction)
-- [x] Charge active ability (1 AP, rush enemy within 4 tiles, instant-kills basic enemies)
-- [x] Increased base damage (35 vs standard 25)
-- [x] 120 HP, 3 move range, 5 sight range
-- [x] Heavy sprite and animations
-- [x] Pirate Ambush event mitigation
-
-#### Sniper Officer Class
-- [x] New officer type: Sniper
-- [x] Extended sight range (+2) and shoot range (+2) for long-range combat
-- [x] Increased base damage (30 vs standard 25)
-- [x] Precision Shot active ability (1 AP, guaranteed hit on any visible enemy for 2x damage)
-- [x] 70 HP, 4 move range, 9 sight range, 12 shoot range
-- [x] Best long-range accuracy profile (65% at 10+ tiles)
-- [x] Sniper sprite with hood and targeting monocle
-
-#### Biome System
-- [x] Three biome types: Station, Asteroid, Planet
-- [x] BSP room generation for Station maps
-- [x] Cellular automata cave generation for Asteroid maps
-- [x] Open field generation with obstacle clusters for Planet maps
-- [x] Biome-specific enemy counts and heavy spawn rates
-- [x] Biome-specific loot distributions
-- [x] Biome pre-assignment to scavenge nodes with variety balancing
-- [x] Distinct visual themes and color palettes per biome
-
-#### Smart Enemy AI
-- [x] Flanking awareness - AI recognizes when cover is ineffective
-- [x] Automatic repositioning when being flanked
-- [x] Prioritizes finding cover that protects from threats
-- [x] Evaluates cover effectiveness based on threat directions
-
-#### Mission Difficulty Scaling
-- [x] Dynamic difficulty multiplier based on node progress (1.0x at start, ~2.5x at end)
-- [x] Reduced difficulty scaling in final stages (nodes 35+) for better balance
-- [x] Enemy count scaling with difficulty multiplier
-- [x] Heavy enemy spawn chance increases with difficulty
-
-#### Navigation & Balance Improvements
-- [x] Increased star map to 50 nodes (16 columns) for longer journey
-- [x] Increased drift mode penalty (15% integrity per deficit)
-- [x] Navigation penalties: −1% ship integrity and −2% stability per jump
-- [x] Updated fuel costs: base 2, +2 for row distance, +4 for backward travel
-- [x] Final stage stability reduction (3% per turn instead of 5% in nodes 35+)
-
-#### Specialist Abilities Expansion
-- [x] Tech: Turret deployment system (replaces Breach ability)
-- [x] Heavy: Charge melee attack system (replaces Taunt ability)
-- [x] Captain: Execute instant-kill system (new ability)
-- [x] Ability cooldown system (2-turn cooldown for all abilities)
-- [x] Turret auto-fire system (processes before player actions each turn)
-- [x] Charge pathfinding and melee animation
-- [x] Execute targeting mode with range visualization
-- [x] Medic: Enhanced healing passive (+25% healing bonus, Patch heals 62.5% max HP)
-- [x] Medic: Patch ability updated to 1 AP cost (reduced from 2 AP) and 3-tile range
-
-#### Combat System Enhancements
-- [x] Hit chance display on targetable enemies
-- [x] Cover indicators on units (half/full cover status)
-- [x] Flanking damage bonus (+50%)
-- [x] Attacker cover bonus (stable firing position: +5% half cover, +10% full cover)
-- [x] Pathfinding visualization (neon blue path line with glow and arrowhead)
-- [x] Cover bonus display in tactical HUD showing attacker accuracy bonus
-- [x] LOS Forgiveness: Lenient line-of-sight checks around obstacles
-- [x] Mission Unit Pulse: Visual pulsing for mission objectives
-- [x] Camera Zoom Persistence: Maintaining zoom level across turns
-- [x] Turn Interaction Pause: Brief delay between consecutive unit turns
-
-#### Mission Objectives System
-- [x] Mission objective system with binary and progress types
-- [x] Biome-specific objectives (9 total objectives across 3 biomes)
-- [x] Objective interactable objects spawning system
-- [x] Objectives Panel UI component
-- [x] Bonus reward system with deterministic rewards
-- [x] Objective completion tracking and notifications
-- [x] Objective preview in team selection dialog
-
-#### Pathfinding Visualization
-- [x] Visual pathfinding path line with neon blue glow effect
-- [x] Arrowhead indicator at destination tile
-- [x] Real-time path updates when hovering over movement destinations
-- [x] Path visualization only shows for valid movement targets
-
-#### Narrative & Feedback Systems
-- [x] Voyage intro scene with Oregon Trail-style presentation
-- [x] Procedural scene| **Narrative** | Intro scene & Milestone events |
-- [x] Milestone system implemented
-- [x] Emotional milestone scenes with threshold-specific narratives and color palettes
-- [x] Game Over Recap screen with failure-specific messaging
-- [x] Unit stats tooltip on hover (HP, AP, ranges, damage, unit type)
-- [x] Milestone tracking and persistence
-
-### Immediate Priority (Week 1-2)
-
-#### 1. Visual Effects Polish
-- [ ] Screen shake on damage
-- [ ] Particle effects for explosions/impacts
-- [ ] Enhanced fog of war transitions
-- [ ] Animated tileset elements (flickering lights, steam vents)
-
-#### 2. Quality of Life Enhancements
-- [ ] Auto-save after jumps and missions
-- [x] Comprehensive tooltip system for UI elements (implemented)
-- [ ] Mission briefing before tactical deployment
-- [ ] Keyboard shortcuts reference
-
-### Short-Term Goals (Week 3-4)
-
-#### 3. Game Balance Pass (Ongoing)
-- [x] Mission difficulty scaling system implemented
-- [x] Final stage balancing (reduced stability loss, difficulty scaling)
-- [x] Navigation penalties tuned (ship integrity and stability loss per jump)
-- [x] Drift mode penalty increased for harsher consequences
-- [ ] Fine-tuning event damage/impact balance
-- [ ] Resource economy refinement (fuel costs, scrap drops)
-- [ ] Combat damage/accuracy fine-tuning
-
-#### 4. Additional Enemy Types
-- [x] Sniper enemy type (long-range, overwatch capability)
-- [x] Elite enemy type (high HP, high damage)
-- [x] Difficulty-based enemy spawning
-- [ ] Additional enemy variants (explosive, boss types)
-
-### Medium-Term Goals (Month 2)
-
-#### 5. Content Expansion
-- [ ] Additional random events (expand to 20+)
-- [ ] Additional enemy variants (explosive, boss)
-- [ ] Environmental hazards on tactical maps
-- [ ] Special mission types (rescue, sabotage)
-
-#### 6. Procedural Generation Improvements
-- [ ] More map templates/themes
-- [ ] Room-based generation for interior maps
-- [ ] Loot distribution balancing
-- [ ] Enemy placement variety
-
-#### 7. Officer System Expansion
-- [ ] Recruit new officers at trading posts
-- [ ] Officer experience/leveling (optional)
-- [ ] Unique officer traits/perks
-- [ ] Officer equipment system
-
-### Long-Term Goals (Month 3+)
-
-#### 8. Advanced Features
-- [ ] Multiple difficulty modes
-- [ ] Endless/roguelike mode
-- [ ] Achievement system
-- [ ] Statistics tracking (missions completed, enemies killed, etc.)
-- [ ] Controller support
-
-#### 9. Story & Narrative
-- [ ] "Captain's Log" intro sequence
-- [ ] Story events tied to specific nodes
-- [ ] Character interactions/dialogue
-- [ ] Multiple ending variants based on decisions
-
----
 
 ## Development Notes
 
@@ -1159,25 +824,23 @@ Last Light Odyssey/
 ```
 
 ### Key Autoloads
-- **GameState**: Global statistics, officer tracking, win/loss logic, save/load system, mission difficulty scaling, cumulative statistics, milestone tracking
-- **EventManager**: Random events, node types, event resolution
-- **TutorialManager**: Tutorial state, step progression, persistence
-- **CombatRNG**: Centralized combat random number generation
+- **GameState**: Global economy (`cash`, `intel`, `logs`), officer progression, win/loss logic.
+- **VoyageManager**: Infinite map generation (`InfiniteGridGenerator`), node state tracking.
+- **EventManager**: Random events resolution.
 
 ### Key Classes
-- **BiomeConfig**: Biome type definitions, color themes, enemy/loot configurations, difficulty scaling
-- **MapGenerator**: Procedural map generation (BSP, caves, open fields)
-- **StarMapGenerator**: Star map node graph generation (50 nodes, 16 columns) with biome assignment
-- **EnemyAI**: Smart enemy behavior with flanking awareness and repositioning
+- **OfficerData**: Persistent character resource (Level, XP, Abilities).
+- **InfiniteGridGenerator**: Procedural generation of the coordinate-based map.
+- **BiomeConfig**: Biome type definitions and difficulty scaling.
 
 ### Design Philosophy
-> *"Start with Gray Boxes."* Don't polish art until the mechanics feel fun. If the game is stressful and addictive with just squares and numbers, it will be a masterpiece once polish is added.
+> *"Start with Gray Boxes."*
 
 The core tension should come from:
-1. **Resource scarcity** - Never enough fuel, always fighting for integrity
-2. **Time pressure** - Cryo-Stability forces mission exits
-3. **Meaningful choices** - Trade-offs between risk and reward
-4. **Permanent consequences** - Dead officers stay dead
+1. **Resource Scarcity** - Balancing Fuel (Survival) vs Cash (Power).
+2. **Risk Assessment** - Pushing for "one more node" vs Banking loot.
+3. **Meaningful Progression** - Developing unique Officer builds via the Tech Tree.
+4. **Permanent Consequences** - Injuries and Death scale the difficulty curve naturally.
 
 ---
 
