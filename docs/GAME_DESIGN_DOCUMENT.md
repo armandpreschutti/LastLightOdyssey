@@ -622,6 +622,7 @@ As the mission progresses throughout the voyage, the game displays **emotional s
 ### Tutorial System
 First-time players receive a **9-step guided tutorial** that covers:
 
+1. **Core Objective** - Understand the voyage loop and long-term survival goal
 2. **Resource Management** - Understanding fuel, hull, and scrap
 3. **Random Events** - How events work and specialist mitigation
 4. **Scavenge Missions** - Team selection and permadeath warning
@@ -789,41 +790,35 @@ Interface icons used throughout the game for resource displays, combat info, and
 
 ---
 
-## 7. Implementation Phases: Voyage 2.0 Update
+## 7. Implementation Status
 
-### Phase 1: Foundation & Economy Refactor [COMPLETED]
-**Goal:** Establish the new data structures and remove legacy "Oregon Trail" systems to prevent logic conflicts.
+### Completed Systems (Code-Verified)
 
 - [x] **GameState.gd Cleanup**: Remove `colonists` and `cryo_stability` (management). Add `cash`, `intel`, `data_logs`.
 - [x] **MarketMenu.tscn**: Implement static transactions (Buy Fuel/Scrap, Repair Hull).
 - [x] **HUD Update**: Replace Colonist counter with Economy counters.
-
-### Phase 2: The Infinite Map System [COMPLETED]
-**Goal:** Replace the linear node graph with the procedural, infinite web.
-
 - [x] **InfiniteGridGenerator.gd**: Implement coordinate-based generation (40% Scavenge / 40% Empty).
 - [x] **VoyageManager.gd**: Add grid tracking `Vector2`, movement logic (adjacent nodes), and fuel consumption.
 - [x] **Node State System**: Implement UNVISITED, CLEARED, STORY states.
+- [x] **OfficerData.gd**: Persistent class with `level`, `xp`, `unlocked_abilities`, `injury_jumps`.
+- [x] **Barracks + Ability Tree UI**: Implemented with unlock logic using XP/Data Logs and per-tier choices.
+- [x] **Injury Mechanics**: <50% HP can apply injuries; injuries recover over voyage jumps.
+- [x] **Tactical Ability Integration**: Combat logic reads unlocked abilities for cooldowns/modifiers.
+- [x] **Mission Rewards Pipeline**: Tactical results award XP, cash, intel, and data logs.
+- [x] **Enemy Progression Scaling**: Enemy composition scales by voyage progression/difficulty.
+- [x] **Loss Conditions**: Ship destruction and crew wipe game-over paths implemented.
 
-### Phase 3: The RPG Layer (Officers)
-**Goal:** Convert static units into evolving characters with persistent data.
+### In Progress / Partial
 
-- [ ] **OfficerData.gd**: Create class with `level`, `xp`, `unlocked_abilities`, `injury_jumps`.
-- [ ] **BarracksMenu.tscn**: Create tech tree UI and unlock logic (XP + Logs).
-- [ ] **Injury Mechanics**: Implement <50% HP check triggers Injury.
+- [ ] **Story-Driven Win Chain**: Intel-threshold story node loop is documented but not fully wired to a final story mission trigger in runtime flow.
+- [ ] **Unified Win Condition Hook**: `GameState._check_win_condition()` remains a placeholder and should be connected to active story completion logic.
 
-### Phase 4: Tactical Integration & Scaling
-**Goal:** Connect the RPG layer to combat.
+## 8. Next Steps & Roadmap
 
-- [ ] **Unit.gd**: Modify ability/damage logic to check `OfficerData.unlocked_abilities`.
-- [ ] **MissionManager**: Add XP/Cash/Intel rewards on completion.
-- [ ] **Enemy Tiers**: Implement Veteran (Tier 2) and Elite (Tier 3) scaling based on Jumps.
-
-### Phase 5: The Loop Closer
-**Goal:** Implement winning conditions and story drivers.
-
-- [ ] **Story Spawning**: VoyageManager logic to spawn Story Node when `Intel >= 10`.
-- [ ] **Win/Loss**: Trigger Game Over on Hull 0 or TPK. Trigger Win on Final Story Mission.
+1. **Finalize Story Node Loop**: Wire `intel >= 10` progression into deterministic story mission spawning/consumption.
+2. **Connect Victory Trigger**: Replace placeholder win emit with a validated final-story completion path.
+3. **Reduce Legacy Drift**: Remove or archive old/parallel map-generation code paths no longer used in production flow.
+4. **Add GDD Change Log**: Track significant design and systems changes by date to avoid future status drift.
 
 
 ## Development Notes
@@ -856,7 +851,7 @@ Last Light Odyssey/
 ```
 
 ### Key Autoloads
-- **GameState**: Global economy (`cash`, `intel`, `logs`), officer progression, win/loss logic.
+- **GameState**: Global economy (`cash`, `intel`, `data_logs`), officer progression, win/loss logic.
 - **VoyageManager**: Infinite map generation (`InfiniteGridGenerator`), node state tracking.
 - **EventManager**: Random events resolution.
 

@@ -21,7 +21,19 @@ signal deploy_pressed
 
 var _pulse_tween: Tween
 
+var _last_cash: int = 0
+var _last_fuel: int = 0
+var _last_integrity: int = 0
+var _last_scrap: int = 0
+
+
 func _ready() -> void:
+	# Store initial values to prevent animations on first update
+	_last_cash = GameState.cash
+	_last_fuel = GameState.fuel
+	_last_integrity = GameState.ship_integrity
+	_last_scrap = GameState.scrap
+	
 	_connect_signals()
 	_update_all_stats()
 	_update_glass_style()
@@ -129,6 +141,51 @@ func _stop_pulse() -> void:
 		glow_rect.color.a = 0.0
 
 
+## Spawns a floating text indicator next to a label to show resource changes
+func _spawn_stat_change_indicator(target_node: Control, delta: int, is_percentage: bool = false) -> void:
+	if delta == 0:
+		return
+		
+	var indicator = Label.new()
+	var prefix = "+" if delta > 0 else ""
+	var suffix = "%" if is_percentage else ""
+	indicator.text = prefix + str(delta) + suffix
+	
+	# User Request: Bigger and White
+	indicator.modulate = Color.WHITE
+	indicator.add_theme_font_size_override("font_size", 22)
+	
+	# Add to main HUD so it's on top and doesn't affect row layout
+	add_child(indicator)
+	
+	# Position next to the actual text content rather than the container edge
+	indicator.top_level = true
+	
+	var label_node = target_node as Label
+	var text_width = 0.0
+	if label_node:
+		var font = label_node.get_theme_font("font")
+		var font_size = label_node.get_theme_font_size("font_size")
+		text_width = font.get_string_size(label_node.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	else:
+		text_width = target_node.size.x
+		
+	var start_pos = target_node.global_position + Vector2(text_width + 15, -5)
+	start_pos.x += randf_range(-2, 2) # Minimal jitter
+	indicator.global_position = start_pos
+	
+	# Add shadow for better readability
+	indicator.add_theme_constant_override("shadow_offset_x", 1)
+	indicator.add_theme_constant_override("shadow_offset_y", 1)
+	indicator.add_theme_color_override("font_shadow_color", Color.BLACK)
+	
+	# Animate: Fade out in place
+	var tween = create_tween()
+	tween.tween_property(indicator, "modulate:a", 0.0, 1.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	
+	tween.finished.connect(indicator.queue_free)
+
+
 
 func _update_all_stats() -> void:
 	_on_cash_changed(GameState.cash)
@@ -138,6 +195,9 @@ func _update_all_stats() -> void:
 
 
 func _on_cash_changed(new_value: int) -> void:
+	var delta = new_value - _last_cash
+	_spawn_stat_change_indicator(cash_label, delta)
+	_last_cash = new_value
 	cash_label.text = "CASH: %d" % new_value
 
 
@@ -145,7 +205,10 @@ func _on_cash_changed(new_value: int) -> void:
 
 
 func _on_fuel_changed(new_value: int) -> void:
-	fuel_label.text = "FUEL CELLS: %d" % new_value
+	var delta = new_value - _last_fuel
+	_spawn_stat_change_indicator(fuel_label, delta)
+	_last_fuel = new_value
+	fuel_label.text = "FUEL: %d" % new_value
 	if new_value == 0:
 		status_label.text = "[ DRIFT MODE - NO FUEL ]"
 		status_label.visible = true
@@ -154,10 +217,16 @@ func _on_fuel_changed(new_value: int) -> void:
 
 
 func _on_integrity_changed(new_value: int) -> void:
-	integrity_label.text = "HULL INTEGRITY: %d%%" % new_value
+	var delta = new_value - _last_integrity
+	_spawn_stat_change_indicator(integrity_label, delta, true)
+	_last_integrity = new_value
+	integrity_label.text = "HULL: %d%%" % new_value
 
 
 func _on_scrap_changed(new_value: int) -> void:
+	var delta = new_value - _last_scrap
+	_spawn_stat_change_indicator(scrap_label, delta)
+	_last_scrap = new_value
 	scrap_label.text = "SCRAP: %d" % new_value
 
 

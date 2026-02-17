@@ -3,6 +3,12 @@
 **Target Engine:** Godot 4.6
 **Scope:** Management Layer, Economy, Progression, Map Generation
 
+## Current Phase Snapshot (February 2026)
+
+- **Current Phase:** **Phase 4 (Tactical Integration & Scaling) is mostly complete**, and the project is transitioning into **Phase 5 (Loop Closer)**.
+- **Confirmed complete in code:** Officer progression data model, Barracks + Ability Tree UI, injury tracking/recovery, mission-end XP awarding, and mission rewards (cash/intel/data logs).
+- **Primary remaining work:** Full story-driven progression loop and final win-condition wiring.
+
 ## 1. Global Architecture & Economy (GameState.gd) [COMPLETED]
 
 ### 1.1 Deprecated Systems
@@ -62,7 +68,7 @@ Update the NodeData class to include a state Enum:
 
 **UI Feedback:** Spawn a "Signal Detected" arrow on the map UI pointing to the coordinate.
 
-## 3. Roster & Progression (OfficerData.gd) [PENDING]
+## 3. Roster & Progression (OfficerData.gd) [MOSTLY COMPLETE]
 
 ### 3.1 Data Structure Expansion
 Refactor the simple roster dictionary into a robust OfficerData class.
@@ -115,7 +121,14 @@ Create a UI for unlocking skills.
 
 **Action:** On confirm, append the selected Ability ID to unlocked_abilities and deduct Data Logs from GameState.
 
-## 4. Combat Integration (Unit.gd) [PENDING]
+### 3.4 Implementation Status (Code Check)
+- [x] `OfficerData` class is implemented with `level`, `xp`, `unlocked_abilities`, `current_hp`, and `injury_jumps`.
+- [x] Barracks/Ability Tree UI is implemented and supports level-gated, data-log-cost unlocks.
+- [x] Tier selection behavior is implemented (one pick in level 2 tier, one pick in level 3 tier).
+- [x] Mission-end XP earning is implemented (survival + kill XP, objective multiplier).
+- [x] Injury application and jump-based recovery are implemented.
+
+## 4. Combat Integration (Unit.gd) [MOSTLY COMPLETE]
 
 ### 4.1 Ability Check System
 Modify the Unit class (Tactical Layer) to support the new dynamic abilities.
@@ -138,7 +151,12 @@ func get_damage_modifier(target: Unit) -> float:
     return 1.0
 ```
 
-## 5. Enemy Evolution (BiomeConfig.gd) [PENDING]
+### 4.2 Implementation Status (Code Check)
+- [x] Ability-aware combat hooks are integrated in tactical flow (cooldowns and behavior changes tied to unlocked abilities).
+- [x] Mission completion applies progression/economy rewards into `GameState` (`cash`, `intel`, `data_logs`, officer XP).
+- [~] Additional balancing/cleanup remains, but core phase goals are in place.
+
+## 5. Enemy Evolution (BiomeConfig.gd) [PARTIAL]
 
 ### 5.1 Tiered Scaling System
 Enemies scale based on GameState.total_jumps_made.
@@ -164,6 +182,8 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 * **Win Condition:** Completion of the final Story Mission Chain (Triggered via specific Story Node).
 
 ## 7. Implementation Phases: Voyage 2.0 Update
+
+**Current Overall Status:** **Late Phase 4 / Early Phase 5**
 
 ### Phase 1: Foundation & Economy Refactor [COMPLETED]
 **Goal:** Establish the new data structures and remove legacy "Oregon Trail" systems to prevent logic conflicts.
@@ -201,7 +221,7 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 * [x] Update NodeData to track states: UNVISITED, CLEARED, STORY.
 * [x] **Dead Zones:** If state is CLEARED, disable the "Scavenge" button (traversal only).
 
-### Phase 3: The RPG Layer (Officers) [PENDING]
+### Phase 3: The RPG Layer (Officers) [MOSTLY COMPLETE]
 **Goal:** Convert static units into evolving characters with persistent data.
 
 **OfficerData.gd Class**
@@ -220,7 +240,7 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 * **Recovery:** In `VoyageManager`, decrement `injury_jumps` on every jump.
 * **Roster Check:** Prevent selecting injured officers for missions.
 
-### Phase 4: Tactical Integration & Scaling [PENDING]
+### Phase 4: Tactical Integration & Scaling [MOSTLY COMPLETE]
 **Goal:** Connect the RPG layer to the actual combat gameplay.
 
 **Unit.gd Ability Update**
@@ -237,7 +257,9 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 * Define stats/sprites for Tier 2 (Veteran) and Tier 3 (Elite) enemies.
 * **Update MapGenerator** to select tiers based on `GameState.total_jumps_made`.
 
-### Phase 5: The Loop Closer [PENDING]
+**Status Update:** Mission-end XP + reward hooks and ability-linked tactical behavior are implemented; enemy scaling is present but still under ongoing tuning/cleanup.
+
+### Phase 5: The Loop Closer [IN PROGRESS]
 **Goal:** Implement the winning conditions and story drivers.
 
 **Story Node Spawning**
@@ -248,3 +270,5 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 **Win/Loss Logic**
 * **Loss:** Trigger Game Over if `hull <= 0` OR `all_officers_dead`.
 * **Win:** Define the specific "Final Story Mission" that triggers the Victory Screen.
+
+**Status Update:** Loss conditions are active. Final story-chain driven win flow is the main remaining integration target.
