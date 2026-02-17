@@ -70,8 +70,11 @@ func _setup_header_progression(accent: Color):
 	var header = $Panel/VBox/Header
 	
 	# Remove existing custom elements to avoid duplicates
+	# Must remove_child first so they leave the layout immediately; queue_free alone is deferred
 	for child in [header.get_node_or_null("LevelLabel"), header.get_node_or_null("XPBar")]:
-		if child: child.queue_free()
+		if child:
+			header.remove_child(child)
+			child.queue_free()
 	
 	# Level Label
 	var level_lbl = Label.new()

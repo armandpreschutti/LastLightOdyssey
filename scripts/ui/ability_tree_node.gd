@@ -32,6 +32,8 @@ func _ready():
 	# Also connect from tooltip area since it covers the node
 	tooltip_area.mouse_entered.connect(_on_mouse_entered)
 	tooltip_area.mouse_exited.connect(_on_mouse_exited)
+	# Pass clicks through so _gui_input on the root Control fires
+	tooltip_area.mouse_filter = Control.MOUSE_FILTER_PASS
 
 
 func setup(ab_id: String, off_key: String):
@@ -96,7 +98,7 @@ func _on_mouse_exited():
 	unhovered.emit()
 
 
-func _on_gui_input(event):
+func _gui_input(event):
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if is_available and not is_unlocked:
 			unlock_requested.emit(ability_id, unlock_cost)

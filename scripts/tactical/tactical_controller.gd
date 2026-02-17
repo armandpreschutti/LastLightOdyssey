@@ -917,7 +917,7 @@ func _select_unit(unit: Node2D) -> void:
 	)
 	
 	# Update ability buttons (with cooldown info)
-	tactical_hud.update_ability_buttons(unit.officer_type, unit.current_ap, unit.get_ability_cooldown())
+	tactical_hud.update_ability_buttons(unit.officer_type, unit.current_ap, unit)
 	
 	# Update attackable enemy highlights
 	_update_attackable_highlights()
@@ -1064,7 +1064,7 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 		_set_animating(false)
 		# Update ability buttons with new AP after movement (if this is the selected unit)
 		if selected_unit == unit:
-			tactical_hud.update_ability_buttons(unit.officer_type, unit.current_ap, unit.get_ability_cooldown())
+			tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 	
 	# Check if unit is out of AP and auto-end turn
 	if unit == deployed_officers[current_unit_index]:
@@ -1098,7 +1098,7 @@ func _interact_with(interactable: Node2D) -> void:
 		_update_attackable_highlights()
 		
 		# Update ability buttons with new AP after interaction
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		
 		# Check if unit is out of AP and auto-end turn
 		if selected_unit == deployed_officers[current_unit_index]:
@@ -1823,10 +1823,11 @@ func _end_mission(success: bool) -> void:
 		# Dead officers: kill_officer() already fired during combat → od.alive=false, current_hp=0
 
 	# --- Phase 4: Apply XP + grant intel/data-log rewards ---
-	for officer_key in mission_roster:
-		var od: OfficerData = GameState.get_officer(officer_key)
-		if od and od.alive:
-			od.add_xp(individual_xp_map.get(officer_key, 0))
+	if success:
+		for officer_key in mission_roster:
+			var od: OfficerData = GameState.get_officer(officer_key)
+			if od and od.alive:
+				od.add_xp(individual_xp_map.get(officer_key, 0))
 
 	# Intel is earned from exploration (new jumps), not from missions
 
@@ -2552,7 +2553,7 @@ func _phase_resolution(shooter: Node2D) -> void:
 		
 		# Update ability buttons with new AP after attack (if this is the selected unit)
 		if shooter == selected_unit:
-			tactical_hud.update_ability_buttons(shooter.officer_type, shooter.current_ap, shooter.get_ability_cooldown())
+			tactical_hud.update_ability_buttons(shooter.officer_type, shooter.current_ap, shooter)
 		
 		# Check if unit is out of AP and auto-end turn
 		if shooter == deployed_officers[current_unit_index]:
@@ -2958,16 +2959,27 @@ func _update_precision_mode_highlights() -> void:
 				tactical_map.set_enemy_target_tile(enemy_pos, enemy_size)
 
 
-func _on_ability_used(ability_type: String) -> void:
+func _on_ability_used(ability_id: String) -> void:
 	if not selected_unit or selected_unit not in deployed_officers:
 		return
-	
+
 	if selected_unit != deployed_officers[current_unit_index]:
 		tactical_hud.show_combat_message("NOT YOUR TURN", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		return
-	
+
+	# Route tier 2/3 unlocked abilities to the new handler.
+	# Base (slot: "base") abilities always fall through to the match handler below,
+	# which has the full targeting-mode implementation (charge_mode, execute_mode, etc.)
+	var ability_def = GameState.get_ability_def(ability_id)
+	if not ability_def.is_empty() and ability_def.get("slot", "") != "base":
+		_use_upgraded_ability(ability_id, ability_def)
+		return
+
+	# Fallback to old base ability handling for backwards compatibility
+	var ability_type = ability_id
+
 	# Check cooldown first
 	if selected_unit.is_ability_on_cooldown():
 		tactical_hud.show_combat_message("COOLDOWN: %d TURNS" % selected_unit.get_ability_cooldown(), Color(1, 0.5, 0))
@@ -3082,6 +3094,49 @@ func _on_ability_used(ability_type: String) -> void:
 			# Update enemy highlights for precision mode
 			_update_precision_mode_highlights()
 			tactical_hud.show_cancel_button()
+
+
+## Handle upgraded ability usage
+func _use_upgraded_ability(ability_id: String, ability_def: Dictionary) -> void:
+	var ability_type = ability_def.get("type", "passive")
+	var cost = ability_def.get("cost", 1)
+
+	# Passive abilities don't require usage
+	if ability_type == "passive":
+		tactical_hud.show_combat_message("PASSIVE ABILITY", Color(0.4, 0.9, 1.0))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+
+	# Check AP cost
+	if not selected_unit.has_ap(cost):
+		tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+
+	# Check cooldown
+	if selected_unit.is_ability_on_cooldown(ability_id):
+		var remaining = selected_unit.get_ability_cooldown(ability_id)
+		tactical_hud.show_combat_message("COOLDOWN: %d TURNS" % remaining, Color(1, 0.5, 0))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+
+	# Show ability name
+	var ability_name = ability_def.get("name", ability_id)
+	tactical_hud.show_combat_message("USING: %s" % ability_name.to_upper(), Color(0.4, 0.9, 1.0))
+	await get_tree().create_timer(0.8).timeout
+	tactical_hud.hide_combat_message()
+
+	# Most upgraded abilities will require targeting or further interaction
+	# For now, mark that an ability was used
+	selected_unit.use_ap(cost)
+	var cooldown = ability_def.get("cooldown", 2)
+	selected_unit._start_cooldown(ability_id, cooldown)
+
+	_select_unit(selected_unit)
+	_check_auto_end_turn()
 
 
 ## Cancel any active ability targeting mode
@@ -3310,7 +3365,7 @@ func _try_patch_target(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3325,7 +3380,7 @@ func _try_patch_target(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3339,7 +3394,7 @@ func _try_patch_target(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3353,7 +3408,7 @@ func _try_patch_target(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3390,14 +3445,14 @@ func _try_patch_target(grid_pos: Vector2i) -> void:
 		_set_animating(false)
 		
 		# Update ability buttons with new AP after patch (ability is now on cooldown)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		
 		# Check if unit is out of AP and auto-end turn
 		_check_auto_end_turn()
 	else:
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3427,7 +3482,7 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3441,7 +3496,7 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3456,7 +3511,7 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3471,7 +3526,7 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3485,7 +3540,7 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3527,14 +3582,14 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 		_set_animating(false)
 		
 		# Update ability buttons with new AP after turret (ability is now on cooldown)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		
 		# Check if unit is out of AP and auto-end turn
 		_check_auto_end_turn()
 	else:
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 
 
 ## Try to charge an enemy (Heavy ability)
@@ -3564,7 +3619,7 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
 		if heavy_unit == selected_unit:
-			tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit.get_ability_cooldown())
+			tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit)
 		# Restore movement range if unit still has AP
 		if heavy_unit == deployed_officers[current_unit_index] and heavy_unit.has_ap():
 			var unit_pos = heavy_unit.get_grid_position()
@@ -3585,7 +3640,7 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
 		if heavy_unit == selected_unit:
-			tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit.get_ability_cooldown())
+			tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit)
 		# Restore movement range if unit still has AP
 		if heavy_unit == deployed_officers[current_unit_index] and heavy_unit.has_ap():
 			var unit_pos = heavy_unit.get_grid_position()
@@ -3600,7 +3655,7 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
 		if heavy_unit == selected_unit:
-			tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit.get_ability_cooldown())
+			tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit)
 		# Restore movement range if unit still has AP
 		if heavy_unit == deployed_officers[current_unit_index] and heavy_unit.has_ap():
 			var unit_pos = heavy_unit.get_grid_position()
@@ -3612,7 +3667,7 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
 		if heavy_unit == selected_unit:
-			tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit.get_ability_cooldown())
+			tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit)
 		# Restore movement range if unit still has AP
 		if heavy_unit == deployed_officers[current_unit_index] and heavy_unit.has_ap():
 			var unit_pos = heavy_unit.get_grid_position()
@@ -3677,7 +3732,7 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 	
 	# Update ability buttons with new AP after charge (ability is now on cooldown)
 	if heavy_unit == selected_unit:
-		tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit)
 	
 	# Check if unit is out of AP and auto-end turn
 	# CRITICAL: Only check auto-end turn if heavy_unit is still the current unit
@@ -3911,7 +3966,7 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		_select_unit(selected_unit)
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3926,7 +3981,7 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 	# 	_select_unit(selected_unit)
 	# 	_set_animating(false)
 	# 	# Update ability buttons (ability not used, button should be re-enabled)
-	# 	tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+	# 	tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 	# 	# Restore movement range if unit still has AP
 	# 	if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 	# 		var unit_pos = selected_unit.get_grid_position()
@@ -3947,7 +4002,7 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		_select_unit(selected_unit)
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3963,7 +4018,7 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 		_select_unit(selected_unit)
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		# Restore movement range if unit still has AP
 		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			var unit_pos = selected_unit.get_grid_position()
@@ -3974,7 +4029,7 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 	if not selected_unit.use_execute():
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		return
 	
 	# Guaranteed kill - deal remaining HP as damage
@@ -4019,7 +4074,7 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 	_set_animating(false)
 	
 	# Update ability buttons with new AP after execute (ability is now on cooldown)
-	tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+	tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 	
 	# Check if unit is out of AP and auto-end turn
 	_check_auto_end_turn()
@@ -4054,7 +4109,7 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 		_select_unit(selected_unit)
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		return
 	
 	# Only requirement: enemy must be visible (if player can see the sprite, they can use precision shot)
@@ -4065,14 +4120,14 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 		_select_unit(selected_unit)
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		return
 	
 	# Use the ability (spends AP and starts cooldown)
 	if not selected_unit.use_precision_shot():
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		return
 	
 	# Precision Shot deals 2x base damage (60 for sniper with 30 base damage)
@@ -4122,7 +4177,7 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 	
 	# Update ability buttons with new AP after precision shot (ability is now on cooldown)
 	if selected_unit == selected_unit:  # Always true, but keeping pattern consistent
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit.get_ability_cooldown())
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 	
 	# Check if unit is out of AP and auto-end turn
 	_check_auto_end_turn()

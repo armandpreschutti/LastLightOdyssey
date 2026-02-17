@@ -53,9 +53,12 @@ var grid_position: Vector2i = Vector2i.ZERO
 # Specialist abilities
 var overwatch_active: bool = false  # Scout ability
 
-# Ability cooldown system (2-turn cooldown after use)
-var ability_cooldown: int = 0
+# Ability cooldown system — per-ability: {ability_id: remaining_turns}
+var ability_cooldowns: Dictionary = {}
 const ABILITY_MAX_COOLDOWN: int = 2
+
+# Status effects/buffs tracking: {effect_name: remaining_turns}
+var status_effects: Dictionary = {}
 
 var _moving: bool = false
 var _move_path: PackedVector2Array = []
@@ -228,25 +231,36 @@ func reset_ap() -> void:
 	_update_ap_display()
 
 
-## Reduce ability cooldown by 1 (called at start of each round)
+## Reduce all ability cooldowns by 1 (called at start of each round)
 func reduce_cooldown() -> void:
-	if ability_cooldown > 0:
-		ability_cooldown -= 1
+	for key in ability_cooldowns.keys():
+		if ability_cooldowns[key] > 0:
+			ability_cooldowns[key] -= 1
 
 
-## Check if ability is on cooldown
-func is_ability_on_cooldown() -> bool:
-	return ability_cooldown > 0
+## Check if a specific ability (or any ability) is on cooldown
+func is_ability_on_cooldown(ability_id: String = "") -> bool:
+	if ability_id != "":
+		return ability_cooldowns.get(ability_id, 0) > 0
+	for v in ability_cooldowns.values():
+		if v > 0:
+			return true
+	return false
 
 
-## Get remaining cooldown turns
-func get_ability_cooldown() -> int:
-	return ability_cooldown
+## Get remaining cooldown turns for a specific ability (or max of all)
+func get_ability_cooldown(ability_id: String = "") -> int:
+	if ability_id != "":
+		return ability_cooldowns.get(ability_id, 0)
+	var max_cd := 0
+	for v in ability_cooldowns.values():
+		max_cd = maxi(max_cd, v)
+	return max_cd
 
 
-## Start ability cooldown after use
-func _start_cooldown(cooldown_turns: int = ABILITY_MAX_COOLDOWN) -> void:
-	ability_cooldown = cooldown_turns
+## Start cooldown for a specific ability
+func _start_cooldown(ability_id: String, cooldown_turns: int = ABILITY_MAX_COOLDOWN) -> void:
+	ability_cooldowns[ability_id] = cooldown_turns
 
 
 func take_damage(amount: int) -> void:
@@ -370,17 +384,17 @@ func toggle_overwatch() -> bool:
 	if officer_type != "scout":
 		return false
 	
-	if is_ability_on_cooldown():
+	if is_ability_on_cooldown("overwatch"):
 		return false
-	
+
 	if not overwatch_active and not use_ap(1):
 		return false
-	
+
 	overwatch_active = not overwatch_active
-	
+
 	# Start cooldown when activating
 	if overwatch_active:
-		_start_cooldown()
+		_start_cooldown("overwatch")
 	
 	# Update overwatch indicator
 	if overwatch_indicator:
@@ -519,14 +533,14 @@ func attacks_ignore_cover() -> bool:
 func use_turret() -> bool:
 	if officer_type != "tech":
 		return false
-	
-	if is_ability_on_cooldown():
+
+	if is_ability_on_cooldown("turret"):
 		return false
-	
+
 	if not use_ap(1):
 		return false
-	
-	_start_cooldown()
+
+	_start_cooldown("turret")
 	return true
 
 
@@ -535,12 +549,12 @@ func use_patch(target: Node2D) -> bool:
 	if officer_type != "medic":
 		return false
 	
-	if is_ability_on_cooldown():
+	if is_ability_on_cooldown("patch"):
 		return false
-	
+
 	if not use_ap(1):
 		return false
-	
+
 	# Validate range (3 tiles manhattan distance)
 	var medic_pos = get_grid_position()
 	var target_pos = target.get_grid_position()
@@ -554,7 +568,7 @@ func use_patch(target: Node2D) -> bool:
 	var heal_amount = int(target.max_hp * base_heal_percent * heal_multiplier)
 	target.heal(heal_amount)
 	
-	_start_cooldown(1)  # 1-turn cooldown for patch
+	_start_cooldown("patch", 1)
 	return true
 
 
@@ -562,14 +576,14 @@ func use_patch(target: Node2D) -> bool:
 func use_charge() -> bool:
 	if officer_type != "heavy":
 		return false
-	
-	if is_ability_on_cooldown():
+
+	if is_ability_on_cooldown("charge"):
 		return false
-	
+
 	if not use_ap(1):
 		return false
-	
-	_start_cooldown()
+
+	_start_cooldown("charge")
 	return true
 
 
@@ -578,17 +592,17 @@ func use_execute() -> bool:
 	if officer_type != "captain":
 		return false
 
-	if is_ability_on_cooldown():
+	if is_ability_on_cooldown("execute"):
 		return false
 
 	if not use_ap(1):
 		return false
 
-	_start_cooldown()
+	_start_cooldown("execute")
 	# Warlord: Execute has no cooldown
 	var _od: OfficerData = GameState.get_officer(officer_key)
 	if _od and _od.has_ability("warlord"):
-		ability_cooldown = 0
+		ability_cooldowns["execute"] = 0
 	return true
 
 
@@ -597,19 +611,65 @@ func use_precision_shot() -> bool:
 	if officer_type != "sniper":
 		return false
 
-	if is_ability_on_cooldown():
+	if is_ability_on_cooldown("precision_shot"):
 		return false
 
 	if not use_ap(1):
 		return false
 
-	# Snap Shot: Precision Shot costs 0 cooldown (can fire again this turn or next)
+	# Snap Shot: Precision Shot costs 0 cooldown
 	var _od: OfficerData = GameState.get_officer(officer_key)
-	if _od and _od.has_ability("snap_shot"):
-		pass  # no cooldown applied
-	else:
-		_start_cooldown()
+	if not (_od and _od.has_ability("snap_shot")):
+		_start_cooldown("precision_shot")
 	return true
+
+
+## Use an upgraded ability by ID
+func use_ability_by_id(ability_id: String) -> bool:
+	var ability_def = GameState.get_ability_def(ability_id)
+	if ability_def.is_empty():
+		return false
+
+	var cost = ability_def.get("cost", 1)
+	if not use_ap(cost):
+		return false
+
+	var ability_type = ability_def.get("type", "passive")
+	if ability_type == "passive":
+		# Passives don't use AP or cooldown
+		return false
+
+	# Check if this ability modifies a base ability
+	var modifies = ability_def.get("modifies", "")
+	if modifies != "":
+		# Don't apply cooldown override here - it's handled at ability use time
+		pass
+
+	# Apply default cooldown
+	var cooldown = ability_def.get("cooldown", 2)
+	_start_cooldown(ability_id, cooldown)
+
+	return true
+
+
+## Get effective ability cooldown considering unlocked modifiers
+func get_effective_ability_cooldown(ability_id: String) -> int:
+	var override = GameState.get_ability_cooldown_override(ability_id)
+	if override >= 0:
+		return override
+	return GameState.get_ability_cooldown(ability_id)
+
+
+## Get damage multiplier for an ability (considering modifiers)
+func get_ability_damage_multiplier(ability_id: String) -> float:
+	var base_multiplier = GameState.get_ability_damage_multiplier(ability_id)
+	return base_multiplier
+
+
+## Check if unit has a specific ability unlocked
+func has_ability_unlocked(ability_id: String) -> bool:
+	var od: OfficerData = GameState.get_officer(officer_key)
+	return od != null and od.has_ability(ability_id)
 
 
 ## Check if target is valid for Precision Shot (any visible enemy, no distance/cover restrictions)
@@ -623,7 +683,7 @@ func can_precision_shot_target(target_pos: Vector2i) -> bool:
 
 ## Check if unit can use their special ability
 func can_use_ability(ability_type: String) -> bool:
-	if is_ability_on_cooldown():
+	if is_ability_on_cooldown(ability_type):
 		return false
 	
 	match ability_type:
@@ -647,7 +707,7 @@ func can_use_ability(ability_type: String) -> bool:
 func face_towards(target_pos: Vector2i) -> void:
 	var target_world = Vector2(target_pos.x * 32 + 16, target_pos.y * 32 + 16)
 	var direction = (target_world - position).normalized()
-	
+
 	# Flip sprite based on direction
 	if sprite and direction.x != 0:
 		sprite.flip_h = direction.x < 0
@@ -659,6 +719,564 @@ func update_cover_indicator(cover_level: int) -> void:
 		half_cover_indicator.visible = (cover_level == 1)
 	if full_cover_indicator:
 		full_cover_indicator.visible = (cover_level == 2)
+
+
+## Add a status effect/buff to this unit
+func add_status_effect(effect_name: String, duration: int) -> void:
+	status_effects[effect_name] = duration
+	_apply_status_visual_feedback(effect_name)
+
+
+## Remove a status effect
+func remove_status_effect(effect_name: String) -> void:
+	if effect_name in status_effects:
+		status_effects.erase(effect_name)
+
+
+## Check if unit has a status effect
+func has_status_effect(effect_name: String) -> bool:
+	return effect_name in status_effects and status_effects[effect_name] > 0
+
+
+## Decrement all status effect durations (call at end of turn)
+func tick_status_effects() -> void:
+	var effects_to_remove = []
+	for effect_name in status_effects:
+		status_effects[effect_name] -= 1
+		if status_effects[effect_name] <= 0:
+			effects_to_remove.append(effect_name)
+
+	for effect_name in effects_to_remove:
+		remove_status_effect(effect_name)
+
+
+## Apply visual feedback for status effects
+func _apply_status_visual_feedback(effect_name: String) -> void:
+	if not sprite:
+		return
+
+	match effect_name:
+		"phantom":
+			var tween = create_tween()
+			tween.tween_property(sprite, "modulate", Color(0.6, 1.0, 0.8, 0.6), 0.3)
+
+		"immune":
+			var tween = create_tween()
+			tween.tween_property(sprite, "modulate", Color(1.5, 1.5, 0.5, 1.0), 0.2)
+			tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+
+		"stim":
+			var tween = create_tween()
+			tween.tween_property(sprite, "modulate", Color(1.0, 1.3, 0.3, 1.0), 0.2)
+			tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+
+		"adrenaline":
+			var tween = create_tween()
+			tween.tween_property(sprite, "modulate", Color(1.2, 0.8, 1.2, 1.0), 0.2)
+			tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+
+		"marked":
+			var tween = create_tween()
+			tween.tween_property(sprite, "modulate", Color(1.5, 0.5, 0.5, 1.0), 0.15)
+			tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.15)
+
+
+## Gain bonus AP (used by abilities like Lead by Example)
+func gain_bonus_ap(amount: int) -> void:
+	current_ap = mini(current_ap + amount, max_ap)
+	_update_ap_display()
+
+
+## Gain bonus movement (used by abilities like Hit & Run)
+func gain_bonus_movement(amount: int) -> void:
+	var original_range = move_range
+	move_range += amount
+
+
+## Calculate damage taken considering status effects
+func calculate_damage_received(base_damage: int) -> int:
+	var actual_damage = base_damage
+
+	# Stim reduces damage by 50%
+	if has_status_effect("stim"):
+		actual_damage = int(actual_damage * 0.5)
+
+	# Phantom reduces damage by 50%
+	if has_status_effect("phantom"):
+		actual_damage = int(actual_damage * 0.5)
+
+	# Bulldozer armor reduces damage
+	if has_status_effect("bulldozer_armor"):
+		actual_damage = maxi(1, actual_damage - 20)
+
+	return actual_damage
+
+
+## Get accuracy modifier from status effects
+func get_accuracy_modifier_from_effects() -> float:
+	var modifier = 0.0
+
+	# Poison reduces accuracy
+	if has_status_effect("poison"):
+		modifier -= 20.0
+
+	# Adrenaline increases accuracy
+	if has_status_effect("adrenaline"):
+		modifier += 15.0
+
+	return modifier
+
+
+## Get critical hit chance modifier from status effects
+func get_critical_chance_modifier() -> float:
+	var modifier = critical_hit_chance
+
+	if has_status_effect("adrenaline"):
+		modifier += 5.0  # Small crit bonus from adrenaline
+
+	return modifier
+
+
+#region Ability Implementations - All Classes
+
+# CAPTAIN ABILITIES
+#====================
+
+## Captain Level 2A: Lead by Example - Passive bonus when killing enemies
+func apply_lead_by_example_bonus(squad: Array[Node2D]) -> void:
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("lead_by_example"):
+		return
+	# Grants +1 AP to all squad members on next turn (handled by caller)
+	for unit in squad:
+		if unit != self and unit.has_method("gain_bonus_ap"):
+			unit.gain_bonus_ap(1)
+
+
+## Captain Level 2B: Coordinate Fire - Mark target for accuracy/crit bonus
+func apply_coordinate_fire(target: Node2D) -> void:
+	if not use_ap(1):
+		return
+	if is_ability_on_cooldown("coordinate_fire"):
+		return
+
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("coordinate_fire"):
+		return
+
+	# Mark target with visual indicator
+	if target.has_method("add_status_effect"):
+		target.add_status_effect("marked", 1)  # Lasts 1 turn
+
+	_start_cooldown("coordinate_fire")
+
+
+## Captain Level 3A: Warlord - Remove Execute cooldown
+func get_execute_cooldown_with_warlord() -> int:
+	var od = GameState.get_officer(officer_key)
+	if od and od.has_ability("warlord"):
+		return 0  # No cooldown
+	return 2
+
+
+## Captain Level 3B: No One Left Behind - Save ally from death
+func try_save_ally(target: Node2D) -> bool:
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("no_one_left_behind"):
+		return false
+	if target.current_hp > 0:
+		return false
+
+	# Restore to 1 HP and grant 1-turn immunity
+	target.current_hp = 1
+	target._update_hp_bar()
+	if target.has_method("add_status_effect"):
+		target.add_status_effect("immune", 1)
+
+	return true
+
+
+## Captain Level 3C: Command Presence - Aura buff to nearby allies
+func get_command_presence_range() -> int:
+	var od = GameState.get_officer(officer_key)
+	if od and od.has_ability("command_presence"):
+		return 4
+	return 0
+
+
+# SCOUT ABILITIES
+#==================
+
+## Scout Level 2A: Hit & Run - Bonus movement after shooting
+func apply_hit_and_run_bonus() -> void:
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("hit_and_run"):
+		return
+
+	# Grant +3 movement range next turn (tracked by caller)
+	if has_method("gain_bonus_movement"):
+		gain_bonus_movement(3)
+
+
+## Scout Level 2B: Deep Scanner - Reveal enemies through walls
+func apply_deep_scanner() -> bool:
+	if not use_ap(0):  # 0 AP cost
+		return false
+	if is_ability_on_cooldown("deep_scanner"):
+		return false
+
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("deep_scanner"):
+		return false
+
+	# Triggers fog of war reveal (handled by tactical controller)
+	_start_cooldown("deep_scanner", 3)
+	return true
+
+
+## Scout Level 3A: Killzone - Overwatch triggers on all enemies
+func apply_killzone_upgrade() -> bool:
+	var od = GameState.get_officer(officer_key)
+	return od != null and od.has_ability("killzone")
+
+
+## Scout Level 3B: Phantom - Become invisible for 2 turns
+func apply_phantom_invisibility() -> bool:
+	if not use_ap(1):
+		return false
+	if is_ability_on_cooldown("phantom"):
+		return false
+
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("phantom"):
+		return false
+
+	# Add invisibility status (reduces damage taken by 50%, prevents targeting)
+	if has_method("add_status_effect"):
+		add_status_effect("phantom", 2)
+
+	# Visual feedback: fade out slightly
+	var tween = create_tween()
+	tween.tween_property(sprite, "modulate", Color(1, 1, 1, 0.5), 0.3)
+
+	_start_cooldown("phantom")
+	return true
+
+
+## Scout Level 3C: Untouchable - Miss guarantee after kill
+func apply_untouchable_protection() -> bool:
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("untouchable"):
+		return false
+
+	# Grants next attack against self guaranteed miss
+	if has_method("add_status_effect"):
+		add_status_effect("untouchable", 1)
+
+	return true
+
+
+# TECH ABILITIES
+#=================
+
+## Tech Level 2A: Combat Engineer - Upgrade turrets
+func get_turret_stats_with_engineer() -> Dictionary:
+	var od = GameState.get_officer(officer_key)
+	var stats = {"hp": 20, "duration": 3, "damage": 15, "range": 6}
+
+	if od and od.has_ability("combat_engineer"):
+		stats["hp"] = 40  # +20 HP shield
+		stats["duration"] = 5  # Extended duration
+
+	return stats
+
+
+## Tech Level 2B: Sapper - EMP grenade attack
+func apply_sapper_emp(target_pos: Vector2i) -> bool:
+	if not use_ap(1):
+		return false
+	if is_ability_on_cooldown("sapper"):
+		return false
+
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("sapper"):
+		return false
+
+	# Stuns enemies in 3x3 area
+	# This would be called by tactical controller with target_pos
+	_start_cooldown("sapper")
+	return true
+
+
+## Tech Level 3A: Twin-Link - Deploy 2 turrets
+func get_max_turrets_with_twinlink() -> int:
+	var od = GameState.get_officer(officer_key)
+	if od and od.has_ability("twin_link"):
+		return 2
+	return 1
+
+
+## Tech Level 3B: Overclock - Turret fires multiple times then explodes
+func apply_overclock_to_turret(turret: Node2D) -> bool:
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("overclock"):
+		return false
+
+	# Turret fires 3 times then self-destructs with area damage
+	# This is handled by the turret itself when overclock is applied
+	if turret.has_method("trigger_overclock"):
+		turret.trigger_overclock()
+
+	return true
+
+
+## Tech Level 3C: Haywire Protocol - Control enemy robot
+func apply_haywire_protocol(target: Node2D) -> bool:
+	if not use_ap(1):
+		return false
+	if is_ability_on_cooldown("haywire_protocol"):
+		return false
+
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("haywire_protocol"):
+		return false
+
+	# Target fights for you for 2 turns, then stuns for 1
+	if target.has_method("charm_unit"):
+		target.charm_unit(2)
+
+	_start_cooldown("haywire_protocol", 4)
+	return true
+
+
+# MEDIC ABILITIES
+#==================
+
+## Medic Level 2A: Adrenaline Patch - Patch + movement/accuracy buff
+func apply_adrenaline_patch(target: Node2D) -> bool:
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("adrenaline_patch"):
+		return false
+
+	# Standard patch healing
+	var heal_amount = int(target.max_hp * 0.625)  # 62.5% with medic bonus
+	target.heal(heal_amount)
+
+	# Add buff
+	if target.has_method("add_status_effect"):
+		target.add_status_effect("adrenaline", 2)  # +2 movement, +15% accuracy for 2 turns
+
+	return true
+
+
+## Medic Level 2B: Field Surgeon - Auto-stabilize allies
+func try_auto_stabilize(target: Node2D) -> bool:
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("field_surgeon"):
+		return false
+
+	var distance = abs(get_grid_position().x - target.get_grid_position().x) + \
+	               abs(get_grid_position().y - target.get_grid_position().y)
+
+	if distance > 4:
+		return false
+
+	# Save from death
+	if target.current_hp <= 0:
+		target.current_hp = 1
+		target._update_hp_bar()
+		return true
+
+	return false
+
+
+## Medic Level 3A: Miracle Worker - Global heal all allies
+func apply_miracle_worker(squad: Array[Node2D]) -> bool:
+	if not use_ap(2):
+		return false
+
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("miracle_worker"):
+		return false
+
+	# Heal all squad members for 50% HP
+	for unit in squad:
+		var heal_amount = int(unit.max_hp * 0.5)
+		unit.heal(heal_amount)
+
+	_start_cooldown("miracle_worker", 999)  # One use per mission
+	return true
+
+
+## Medic Level 3B: Toxicologist - Poison enemies with attacks
+func apply_toxicologist_poison(target: Node2D) -> void:
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("toxicologist"):
+		return
+
+	# Apply poison status (5 DMG/turn, -20% accuracy)
+	if target.has_method("add_status_effect"):
+		target.add_status_effect("poison", 3)
+
+
+## Medic Level 3C: Stim Injector - Boost ally with AP + damage reduction
+func apply_stim_injector(target: Node2D) -> bool:
+	if not use_ap(1):
+		return false
+	if is_ability_on_cooldown("stim_injector"):
+		return false
+
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("stim_injector"):
+		return false
+
+	# Grant +2 AP and -50% damage taken for 1 turn
+	target.current_ap = mini(target.current_ap + 2, target.max_ap)
+	target._update_ap_display()
+
+	if target.has_method("add_status_effect"):
+		target.add_status_effect("stim", 1)
+
+	_start_cooldown("stim_injector", 3)
+	return true
+
+
+# HEAVY ABILITIES
+#===================
+
+## Heavy Level 2A: Bulldozer - Charge destroys cover, grant armor
+func apply_bulldozer_armor() -> void:
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("bulldozer"):
+		return
+
+	# Add armor status (+20 defense reduction)
+	if has_method("add_status_effect"):
+		add_status_effect("bulldozer_armor", 2)
+
+
+## Heavy Level 2B: Suppression Fire - Cone attack that pins enemies
+func apply_suppression_fire(target_pos: Vector2i) -> bool:
+	if not use_ap(2):
+		return false
+	if is_ability_on_cooldown("suppression_fire"):
+		return false
+
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("suppression_fire"):
+		return false
+
+	# Deal damage in cone and pin down enemies
+	# Caller will apply pin_down status to hit enemies
+	_start_cooldown("suppression_fire")
+	return true
+
+
+## Heavy Level 3A: Juggernaut - Immunity + regen passive
+func apply_juggernaut_regeneration() -> void:
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("juggernaut"):
+		return
+
+	# Regenerate 15% max HP if didn't attack this turn
+	var regen_amount = int(max_hp * 0.15)
+	heal(regen_amount)
+
+	# Visual feedback
+	var tween = create_tween()
+	tween.tween_property(sprite, "modulate", Color(1.2, 1.5, 0.8, 1.0), 0.2)
+	tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+
+
+## Heavy Level 3B: Rocket Salvo - Area damage and cover destruction
+func apply_rocket_salvo(target_pos: Vector2i) -> bool:
+	if not use_ap(2):
+		return false
+	if is_ability_on_cooldown("rocket_salvo"):
+		return false
+
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("rocket_salvo"):
+		return false
+
+	# Deal 40 area damage in 3x3 and destroy cover
+	# Caller applies damage to affected units
+	_start_cooldown("rocket_salvo", 3)
+	return true
+
+
+## Heavy Level 3C: Intimidate - Aura that debuffs enemies
+func get_intimidate_range() -> int:
+	var od = GameState.get_officer(officer_key)
+	if od and od.has_ability("intimidate"):
+		return 3
+	return 0
+
+
+# SNIPER ABILITIES
+#===================
+
+## Sniper Level 2A: Damn Good Ground - Accuracy/crit bonus when stationary
+func get_damn_good_ground_bonus(moved_this_turn: bool) -> Dictionary:
+	var od = GameState.get_officer(officer_key)
+	var bonus = {"crit_chance": 0.0, "sight_range": 0}
+
+	if od and od.has_ability("damn_good_ground") and not moved_this_turn:
+		bonus["crit_chance"] = 15.0
+		bonus["sight_range"] = 2
+
+	return bonus
+
+
+## Sniper Level 2B: Snap Shot - Precision Shot has no cooldown
+func get_precision_shot_cooldown_with_snapshot() -> int:
+	var od = GameState.get_officer(officer_key)
+	if od and od.has_ability("snap_shot"):
+		return 0  # No cooldown
+	return 2
+
+
+## Sniper Level 3A: Serial - Refund AP on kills
+func apply_serial_refund() -> void:
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("serial"):
+		return
+
+	# Refund all AP spent on killing shot
+	reset_ap()
+
+
+## Sniper Level 3B: Apex Predator - 2x damage vs full health enemies
+func get_apex_predator_damage_multiplier(target: Node2D) -> float:
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("apex_predator"):
+		return 1.0
+
+	if target.current_hp == target.max_hp:
+		return 2.0  # Double damage
+
+	return 1.0
+
+
+## Sniper Level 3C: Double Tap - Fire twice with accuracy penalty
+func apply_double_tap(target_pos: Vector2i, hit_chance: float) -> Dictionary:
+	if not use_ap(1):
+		return {"success": false}
+	if is_ability_on_cooldown("double_tap"):
+		return {"success": false}
+
+	var od = GameState.get_officer(officer_key)
+	if not od or not od.has_ability("double_tap"):
+		return {"success": false}
+
+	# Fire twice with -15% accuracy on second shot
+	var first_hit = randf() <= (hit_chance / 100.0)
+	var second_hit = randf() <= ((hit_chance - 15.0) / 100.0)
+
+	_start_cooldown("double_tap", 2)
+	return {"success": true, "hits": [first_hit, second_hit]}
+
+#endregion
 
 
 #region Attack Animations

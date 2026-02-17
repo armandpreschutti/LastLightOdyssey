@@ -55,9 +55,14 @@ signal ability_cancelled
 # Unit stats tooltip
 @onready var unit_stats_tooltip: Control = $UnitStatsTooltip
 
+# Ability panel (new upgraded abilities panel)
+var ability_panel: Control = null
+
 # Current ability info
 var _current_ability_type: String = ""
 var _is_animating: bool = false  # Track animation state to disable ability button
+var _current_officer_key: String = ""  # Track current officer for ability panel
+var _dynamic_ability_buttons: Array = []  # Dynamically added tier 2/3 ability buttons
 
 
 func _ready() -> void:
@@ -69,6 +74,14 @@ func _ready() -> void:
 	extract_button.visible = false
 	ability_container.visible = false
 	cancel_button.visible = false
+
+	# Load and setup ability panel
+	var ability_panel_scene = preload("res://scenes/ui/ability_panel.tscn")
+	if ability_panel_scene:
+		ability_panel = ability_panel_scene.instantiate()
+		add_child(ability_panel)
+		ability_panel.ability_selected.connect(_on_ability_panel_ability_selected)
+		ability_panel.panel_closed.connect(_on_ability_panel_closed)
 	
 	# Hide pause panel and all its decorative elements by default - only show during active tactical missions
 	pause_panel.visible = false
@@ -220,9 +233,12 @@ func set_end_turn_enabled(enabled: bool) -> void:
 	end_turn_button.disabled = not enabled
 	# Track animation state and disable ability button during animations (same as END TURN button)
 	_is_animating = not enabled
-	# Immediately disable ability button if animating (update_ability_buttons() will handle proper state when called)
+	# Immediately disable ability buttons if animating (update_ability_buttons() will handle proper state when called)
 	if ability_container.visible and _is_animating:
 		ability_button.disabled = true
+		for btn in _dynamic_ability_buttons:
+			if is_instance_valid(btn):
+				btn.disabled = true
 
 
 func _on_pause_pressed() -> void:
@@ -243,7 +259,13 @@ func _on_extract_pressed() -> void:
 	extract_pressed.emit()
 
 
-func update_ability_buttons(officer_type: String, current_ap: int, cooldown: int = 0) -> void:
+func update_ability_buttons(officer_type: String, current_ap: int, unit_ref: Object = null) -> void:
+	# Clear dynamic buttons from previous call
+	for btn in _dynamic_ability_buttons:
+		if is_instance_valid(btn):
+			btn.queue_free()
+	_dynamic_ability_buttons.clear()
+
 	# Hide by default
 	ability_container.visible = false
 	_current_ability_type = ""
@@ -297,25 +319,48 @@ func update_ability_buttons(officer_type: String, current_ap: int, cooldown: int
 	if ability_name != "":
 		ability_container.visible = true
 		_current_ability_type = ability_name
-		
-		# Check cooldown - button must be disabled if on cooldown or during animations
-		var is_on_cooldown := cooldown > 0
+
+		var base_cd: int = unit_ref.get_ability_cooldown(ability_name) if unit_ref else 0
+		var is_on_cooldown := base_cd > 0
 		var has_enough_ap := current_ap >= ap_cost
-		
+
 		if is_on_cooldown:
-			ability_header.text = "ABILITY: [CD %d]" % cooldown
-			ability_button.text = "%s (CD: %d)" % [ability_text, cooldown]
-			# Always disabled when on cooldown
+			ability_header.text = "ABILITY: [CD %d]" % base_cd
+			ability_button.text = "%s (CD: %d)" % [ability_text, base_cd]
 			ability_button.disabled = true
-			ability_desc.text = ability_description + "\n>> On cooldown for %d more turn(s)." % cooldown
-			ability_button.tooltip_text = ability_tooltip + "\nCooldown: %d turn(s) remaining." % cooldown
+			ability_desc.text = ability_description + "\n>> On cooldown for %d more turn(s)." % base_cd
+			ability_button.tooltip_text = ability_tooltip + "\nCooldown: %d turn(s) remaining." % base_cd
 		else:
 			ability_header.text = "SPECIALIST ABILITY:"
 			ability_button.text = ability_text
-			# Disabled if not enough AP OR if animations are playing
 			ability_button.disabled = not has_enough_ap or _is_animating
 			ability_desc.text = ability_description
 			ability_button.tooltip_text = ability_tooltip
+
+	# Add buttons for unlocked tier 2/3 active abilities
+	var od = GameState.get_officer(officer_type)
+	if od:
+		for ab_id in GameState.OFFICER_ABILITIES.get(officer_type, []):
+			if not od.has_ability(ab_id):
+				continue
+			var def = GameState.get_ability_def(ab_id)
+			if def.is_empty() or def.get("type", "passive") != "active" or def.get("level", 1) == 1:
+				continue
+			var ab_cost: int = def.get("cost", 1)
+			var cd_remaining: int = unit_ref.get_ability_cooldown(ab_id) if unit_ref else 0
+			var on_cd := cd_remaining > 0
+			var btn := Button.new()
+			if on_cd:
+				btn.text = "[ %s ] - %d AP (CD: %d)" % [def.get("name", ab_id).to_upper(), ab_cost, cd_remaining]
+			else:
+				btn.text = "[ %s ] - %d AP" % [def.get("name", ab_id).to_upper(), ab_cost]
+			btn.disabled = on_cd or current_ap < ab_cost or _is_animating
+			btn.tooltip_text = def.get("desc", "")
+			var captured_id: String = ab_id
+			btn.pressed.connect(func(): ability_used.emit(captured_id))
+			ability_container.add_child(btn)
+			ability_container.visible = true
+			_dynamic_ability_buttons.append(btn)
 
 
 func _on_ability_pressed() -> void:
@@ -403,3 +448,20 @@ func hide_pause_button() -> void:
 	pause_panel.visible = false
 	pause_glow.visible = false
 	pause_border.visible = false
+
+
+## Show upgraded abilities panel for current officer
+func show_ability_panel(officer_key: String, unit: Node2D) -> void:
+	if ability_panel:
+		_current_officer_key = officer_key
+		ability_panel.show_abilities(officer_key, unit)
+
+
+## Called when an ability is selected from the panel
+func _on_ability_panel_ability_selected(ability_id: String) -> void:
+	ability_used.emit(ability_id)
+
+
+## Called when ability panel is closed
+func _on_ability_panel_closed() -> void:
+	pass

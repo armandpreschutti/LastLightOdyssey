@@ -1,0 +1,5 @@
+[gd_scene format=3 uid="uid://c2xmr7p1oa5kt"]
+
+[node name="AbilityButton" type="Button"]
+custom_minimum_size = Vector2(280, 40)
+text = "Ability Name"

@@ -27,51 +27,69 @@ const OFFICER_COLOR = {
 	"sniper":  Color(0.6, 0.55, 0.7),
 }
 
-# Ability definitions: id → {name, desc, level, slot}
+# Ability definitions: id → {name, desc, level, slot, modifiers}
 const ABILITY_DEFS: Dictionary = {
-	"execute":            {"name": "Execute",            "desc": "Guaranteed kill on any enemy within 4 tiles that is below 50% HP. 2-turn cooldown.",                                                            "level": 1, "slot": "base"},
-	"overwatch":          {"name": "Overwatch",          "desc": "Take a reaction shot at the first enemy that moves in Line of Sight. Guaranteed hit. 2-turn cooldown.",                                          "level": 1, "slot": "base"},
-	"turret":             {"name": "Turret",             "desc": "Deploy an auto-firing sentry on an adjacent tile. Lasts 3 turns. 2-turn cooldown.",                                                              "level": 1, "slot": "base"},
-	"patch":              {"name": "Patch",              "desc": "Heal yourself or an ally within 3 tiles for 62.5% Max HP. 2-turn cooldown.",                                                                    "level": 1, "slot": "base"},
-	"charge":             {"name": "Charge",             "desc": "Rush an enemy within 4 tiles. Instant-kills basic enemies; deals 2x Base Damage to heavy enemies. 2-turn cooldown.",                             "level": 1, "slot": "base"},
-	"precision_shot":     {"name": "Precision Shot",     "desc": "Guaranteed hit on any visible enemy. Deals 2x Base Damage. 2-turn cooldown.",                                                                   "level": 1, "slot": "base"},
+	# BASE ABILITIES (Level 1)
+	"execute":            {"name": "Execute",            "desc": "Guaranteed kill on any enemy within 4 tiles that is below 50% HP. 2-turn cooldown.",                                                            "level": 1, "slot": "base", "type": "active", "cost": 1},
+	"overwatch":          {"name": "Overwatch",          "desc": "Take a reaction shot at the first enemy that moves in Line of Sight. Guaranteed hit. 2-turn cooldown.",                                          "level": 1, "slot": "base", "type": "active", "cost": 1},
+	"turret":             {"name": "Turret",             "desc": "Deploy an auto-firing sentry on an adjacent tile. Lasts 3 turns. 2-turn cooldown.",                                                              "level": 1, "slot": "base", "type": "active", "cost": 1},
+	"patch":              {"name": "Patch",              "desc": "Heal yourself or an ally within 3 tiles for 62.5% Max HP. 2-turn cooldown.",                                                                    "level": 1, "slot": "base", "type": "active", "cost": 1},
+	"charge":             {"name": "Charge",             "desc": "Rush an enemy within 4 tiles. Instant-kills basic enemies; deals 2x Base Damage to heavy enemies. 2-turn cooldown.",                             "level": 1, "slot": "base", "type": "active", "cost": 1},
+	"precision_shot":     {"name": "Precision Shot",     "desc": "Guaranteed hit on any visible enemy. Deals 2x Base Damage. 2-turn cooldown.",                                                                   "level": 1, "slot": "base", "type": "active", "cost": 1},
 
-	# Captain
-	"lead_by_example":    {"name": "Lead by Example",    "desc": "When the Captain kills an enemy, all other squad members gain +1 AP on their next turn.",                                                       "level": 2, "slot": "a"},
-	"coordinate_fire":    {"name": "Coordinate Fire",    "desc": "Mark a target. All allies gain +20% Accuracy and +25% Critical Chance against that target for 1 turn. (1 AP, active)",                        "level": 2, "slot": "b"},
-	"warlord":            {"name": "Warlord",            "desc": "Execute no longer has a cooldown. Chain multiple executions in a single turn if you have enough AP.",                                            "level": 3, "slot": "a"},
-	"no_one_left_behind": {"name": "No One Left Behind", "desc": "If an ally within 5 tiles takes lethal damage, they survive with 1 HP and become immune to all damage for 1 turn. (Once per ally per mission)", "level": 3, "slot": "b"},
-	"command_presence":   {"name": "Command Presence",   "desc": "All allies within 4 tiles gain +10% Accuracy and +15% Critical Chance. The Captain gains +10 Defense per nearby ally.",                          "level": 3, "slot": "c"},
-	# Scout
-	"hit_and_run":        {"name": "Hit & Run",          "desc": "If the Scout moves and shoots in the same turn, they immediately gain +3 Movement Points to retreat or reposition.",                             "level": 2, "slot": "a"},
-	"deep_scanner":       {"name": "Deep Scanner",       "desc": "Reveals all enemies in a large radius (15 tiles) for 1 turn, even through walls. (0 AP, 3-turn cooldown)",                                      "level": 2, "slot": "b"},
-	"killzone":           {"name": "Killzone",           "desc": "Overwatch now triggers on every enemy that moves in Line of Sight during the enemy turn, not just the first.",                                   "level": 3, "slot": "a"},
-	"phantom":            {"name": "Phantom",            "desc": "Become Invisible for 2 turns. First attack from invisibility deals +100% Damage but reveals you. (1 AP, active)",                               "level": 3, "slot": "b"},
-	"untouchable":        {"name": "Untouchable",        "desc": "If you kill an enemy during your turn, the next attack against you during the enemy turn is guaranteed to Miss.",                                 "level": 3, "slot": "c"},
-	# Tech
-	"combat_engineer":    {"name": "Combat Engineer",    "desc": "Turrets gain a 20 HP shield barrier and their duration is extended to 5 turns.",                                                                 "level": 2, "slot": "a"},
-	"sapper":             {"name": "Sapper",             "desc": "Throw a localized EMP grenade. Stuns robotic enemies and disables weapons in a 3×3 area for 1 turn. (1 AP, active)",                            "level": 2, "slot": "b"},
-	"twin_link":          {"name": "Twin-Link",          "desc": "You can have 2 Turrets active simultaneously. Deploying a second turret does not destroy the first.",                                            "level": 3, "slot": "a"},
-	"overclock":          {"name": "Overclock",          "desc": "Target your active Turret. It fires 3 times at random enemies, then self-destructs with 20 area damage. (0 AP)",                                 "level": 3, "slot": "b"},
-	"haywire_protocol":   {"name": "Haywire Protocol",   "desc": "Hack a robotic enemy. It fights for you for 2 turns, then shuts down for 1 turn. (1 AP, 4-turn cooldown)",                                      "level": 3, "slot": "c"},
-	# Medic
-	"adrenaline_patch":   {"name": "Adrenaline Patch",   "desc": "Patch also grants the target +2 Movement and +15% Accuracy for 2 turns.",                                                                       "level": 2, "slot": "a"},
-	"field_surgeon":      {"name": "Field Surgeon",      "desc": "Automatically stabilize any ally who drops to 0 HP within 4 tiles, preventing death (unless Medic is also killed).",                            "level": 2, "slot": "b"},
-	"miracle_worker":     {"name": "Miracle Worker",     "desc": "Global Heal: instantly restore 50% HP to all squad members regardless of distance. (2 AP, once per mission)",                                    "level": 3, "slot": "a"},
-	"toxicologist":       {"name": "Toxicologist",       "desc": "Attacks apply Poison (5 DMG/turn, -20% Aim). Patch removes all status effects from allies.",                                                     "level": 3, "slot": "b"},
-	"stim_injector":      {"name": "Stim Injector",      "desc": "Inject an ally: they gain +2 AP and take -50% damage for 1 turn. (1 AP, 3-turn cooldown)",                                                      "level": 3, "slot": "c"},
-	# Heavy
-	"bulldozer":          {"name": "Bulldozer",          "desc": "Charge destroys all cover in its path. Gain +20 Armor after charging.",                                                                          "level": 2, "slot": "a"},
-	"suppression_fire":   {"name": "Suppression Fire",   "desc": "Deal light damage to all enemies in a cone and remove their ability to move next turn (Pin Down). (2 AP, active)",                               "level": 2, "slot": "b"},
-	"juggernaut":         {"name": "Juggernaut",         "desc": "Immune to Critical Hits and Knockback. If you end your turn without attacking, regenerate 15% Max HP.",                                          "level": 3, "slot": "a"},
-	"rocket_salvo":       {"name": "Rocket Salvo",       "desc": "Launch a micro-missile swarm at a 3×3 area: 40 area damage and destroys all cover. (2 AP, 3-turn cooldown)",                                    "level": 3, "slot": "b"},
-	"intimidate":         {"name": "Intimidate",         "desc": "Enemies within 3 tiles suffer -20% Accuracy and cannot use Overwatch or Reaction Fire.",                                                         "level": 3, "slot": "c"},
-	# Sniper
-	"damn_good_ground":   {"name": "Damn Good Ground",   "desc": "If you have not moved this turn, gain +15% Critical Chance and +2 Sight Range.",                                                                 "level": 2, "slot": "a"},
-	"snap_shot":          {"name": "Snap Shot",          "desc": "Precision Shot has no cooldown — move and shoot or fire multiple precision shots in the same turn.",                                              "level": 2, "slot": "b"},
-	"serial":             {"name": "Serial",             "desc": "Killing an enemy with your main weapon fully refunds your Action Points. Chain kills until you miss or run out of targets.",                     "level": 3, "slot": "a"},
-	"apex_predator":      {"name": "Apex Predator",      "desc": "Deal +100% damage against enemies at full health. Designed for one-shotting high-value targets.",                                                 "level": 3, "slot": "b"},
-	"double_tap":         {"name": "Double Tap",         "desc": "Fire two shots at the same target: second shot has -15% accuracy penalty. (1 AP, 2-turn cooldown)",                                              "level": 3, "slot": "c"},
+	# CAPTAIN - Level 2
+	"lead_by_example":    {"name": "Lead by Example",    "desc": "When the Captain kills an enemy, all other squad members gain +1 AP on their next turn.",                                                       "level": 2, "slot": "a", "type": "passive"},
+	"coordinate_fire":    {"name": "Coordinate Fire",    "desc": "Mark a target. All allies gain +20% Accuracy and +25% Critical Chance against that target for 1 turn. (1 AP, active)",                        "level": 2, "slot": "b", "type": "active", "cost": 1},
+
+	# CAPTAIN - Level 3
+	"warlord":            {"name": "Warlord",            "desc": "Execute no longer has a cooldown. Chain multiple executions in a single turn if you have enough AP.",                                            "level": 3, "slot": "a", "type": "passive", "cooldown_override": 0, "modifies": "execute"},
+	"no_one_left_behind": {"name": "No One Left Behind", "desc": "If an ally within 5 tiles takes lethal damage, they survive with 1 HP and become immune to all damage for 1 turn. (Once per ally per mission)", "level": 3, "slot": "b", "type": "passive"},
+	"command_presence":   {"name": "Command Presence",   "desc": "All allies within 4 tiles gain +10% Accuracy and +15% Critical Chance. The Captain gains +10 Defense per nearby ally.",                          "level": 3, "slot": "c", "type": "passive", "aura_range": 4},
+
+	# SCOUT - Level 2
+	"hit_and_run":        {"name": "Hit & Run",          "desc": "If the Scout moves and shoots in the same turn, they immediately gain +3 Movement Points to retreat or reposition.",                             "level": 2, "slot": "a", "type": "passive"},
+	"deep_scanner":       {"name": "Deep Scanner",       "desc": "Reveals all enemies in a large radius (15 tiles) for 1 turn, even through walls. (0 AP, 3-turn cooldown)",                                      "level": 2, "slot": "b", "type": "active", "cost": 0, "cooldown": 3},
+
+	# SCOUT - Level 3
+	"killzone":           {"name": "Killzone",           "desc": "Overwatch now triggers on every enemy that moves in Line of Sight during the enemy turn, not just the first.",                                   "level": 3, "slot": "a", "type": "passive", "modifies": "overwatch"},
+	"phantom":            {"name": "Phantom",            "desc": "Become Invisible for 2 turns. First attack from invisibility deals +100% Damage but reveals you. (1 AP, active)",                               "level": 3, "slot": "b", "type": "active", "cost": 1, "duration": 2},
+	"untouchable":        {"name": "Untouchable",        "desc": "If you kill an enemy during your turn, the next attack against you during the enemy turn is guaranteed to Miss.",                                 "level": 3, "slot": "c", "type": "passive"},
+
+	# TECH - Level 2
+	"combat_engineer":    {"name": "Combat Engineer",    "desc": "Turrets gain a 20 HP shield barrier and their duration is extended to 5 turns.",                                                                 "level": 2, "slot": "a", "type": "passive", "modifies": "turret", "turret_hp_bonus": 20, "turret_duration": 5},
+	"sapper":             {"name": "Sapper",             "desc": "Throw a localized EMP grenade. Stuns robotic enemies and disables weapons in a 3×3 area for 1 turn. (1 AP, active)",                            "level": 2, "slot": "b", "type": "active", "cost": 1},
+
+	# TECH - Level 3
+	"twin_link":          {"name": "Twin-Link",          "desc": "You can have 2 Turrets active simultaneously. Deploying a second turret does not destroy the first.",                                            "level": 3, "slot": "a", "type": "passive", "modifies": "turret", "max_turrets": 2},
+	"overclock":          {"name": "Overclock",          "desc": "Target your active Turret. It fires 3 times at random enemies, then self-destructs with 20 area damage. (0 AP)",                                 "level": 3, "slot": "b", "type": "active", "cost": 0},
+	"haywire_protocol":   {"name": "Haywire Protocol",   "desc": "Hack a robotic enemy. It fights for you for 2 turns, then shuts down for 1 turn. (1 AP, 4-turn cooldown)",                                      "level": 3, "slot": "c", "type": "active", "cost": 1, "cooldown": 4},
+
+	# MEDIC - Level 2
+	"adrenaline_patch":   {"name": "Adrenaline Patch",   "desc": "Patch also grants the target +2 Movement and +15% Accuracy for 2 turns.",                                                                       "level": 2, "slot": "a", "type": "passive", "modifies": "patch"},
+	"field_surgeon":      {"name": "Field Surgeon",      "desc": "Automatically stabilize any ally who drops to 0 HP within 4 tiles, preventing death (unless Medic is also killed).",                            "level": 2, "slot": "b", "type": "passive", "range": 4},
+
+	# MEDIC - Level 3
+	"miracle_worker":     {"name": "Miracle Worker",     "desc": "Global Heal: instantly restore 50% HP to all squad members regardless of distance. (2 AP, once per mission)",                                    "level": 3, "slot": "a", "type": "active", "cost": 2, "uses_per_mission": 1},
+	"toxicologist":       {"name": "Toxicologist",       "desc": "Attacks apply Poison (5 DMG/turn, -20% Aim). Patch removes all status effects from allies.",                                                     "level": 3, "slot": "b", "type": "passive"},
+	"stim_injector":      {"name": "Stim Injector",      "desc": "Inject an ally: they gain +2 AP and take -50% damage for 1 turn. (1 AP, 3-turn cooldown)",                                                      "level": 3, "slot": "c", "type": "active", "cost": 1, "cooldown": 3},
+
+	# HEAVY - Level 2
+	"bulldozer":          {"name": "Bulldozer",          "desc": "Charge destroys all cover in its path. Gain +20 Armor after charging.",                                                                          "level": 2, "slot": "a", "type": "passive", "modifies": "charge", "armor_bonus": 20},
+	"suppression_fire":   {"name": "Suppression Fire",   "desc": "Deal light damage to all enemies in a cone and remove their ability to move next turn (Pin Down). (2 AP, active)",                               "level": 2, "slot": "b", "type": "active", "cost": 2},
+
+	# HEAVY - Level 3
+	"juggernaut":         {"name": "Juggernaut",         "desc": "Immune to Critical Hits and Knockback. If you end your turn without attacking, regenerate 15% Max HP.",                                          "level": 3, "slot": "a", "type": "passive"},
+	"rocket_salvo":       {"name": "Rocket Salvo",       "desc": "Launch a micro-missile swarm at a 3×3 area: 40 area damage and destroys all cover. (2 AP, 3-turn cooldown)",                                    "level": 3, "slot": "b", "type": "active", "cost": 2, "cooldown": 3},
+	"intimidate":         {"name": "Intimidate",         "desc": "Enemies within 3 tiles suffer -20% Accuracy and cannot use Overwatch or Reaction Fire.",                                                         "level": 3, "slot": "c", "type": "passive", "aura_range": 3},
+
+	# SNIPER - Level 2
+	"damn_good_ground":   {"name": "Damn Good Ground",   "desc": "If you have not moved this turn, gain +15% Critical Chance and +2 Sight Range.",                                                                 "level": 2, "slot": "a", "type": "passive"},
+	"snap_shot":          {"name": "Snap Shot",          "desc": "Precision Shot has no cooldown — move and shoot or fire multiple precision shots in the same turn.",                                              "level": 2, "slot": "b", "type": "passive", "modifies": "precision_shot", "cooldown_override": 0},
+
+	# SNIPER - Level 3
+	"serial":             {"name": "Serial",             "desc": "Killing an enemy with your main weapon fully refunds your Action Points. Chain kills until you miss or run out of targets.",                     "level": 3, "slot": "a", "type": "passive"},
+	"apex_predator":      {"name": "Apex Predator",      "desc": "Deal +100% damage against enemies at full health. Designed for one-shotting high-value targets.",                                                 "level": 3, "slot": "b", "type": "passive", "damage_multiplier": 2.0},
+	"double_tap":         {"name": "Double Tap",         "desc": "Fire two shots at the same target: second shot has -15% accuracy penalty. (1 AP, 2-turn cooldown)",                                              "level": 3, "slot": "c", "type": "active", "cost": 1, "cooldown": 2},
 }
 
 # Per-officer ability lists: [L1, L2-A, L2-B, L3-A, L3-B, L3-C]
@@ -218,6 +236,10 @@ func _init_officers() -> void:
 	for key in ["captain", "scout", "tech", "medic", "heavy", "sniper"]:
 		var od = OfficerData.new()
 		od.initialize(key)
+		if developer_mode:
+			od.level = 3
+			od.xp = 300  # XP threshold to reach level 3
+			od.data_logs = 5
 		# Unlock Level 1 ability by default
 		var abilities = OFFICER_ABILITIES.get(key, [])
 		if not abilities.is_empty():
@@ -541,10 +563,10 @@ func get_mission_difficulty() -> float:
 func restore_star_map_generator() -> StarMapGenerator:
 	if not has_saved_star_map_data():
 		return null
-	
+
 	var generator = StarMapGenerator.new()
 	generator.nodes.clear()
-	
+
 	var nodes_data = saved_star_map_data["nodes"]
 	for node_dict in nodes_data:
 		var node = StarMapGenerator.MapNode.new(
@@ -552,20 +574,61 @@ func restore_star_map_generator() -> StarMapGenerator:
 			int(node_dict["column"]),
 			int(node_dict["row"])
 		)
-		
+
 		# Restore connections
 		for conn_id in node_dict["connections"]:
 			node.connections.append(int(conn_id))
-		
+
 		node.node_type = int(node_dict["node_type"])
 		node.biome_type = int(node_dict.get("biome_type", -1))
-		
+
 		# Restore fuel costs
 		var fuel_costs = node_dict.get("connection_fuel_costs", {})
 		for key in fuel_costs.keys():
 			node.connection_fuel_costs[int(key)] = int(fuel_costs[key])
-		
+
 		generator.nodes.append(node)
-	
+
 	return generator
+#endregion
+
+
+#region Ability System Helpers
+
+## Get ability definition by ID
+func get_ability_def(ability_id: String) -> Dictionary:
+	return ABILITY_DEFS.get(ability_id, {})
+
+
+## Get ability cost (AP required to use)
+func get_ability_cost(ability_id: String) -> int:
+	var def = get_ability_def(ability_id)
+	return def.get("cost", 1)
+
+
+## Get ability type (passive or active)
+func get_ability_type(ability_id: String) -> String:
+	var def = get_ability_def(ability_id)
+	return def.get("type", "passive")
+
+
+## Get cooldown override for an ability (if any)
+func get_ability_cooldown_override(ability_id: String) -> int:
+	var def = get_ability_def(ability_id)
+	if def.has("cooldown_override"):
+		return def.get("cooldown_override", -1)
+	return -1  # -1 means no override
+
+
+## Get custom cooldown (if different from base)
+func get_ability_cooldown(ability_id: String) -> int:
+	var def = get_ability_def(ability_id)
+	return def.get("cooldown", 2)  # Default 2-turn cooldown for base abilities
+
+
+## Get damage multiplier for an ability (for passive bonuses like Apex Predator)
+func get_ability_damage_multiplier(ability_id: String) -> float:
+	var def = get_ability_def(ability_id)
+	return def.get("damage_multiplier", 1.0)
+
 #endregion
