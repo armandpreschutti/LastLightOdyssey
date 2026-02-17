@@ -280,6 +280,16 @@ func _populate_officers() -> void:
 		officer_buttons[officer_key] = check
 		header_hbox.add_child(check)
 
+		# XP & HP Rows (Matching Barracks style)
+		if od:
+			var xp_next = od.get_next_xp_threshold()
+			var xp_val_text = "LVL %d  |  %d / %d XP" % [od.level, od.xp, xp_next]
+			var xp_row = _create_progress_row("XP", od.xp, xp_next, Color(0.2, 0.6, 1.0), xp_val_text)
+			right_vbox.add_child(xp_row)
+			
+			var hp_row = _create_progress_row("HP", od.current_hp, od.max_hp, Color(0.2, 0.9, 0.4), "%d / %d" % [od.current_hp, od.max_hp])
+			right_vbox.add_child(hp_row)
+
 		# Injured status label
 		if is_injured:
 			var injury_label = Label.new()
@@ -446,12 +456,6 @@ func _build_detail_sections(container: VBoxContainer, officer_key: String) -> vo
 	container.add_child(stats_label)
 	
 	var stats = _get_officer_stats(officer_key)
-	
-	# Current HP Bar (Persistent data from GameState)
-	var od = GameState.get_officer(officer_key)
-	if od:
-		var hp_bar = _create_progress_bar(od.current_hp, od.max_hp, Color(0.2, 0.9, 0.4), "HP: %d / %d" % [od.current_hp, od.max_hp])
-		container.add_child(hp_bar)
 	
 	var stats_text = "  Move Range: %d tiles  |  Attack Range: %d tiles" % [stats.move_range, stats.attack_range]
 	var stats_value_label = Label.new()
@@ -696,3 +700,52 @@ func _create_progress_bar(val: float, max_val: float, bar_color: Color, label_te
 	bar.add_child(label)
 	
 	return bar
+
+
+func _create_progress_row(label_text: String, val: float, max_val: float, bar_color: Color, value_text: String) -> HBoxContainer:
+	var hbox = HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 10)
+	
+	var label = Label.new()
+	label.text = label_text + ":"
+	label.custom_minimum_size = Vector2(30, 0)
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", Color(0.6, 0.8, 0.9))
+	hbox.add_child(label)
+	
+	var bar = ProgressBar.new()
+	bar.min_value = 0
+	bar.max_value = max_val
+	bar.value = val
+	bar.show_percentage = false
+	bar.custom_minimum_size = Vector2(330, 24)
+	bar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	
+	# Background style
+	var sb_bg = StyleBoxFlat.new()
+	sb_bg.bg_color = Color(0, 0, 0, 0.3)
+	sb_bg.set_corner_radius_all(2)
+	bar.add_theme_stylebox_override("background", sb_bg)
+	
+	# Fill style
+	var sb_fill = StyleBoxFlat.new()
+	sb_fill.bg_color = bar_color
+	sb_fill.bg_color.a = 0.7
+	sb_fill.set_corner_radius_all(2)
+	sb_fill.border_width_right = 1
+	sb_fill.border_color = Color(1, 1, 1, 0.3)
+	bar.add_theme_stylebox_override("fill", sb_fill)
+	
+	# Overlaying value text
+	var val_label = Label.new()
+	val_label.text = value_text
+	val_label.add_theme_font_size_override("font_size", 12)
+	val_label.add_theme_color_override("font_color", Color.WHITE)
+	val_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	val_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	val_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	val_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	bar.add_child(val_label)
+	
+	hbox.add_child(bar)
+	return hbox

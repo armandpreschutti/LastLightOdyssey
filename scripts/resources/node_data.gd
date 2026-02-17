@@ -32,6 +32,7 @@ enum DifficultyGrade {
 @export var biome_type: int = -1 # See BiomeConfig.BiomeType
 @export var state: NodeState = NodeState.UNVISITED
 @export var is_new_earth: bool = false
+@export var is_story_node: bool = false
 
 # Difficulty Properties
 @export var difficulty_grade: DifficultyGrade = DifficultyGrade.EASY
@@ -43,6 +44,7 @@ enum DifficultyGrade {
 @export var event_penalty_text: String = "" # e.g. "-15 HULL"
 @export var event_mitigation_text: String = "" # e.g. "+10 WITH TECH"
 @export var pending_event_id: int = -1 # Pre-rolled random event ID
+@export var campaign_mission_id: String = "" # ID of mission this story node represents (e.g. "1A", "2B")
 
 func _init(p_id: String = "", p_pos: Vector2 = Vector2.ZERO, p_type: int = EventManager.NodeType.EMPTY_SPACE) -> void:
 	id = p_id

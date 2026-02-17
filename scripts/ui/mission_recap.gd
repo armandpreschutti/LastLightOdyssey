@@ -89,7 +89,6 @@ func _ready() -> void:
 		xp_row = stats_container.get_node("XPRow")
 		xp_label = xp_row.get_node("XPLabel")
 
-
 	# Cash and XP rows are handled programmatically above
 
 
@@ -145,7 +144,7 @@ func show_recap(stats: Dictionary) -> void:
 	var total_xp: int = stats.get("xp_awarded", 0)
 	xp_label.text = "TOTAL XP AWARDED: +%d XP" % total_xp
 	
-	# Add cash breakdown tooltip-like text or modify label to show breakdown if successful
+	# Breakdown shown in cash_label if success
 	if total_cash > 0:
 		var breakdown = []
 		if cash_reward > 0: breakdown.append("BASE: %d" % cash_reward)
@@ -235,33 +234,124 @@ func show_recap(stats: Dictionary) -> void:
 			_objective_labels.append(obj_label)
 	
 	# Add officer status rows
+	# Add officer status rows
 	for officer_data in officers_status:
-		var officer_label = Label.new()
-		officer_label.add_theme_font_size_override("font_size", 16)
-		
-		var officer_name = officer_data.get("name", "UNKNOWN").to_upper()
-		var is_alive = officer_data.get("alive", false)
-		var hp = officer_data.get("hp", 0)
-		var max_hp = officer_data.get("max_hp", 100)
-		var xp_earned = officer_data.get("xp_earned", 0)
-		
-		if is_alive:
-			var xp_text = ""
-			if xp_earned > 0:
-				xp_text = " (+%d XP)" % xp_earned
-			officer_label.text = "  %s - HP: %d/%d%s" % [officer_name, hp, max_hp, xp_text]
-			officer_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))
-		else:
-			officer_label.text = "  %s - K.I.A." % officer_name
-			officer_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2))
-		
-		officers_container.add_child(officer_label)
+		var officer_row = _create_officer_xp_row(officer_data)
+		officers_container.add_child(officer_row)
 	
 	# Animate in
-	_animate_recap_in()
+	_animate_recap_in(stats)
 
 
-func _animate_recap_in() -> void:
+func _create_officer_xp_row(data: Dictionary) -> VBoxContainer:
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 2)
+	
+	var name = data.get("name", "UNKNOWN").to_upper()
+	var alive = data.get("alive", false)
+	var hp = data.get("hp", 0)
+	var max_hp = data.get("max_hp", 100)
+	var xp_earned = data.get("xp_earned", 0)
+	
+	var header = HBoxContainer.new()
+	header.add_theme_constant_override("separation", 10)
+	vbox.add_child(header)
+	
+	var name_label = Label.new()
+	name_label.text = " " + name
+	name_label.add_theme_font_size_override("font_size", 16)
+	if not alive:
+		name_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2))
+	else:
+		name_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))
+	header.add_child(name_label)
+	
+	if not alive:
+		var kia_label = Label.new()
+		kia_label.text = " - K.I.A."
+		kia_label.add_theme_font_size_override("font_size", 16)
+		kia_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2))
+		header.add_child(kia_label)
+		return vbox
+
+	# HP display
+	var hp_text = "HP: %d/%d" % [hp, max_hp]
+	var hp_label = Label.new()
+	hp_label.text = hp_text
+	hp_label.add_theme_font_size_override("font_size", 14)
+	hp_label.add_theme_color_override("font_color", Color(0.6, 0.8, 0.6))
+	header.add_child(hp_label)
+
+	# XP Bar
+	var od = GameState.get_officer(name.to_lower())
+	if od:
+		var xp_total = od.xp
+		var xp_start = xp_total - xp_earned
+		var level_start = _calculate_level_for_xp(xp_start)
+		var threshold = _get_threshold_for_level(level_start)
+		
+		var xp_hbox = HBoxContainer.new()
+		xp_hbox.add_theme_constant_override("separation", 8)
+		vbox.add_child(xp_hbox)
+		
+		var xp_title = Label.new()
+		xp_title.text = "  XP:"
+		xp_title.add_theme_font_size_override("font_size", 14)
+		xp_title.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0))
+		xp_hbox.add_child(xp_title)
+		
+		var bar = ProgressBar.new()
+		bar.name = "XPBar_" + name
+		bar.min_value = 0
+		bar.max_value = threshold
+		bar.value = xp_start
+		bar.show_percentage = false
+		bar.custom_minimum_size = Vector2(280, 14)
+		
+		# Styles (reusing logic from barracks)
+		var sb_bg = StyleBoxFlat.new()
+		sb_bg.bg_color = Color(0, 0, 0, 0.4)
+		sb_bg.set_corner_radius_all(2)
+		bar.add_theme_stylebox_override("background", sb_bg)
+		
+		var sb_fill = StyleBoxFlat.new()
+		sb_fill.bg_color = Color(0.2, 0.6, 1.0, 0.7)
+		sb_fill.set_corner_radius_all(2)
+		bar.add_theme_stylebox_override("fill", sb_fill)
+		
+		xp_hbox.add_child(bar)
+		
+		var level_label = Label.new()
+		level_label.name = "LevelLabel_" + name
+		level_label.text = "LVL %d" % level_start
+		level_label.add_theme_font_size_override("font_size", 14)
+		level_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.4))
+		level_label.pivot_offset = Vector2(25, 10) # For scaling flash
+		xp_hbox.add_child(level_label)
+		
+		var gain_label = Label.new()
+		gain_label.name = "GainLabel_" + name
+		gain_label.text = "+%d XP" % xp_earned
+		gain_label.add_theme_font_size_override("font_size", 14)
+		gain_label.add_theme_color_override("font_color", Color(0.4, 0.9, 1.0))
+		gain_label.modulate.a = 0.0 # Initially hidden
+		xp_hbox.add_child(gain_label)
+
+	return vbox
+
+
+func _calculate_level_for_xp(xp_val: int) -> int:
+	var lvl = 1
+	while xp_val >= _get_threshold_for_level(lvl):
+		lvl += 1
+	return lvl
+
+
+func _get_threshold_for_level(lvl: int) -> int:
+	return 50 * lvl * (lvl + 1)
+
+
+func _animate_recap_in(stats: Dictionary) -> void:
 	# Start with everything hidden
 	modulate.a = 0.0
 	visible = true
@@ -321,9 +411,28 @@ func _animate_recap_in() -> void:
 			_stat_tween.tween_interval(0.1)
 		_stat_tween.tween_interval(0.2)
 	
-	# Reveal officer statuses
-	for child in officers_container.get_children():
+	# Reveal officer statuses and animate XP
+	for i in range(officers_container.get_child_count()):
+		var child = officers_container.get_child(i)
 		_stat_tween.tween_property(child, "modulate:a", 1.0, 0.25)
+		
+		# If child has an XP bar, animate it
+		var xp_bar = child.find_child("XPBar_*", true, false)
+		if xp_bar:
+			var name_split = xp_bar.name.split("_")
+			if name_split.size() > 1:
+				var officer_name = name_split[1]
+				# Find the original data for this officer to get gain
+				var gain = 0
+				for st in stats.get("officers_status", []):
+					if st.get("name", "").to_upper() == officer_name:
+						gain = st.get("xp_earned", 0)
+						break
+				
+				if gain > 0:
+					_stat_tween.tween_callback(_animate_officer_xp.bind(child, officer_name, gain))
+					_stat_tween.tween_interval(0.6) # Allow some time for animation to start
+		
 		_stat_tween.tween_interval(0.1)
 	
 	_stat_tween.tween_interval(0.3)
@@ -331,6 +440,70 @@ func _animate_recap_in() -> void:
 	# Show continue button
 	_stat_tween.tween_property(continue_button, "modulate:a", 1.0, 0.3)
 	_stat_tween.tween_callback(func(): continue_button.disabled = false)
+
+
+func _animate_officer_xp(vbox: Control, officer_name: String, total_gain: int) -> void:
+	var xp_bar: ProgressBar = vbox.find_child("XPBar_" + officer_name, true, false)
+	var lvl_label: Label = vbox.find_child("LevelLabel_" + officer_name, true, false)
+	var gain_label: Label = vbox.find_child("GainLabel_" + officer_name, true, false)
+	
+	if not xp_bar or not total_gain: return
+	
+	# Show the gain label with a fade-in
+	var label_tween = create_tween()
+	label_tween.tween_property(gain_label, "modulate:a", 1.0, 0.2)
+	
+	var start_xp = xp_bar.value
+	var end_xp = start_xp + total_gain
+	
+	var main_tween = create_tween()
+	main_tween.set_ease(Tween.EASE_OUT)
+	main_tween.set_trans(Tween.TRANS_QUAD)
+	
+	# We use a custom method to handle potential level-ups during animation
+	main_tween.tween_method(
+		func(val: float):
+			_update_xp_bar_during_tween(xp_bar, lvl_label, val),
+		start_xp,
+		end_xp,
+		1.2
+	)
+	
+	# Subtle scale pulse on the bar during animation
+	var pulse = create_tween().set_loops()
+	pulse.tween_property(xp_bar, "custom_minimum_size:y", 16, 0.3)
+	pulse.tween_property(xp_bar, "custom_minimum_size:y", 14, 0.3)
+	
+	main_tween.finished.connect(func(): pulse.kill())
+
+
+func _update_xp_bar_during_tween(bar: ProgressBar, lvl_label: Label, current_total_xp: float) -> void:
+	var current_lvl = _calculate_level_for_xp(int(current_total_xp))
+	var threshold = _get_threshold_for_level(current_lvl)
+	
+	# Check if we just leveled up manually to trigger a flash (visual only)
+	var displayed_lvl = int(lvl_label.text.split(" ")[1])
+	if current_lvl > displayed_lvl:
+		lvl_label.text = "LVL %d" % current_lvl
+		_flash_label(lvl_label, Color(1, 1, 1), Color(0.9, 0.85, 0.4))
+		# Flash bar too
+		var bf = bar.get_theme_stylebox("fill").duplicate()
+		bf.bg_color = Color(1, 1, 1, 0.9)
+		bar.add_theme_stylebox_override("fill", bf)
+		create_tween().tween_property(bf, "bg_color", Color(0.2, 0.6, 1.0, 0.7), 0.3)
+		if SFXManager:
+			SFXManager.play_sfx_by_name("ui", "objective_complete") # Reusing a positive fan-fare
+	
+	bar.max_value = threshold
+	bar.value = current_total_xp
+
+
+func _flash_label(target: Label, flash_color: Color, original_color: Color) -> void:
+	var t = create_tween()
+	t.tween_property(target, "theme_override_colors/font_color", flash_color, 0.1)
+	t.tween_property(target, "theme_override_colors/font_color", original_color, 0.2)
+	t.parallel().tween_property(target, "scale", Vector2(1.2, 1.2), 0.1)
+	t.tween_property(target, "scale", Vector2(1.0, 1.0), 0.1)
 
 
 func _on_continue_pressed() -> void:
@@ -373,6 +546,22 @@ func _input(event: InputEvent) -> void:
 					label.modulate.a = 1.0
 			for child in officers_container.get_children():
 				child.modulate.a = 1.0
+				# Finalize XP bar if it exists
+				var xp_bar = child.find_child("XPBar_*", true, false)
+				if xp_bar:
+					var name_split = xp_bar.name.split("_")
+					if name_split.size() > 1:
+						var officer_name = name_split[1]
+						var od = GameState.get_officer(officer_name.to_lower())
+						if od:
+							xp_bar.max_value = od.get_next_xp_threshold()
+							xp_bar.value = od.xp
+						var lvl_label = child.find_child("LevelLabel_*", true, false)
+						if lvl_label and od:
+							lvl_label.text = "LVL %d" % od.level
+						var gain_label = child.find_child("GainLabel_*", true, false)
+						if gain_label:
+							gain_label.modulate.a = 1.0
 			continue_button.modulate.a = 1.0
 			continue_button.disabled = false
 		else:

@@ -51,18 +51,26 @@ func show_recap(ending_type: String) -> void:
 	title_label.text = "[ VOYAGE COMPLETE ]"
 	
 	match ending_type:
-		"perfect":
-			ending_label.text = "THE GOLDEN AGE"
+		"5A":
+			ending_label.text = "ENDING 5A — THE GOLDEN AGE"
 			ending_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
-			ending_desc_label.text = "The Arkship arrived with all critical systems intact. The data archives are preserved."
-		"good":
-			ending_label.text = "THE HARD FOUNDATION"
+			ending_desc_label.text = "The Arkship arrived with all critical systems intact. The data archives are preserved. A golden era dawns."
+		"5B":
+			ending_label.text = "ENDING 5B — THE HARD FOUNDATION"
 			ending_label.add_theme_color_override("font_color", Color(0.3, 0.9, 0.5))
-			ending_desc_label.text = "The ship sustained damage, but the core mission data survived. Rebuilding can begin."
-		"bad":
-			ending_label.text = "THE ENDANGERED SPECIES"
+			ending_desc_label.text = "The ship sustained damage, but the core mission data survived. Rebuilding can begin on solid ground."
+		"5C":
+			ending_label.text = "ENDING 5C — THE NARROW ESCAPE"
+			ending_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.9))
+			ending_desc_label.text = "Against all odds, the crew found a viable corridor. The colony will endure, though scars remain."
+		"5D":
+			ending_label.text = "ENDING 5D — THE ENDANGERED SPECIES"
 			ending_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.3))
-			ending_desc_label.text = "Critical failures plagued the journey. Verify mission parameters immediately."
+			ending_desc_label.text = "Critical failures plagued the journey. Survival is uncertain, but the signal still transmits."
+		"5E":
+			ending_label.text = "ENDING 5E — THE LAST BROADCAST"
+			ending_label.add_theme_color_override("font_color", Color(0.8, 0.3, 0.3))
+			ending_desc_label.text = "The final beacon fires into the void. Whether anyone hears it is no longer your burden to bear."
 		_:
 			ending_label.text = "JOURNEY'S END"
 			ending_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.9))

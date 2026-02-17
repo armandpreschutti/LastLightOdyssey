@@ -11,9 +11,18 @@ var _current_tween: Tween = null
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	# Start with overlay black and visible (will be faded in by calling code)
 	fade_overlay.color = Color(0, 0, 0, 1.0)
 	fade_overlay.visible = true
+	_ensure_visible()
+
+
+func _ensure_visible() -> void:
+	visible = true
+	var parent = get_parent()
+	if parent is CanvasLayer:
+		parent.visible = true
 
 
 ## Fade to black (fade out)
@@ -24,6 +33,7 @@ func fade_out(duration: float = 0.6) -> void:
 		if _current_tween:
 			_current_tween.kill()
 	
+	_ensure_visible()
 	_is_fading = true
 	fade_overlay.visible = true
 	fade_overlay.color = Color(0, 0, 0, 0)
@@ -43,6 +53,7 @@ func fade_in(duration: float = 0.6) -> void:
 		if _current_tween:
 			_current_tween.kill()
 	
+	_ensure_visible()
 	_is_fading = true
 	fade_overlay.visible = true
 	fade_overlay.color = Color(0, 0, 0, 1.0)
@@ -58,6 +69,7 @@ func fade_in(duration: float = 0.6) -> void:
 
 ## Set fade overlay to fully black (instant, no animation)
 func set_black() -> void:
+	_ensure_visible()
 	if _current_tween:
 		_current_tween.kill()
 		_current_tween = null

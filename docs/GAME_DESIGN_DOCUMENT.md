@@ -49,7 +49,7 @@ The economy has been overhauled to support a non-linear "Voyage" loop.
 | **Hull Integrity** | 100.0 | Ship Health. At 0.0, trigger Game Over (Ship Destruction). |
 | **Cash** | 100 | Liquid Assets. Primary currency. Used in the **Market** to buy Fuel/Scrap. |
 | **Intel** | 0 | Story Progress. Gained from tactical missions. **Threshold of 10** spawns a Story Node. |
-| **Data Logs** | 0 | Tech Currency. Shared resource used to purchase **Ability Tree** slots for Officers. |
+| **Data Logs** | 0 | [REFACTORED] Tech Currency. Now earned individually by Officers upon Level Up. |
 
 ### 2.2 The Infinite Map System
 
@@ -151,9 +151,13 @@ Officers gain XP from missions to unlock new tiers of abilities.
 - **Objective**: +45% XP Multiplier (if successful).
 
 **Tech Tree Unlocks:**
-Purchased with **XP** + **Data Logs** in the Barracks.
-- **Level 2**: Requires 100 XP + 5 Data Logs. Unlocks Binary Choice (Trait A or B).
-- **Level 3**: Requires 300 XP + 10 Data Logs. Unlocks Trinary Choice (Trait A, B, or C).
+Purchased with **Data Logs** earned via Leveling.
+- **Level 2**: Requires Level 2 + 1 Data Log. Unlocks Binary Choice (Trait A or B).
+- **Level 3**: Requires Level 3 + 1 Data Log. Unlocks Trinary Choice (Trait A, B, or C).
+
+**Progression UI:**
+- **Team Select**: Unit levels and XP progress bars are visible in the collapsed view.
+- **Mission Recap**: Features animated XP slider bars showing unit progression toward the next level.
 
 ### 3.4 The Injury System
 
@@ -161,7 +165,9 @@ Officers taking significant damage are sidelined for recovery.
 
 - **Trigger**: Tactical Mission ends with Officer HP < 50% (and Officer is Alive).
 - **Effect**: Officer gains **2 Injury Jumps**. They cannot be selected for deployment.
-- **Recovery**: -1 Injury Jump for every Voyage Jump made.
+- **Recovery**: -1 Injury Jump for every Voyage Jump made to a **New Node**. Jumps along traveled paths (Amber Pathlines) do not count.
+- **Healing**: Upon full recovery (Injury Jumps = 0), the Officer's HP is restored to 100%.
+- **Travel Maintenance**: All Officers receive minor HP healing during jumps reflecting shipboard maintenance.
 
 ### 3.5 Combat System
 
@@ -798,6 +804,9 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] **MarketMenu.tscn**: Implement static transactions (Buy Fuel/Scrap, Repair Hull).
 - [x] **HUD Update**: Replace Colonist counter with Economy counters.
 - [x] **InfiniteGridGenerator.gd**: Implement coordinate-based generation (40% Scavenge / 40% Empty).
+- [x] **Unit Progression Refactor**: Per-unit Data Logs, auto-leveling, and animated XP sliders.
+- [x] **Injury System V2**: Backtracking (Amber Path) jump exclusion and full health restoration on recovery.
+- [x] **Story Branching Labels**: Final story nodes updated with "CHOICE 5A/5B" button labels.
 - [x] **VoyageManager.gd**: Add grid tracking `Vector2`, movement logic (adjacent nodes), and fuel consumption.
 - [x] **Node State System**: Implement UNVISITED, CLEARED, STORY states.
 - [x] **OfficerData.gd**: Persistent class with `level`, `xp`, `unlocked_abilities`, `injury_jumps`.

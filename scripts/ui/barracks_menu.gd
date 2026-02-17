@@ -13,7 +13,6 @@ const PORTRAIT_MAP = {
 
 const ABILITY_ICON_PATH = "res://assets/sprites/ui/icons/abilities/"
 
-@onready var data_logs_label: Label = $MenuPanel/Layout/MarginWrap/HeaderBar/DataLogsLabel
 @onready var cards_container: VBoxContainer = $MenuPanel/Layout/ScrollContainer/VBoxContainer
 @onready var close_button: Button = $MenuPanel/Layout/MarginWrap/HeaderBar/CloseButton
 @onready var tech_tree_popup = $AbilitiesTechTree 
@@ -23,7 +22,6 @@ func _ready() -> void:
 	visible = false
 	if close_button:
 		close_button.pressed.connect(_on_close_pressed)
-	GameState.data_logs_changed.connect(_on_data_logs_changed)
 
 
 func show_barracks() -> void:
@@ -35,15 +33,10 @@ func _on_close_pressed() -> void:
 	visible = false
 
 
-func _on_data_logs_changed(_new_val: int) -> void:
-	if visible:
-		_populate()
-
-
 func _populate() -> void:
-	# Update header data log count
-	if data_logs_label:
-		data_logs_label.text = "Data Logs: %d" % GameState.data_logs
+	# Hide global data log label if it exists (no longer relevant)
+	if has_node("MenuPanel/Layout/MarginWrap/HeaderBar/DataLogsLabel"):
+		$MenuPanel/Layout/MarginWrap/HeaderBar/DataLogsLabel.visible = false
 
 	# Clear existing cards
 	for child in cards_container.get_children():
@@ -138,10 +131,11 @@ func _build_officer_card(officer_key: String) -> Control:
 	level_label.add_theme_font_size_override("font_size", 13)
 	name_row.add_child(level_label)
 
-	var xp_next = OfficerData.XP_LEVEL3_THRESHOLD if od.level >= 2 else OfficerData.XP_LEVEL2_THRESHOLD
-	var xp_val_text = "%d / %d" % [od.xp, xp_next] if od.level < 3 else "%d" % od.xp
+	var xp_next = od.get_next_xp_threshold()
+	var xp_val_text = "%d / %d XP" % [od.xp, xp_next]
 	var xp_bar_row = _create_progress_row("XP", od.xp, xp_next, Color(0.2, 0.6, 1.0), xp_val_text)
 	left_vbox.add_child(xp_bar_row)
+
 
 	var hp_bar_row = _create_progress_row("HP", od.current_hp, od.max_hp, Color(0.2, 0.9, 0.4), "%d / %d" % [od.current_hp, od.max_hp])
 	left_vbox.add_child(hp_bar_row)

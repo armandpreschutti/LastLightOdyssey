@@ -20,14 +20,28 @@ var footer_slots_container: HBoxContainer = null
 func _ready():
 	visible = false
 	close_button.pressed.connect(hide_tree)
-	GameState.data_logs_changed.connect(_on_data_logs_changed)
 	_setup_footer()
 
 
-func _on_data_logs_changed(_val):
-	if visible:
-		_update_unlock_states()
-		data_logs_label.text = "Data Logs: %d" % GameState.data_logs
+func _refresh_header_stats():
+	var od = GameState.get_officer(current_officer_key)
+	if not od: return
+	
+	data_logs_label.text = "Data Logs: %d" % od.data_logs
+	
+	# Update XP bar and Level if they exist
+	var level_lbl = $Panel/VBox/Header.get_node_or_null("LevelLabel")
+	if level_lbl:
+		level_lbl.text = "LEVEL %d" % od.level
+		
+	var xp_bar = $Panel/VBox/Header.get_node_or_null("XPBar")
+	if xp_bar:
+		var next_xp = od.get_next_xp_threshold()
+		xp_bar.max_value = next_xp
+		xp_bar.value = od.xp
+		var xp_text = xp_bar.get_node_or_null("XPText")
+		if xp_text:
+			xp_text.text = "%d / %d XP" % [od.xp, next_xp]
 
 
 func show_tree(officer_key: String):
@@ -38,7 +52,10 @@ func show_tree(officer_key: String):
 	var accent = GameState.OFFICER_COLOR.get(officer_key, Color.WHITE)
 	title_label.text = "%s ABILITIES" % officer_key.to_upper()
 	title_label.add_theme_color_override("font_color", accent)
-	data_logs_label.text = "Data Logs: %d" % GameState.data_logs
+	
+	# XP/Level Header Logic
+	_setup_header_progression(accent)
+	_refresh_header_stats()
 	
 	main_panel.add_theme_stylebox_override("panel", _glass_style(accent))
 	main_panel.custom_minimum_size = Vector2(920, 740) # Increased to prevent clipping
@@ -47,6 +64,50 @@ func show_tree(officer_key: String):
 	_build_tree()
 	visible = true
 	visibility_changed_to.emit(true)
+
+
+func _setup_header_progression(accent: Color):
+	var header = $Panel/VBox/Header
+	
+	# Remove existing custom elements to avoid duplicates
+	for child in [header.get_node_or_null("LevelLabel"), header.get_node_or_null("XPBar")]:
+		if child: child.queue_free()
+	
+	# Level Label
+	var level_lbl = Label.new()
+	level_lbl.name = "LevelLabel"
+	level_lbl.add_theme_font_size_override("font_size", 18)
+	level_lbl.add_theme_color_override("font_color", Color(0.9, 0.85, 0.4))
+	header.add_child(level_lbl)
+	header.move_child(level_lbl, 1) # Put it after title
+	
+	# XP Bar (matching BarracksMenu style)
+	var bar = ProgressBar.new()
+	bar.name = "XPBar"
+	bar.show_percentage = false
+	bar.custom_minimum_size = Vector2(250, 20)
+	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	
+	var sb_bg = StyleBoxFlat.new()
+	sb_bg.bg_color = Color(0, 0, 0, 0.3)
+	sb_bg.set_corner_radius_all(2)
+	bar.add_theme_stylebox_override("background", sb_bg)
+	
+	var sb_fill = StyleBoxFlat.new()
+	sb_fill.bg_color = Color(0.2, 0.6, 1.0, 0.7)
+	sb_fill.set_corner_radius_all(2)
+	bar.add_theme_stylebox_override("fill", sb_fill)
+	
+	var val_label = Label.new()
+	val_label.name = "XPText"
+	val_label.add_theme_font_size_override("font_size", 12)
+	val_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	val_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	val_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	bar.add_child(val_label)
+	
+	header.add_child(bar)
+	header.move_child(bar, 2)
 
 
 func hide_tree():
@@ -131,10 +192,10 @@ func _update_unlock_states():
 		
 		if not is_unlocked:
 			if tier == 2:
-				is_available = od.can_unlock_level2(GameState.data_logs)
+				is_available = od.can_unlock_level2(od.data_logs)
 				cost = OfficerData.DATA_LOGS_LEVEL2_COST
 			elif tier == 3:
-				is_available = od.can_unlock_level3(GameState.data_logs)
+				is_available = od.can_unlock_level3(od.data_logs)
 				cost = OfficerData.DATA_LOGS_LEVEL3_COST
 		
 		# Check if another ability in the same tier is already unlocked
@@ -163,18 +224,18 @@ func _update_unlock_states():
 
 func _on_unlock_requested(ab_id: String, cost: int):
 	var od = GameState.get_officer(current_officer_key)
-	if GameState.data_logs >= cost:
-		GameState.data_logs -= cost
+	if od.data_logs >= cost:
+		od.data_logs -= cost
 		od.unlock_ability(ab_id)
 		
-		# Advance level
-		var def = GameState.ABILITY_DEFS.get(ab_id, {})
-		var new_level = def.get("level", od.level)
-		if new_level > od.level:
-			od.level = new_level
+		# Advance level logic is now internal to unlock_ability/add_xp but let's ensure consistency
+		# Actually, unlock_ability just adds to the list. 
+		# If it's a higher tier, we might want to ensure level matches, but add_xp already handles auto-level.
+		# For manual unlocks, we just deduct DL and add ability.
 			
 		GameState.save_game()
 		_update_unlock_states()
+		_refresh_header_stats()
 		# Add a nice effect here if possible
 
 

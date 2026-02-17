@@ -5,9 +5,20 @@
 
 ## Current Phase Snapshot (February 2026)
 
-- **Current Phase:** **Phase 4 (Tactical Integration & Scaling) is mostly complete**, and the project is transitioning into **Phase 5 (Loop Closer)**.
-- **Confirmed complete in code:** Officer progression data model, Barracks + Ability Tree UI, injury tracking/recovery, mission-end XP awarding, and mission rewards (cash/intel/data logs).
-- **Primary remaining work:** Full story-driven progression loop and final win-condition wiring.
+- **Current Phase:** **Phase 5 (Loop Closer) is now in active implementation**.
+- **Confirmed complete in code:** Officer progression model, Barracks + Ability Tree UI, injury tracking/recovery, mission-end XP/rewards, and story-node chapter chain scaffolding.
+- **Primary remaining work:** Narrative content polish, chapter-specific mission variants, and tuning of story pacing/reward cadence.
+
+## 1. Global Architecture & Economy (GameState.gd) [COMPLETED]
+
+### 1.1 Deprecated Systems
+The following variables and logic must be stripped out of the GameState singleton:
+* **colonists**: REMOVED. Game Over is no longer tied to a population count.
+* **cryo_stability**: REMOVED from the Management Layer. (It remains strictly as a turn-timer within the TacticalManager).
+
+### 1.2 New Economy Model
+Implement the following persistent variables in GameState.gd to support the new loop.
+
 
 ## 1. Global Architecture & Economy (GameState.gd) [COMPLETED]
 
@@ -26,7 +37,7 @@ Implement the following persistent variables in GameState.gd to support the new 
 | **hull_integrity** | float | 100.0 | Health. At 0.0, trigger Game Over (Ship Destruction). |
 | **cash** | int | 100 | Liquid Assets. New currency. Used in the MarketMenu to buy Fuel/Scrap. |
 | **intel** | int | 0 | Story Progress. Gained from tactical missions. Threshold 10 spawns a Story Node. |
-| **data_logs** | int | 0 | Tech Currency. Shared resource used to purchase Ability Tree slots. |
+| **data_logs** | int | 0 | [REFACTORED] Now tracked per-officer in OfficerData. Earned via Level Up. |
 
 ### 1.3 The Market System (MarketMenu.tscn)
 Create a new UI scene accessible from the Management HUD. It serves as the primary "bailout" mechanism.
@@ -64,7 +75,8 @@ Update the NodeData class to include a state Enum:
 2. Search visited_nodes for an UNVISITED node within Range 3 of the player.
 3. If none exist, generate a new one at Range 3.
 4. Force node.type = STORY_MISSION.
-5. Reset intel = 0.
+5. Keep **one active story node** at a time.
+6. Spend intel on **story chapter completion** (not on spawn).
 
 **UI Feedback:** Spawn a "Signal Detected" arrow on the map UI pointing to the coordinate.
 
@@ -89,6 +101,7 @@ var unlocked_abilities: Array[String] = ["base"] # List of Ability IDs (e.g. "ex
 # Health & Status
 var max_hp: int         # Base HP
 var current_hp: int     # Tracks persistent damage across jumps
+var data_logs: int      # Unit-specific tech currency earned on level up
 var injury_jumps: int   # 0 = Ready. >0 = Unavailable for selection.
 ```
 
@@ -99,9 +112,12 @@ var injury_jumps: int   # 0 = Ready. >0 = Unavailable for selection.
 
 **UI:** Display "Injured (2 Jumps)" in the Roster view.
 
-**Recovery:** In VoyageManager.process_jump():
+**Recovery (Refined):** In VoyageManager.process_jump():
 * Iterate through all officers.
-* If injury_jumps > 0: injury_jumps -= 1.
+* **Logic:** decrement `injury_jumps` ONLY if the jump is to a new (unvisited) node. Jumps along **Amber Pathlines** (backtracking) do not count towards recovery.
+* **Healing:** When `injury_jumps` reaches 0, the officer's `current_hp` is restored to `max_hp`.
+* **Travel Maintenance:** All living units (injured or not) heal a small percentage of HP on every jump to represent shipboard medical care.
+
 
 ### 3.3 XP & Leveling Logic
 **XP Sources (TacticalManager):**
@@ -112,14 +128,16 @@ var injury_jumps: int   # 0 = Ready. >0 = Unavailable for selection.
 **Tech Tree Implementation (BarracksMenu.gd):**
 Create a UI for unlocking skills.
 **Requirements:**
-* **Level 2 Unlock:** Requires 100 XP + 5 Data Logs.
-* **Level 3 Unlock:** Requires 300 XP + 10 Data Logs.
+* **Level 2 Unlock:** Requires Level 2 + 1 Data Log (Unit-specific).
+* **Level 3 Unlock:** Requires Level 3 + 1 Data Log (Unit-specific).
 
-**Selection:**
-* **Level 2:** User selects Option A OR Option B.
-* **Level 3:** User selects Option A OR Option B OR Option C.
+**Progression Mechanics:**
+* **Auto-Leveling:** Units automatically advance in level when XP thresholds are met.
+* **Reward:** Each level up awards +1 Data Log to that specific unit.
+* **UI Feedback:** The Mission Recap screen features an animated XP progression bar for each unit.
 
-**Action:** On confirm, append the selected Ability ID to unlocked_abilities and deduct Data Logs from GameState.
+
+**Action:** On confirm, append the selected Ability ID to unlocked_abilities and deduct Data Logs from the officer's `data_logs` count.
 
 ### 3.4 Implementation Status (Code Check)
 - [x] `OfficerData` class is implemented with `level`, `xp`, `unlocked_abilities`, `current_hp`, and `injury_jumps`.
@@ -176,14 +194,14 @@ Determine the spawn list based on game depth.
 Bosses (Station, Asteroid, Planet) are no longer static.
 * **Formula:** BossHP = BaseHP * (1.0 + (Average_Squad_Level * 0.5)).
 
-## 6. Win/Loss Conditions [PARTIAL]
+## 6. Win/Loss Conditions [IN PROGRESS]
 * **Loss Condition 1 (Critical Failure):** hull_integrity <= 0.0.
 * **Loss Condition 2 (Crew Wipe):** roster.all(x => !x.alive).
 * **Win Condition:** Completion of the final Story Mission Chain (Triggered via specific Story Node).
 
 ## 7. Implementation Phases: Voyage 2.0 Update
 
-**Current Overall Status:** **Late Phase 4 / Early Phase 5**
+**Current Overall Status:** **Mid Phase 5**
 
 ### Phase 1: Foundation & Economy Refactor [COMPLETED]
 **Goal:** Establish the new data structures and remove legacy "Oregon Trail" systems to prevent logic conflicts.
@@ -271,4 +289,4 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 * **Loss:** Trigger Game Over if `hull <= 0` OR `all_officers_dead`.
 * **Win:** Define the specific "Final Story Mission" that triggers the Victory Screen.
 
-**Status Update:** Loss conditions are active. Final story-chain driven win flow is the main remaining integration target.
+**Status Update:** Story chapter progression, one-active story node enforcement, intel-on-completion spending, and final-story-mission victory trigger are wired. Final narrative choice buttons now use "CHOICE 5A / 5B" labeling convention. Remaining work is content/tuning polish.

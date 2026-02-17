@@ -57,6 +57,8 @@ const COLOR_IMPOSSIBLE = Color(0.6, 0.0, 1.0, 1.0) # Purple/Black (Using Purple 
 # Question mark sprite for LOCKED nodes
 const QUESTION_MARK_TEXTURE = preload("res://assets/sprites/navigation/question_mark.png")
 const SKULL_TEXTURE = preload("res://assets/sprites/navigation/skull_icon.png")
+const STORY_TEXTURE = preload("res://assets/sprites/navigation/node_target.png")
+const COLOR_STORY = Color(0.95, 0.45, 1.0, 1.0)
 
 var is_hovered: bool = false
 var _pulse_tween: Tween = null
@@ -103,9 +105,20 @@ func _update_visual_state(is_current: bool, is_reachable: bool) -> void:
 	if is_current:
 		set_state(StarMapNode.NodeState.CURRENT)
 	elif is_reachable:
-		# Reachable nodes are always AVAILABLE (interactive), even if visited
-		set_state(StarMapNode.NodeState.AVAILABLE)
-	elif node_data.state == NodeData.NodeState.VISITED or node_data.state == NodeData.NodeState.CLEARED:
+		# Missions stay AVAILABLE (highlighted) until CLEARED.
+		# Random events go to VISITED once visited.
+		var is_cleared = node_data.state == NodeData.NodeState.CLEARED
+		var is_visited = node_data.state == NodeData.NodeState.VISITED or node_data.is_story_node
+		var is_random_event = (node_data.node_type == EventManager.NodeType.EMPTY_SPACE)
+		
+		if is_random_event and is_visited:
+			set_state(StarMapNode.NodeState.VISITED)
+		elif is_cleared:
+			set_state(StarMapNode.NodeState.VISITED)
+		else:
+			set_state(StarMapNode.NodeState.AVAILABLE)
+	elif node_data.state != NodeData.NodeState.UNVISITED:
+		# Visited, Story, or Cleared nodes that are not reachable from current.
 		set_state(StarMapNode.NodeState.VISITED)
 	else:
 		set_state(StarMapNode.NodeState.LOCKED)
@@ -125,7 +138,7 @@ func set_state(new_state: NodeState) -> void:
 
 ## Update visual appearance based on state and type
 func _update_visual() -> void:
-	if not sprite or not label:
+	if not sprite or not label or node_data == null:
 		return
 	
 	# Set texture based on node type
@@ -145,10 +158,17 @@ func _update_visual() -> void:
 				current_indicator.visible = false
 				
 		NodeState.AVAILABLE:
-			label.add_theme_color_override("font_color", COLOR_AVAILABLE)
+			if node_data.is_story_node:
+				label.add_theme_color_override("font_color", COLOR_STORY)
+			else:
+				label.add_theme_color_override("font_color", COLOR_AVAILABLE)
 			sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)
 			# Waypoints get white glow if unvisited
-			if node_data.node_type == EventManager.NodeType.EMPTY_SPACE:
+			if node_data.is_story_node:
+				if glow_effect:
+					glow_effect.visible = true
+					_apply_panel_color(glow_effect, COLOR_STORY, 0.55)
+			elif node_data.node_type == EventManager.NodeType.EMPTY_SPACE:
 				if glow_effect:
 					# Always show glow for available waypoints, even if visited
 					glow_effect.visible = true
@@ -162,18 +182,41 @@ func _update_visual() -> void:
 				current_indicator.visible = false
 				
 		NodeState.CURRENT:
-			label.add_theme_color_override("font_color", COLOR_CURRENT)
+			if node_data.is_story_node:
+				label.add_theme_color_override("font_color", COLOR_STORY)
+				if glow_effect:
+					glow_effect.visible = true
+					_apply_panel_color(glow_effect, COLOR_STORY, 0.55)
+			else:
+				label.add_theme_color_override("font_color", COLOR_CURRENT)
+				if glow_effect:
+					glow_effect.visible = false
+			
 			sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)
-			if glow_effect:
-				glow_effect.visible = false
 			if current_indicator:
 				current_indicator.visible = false
 				
 		NodeState.VISITED:
-			label.add_theme_color_override("font_color", COLOR_VISITED)
+			var is_scavenge = node_data.node_type == EventManager.NodeType.SCAVENGE_SITE
+			if node_data.is_story_node:
+				label.add_theme_color_override("font_color", COLOR_STORY)
+				if glow_effect and node_data.state != NodeData.NodeState.CLEARED:
+					glow_effect.visible = true
+					_apply_panel_color(glow_effect, COLOR_STORY, 0.55)
+			elif is_scavenge and node_data.state != NodeData.NodeState.CLEARED:
+				# Show difficulty color and glow for visited but not cleared scavenger missions
+				_update_visited_mission_color()
+				if glow_effect:
+					glow_effect.visible = true
+					# Use same alpha/logic as _update_difficulty_visuals
+					var grade_color = _get_grade_color()
+					_apply_panel_color(glow_effect, grade_color, 0.35)
+			else:
+				label.add_theme_color_override("font_color", COLOR_VISITED)
+				if glow_effect:
+					glow_effect.visible = false
+			
 			sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)
-			if glow_effect:
-				glow_effect.visible = false
 			if current_indicator:
 				current_indicator.visible = false
 	
@@ -187,6 +230,11 @@ func _update_visual() -> void:
 	_update_event_result_visuals()
 
 func _update_difficulty_visuals() -> void:
+	if node_data and node_data.is_story_node:
+		if has_node("SkullContainer"):
+			$SkullContainer.visible = false
+		return
+
 	if not node_data or node_data.node_type != EventManager.NodeType.SCAVENGE_SITE:
 		if has_node("SkullContainer"):
 			$SkullContainer.visible = false
@@ -215,13 +263,15 @@ func _update_difficulty_visuals() -> void:
 			grade_color = COLOR_IMPOSSIBLE
 			
 	# Apply highlight to label or glow if available and unvisited
-	label.add_theme_color_override("font_color", grade_color)
+	if current_state != NodeState.VISITED:
+		label.add_theme_color_override("font_color", grade_color)
 	
-	if glow_effect and current_state == NodeState.AVAILABLE:
-		# Always show glow for available missions, even if visited/cleared
+	# Always show glow for active (Available, Current, or jumpable Visited) missions, as long as not cleared
+	var is_active = (current_state == NodeState.AVAILABLE or current_state == NodeState.CURRENT or current_state == NodeState.VISITED)
+	if glow_effect and is_active and node_data.state != NodeData.NodeState.CLEARED:
 		glow_effect.visible = true 
 		_apply_panel_color(glow_effect, grade_color, 0.35)
-		
+	
 	# Update skulls
 	_update_skulls(grade)
 
@@ -295,28 +345,64 @@ func _update_event_result_visuals() -> void:
 	if not node_data:
 		return
 		
-	# Penalty Label - only show for UNVISITED nodes
+	# Penalty Label - show for UNVISITED (forecast) or CURRENT (result)
 	var pl = get_node_or_null("PenaltyLabel")
 	var penalty_text = node_data.event_penalty_text
 	
-	# Forecast for penalty
+	# Forecast for penalty if not yet resolved
 	if penalty_text == "" and current_state == NodeState.AVAILABLE and node_data.pending_event_id >= 0:
 		var event = EventManager.random_events[node_data.pending_event_id]
-		var integrity_loss = event.get("integrity_loss", 0)
-		if integrity_loss > 0:
-			penalty_text = "-" + str(integrity_loss) + " HULL"
+		var effects = []
+		
+		var integrity_change = event.get("integrity_change_pct", 0)
+		if integrity_change != 0:
+			var prefix = "+" if integrity_change > 0 else ""
+			effects.append(prefix + str(integrity_change) + "% HULL")
+			
+		var cash_change = event.get("cash_change", 0)
+		if cash_change != 0:
+			var prefix = "+" if cash_change > 0 else ""
+			effects.append(prefix + str(cash_change) + " CASH")
+			
+		var fuel_change = event.get("fuel_change", 0)
+		if fuel_change != 0:
+			var prefix = "+" if fuel_change > 0 else ""
+			effects.append(prefix + str(fuel_change) + " FUEL")
+			
+		var scrap_change = event.get("scrap_change", 0)
+		if scrap_change != 0:
+			var prefix = "+" if scrap_change > 0 else ""
+			effects.append(prefix + str(scrap_change) + " SCRAP")
+		
+		if not effects.is_empty():
+			penalty_text = ", ".join(effects)
 
-	if penalty_text != "" and node_data.state == NodeData.NodeState.UNVISITED:
+	# Determine if we should show the label
+	# We show it if it's UNVISITED (forecast) OR if it's the CURRENT node (result)
+	var is_current = (current_state == NodeState.CURRENT)
+	var should_show = (node_data.state == NodeData.NodeState.UNVISITED) or is_current
+	
+	if penalty_text != "" and should_show:
 		if not pl:
 			pl = Label.new()
 			pl.name = "PenaltyLabel"
 			add_child(pl)
 			pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			pl.add_theme_font_size_override("font_size", 16) # Much bigger (was 11)
+			pl.add_theme_font_size_override("font_size", 16) # Much bigger
+		
+		# Color coding: Green for prizes, Red for penalties, Amber for mixed
+		var has_plus = "+" in penalty_text
+		var has_minus = "-" in penalty_text
+		
+		if has_plus and not has_minus:
+			pl.add_theme_color_override("font_color", Color(0.4, 1.0, 0.4, 1.0)) # Green
+		elif has_minus and not has_plus:
 			pl.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3, 1.0)) # Red
+		else:
+			pl.add_theme_color_override("font_color", Color(1.0, 0.8, 0.0, 1.0)) # Amber/Yellow for mixed
 		
 		pl.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-		pl.position.y -= 38 # Shifted up for larger font
+		pl.position.y = -38 # Absolute offset from top
 		pl.text = penalty_text
 		pl.visible = true
 	elif pl:
@@ -325,7 +411,7 @@ func _update_event_result_visuals() -> void:
 
 ## Update the sprite texture based on node type
 func _update_sprite_texture() -> void:
-	if not sprite:
+	if not sprite or node_data == null:
 		return
 	
 	# Check if node has been visited, is current, or has an amber line
@@ -336,7 +422,7 @@ func _update_sprite_texture() -> void:
 	
 	# For now, simplistic approach: If we are visualizing it, we see it.
 	# Or follow the logic:
-	var show_details = current_state != NodeState.LOCKED
+	var show_details = current_state != NodeState.LOCKED or node_data.is_story_node
 	
 	if not show_details:
 		sprite.texture = QUESTION_MARK_TEXTURE
@@ -350,6 +436,8 @@ func _update_sprite_texture() -> void:
 	elif node_data.is_new_earth:
 		# End node (New Earth)
 		sprite.texture = preload("res://assets/sprites/navigation/planet_earth.png")
+	elif node_data.is_story_node:
+		sprite.texture = STORY_TEXTURE
 	else:
 		# Regular nodes - use type-based texture
 		match node_data.node_type:
@@ -378,12 +466,12 @@ func _update_sprite_texture() -> void:
 
 ## Update label text based on node type and id
 func _update_label_text() -> void:
-	if not label:
+	if not label or node_data == null:
 		return
 	
 	# Check if node has been visited, is current, or has an amber line
 	# Check if node has been visited, is current, or has an amber line
-	var show_details = current_state != NodeState.LOCKED
+	var show_details = current_state != NodeState.LOCKED or node_data.is_story_node
 	
 	# Show no text for unvisited nodes without amber lines
 	# Reveal if visited OR is current OR has amber line to it
@@ -396,6 +484,8 @@ func _update_label_text() -> void:
 		label.text = "EARTH"
 	elif node_data.is_new_earth:
 		label.text = "NEW EARTH"
+	elif node_data.is_story_node:
+		label.text = "STORY SIGNAL"
 	else:
 		match node_data.node_type:
 			EventManager.NodeType.EMPTY_SPACE:
@@ -515,3 +605,23 @@ func _on_mouse_exited() -> void:
 	
 	# Restore visual state
 	_update_visual()
+
+
+func _update_visited_mission_color() -> void:
+	if not node_data: return
+	var grade_color = COLOR_EASY
+	match node_data.difficulty_grade:
+		NodeData.DifficultyGrade.EASY: grade_color = COLOR_EASY
+		NodeData.DifficultyGrade.MEDIUM: grade_color = COLOR_MEDIUM
+		NodeData.DifficultyGrade.HARD: grade_color = COLOR_HARD
+		NodeData.DifficultyGrade.IMPOSSIBLE: grade_color = COLOR_IMPOSSIBLE
+	label.add_theme_color_override("font_color", grade_color)
+
+
+func _get_grade_color() -> Color:
+	match node_data.difficulty_grade:
+		NodeData.DifficultyGrade.EASY: return COLOR_EASY
+		NodeData.DifficultyGrade.MEDIUM: return COLOR_MEDIUM
+		NodeData.DifficultyGrade.HARD: return COLOR_HARD
+		NodeData.DifficultyGrade.IMPOSSIBLE: return COLOR_IMPOSSIBLE
+	return COLOR_EASY

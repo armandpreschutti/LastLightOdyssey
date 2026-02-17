@@ -100,8 +100,11 @@ func generate_options(source_node: NodeData, incoming_vector: Vector2, override_
 			new_node.biome_type = _roll_biome_type()
 			_assign_difficulty_grade(new_node)
 		elif new_node.node_type == EventManager.NodeType.EMPTY_SPACE:
-			# Pre-roll random event ID (0 to 9)
-			new_node.pending_event_id = rng.randi_range(0, 9)
+			# Pre-roll random event ID (0 to 19) only 17.5% of the time (15-20% per request)
+			if rng.randf() < 0.175:
+				new_node.pending_event_id = rng.randi_range(0, 19)
+			else:
+				new_node.pending_event_id = -1 # No event
 		
 		# Connect
 		source_node.connections.append(new_id)

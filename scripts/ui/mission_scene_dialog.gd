@@ -43,25 +43,36 @@ func _ready() -> void:
 	scene_canvas.draw.connect(_draw_procedural_scene)
 
 
-func show_scene(biome_type: int, objective_type: String = "") -> void:
+func show_scene(
+	biome_type: int,
+	objective_type: String = "",
+	title_override: String = "",
+	description_override: String = "",
+	location_override: String = ""
+) -> void:
 	_current_biome = biome_type as BiomeConfig.BiomeType
 	var biome_name = BiomeConfig.get_biome_name(_current_biome)
 	var description = BIOME_DESCRIPTIONS.get(_current_biome, "An unknown location awaits.")
+	if description_override != "":
+		description = description_override
 	
 	# Set title
-	title_label.text = "SCAVENGE MISSION"
+	title_label.text = "SCAVENGE MISSION" if title_override == "" else title_override
 	
 	# Set location/date flavor text
 	var current_node = VoyageManager.get_current_node()
 	var cycle = int(current_node.position.length() / 400.0) + 1 if current_node else 1
 
 	# Set location/date flavor text
-	location_label.text = "%s  |  SECTOR %d-%d  |  CYCLE %d" % [
-		biome_name.to_upper(),
-		randi_range(1, 9),
-		randi_range(100, 999),
-		cycle
-	]
+	if location_override == "":
+		location_label.text = "%s  |  SECTOR %d-%d  |  CYCLE %d" % [
+			biome_name.to_upper(),
+			randi_range(1, 9),
+			randi_range(100, 999),
+			cycle
+		]
+	else:
+		location_label.text = location_override
 	
 	# Map objective type to image name
 	var image_name = "mission_" + objective_type

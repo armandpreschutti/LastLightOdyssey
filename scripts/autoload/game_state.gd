@@ -7,12 +7,15 @@ signal integrity_changed(new_value: int)
 signal scrap_changed(new_value: int)
 signal cash_changed(new_value: int)
 signal intel_changed(new_value: int)
-signal data_logs_changed(new_value: int)
 signal officer_died(officer_type: String)
 signal officer_injured(officer_key: String)
 signal game_over(reason: String)
 signal game_won(ending_type: String)
 signal developer_mode_changed(enabled: bool)
+
+const SETTINGS_CONFIG_PATH: String = "user://settings.cfg"
+const SETTINGS_DEVELOPER_SECTION: String = "developer"
+const SETTINGS_DEVELOPER_KEY: String = "developer_mode"
 
 # --- Ability & Officer Definitions ---
 const OFFICER_COLOR = {
@@ -124,12 +127,10 @@ var intel: int = 0:
 		intel = maxi(0, value)
 		intel_changed.emit(intel)
 
-var data_logs: int = 0:
-	set(value):
-		if developer_mode and value < data_logs:
-			value = data_logs
-		data_logs = maxi(0, value)
-		data_logs_changed.emit(data_logs)
+# Story progression (Phase 5 loop closer)
+
+var story_chapters_completed: int = 0
+var story_victory_emitted: bool = false
 
 const SHIP_INTEGRITY_LOSS_PER_JUMP: int = 1  # Ship takes minor damage from each jump
 const HULL_DAMAGE_DRIFT_MODE: int = 5 # Extra damage when drafting without fuel
@@ -170,7 +171,46 @@ var total_tactical_turns: int = 0
 
 
 func _ready() -> void:
+	load_persistent_settings()
 	_init_officers()
+
+## Load persistent non-run state from settings.cfg
+func load_persistent_settings() -> void:
+	developer_mode = get_saved_developer_mode(false)
+
+
+## Returns the persisted Developer Mode flag from settings.cfg with type-safe coercion.
+func get_saved_developer_mode(default_value: bool = false) -> bool:
+	var config = ConfigFile.new()
+	var err = config.load(SETTINGS_CONFIG_PATH)
+	if err != OK:
+		return default_value
+	var raw_value = config.get_value(SETTINGS_DEVELOPER_SECTION, SETTINGS_DEVELOPER_KEY, default_value)
+	return _coerce_bool(raw_value, default_value)
+
+
+## Centralized Developer Mode check for gameplay systems.
+func is_developer_mode_enabled() -> bool:
+	return developer_mode
+
+
+func _coerce_bool(value: Variant, default_value: bool = false) -> bool:
+	match typeof(value):
+		TYPE_BOOL:
+			return value
+		TYPE_INT:
+			return int(value) != 0
+		TYPE_FLOAT:
+			return not is_zero_approx(float(value))
+		TYPE_STRING:
+			var normalized := String(value).strip_edges().to_lower()
+			if normalized in ["1", "true", "yes", "on"]:
+				return true
+			if normalized in ["0", "false", "no", "off", ""]:
+				return false
+			return default_value
+		_:
+			return default_value
 
 
 ## Create fresh OfficerData for all 6 officers
@@ -202,7 +242,8 @@ func reset_game() -> void:
 	scrap = 25
 	cash = 100
 	intel = 0
-	data_logs = 0
+	story_chapters_completed = 0
+	story_victory_emitted = false
 	
 	# Reset cumulative stats
 	total_fuel_collected = 0
@@ -274,8 +315,24 @@ func repair_ship(amount: int) -> void:
 
 
 func _check_win_condition() -> void:
-	# Placeholder for new Victory Condition (Story Mission)
-	game_won.emit("good")
+	trigger_story_victory()
+
+
+func get_ending_type_by_hull() -> String:
+	if ship_integrity >= 100:
+		return "perfect"
+	if ship_integrity >= 50:
+		return "good"
+	return "bad"
+
+
+func trigger_story_victory(ending_type: String = "") -> void:
+	if story_victory_emitted:
+		return
+	story_victory_emitted = true
+	if ending_type == "":
+		ending_type = get_ending_type_by_hull()
+	game_won.emit(ending_type)
 
 
 func _trigger_game_over(reason: String) -> void:
@@ -321,13 +378,14 @@ func save_game() -> bool:
 		officers_data[key] = (officers[key] as OfficerData).to_dict()
 
 	var save_data = {
-		"version": 6, # Voyage 2.0 + RPG layer (Phase 3/4)
+		"version": 7, # Voyage 2.0 + story progression (Phase 5)
 		"fuel": fuel,
 		"ship_integrity": ship_integrity,
 		"scrap": scrap,
 		"cash": cash,
 		"intel": intel,
-		"data_logs": data_logs,
+		"story_chapters_completed": story_chapters_completed,
+		"story_victory_emitted": story_victory_emitted,
 		"officers": officers_data,
 		# VoyageManager Data
 		"voyage_data": VoyageManager.get_save_data(),
@@ -392,7 +450,8 @@ func load_game() -> bool:
 	scrap = int(save_data.get("scrap", 0))
 	cash = int(save_data.get("cash", 100))
 	intel = int(save_data.get("intel", 0))
-	data_logs = int(save_data.get("data_logs", 0))
+	story_chapters_completed = int(save_data.get("story_chapters_completed", 0))
+	story_victory_emitted = bool(save_data.get("story_victory_emitted", false))
 
 	# Restore VoyageManager Data
 	if save_data.has("voyage_data"):

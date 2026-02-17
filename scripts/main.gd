@@ -19,15 +19,85 @@ extends Node
 @onready var mission_scene_dialog: Control = $DialogLayer/MissionSceneDialog
 @onready var objective_complete_scene_dialog: Control = $DialogLayer/ObjectiveCompleteSceneDialog
 @onready var enemy_elimination_scene_dialog: Control = $DialogLayer/EnemyEliminationSceneDialog
+@onready var story_choice_dialog: Control = $DialogLayer/StoryChoiceDialog
 @onready var tactical_mode: Node2D = $TacticalMode
 @onready var management_layer: CanvasLayer = $ManagementLayer
 @onready var management_background: Control = $BackgroundLayer/Background
+@onready var fade_transition_layer: CanvasLayer = $FadeTransitionLayer
 @onready var fade_transition: Control = $FadeTransitionLayer/FadeTransition
 
 var _pending_ending_type: String = ""  # Store ending type for the win sequence
 var _pending_officer_keys: Array[String] = []  # Store selected officers for mission start
 var _pending_objectives: Array[MissionObjective] = []  # Store selected objectives for mission start
 var _pending_game_over_reason: String = ""  # Store game over reason for the sequence
+var _pending_story_victory: bool = false
+var _suppress_mission_scene_dismiss_handler: bool = false
+
+# Campaign branching pending state
+var _pending_next_choices: Array[String] = []
+var _pending_is_terminal_mission: bool = false
+var _pending_completed_mission_id: String = ""
+
+const CAMPAIGN_PRE_SCENES: Dictionary = {
+	"1A": {"title": "CHAPTER 1 — MISSION 1A", "text": "Long-range telemetry locks onto a fragmented pre-colony beacon. You are not the first to cross this void.", "location": "SIGNAL 1A"},
+	"2A": {"title": "CHAPTER 2 — MISSION 2A", "text": "A broken relay repeats distress metadata from decades ago. The signal carries coordinates and a warning.", "location": "SIGNAL 2A"},
+	"2B": {"title": "CHAPTER 2 — MISSION 2B", "text": "A broken relay repeats distress metadata from decades ago. Alternative route detected ahead.", "location": "SIGNAL 2B"},
+	"3A": {"title": "CHAPTER 3 — MISSION 3A", "text": "Cryo archival fragments suggest a failed settlement attempt. Survivors marked a fallback route deeper into the sector.", "location": "SIGNAL 3A"},
+	"3B": {"title": "CHAPTER 3 — MISSION 3B", "text": "Cryo archival fragments suggest a failed settlement attempt. A central hub shows signs of recent activity.", "location": "SIGNAL 3B"},
+	"3C": {"title": "CHAPTER 3 — MISSION 3C", "text": "Cryo archival fragments suggest a failed settlement attempt. A divergent path emerges from the data.", "location": "SIGNAL 3C"},
+	"4A": {"title": "CHAPTER 4 — MISSION 4A", "text": "Your scans isolate a stable corridor hidden behind false readings. The way forward requires direct ground verification.", "location": "SIGNAL 4A"},
+	"4B": {"title": "CHAPTER 4 — MISSION 4B", "text": "Your scans isolate a stable corridor hidden behind false readings. A critical juncture approaches.", "location": "SIGNAL 4B"},
+	"4C": {"title": "CHAPTER 4 — MISSION 4C", "text": "Your scans isolate a stable corridor hidden behind false readings. Multiple landing zones identified.", "location": "SIGNAL 4C"},
+	"4D": {"title": "CHAPTER 4 — MISSION 4D", "text": "Your scans isolate a stable corridor hidden behind false readings. The final approach vector is set.", "location": "SIGNAL 4D"},
+	"5A": {"title": "CHAPTER 5 — ENDING A", "text": "Final beacon packet recovered. The navigation solution is complete. Path A selected.", "location": "ENDING A"},
+	"5B": {"title": "CHAPTER 5 — ENDING B", "text": "Final beacon packet recovered. The navigation solution is complete. Path B selected.", "location": "ENDING B"},
+	"5C": {"title": "CHAPTER 5 — ENDING C", "text": "Final beacon packet recovered. The navigation solution is complete. Path C selected.", "location": "ENDING C"},
+	"5D": {"title": "CHAPTER 5 — ENDING D", "text": "Final beacon packet recovered. The navigation solution is complete. Path D selected.", "location": "ENDING D"},
+	"5E": {"title": "CHAPTER 5 — ENDING E", "text": "Final beacon packet recovered. The navigation solution is complete. Path E selected.", "location": "ENDING E"},
+}
+
+const CAMPAIGN_POST_SCENES: Dictionary = {
+	"1A": {"title": "CHAPTER 1 COMPLETE — 1A", "text": "Mission intelligence archived. Prepare for the next signal.", "location": "DEBRIEF 1A"},
+	"2A": {"title": "CHAPTER 2 COMPLETE — 2A", "text": "Route data secured. The path ahead becomes clearer.", "location": "DEBRIEF 2A"},
+	"2B": {"title": "CHAPTER 2 COMPLETE — 2B", "text": "Route data secured. An alternative course is charted.", "location": "DEBRIEF 2B"},
+	"3A": {"title": "CHAPTER 3 COMPLETE — 3A", "text": "Settlement records analyzed. History guides the future.", "location": "DEBRIEF 3A"},
+	"3B": {"title": "CHAPTER 3 COMPLETE — 3B", "text": "Settlement records analyzed. The hub's secrets revealed.", "location": "DEBRIEF 3B"},
+	"3C": {"title": "CHAPTER 3 COMPLETE — 3C", "text": "Settlement records analyzed. A new direction emerges.", "location": "DEBRIEF 3C"},
+	"4A": {"title": "CHAPTER 4 COMPLETE — 4A", "text": "Corridor verified. The final approach preparations begin.", "location": "DEBRIEF 4A"},
+	"4B": {"title": "CHAPTER 4 COMPLETE — 4B", "text": "Corridor verified. The critical juncture is reached.", "location": "DEBRIEF 4B"},
+	"4C": {"title": "CHAPTER 4 COMPLETE — 4C", "text": "Corridor verified. Landing zones prioritized.", "location": "DEBRIEF 4C"},
+	"4D": {"title": "CHAPTER 4 COMPLETE — 4D", "text": "Corridor verified. Final approach vectors locked.", "location": "DEBRIEF 4D"},
+	"5A": {"title": "CHAPTER 5 COMPLETE — ENDING A", "text": "Landing successful. Humanity's new home awaits.", "location": "NEW EARTH A"},
+	"5B": {"title": "CHAPTER 5 COMPLETE — ENDING B", "text": "Landing successful. A new era begins.", "location": "NEW EARTH B"},
+	"5C": {"title": "CHAPTER 5 COMPLETE — ENDING C", "text": "Landing successful. The voyage concludes.", "location": "NEW EARTH C"},
+	"5D": {"title": "CHAPTER 5 COMPLETE — ENDING D", "text": "Landing successful. Home is found.", "location": "NEW EARTH D"},
+	"5E": {"title": "CHAPTER 5 COMPLETE — ENDING E", "text": "Landing successful. A new world awaits.", "location": "NEW EARTH E"},
+}
+
+const CAMPAIGN_CHOICE_OPTIONS: Dictionary = {
+	"2A": {"label": "CHOICE 2A", "text": "Select this path forward."},
+	"2B": {"label": "CHOICE 2B", "text": "Select this alternative."},
+	"3A": {"label": "CHOICE 3A", "text": "Select this route."},
+	"3B": {"label": "CHOICE 3B", "text": "Select this course."},
+	"3C": {"label": "CHOICE 3C", "text": "Select this direction."},
+	"4A": {"label": "CHOICE 4A", "text": "Select this approach."},
+	"4B": {"label": "CHOICE 4B", "text": "Select this option."},
+	"4C": {"label": "CHOICE 4C", "text": "Select this vector."},
+	"4D": {"label": "CHOICE 4D", "text": "Select this path."},
+	"5A": {"label": "CHOICE 5A", "text": "Select Ending A."},
+	"5B": {"label": "CHOICE 5B", "text": "Select Ending B."},
+	"5C": {"label": "CHOICE 5C", "text": "Select Ending C."},
+	"5D": {"label": "CHOICE 5D", "text": "Select Ending D."},
+	"5E": {"label": "CHOICE 5E", "text": "Select Ending E."},
+}
+const ENABLE_STORY_PRE_SCENE: bool = true
+const ENABLE_STORY_POST_SCENE: bool = true
+const ENABLE_REGULAR_MISSION_SCENE: bool = false
+const ENABLE_EVENT_SCENE: bool = false
+const ENABLE_VOYAGE_INTRO_SCENE: bool = true
+const ENABLE_NEW_EARTH_SCENE: bool = false
+const ENABLE_GAME_OVER_SCENE: bool = true
+const ENABLE_FADE_TRANSITIONS: bool = true
 
 enum GamePhase { IDLE, EVENT_DISPLAY, TEAM_SELECT, TACTICAL, TRADING, GAME_OVER, GAME_WON }
 
@@ -47,6 +117,9 @@ var _wormhole_offered_at: String = ""  # Track if wormhole dialog was presented 
 func _ready() -> void:
 	# Add to group for easy discovery by TutorialManager
 	add_to_group("main")
+
+	# Fade layer must stay visible/on-top or transitions render invisibly.
+	fade_transition_layer.visible = true
 	
 	# Ensure fade is black immediately (before any other initialization)
 	# This prevents grey flash when transitioning from title menu
@@ -59,7 +132,7 @@ func _ready() -> void:
 	
 	# Wait a frame to ensure everything is initialized, then fade in from black
 	await get_tree().process_frame
-	fade_transition.fade_in(0.6)
+	_fade_in(0.6)
 	
 	# Show voyage intro scene when starting a new voyage
 	_show_voyage_intro()
@@ -74,6 +147,7 @@ func _connect_signals() -> void:
 	mission_scene_dialog.scene_dismissed.connect(_on_mission_scene_dismissed)
 	tactical_mode.mission_complete.connect(_on_mission_complete)
 	mission_recap.recap_dismissed.connect(_on_recap_dismissed)
+	story_choice_dialog.choice_made.connect(_on_story_choice_made)
 	new_earth_scene.scene_dismissed.connect(_on_new_earth_scene_dismissed)
 	voyage_intro_scene_dialog.scene_dismissed.connect(_on_voyage_intro_scene_dismissed)
 	objective_complete_scene_dialog.scene_dismissed.connect(_on_objective_complete_scene_dismissed)
@@ -210,8 +284,9 @@ func _show_fuel_warning(node_data: NodeData, fuel_cost: int) -> void:
 
 ## Execute jump with ship animation
 func _execute_jump_with_animation(node_data: NodeData, _fuel_cost: int) -> void:
-	# Capture visited state BEFORE jump attempt changes it
-	var was_visited = node_data.state != NodeData.NodeState.UNVISITED
+	# Capture visited state BEFORE jump attempt changes it.
+	# STORY nodes must still run arrival scene flow, so they are treated as not-visited here.
+	var was_visited = node_data.state == NodeData.NodeState.VISITED or node_data.state == NodeData.NodeState.CLEARED
 	
 	# Set flag to prevent multiple clicks during animation
 	_is_jump_animating = true
@@ -276,8 +351,8 @@ func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) ->
 	
 	match pending_node_type:
 		EventManager.NodeType.SCAVENGE_SITE:
-			if was_visited:
-				if node_data.state != NodeData.NodeState.CLEARED:
+			if was_visited and node_data.state != NodeData.NodeState.STORY:
+				if node_data.state == NodeData.NodeState.STORY or node_data.state != NodeData.NodeState.CLEARED:
 					management_hud.set_deploy_active(true)
 				else:
 					management_hud.set_deploy_active(false)
@@ -291,8 +366,16 @@ func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) ->
 			
 			# Show mission scene first, then team selection
 			current_phase = GamePhase.EVENT_DISPLAY
-			# mission_scene_dialog.show_scene(pending_biome_type)
-			_on_mission_scene_dismissed()
+			if node_data.state == NodeData.NodeState.STORY:
+				if ENABLE_STORY_PRE_SCENE:
+					_show_story_beat_scene()
+				else:
+					_on_mission_scene_dismissed()
+			else:
+				if ENABLE_REGULAR_MISSION_SCENE:
+					mission_scene_dialog.show_scene(pending_biome_type)
+				else:
+					_on_mission_scene_dismissed()
 
 		EventManager.NodeType.WORMHOLE:
 			# Show wormhole interaction dialog
@@ -312,6 +395,13 @@ func _trigger_random_event() -> void:
 	var current_node = VoyageManager.get_current_node()
 	if current_node and current_node.pending_event_id >= 0:
 		current_event = EventManager.random_events[current_node.pending_event_id]
+	elif current_node and current_node.pending_event_id == -1:
+		# No event assigned to this node
+		current_event = {}
+		current_node.event_penalty_text = ""
+		star_map.refresh()
+		current_phase = GamePhase.IDLE
+		return
 	else:
 		current_event = EventManager.roll_random_event()
 	
@@ -321,11 +411,36 @@ func _trigger_random_event() -> void:
 	# Resolve event instantly
 	var result = EventManager.resolve_event(current_event, use_specialist)
 	
-	# Store results in node data for display
+	# Store results in node data for display (List all non-zero changes)
 	if current_node:
-		var integrity_loss = current_event.get("integrity_loss", 0)
-		if integrity_loss > 0:
-			current_node.event_penalty_text = "-" + str(integrity_loss) + " HULL"
+		var display_text = ""
+		var effects = []
+		
+		var integrity_change = result.get("integrity_change", 0)
+		if integrity_change != 0:
+			var prefix = "+" if integrity_change > 0 else ""
+			effects.append(prefix + str(integrity_change) + "% HULL")
+			
+		var cash_change = result.get("cash_change", 0)
+		if cash_change != 0:
+			var prefix = "+" if cash_change > 0 else ""
+			effects.append(prefix + str(cash_change) + " CASH")
+			
+		var fuel_change = result.get("fuel_change", 0)
+		if fuel_change != 0:
+			var prefix = "+" if fuel_change > 0 else ""
+			effects.append(prefix + str(fuel_change) + " FUEL")
+			
+		var scrap_change = result.get("scrap_change", 0)
+		if scrap_change != 0:
+			var prefix = "+" if scrap_change > 0 else ""
+			effects.append(prefix + str(scrap_change) + " SCRAP")
+		
+		# Combine effects into a single string
+		if effects.is_empty():
+			current_node.event_penalty_text = "NO INCIDENT"
+		else:
+			current_node.event_penalty_text = ", ".join(effects)
 		
 		# Log to message log
 		var log_msg = "Event: " + current_event.get("name", "Unknown")
@@ -349,8 +464,10 @@ func _trigger_random_event() -> void:
 
 
 func _on_event_scene_dismissed() -> void:
-	# Event dialog no longer shown for random events (now automated)
-	pass
+	# Event scene disabled per user preference.
+	if not ENABLE_EVENT_SCENE:
+		return
+	event_scene_dialog.show_scene(current_event)
 
 
 func _on_event_choice_made(use_specialist: bool) -> void:
@@ -372,8 +489,7 @@ func _on_team_selected(officer_keys: Array[String], objectives: Array[MissionObj
 	_pending_objectives = objectives
 	
 	# Fade to black, then transition to tactical mode
-	fade_transition.fade_out(0.6)
-	await fade_transition.fade_complete
+	await _fade_out(0.6)
 	
 	# Hide the team select dialog explicitly now that we are faded out
 	team_select_dialog.visible = false
@@ -402,7 +518,7 @@ func _on_team_selected(officer_keys: Array[String], objectives: Array[MissionObj
 	await get_tree().process_frame
 	
 	# Fade in from black
-	fade_transition.fade_in(0.6)
+	_fade_in(0.6)
 
 
 func _on_team_select_cancelled() -> void:
@@ -414,6 +530,10 @@ func _on_team_select_cancelled() -> void:
 
 
 func _on_mission_scene_dismissed() -> void:
+	if _suppress_mission_scene_dismiss_handler:
+		_suppress_mission_scene_dismiss_handler = false
+		return
+
 	# After mission scene is dismissed, check if we need to show team select
 	# If we have pending officers, we're in the old flow (shouldn't happen now)
 	# Otherwise, show team select dialog
@@ -470,47 +590,114 @@ func _transition_to_team_select() -> void:
 		TutorialManager.queue_step(TutorialManager.current_step_index)
 
 
-func _on_mission_complete(_success: bool, stats: Dictionary) -> void:
+func _on_mission_complete(success: bool, stats: Dictionary) -> void:
 	# Stop tactical music when leaving tactical mode
 	MusicManager.stop_music()
-	
+
 	# Fade to black, then transition back to management mode
-	fade_transition.fade_out(0.6)
-	await fade_transition.fade_complete
-	
+	await _fade_out(0.6)
+
 	# Hide tactical mode
 	tactical_mode.visible = false
 	management_layer.visible = true
 	management_background.visible = true
-	
+
 	# Fade in from black
-	fade_transition.fade_in(0.6)
-	
-	# No milestone, show mission recap directly
-	mission_recap.show_recap(stats)
-	
+	_fade_in(0.6)
+
+	# Clear pending campaign state
+	_pending_next_choices.clear()
+	_pending_is_terminal_mission = false
+	_pending_completed_mission_id = ""
+
 	# If mission was successful, mark node as completed (only for scavenge sites)
-	if stats.get("success", false) and pending_node_type == EventManager.NodeType.SCAVENGE_SITE:
+	if success and pending_node_type == EventManager.NodeType.SCAVENGE_SITE:
 		var current_node = VoyageManager.get_current_node()
 		if current_node:
+			print("DEBUG: current_node.id=%s, state=%d, is_story=%s" % [current_node.id, current_node.state, current_node.state == NodeData.NodeState.STORY])
+			if current_node.state == NodeData.NodeState.STORY:
+				var story_result = VoyageManager.complete_story_node(current_node.id, true)
+				print("DEBUG: story_result = %s" % str(story_result))
+				if story_result.get("completed", false):
+					var chapter_num = int(story_result.get("chapters_completed", 0))
+					var chapter_total = VoyageManager.get_story_chain_length()
+					VoyageManager.message_log_added.emit("Story chapter %d/%d completed." % [chapter_num, VoyageManager.get_story_chain_length()])
+
+					# Store campaign branching info for post-recap flow
+					var choices = story_result.get("next_choices", [])
+					_pending_next_choices.assign(choices)
+					_pending_is_terminal_mission = story_result.get("is_terminal", false)
+					_pending_completed_mission_id = VoyageManager.current_story_mission_id
+					print("DEBUG: After assignment | mission_id=%s choices=%s terminal=%s" % [_pending_completed_mission_id, str(_pending_next_choices), _pending_is_terminal_mission])
+
+				if story_result.get("story_chain_complete", false):
+					_pending_story_victory = true
 			current_node.state = NodeData.NodeState.CLEARED
 			VoyageManager.map_updated.emit()
 
+	# Show mission recap directly (post-scene will be shown after recap is dismissed)
+	mission_recap.show_recap(stats)
+
 
 func _on_recap_dismissed() -> void:
-	current_phase = GamePhase.IDLE
-	pending_biome_type = -1
-	
 	# Resume navigation music after returning from tactical mission
 	MusicManager.play_navigation_music()
-	
+
 	# Tutorial: Notify mission complete
 	TutorialManager.notify_trigger("mission_complete")
-	
+
+	# Check if we need to show post-story scene
+	if _pending_completed_mission_id != "" and ENABLE_STORY_POST_SCENE:
+		await _show_post_story_scene()
+
+	# Always continue to post-story flow (choice dialog or win)
+	_on_post_story_flow_complete()
+
+
+func _show_post_story_scene() -> void:
+	current_phase = GamePhase.EVENT_DISPLAY
+	_suppress_mission_scene_dismiss_handler = true
+
+	var post_scene = CAMPAIGN_POST_SCENES.get(_pending_completed_mission_id, {})
+	var title = post_scene.get("title", "CHAPTER COMPLETE")
+	var desc = post_scene.get("text", "Story intelligence archived and uplinked.")
+	var location = post_scene.get("location", "STORY DEBRIEF")
+
+	mission_scene_dialog.show_scene(pending_biome_type, "generic", title, desc, location)
+	await mission_scene_dialog.scene_dismissed
+	# Control returns to _on_recap_dismissed which calls _on_post_story_flow_complete()
+
+
+func _on_post_story_flow_complete() -> void:
+	current_phase = GamePhase.IDLE
+	pending_biome_type = -1
+
+	print("DEBUG: _on_post_story_flow_complete | victory=%s terminal=%s mission_id=%s choices=%s" % [
+		_pending_story_victory, _pending_is_terminal_mission,
+		_pending_completed_mission_id, str(_pending_next_choices)
+	])
+
+	if _pending_story_victory:
+		_pending_story_victory = false
+		GameState.trigger_story_victory(_pending_completed_mission_id)
+		return
+
+	if _pending_is_terminal_mission:
+		var ending_id = _pending_completed_mission_id
+		_pending_next_choices.clear()
+		_pending_completed_mission_id = ""
+		GameState.trigger_story_victory(ending_id)
+		return
+
+	if _pending_next_choices.size() > 0:
+		print("DEBUG: Showing choice dialog | choices=%s" % str(_pending_next_choices))
+		_show_story_choice_dialog(_pending_next_choices)
+		return
+
 	# Refresh the star map
 	star_map.refresh()
 	star_map.center_view_on_ship(false)
-	
+
 	# Re-show deploy button if we are still at a scavenger site and it's not cleared
 	var current_node = VoyageManager.get_current_node()
 	if current_node and current_node.node_type == EventManager.NodeType.SCAVENGE_SITE and current_node.state != NodeData.NodeState.CLEARED:
@@ -536,8 +723,10 @@ func _on_game_over(reason: String) -> void:
 	management_background.visible = true
 
 	# Show game over scene dialog first
-	# game_over_scene_dialog.show_scene(reason)
-	_on_game_over_scene_dismissed()
+	if ENABLE_GAME_OVER_SCENE:
+		game_over_scene_dialog.show_scene(reason)
+	else:
+		_on_game_over_scene_dismissed()
 
 
 func _on_game_won(ending_type: String) -> void:
@@ -549,8 +738,10 @@ func _on_game_won(ending_type: String) -> void:
 	management_background.visible = true
 
 	# Show New Earth arrival scene first
-	# new_earth_scene.show_scene(ending_type)
-	_on_new_earth_scene_dismissed()
+	if ENABLE_NEW_EARTH_SCENE:
+		new_earth_scene.show_scene(ending_type)
+	else:
+		_on_new_earth_scene_dismissed()
 
 
 func _on_new_earth_scene_dismissed() -> void:
@@ -566,8 +757,10 @@ func _on_game_over_scene_dismissed() -> void:
 func _show_voyage_intro() -> void:
 	# Show voyage intro scene when starting a new voyage
 	current_phase = GamePhase.EVENT_DISPLAY  # Use EVENT_DISPLAY phase to block interaction
-	# voyage_intro_scene_dialog.show_scene()
-	_on_voyage_intro_scene_dismissed()
+	if ENABLE_VOYAGE_INTRO_SCENE:
+		voyage_intro_scene_dialog.show_scene()
+	else:
+		_on_voyage_intro_scene_dismissed()
 	
 	# Start navigation music immediately
 	MusicManager.play_navigation_music()
@@ -787,3 +980,51 @@ func _on_market_menu_closed() -> void:
 func _on_barracks_pressed() -> void:
 	if barracks_menu:
 		barracks_menu.show_barracks()
+
+
+func _show_story_beat_scene() -> void:
+	var pending_node = VoyageManager.nodes.get(VoyageManager.active_story_node_id)
+	if not pending_node:
+		return
+
+	var mission_id = pending_node.campaign_mission_id
+	if mission_id == "":
+		return
+
+	var pre_scene = CAMPAIGN_PRE_SCENES.get(mission_id, {})
+	var title = pre_scene.get("title", "STORY SIGNAL")
+	var beat_text = pre_scene.get("text", "")
+	var location = pre_scene.get("location", "UNKNOWN SIGNAL")
+
+	mission_scene_dialog.show_scene(pending_biome_type, "generic", title, beat_text, location)
+
+
+func _show_story_choice_dialog(choices: Array[String]) -> void:
+	print("DEBUG: _show_story_choice_dialog | choices=%s" % str(choices))
+	story_choice_dialog.setup(choices, CAMPAIGN_CHOICE_OPTIONS)
+	story_choice_dialog.show_dialog()
+	print("DEBUG: Choice dialog now visible")
+
+
+func _on_story_choice_made(choice_id: String) -> void:
+	_pending_next_choices.clear()
+	_pending_completed_mission_id = ""
+	VoyageManager.set_branch_choice(choice_id)
+	current_phase = GamePhase.IDLE
+	star_map.refresh()
+	star_map.center_view_on_ship(false)
+
+
+func _fade_in(duration: float = 0.6) -> void:
+	if ENABLE_FADE_TRANSITIONS:
+		fade_transition.fade_in(duration)
+	else:
+		fade_transition.set_transparent()
+
+
+func _fade_out(duration: float = 0.6) -> void:
+	if ENABLE_FADE_TRANSITIONS:
+		fade_transition.fade_out(duration)
+		await fade_transition.fade_complete
+	else:
+		fade_transition.set_black()

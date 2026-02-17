@@ -26,6 +26,7 @@ var current_turn: int = 0
 var current_unit_index: int = 0  # Which unit's turn it is (0-based index)
 var mission_active: bool = false
 var is_paused: bool = false  # Track pause state
+var extraction_in_progress: bool = false
 var is_animating: bool = false  # Track when animations are playing to prevent input
 var extraction_positions: Array[Vector2i] = []
 var mission_fuel_collected: int = 0  # Fuel collected during this mission
@@ -33,6 +34,8 @@ var mission_scrap_collected: int = 0  # Scrap collected during this mission
 var mission_enemies_killed: int = 0  # Enemies killed during this mission
 var current_biome: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION
 var is_scavenger_mission: bool = false  # Track if this is a scavenger mission
+var is_story_mission: bool = false  # Track if this tactical run came from a STORY node
+var is_story_dev_mode: bool = false  # True only for story missions while Developer Mode is enabled
 var mission_objectives: Array[MissionObjective] = []  # Current mission objectives
 var stored_player_zoom: Vector2 = Vector2(1.0, 1.0)  # Store player's zoom level between turns
 var mission_roster: Array[String] = []  # Track all officers who were deployed (including those who died)
@@ -44,7 +47,6 @@ var ScrapPileScene: PackedScene
 var HealthPackScene: PackedScene
 var MiningEquipmentScene: PackedScene
 var SecurityTerminalScene: PackedScene
-var DataLogScene: PackedScene
 var PowerCoreScene: PackedScene
 var SampleCollectorScene: PackedScene
 var BeaconScene: PackedScene
@@ -85,7 +87,6 @@ func _ready() -> void:
 	HealthPackScene = load("res://scenes/tactical/health_pack.tscn")
 	MiningEquipmentScene = load("res://scenes/tactical/mining_equipment.tscn")
 	SecurityTerminalScene = load("res://scenes/tactical/security_terminal.tscn")
-	DataLogScene = load("res://scenes/tactical/data_log.tscn")
 	PowerCoreScene = load("res://scenes/tactical/power_core.tscn")
 	SampleCollectorScene = load("res://scenes/tactical/sample_collector.tscn")
 	BeaconScene = load("res://scenes/tactical/beacon.tscn")
@@ -168,6 +169,13 @@ func _on_pause_abandon() -> void:
 func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.BiomeType.STATION, provided_objectives: Array[MissionObjective] = []) -> void:
 	# Don't set mission_active yet - wait until after beam down animation
 	mission_active = false
+	_set_animating(false) # Clear any lingering input lock from prior mission extraction/animations
+	extraction_in_progress = false
+	execute_mode = false
+	charge_mode = false
+	turret_mode = false
+	patch_mode = false
+	precision_mode = false
 	current_turn = 1
 	current_unit_index = 0
 	mission_fuel_collected = 0
@@ -175,6 +183,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	mission_enemies_killed = 0
 	officer_kills.clear()
 	_last_attacker_key = ""
+	selected_unit = null
 	deployed_officers.clear()
 	enemies.clear()
 	active_turrets.clear()
@@ -184,6 +193,8 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	# Check if this is a scavenger mission
 	var current_node = VoyageManager.get_current_node()
 	is_scavenger_mission = (current_node.node_type == EventManager.NodeType.SCAVENGE_SITE) if current_node else false
+	is_story_mission = (current_node.state == NodeData.NodeState.STORY) if current_node else false
+	is_story_dev_mode = is_story_mission and GameState.is_developer_mode_enabled()
 
 	GameState.enter_tactical_mode()
 
@@ -221,7 +232,25 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	extraction_positions = generator.get_extraction_positions()
 
 	# Spawn officers - start invisible and positioned above spawn points for beam down animation
-	var spawn_positions = generator.get_spawn_positions()
+	var spawn_positions: Array[Vector2i] = []
+	var raw_spawn_positions = generator.get_spawn_positions()
+	for raw_pos in raw_spawn_positions:
+		if raw_pos in spawn_positions:
+			continue
+		if tactical_map.is_extraction_tile(raw_pos):
+			push_warning("Officer spawn on extraction tile blocked at %s" % str(raw_pos))
+			continue
+		if not tactical_map.is_tile_walkable(raw_pos):
+			continue
+		spawn_positions.append(raw_pos)
+
+	# Ensure we still have enough spawn points after extraction-tile filtering.
+	while spawn_positions.size() < officer_keys.size():
+		var fallback_spawn = _find_fallback_officer_spawn(spawn_positions)
+		if fallback_spawn == Vector2i(-1, -1):
+			break
+		spawn_positions.append(fallback_spawn)
+
 	for i in range(mini(officer_keys.size(), spawn_positions.size())):
 		var officer = OfficerUnitScene.instantiate()
 		officer.movement_finished.connect(_on_unit_movement_finished.bind(officer))
@@ -322,17 +351,6 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 					security_terminal.set_grid_position(terminal_pos)
 					tactical_map.add_interactable(security_terminal, terminal_pos)
 			
-			# Spawn data logs (progress objective - multiple units)
-			if has_retrieve_logs:
-				for i in range(retrieve_logs_max):
-					var log_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
-					if log_pos != Vector2i(-1, -1):
-						used_positions.append(log_pos)
-						mission_tile_positions.append(log_pos)  # Track mission tile position
-						tactical_map.add_mission_highlight(log_pos) # Add highlight
-						var data_log = DataLogScene.instantiate()
-						data_log.set_grid_position(log_pos)
-						tactical_map.add_interactable(data_log, log_pos)
 			
 			# Spawn power core (binary objective - 1 unit)
 			if has_repair_core:
@@ -437,28 +455,13 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	var difficulty = GameState.get_mission_difficulty()
 	var _enemy_config = BiomeConfig.get_enemy_config(current_biome, difficulty)
 	
-	# Spawn boss enemy based on spawn chance
-	var boss_spawn_chance = _calculate_boss_spawn_chance(difficulty)
-	var _boss_spawned = false
-	if randf() < boss_spawn_chance:
-		var boss_pos = _find_valid_boss_spawn_position(generator)
-		if boss_pos != Vector2i(-1, -1):
-			var boss = EnemyUnitScene.instantiate()
-			boss.set_grid_position(boss_pos)
-			boss.movement_finished.connect(_on_enemy_movement_finished.bind(boss))
-			boss.died.connect(_on_enemy_died.bind(boss))
-			tactical_map.add_unit(boss, boss_pos)
-			boss.initialize(0, "boss", current_biome, difficulty)
-			boss.visible = false  # Start invisible until revealed
-			enemies.append(boss)
-			_boss_spawned = true
-		else:
-			# Fallback: if no valid 2x2 position found, try spawning boss at a regular enemy position
-			push_warning("Could not find valid 2x2 boss spawn position, attempting fallback")
-			var fallback_positions = generator.get_enemy_spawn_positions(difficulty)
-			if fallback_positions.size() > 0:
-				# Use the first enemy spawn position as fallback
-				boss_pos = fallback_positions[0]
+	# Spawn boss enemy based on spawn chance (disabled only for story missions in Developer Mode)
+	if not is_story_dev_mode:
+		var boss_spawn_chance = _calculate_boss_spawn_chance(difficulty)
+		var _boss_spawned = false
+		if randf() < boss_spawn_chance:
+			var boss_pos = _find_valid_boss_spawn_position(generator)
+			if boss_pos != Vector2i(-1, -1):
 				var boss = EnemyUnitScene.instantiate()
 				boss.set_grid_position(boss_pos)
 				boss.movement_finished.connect(_on_enemy_movement_finished.bind(boss))
@@ -468,6 +471,22 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 				boss.visible = false  # Start invisible until revealed
 				enemies.append(boss)
 				_boss_spawned = true
+			else:
+				# Fallback: if no valid 2x2 position found, try spawning boss at a regular enemy position
+				push_warning("Could not find valid 2x2 boss spawn position, attempting fallback")
+				var fallback_positions = generator.get_enemy_spawn_positions(difficulty)
+				if fallback_positions.size() > 0:
+					# Use the first enemy spawn position as fallback
+					boss_pos = fallback_positions[0]
+					var boss = EnemyUnitScene.instantiate()
+					boss.set_grid_position(boss_pos)
+					boss.movement_finished.connect(_on_enemy_movement_finished.bind(boss))
+					boss.died.connect(_on_enemy_died.bind(boss))
+					tactical_map.add_unit(boss, boss_pos)
+					boss.initialize(0, "boss", current_biome, difficulty)
+					boss.visible = false  # Start invisible until revealed
+					enemies.append(boss)
+					_boss_spawned = true
 	
 	# Spawn regular enemies
 	# Check if mission requires minimum enemies for objectives (e.g., clear_passages needs 4 kills)
@@ -479,15 +498,35 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 			min_enemies_required = objective.max_progress
 	
 	var enemy_positions = generator.get_enemy_spawn_positions(difficulty, min_enemies_required)
+	if is_story_dev_mode:
+		# Story missions are intentionally minimal for testing: exactly one BASIC enemy.
+		if enemy_positions.is_empty():
+			enemy_positions = generator.get_enemy_spawn_positions(difficulty, 1)
+		if enemy_positions.is_empty():
+			var used_fallback_positions: Array[Vector2i] = []
+			var fallback_enemy_pos = _find_valid_mining_equipment_position(generator.get_map_dimensions(), used_fallback_positions)
+			if fallback_enemy_pos != Vector2i(-1, -1):
+				enemy_positions.append(fallback_enemy_pos)
+		if enemy_positions.size() > 1:
+			enemy_positions.resize(1)
+
 	var enemy_id = 1
 	for enemy_pos in enemy_positions:
+		var final_enemy_pos = enemy_pos
+		if tactical_map.is_extraction_tile(final_enemy_pos):
+			push_warning("Enemy spawn on extraction tile blocked at %s" % str(final_enemy_pos))
+			var fallback_enemy_pos = _find_valid_mining_equipment_position(generator.get_map_dimensions(), enemy_positions)
+			if fallback_enemy_pos == Vector2i(-1, -1) or tactical_map.is_extraction_tile(fallback_enemy_pos):
+				continue
+			final_enemy_pos = fallback_enemy_pos
+
 		var enemy = EnemyUnitScene.instantiate()
-		enemy.set_grid_position(enemy_pos)
+		enemy.set_grid_position(final_enemy_pos)
 		enemy.movement_finished.connect(_on_enemy_movement_finished.bind(enemy))
 		enemy.died.connect(_on_enemy_died.bind(enemy))
-		tactical_map.add_unit(enemy, enemy_pos)
+		tactical_map.add_unit(enemy, final_enemy_pos)
 		# Select enemy type based on voyage progression
-		var enemy_type = _select_enemy_type(difficulty)
+		var enemy_type = "basic" if is_story_dev_mode else _select_enemy_type(difficulty)
 		enemy.initialize(enemy_id, enemy_type, current_biome)
 		enemy.visible = false  # Start invisible until revealed
 		enemies.append(enemy)
@@ -670,6 +709,40 @@ func _select_enemy_type(difficulty: float) -> String:
 	
 	# Default to basic
 	return "basic"
+
+
+func _find_fallback_officer_spawn(used_positions: Array[Vector2i]) -> Vector2i:
+	# First preference: top-right band (normal officer insertion zone)
+	var top_band_max_y = mini(8, tactical_map.map_height - 2)
+	var right_band_min_x = maxi(1, tactical_map.map_width - 8)
+	for y in range(1, top_band_max_y + 1):
+		for x in range(tactical_map.map_width - 2, right_band_min_x - 1, -1):
+			var pos = Vector2i(x, y)
+			if pos in used_positions:
+				continue
+			if tactical_map.is_extraction_tile(pos):
+				continue
+			if not tactical_map.is_tile_walkable(pos):
+				continue
+			if tactical_map.get_unit_at(pos) != null:
+				continue
+			return pos
+
+	# Fallback: any non-extraction walkable tile
+	for y in range(1, tactical_map.map_height - 1):
+		for x in range(1, tactical_map.map_width - 1):
+			var pos = Vector2i(x, y)
+			if pos in used_positions:
+				continue
+			if tactical_map.is_extraction_tile(pos):
+				continue
+			if not tactical_map.is_tile_walkable(pos):
+				continue
+			if tactical_map.get_unit_at(pos) != null:
+				continue
+			return pos
+
+	return Vector2i(-1, -1)
 
 
 func _on_tile_hovered(grid_pos: Vector2i) -> void:
@@ -1383,17 +1456,29 @@ func _check_extraction_available() -> void:
 func _end_all_unit_turns() -> void:
 	# End all player unit turns
 	for officer in deployed_officers:
-		if officer.has_method("set_ap"):
-			officer.set_ap(0)
+		if is_instance_valid(officer) and "current_ap" in officer:
+			officer.current_ap = 0
+			if officer.has_method("_update_ap_display"):
+				officer._update_ap_display()
 	
 	# End all enemy unit turns
 	for enemy in enemies:
-		if enemy.has_method("set_ap"):
-			enemy.set_ap(0)
+		if is_instance_valid(enemy) and "current_ap" in enemy:
+			enemy.current_ap = 0
+
+
+func _begin_extraction_lock() -> void:
+	extraction_in_progress = true
+	_set_animating(true)
+	_end_all_unit_turns()
+	tactical_hud.set_extract_visible(false)
+	tactical_hud.hide_pause_button()
 
 
 func _on_extract_pressed() -> void:
 	if not mission_active:
+		return
+	if extraction_in_progress:
 		return
 
 	# Check if all enemies are dead in a scavenger mission - if so, extract all units from anywhere
@@ -1417,8 +1502,8 @@ func _on_extract_pressed() -> void:
 				avg_pos /= alive_count
 				combat_camera.center_on_position_with_zoom(avg_pos, Vector2(1.5, 1.5))
 			
-			# End all unit turns to prevent actions during extraction
-			_end_all_unit_turns()
+			# Freeze all actions immediately during extraction
+			_begin_extraction_lock()
 			
 			# Extract all surviving units directly (beam-up animation will play in _end_mission)
 			_end_mission(true)
@@ -1457,8 +1542,8 @@ func _on_extract_pressed() -> void:
 		_show_extraction_warning(units_in_zone, units_outside_zone)
 	else:
 		# All units are in zone, extract normally
-		# End all unit turns to prevent actions during extraction
-		_end_all_unit_turns()
+		# Freeze all actions immediately during extraction
+		_begin_extraction_lock()
 		_end_mission(true)
 
 
@@ -1501,8 +1586,8 @@ func _on_extraction_warning_confirmed(units_outside_zone: Array[Node2D]) -> void
 		if is_instance_valid(unit) and unit in deployed_officers:
 			_on_officer_died(unit.officer_key)
 	
-	# End all unit turns to prevent actions during extraction
-	_end_all_unit_turns()
+	# Freeze all actions immediately during extraction
+	_begin_extraction_lock()
 	
 	# Extract with remaining units
 	_end_mission(true)
@@ -1567,6 +1652,7 @@ func _on_officer_died(officer_key: String) -> void:
 
 func _end_mission(success: bool) -> void:
 	mission_active = false
+	_set_animating(false)
 	tactical_hud.hide_pause_button()  # Hide pause button when mission ends
 	GameState.exit_tactical_mode()
 
@@ -1740,19 +1826,9 @@ func _end_mission(success: bool) -> void:
 	for officer_key in mission_roster:
 		var od: OfficerData = GameState.get_officer(officer_key)
 		if od and od.alive:
-			od.xp += individual_xp_map.get(officer_key, 0)
+			od.add_xp(individual_xp_map.get(officer_key, 0))
 
-	var intel_gained: int = 0
-	var data_logs_gained: int = 0
-	if success:
-		intel_gained = 5 if obj_complete else 2
-		GameState.intel += intel_gained
-		data_logs_gained = randi_range(1, 3)
-		GameState.data_logs += data_logs_gained
-
-	# Append intel/data-log fields to mission_stats
-	mission_stats["intel_gained"] = intel_gained
-	mission_stats["data_logs_gained"] = data_logs_gained
+	# Intel is earned from exploration (new jumps), not from missions
 
 	# Play beam-up animation on successful extraction
 	if success and deployed_officers.size() > 0:
@@ -1777,6 +1853,7 @@ func _end_mission(success: bool) -> void:
 
 	selected_unit = null
 	selected_target = Vector2i(-1, -1)
+	extraction_in_progress = false
 	_cleanup_tactical_ui()  # Ensure all UI elements are properly hidden
 	tactical_map.clear_movement_range()
 
@@ -2506,6 +2583,8 @@ func _spawn_pickup_popup(item_type: String, amount: int, world_pos: Vector2) -> 
 
 ## Execute AI turn for all enemies
 func _execute_enemy_turn() -> void:
+	if not mission_active or extraction_in_progress:
+		return
 	
 	# Reduce overwatch cooldown for all enemies at start of turn
 	for enemy in enemies:
@@ -2513,6 +2592,8 @@ func _execute_enemy_turn() -> void:
 			enemy.reduce_overwatch_cooldown()
 	
 	for enemy in enemies:
+		if not mission_active or extraction_in_progress:
+			return
 		# Check if enemy is valid before processing
 		if not is_instance_valid(enemy):
 			continue
@@ -2529,6 +2610,8 @@ func _execute_enemy_turn() -> void:
 		
 		# Continue taking actions until enemy runs out of AP
 		while is_instance_valid(enemy) and enemy.has_ap() and action_count < max_actions:
+			if not mission_active or extraction_in_progress:
+				return
 			action_count += 1
 			
 			# Check enemy validity again before taking action
@@ -2541,12 +2624,16 @@ func _execute_enemy_turn() -> void:
 			match decision["action"]:
 				"shoot":
 					await execute_shot(enemy, decision["target_pos"], decision["target"])
+					if not mission_active or extraction_in_progress:
+						return
 					
 					# Check if enemy was freed during shot (e.g., killed by overwatch)
 					if not is_instance_valid(enemy):
 						break
 					
 					await get_tree().create_timer(0.3).timeout  # Small delay for visual feedback
+					if not mission_active or extraction_in_progress:
+						return
 				
 				"move":
 					# check enemy validity before movement
@@ -2564,6 +2651,8 @@ func _execute_enemy_turn() -> void:
 
 					# Wait for movement to finish
 					await enemy.movement_finished
+					if not mission_active or extraction_in_progress:
+						return
 
 					# Check if enemy was freed during movement
 					if not is_instance_valid(enemy):
@@ -2580,12 +2669,16 @@ func _execute_enemy_turn() -> void:
 					
 					# Check for overwatch shots
 					await _check_overwatch_shots(enemy, new_pos)
+					if not mission_active or extraction_in_progress:
+						return
 					
 					# Check if enemy was freed during overwatch
 					if not is_instance_valid(enemy):
 						break
 					
 					await get_tree().create_timer(0.2).timeout  # Small delay
+					if not mission_active or extraction_in_progress:
+						return
 				
 				"idle":
 					# If AI decides to idle and enemy still has AP, break to prevent infinite loop
@@ -4105,58 +4198,64 @@ func _find_valid_mining_equipment_position(map_dims: Vector2i, used_positions: A
 	var max_x = map_dims.x - 4
 	var min_y = 3
 	var max_y = map_dims.y - 4
-	
+
 	# Try random positions first
 	for _attempt in range(100):
 		var pos = Vector2i(randi_range(min_x, max_x), randi_range(min_y, max_y))
-		
+
 		# Skip if already used
 		if pos in used_positions:
 			continue
-		
+
 		# Check if tile is walkable (floor tile)
 		if not tactical_map.is_tile_walkable(pos):
 			continue
-		
+		# Extraction tiles are always reserved for extraction only
+		if tactical_map.is_extraction_tile(pos):
+			continue
+
 		# Check if there's already an interactable at this position
 		var existing_interactable = tactical_map.get_interactable_at(pos)
 		if existing_interactable != null:
 			continue
-		
+
 		# Check if there's a unit at this position
 		var unit_at_pos = tactical_map.get_unit_at(pos)
 		if unit_at_pos != null:
 			continue
-		
+
 		# Valid position found
 		return pos
-	
+
 	# Fallback: search exhaustively
 	for x in range(min_x, max_x + 1):
 		for y in range(min_y, max_y + 1):
 			var pos = Vector2i(x, y)
-			
+
 			# Skip if already used
 			if pos in used_positions:
 				continue
-			
+
 			# Check if tile is walkable
 			if not tactical_map.is_tile_walkable(pos):
 				continue
-			
+			# Extraction tiles are always reserved for extraction only
+			if tactical_map.is_extraction_tile(pos):
+				continue
+
 			# Check for existing interactable
 			var existing_interactable = tactical_map.get_interactable_at(pos)
 			if existing_interactable != null:
 				continue
-			
+
 			# Check for unit
 			var unit_at_pos = tactical_map.get_unit_at(pos)
 			if unit_at_pos != null:
 				continue
-			
+
 			# Valid position found
 			return pos
-	
+
 	return Vector2i(-1, -1)  # No valid position found
 
 

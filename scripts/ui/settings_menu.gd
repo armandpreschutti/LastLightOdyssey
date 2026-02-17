@@ -137,8 +137,8 @@ func _load_settings() -> void:
 	_pending_scene = config.get_value("audio", "scene", 100.0)
 	_pending_music = config.get_value("audio", "music", 70.0)
 	
-	# Load developer settings
-	_pending_developer_mode = config.get_value("developer", "developer_mode", false)
+	# Load developer settings via validated GameState reader
+	_pending_developer_mode = GameState.get_saved_developer_mode(false)
 	# Apply immediately to GameState so it's consistent with loaded settings
 	GameState.developer_mode = _pending_developer_mode
 

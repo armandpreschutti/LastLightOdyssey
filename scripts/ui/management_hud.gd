@@ -25,6 +25,9 @@ var _last_cash: int = 0
 var _last_fuel: int = 0
 var _last_integrity: int = 0
 var _last_scrap: int = 0
+var _last_intel: int = 0
+
+var intel_label: Label
 
 
 func _ready() -> void:
@@ -33,7 +36,9 @@ func _ready() -> void:
 	_last_fuel = GameState.fuel
 	_last_integrity = GameState.ship_integrity
 	_last_scrap = GameState.scrap
+	_last_intel = GameState.intel
 	
+	_setup_additional_stats()
 	_connect_signals()
 	_update_all_stats()
 	_update_glass_style()
@@ -64,6 +69,7 @@ func _connect_signals() -> void:
 	GameState.fuel_changed.connect(_on_fuel_changed)
 	GameState.integrity_changed.connect(_on_integrity_changed)
 	GameState.scrap_changed.connect(_on_scrap_changed)
+	GameState.intel_changed.connect(_on_intel_changed)
 	market_button.pressed.connect(_on_market_pressed)
 	if barracks_button:
 		barracks_button.pressed.connect(_on_barracks_pressed)
@@ -141,6 +147,30 @@ func _stop_pulse() -> void:
 		glow_rect.color.a = 0.0
 
 
+## Programmatically add Intel and Data Logs rows to the stat container
+func _setup_additional_stats() -> void:
+	var stats_container = $MarginContainer/VBoxContainer/StatsContainer
+	
+	# Intel Row
+	var intel_row = HBoxContainer.new()
+	intel_row.name = "IntelRow"
+	intel_row.add_theme_constant_override("separation", 10)
+	stats_container.add_child(intel_row)
+	
+	var intel_icon = TextureRect.new()
+	intel_icon.custom_minimum_size = Vector2(24, 24)
+	intel_icon.texture = load("res://assets/sprites/ui/icons/icon_intel.png")
+	intel_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	intel_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	intel_row.add_child(intel_icon)
+	
+	intel_label = Label.new()
+	intel_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	intel_label.add_theme_color_override("font_color", Color(0.8, 0.5, 1.0)) # Purple-ish
+	intel_label.add_theme_font_size_override("font_size", 18)
+	intel_row.add_child(intel_label)
+
+
 ## Spawns a floating text indicator next to a label to show resource changes
 func _spawn_stat_change_indicator(target_node: Control, delta: int, is_percentage: bool = false) -> void:
 	if delta == 0:
@@ -192,6 +222,7 @@ func _update_all_stats() -> void:
 	_on_fuel_changed(GameState.fuel)
 	_on_integrity_changed(GameState.ship_integrity)
 	_on_scrap_changed(GameState.scrap)
+	_on_intel_changed(GameState.intel)
 
 
 func _on_cash_changed(new_value: int) -> void:
@@ -228,6 +259,16 @@ func _on_scrap_changed(new_value: int) -> void:
 	_spawn_stat_change_indicator(scrap_label, delta)
 	_last_scrap = new_value
 	scrap_label.text = "SCRAP: %d" % new_value
+
+
+func _on_intel_changed(new_value: int) -> void:
+	if not intel_label: return
+	var delta = new_value - _last_intel
+	_spawn_stat_change_indicator(intel_label, delta)
+	_last_intel = new_value
+	intel_label.text = "INTEL: %d" % new_value
+
+
 
 
 func set_view_recap_mode(enabled: bool) -> void:

@@ -75,8 +75,8 @@ func update_state(locked_out: bool, available: bool, cost: int):
 	else:
 		bg_panel.modulate = Color(0.2, 0.2, 0.2, 0.5)
 		icon_rect.modulate = Color(0.3, 0.3, 0.3, 0.5)
-		cost_label.text = "LOCKED"
-		cost_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+		cost_label.text = "%d DL" % cost if cost > 0 else "LOCKED"
+		cost_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.7))
 
 	# Apply border color based on officer color
 	var sb = bg_panel.get_theme_stylebox("panel").duplicate()

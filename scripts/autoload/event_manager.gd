@@ -8,100 +8,33 @@ signal event_resolved(result: String)
 enum NodeType { EMPTY_SPACE, SCAVENGE_SITE, TRADING_OUTPOST, WORMHOLE }
 
 # Event table - roll 1d10
+# Event table - expanded to 20 entries
 var random_events: Array[Dictionary] = [
-	{
-		"id": 1,
-		"name": "Solar Flare",
-		"description": "A massive solar flare threatens the ship's electronics.",
-		"integrity_loss": 15,
-		"specialist_mitigation": "tech",
-		"mitigated_integrity_loss": 5,
-		"mitigation_scrap_cost": 18,
-	},
-	{
-		"id": 2,
-		"name": "Meteor Shower",
-		"description": "The ship passes through a dense meteor field.",
-		"integrity_loss": 25,
-		"specialist_mitigation": "scout",
-		"mitigated_integrity_loss": 10,
-		"mitigation_scrap_cost": 22,
-	},
-	{
-		"id": 3,
-		"name": "Disease Outbreak",
-		"description": "A mysterious illness spreads through the cryo chambers.",
-		"integrity_loss": 0,
-		"specialist_mitigation": "medic",
-		"mitigated_integrity_loss": 0,
-		"mitigation_scrap_cost": 30,
-	},
-	{
-		"id": 4,
-		"name": "System Malfunction",
-		"description": "Critical ship systems begin to fail.",
-		"integrity_loss": 20,
-		"specialist_mitigation": "tech",
-		"mitigated_integrity_loss": 10,
-		"mitigation_scrap_cost": 15,
-	},
-	{
-		"id": 5,
-		"name": "Pirate Ambush",
-		"description": "Raiders emerge from a nearby asteroid field.",
-		"integrity_loss": 30,
-		"specialist_mitigation": "heavy",
-		"mitigated_integrity_loss": 15,
-		"mitigation_scrap_cost": 28,
-	},
-	{
-		"id": 6,
-		"name": "Space Debris Field",
-		"description": "The ship navigates through a field of wreckage from past conflicts.",
-		"integrity_loss": 20,
-		"specialist_mitigation": "scout",
-		"mitigated_integrity_loss": 10,
-		"mitigation_scrap_cost": 20,
-	},
-	{
-		"id": 7,
-		"name": "Sensor Ghost",
-		"description": "False readings on the sensors cause momentary alarm, but nothing materializes.",
-		"integrity_loss": 0,
-		"specialist_mitigation": "",
-		"mitigation_scrap_cost": 0,
-	},
-	{
-		"id": 8,
-		"name": "Radiation Storm",
-		"description": "Intense radiation bombards the ship.",
-		"integrity_loss": 10,
-		"specialist_mitigation": "tech",
-		"mitigated_integrity_loss": 5,
-		"mitigation_scrap_cost": 25,
-	},
-	{
-		"id": 9,
-		"name": "Cryo Pod Failure",
-		"description": "A section of cryo pods experiences catastrophic failure.",
-		"integrity_loss": 0,
-		"specialist_mitigation": "medic",
-		"mitigated_integrity_loss": 0,
-		"mitigation_scrap_cost": 35,
-	},
-	{
-		"id": 10,
-		"name": "Clear Skies",
-		"description": "The journey continues without incident.",
-		"integrity_loss": 0,
-		"specialist_mitigation": "",
-		"mitigation_scrap_cost": 0,
-	},
+	{ "id": 1, "name": "Event 1", "integrity_change_pct": -15, "specialist_mitigation": "tech", "mitigated_integrity_change_pct": -5 },
+	{ "id": 2, "name": "Event 2", "integrity_change_pct": -25, "specialist_mitigation": "scout", "mitigated_integrity_change_pct": -10 },
+	{ "id": 3, "name": "Event 3", "integrity_change_pct": -20, "specialist_mitigation": "medic", "mitigated_integrity_change_pct": -5 },
+	{ "id": 4, "name": "Event 4", "integrity_change_pct": -20, "specialist_mitigation": "tech", "mitigated_integrity_change_pct": -10 },
+	{ "id": 5, "name": "Event 5", "integrity_change_pct": -30, "specialist_mitigation": "heavy", "mitigated_integrity_change_pct": -15 },
+	{ "id": 6, "name": "Event 6", "cash_change": -50, "integrity_change_pct": -10, "specialist_mitigation": "scout", "mitigated_integrity_change_pct": 0 },
+	{ "id": 7, "name": "Event 7", "fuel_change": -2, "scrap_change": -15 },
+	{ "id": 8, "name": "Event 8", "integrity_change_pct": -10, "specialist_mitigation": "tech", "mitigated_integrity_change_pct": -5 },
+	{ "id": 9, "name": "Event 9", "cash_change": -75 },
+	{ "id": 10, "name": "Event 10", "integrity_change_pct": 0 }, # Clear skies
+	{ "id": 11, "name": "Event 11", "cash_change": 100 },
+	{ "id": 12, "name": "Event 12", "fuel_change": 3 },
+	{ "id": 13, "name": "Event 13", "integrity_change_pct": 15 },
+	{ "id": 14, "name": "Event 14", "scrap_change": 40 },
+	{ "id": 15, "name": "Event 15", "cash_change": 50, "fuel_change": 1 },
+	{ "id": 16, "name": "Event 16", "fuel_change": 2, "integrity_change_pct": 10 },
+	{ "id": 17, "name": "Event 17", "scrap_change": 20, "cash_change": 30 },
+	{ "id": 18, "name": "Event 18", "integrity_change_pct": 10, "scrap_change": 15 },
+	{ "id": 19, "name": "Event 19", "cash_change": 40, "fuel_change": 1, "scrap_change": 10 },
+	{ "id": 20, "name": "Event 20", "cash_change": 20, "fuel_change": 1, "integrity_change_pct": 5, "scrap_change": 5 },
 ]
 
 
 func roll_random_event() -> Dictionary:
-	var roll = randi_range(0, 9)
+	var roll = randi_range(0, 19)
 	return random_events[roll]
 
 
@@ -128,6 +61,7 @@ func get_mitigation_cost_multiplier() -> float:
 func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionary:
 	var result = {
 		"integrity_change": 0,
+		"cash_change": 0,
 		"fuel_change": 0,
 		"scrap_change": 0,
 		"mitigated": false,
@@ -138,18 +72,20 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
 
 	if can_mitigate:
 		result["mitigated"] = true
-		result["integrity_change"] = -event.get("mitigated_integrity_loss", event.get("integrity_loss", 0))
-		# Scrap cost for mitigation removed per user request
-		result["scrap_change"] = 0
+		var integrity_pct = event.get("mitigated_integrity_change_pct", event.get("integrity_change_pct", 0))
+		result["integrity_change"] = int(integrity_pct) # Assuming max integrity is 100
 	else:
-		result["integrity_change"] = -event.get("integrity_loss", 0)
+		var integrity_pct = event.get("integrity_change_pct", 0)
+		result["integrity_change"] = int(integrity_pct)
 
-	# Add any gains
-	result["fuel_change"] = event.get("fuel_gain", 0)
-	result["scrap_change"] += event.get("scrap_gain", 0)
+	# Handle other resource changes
+	result["cash_change"] = event.get("cash_change", 0)
+	result["fuel_change"] = event.get("fuel_change", 0)
+	result["scrap_change"] = event.get("scrap_change", 0)
 
 	# Apply changes to game state
 	GameState.ship_integrity += result["integrity_change"]
+	GameState.cash += result["cash_change"]
 	GameState.fuel += result["fuel_change"]
 	GameState.scrap += result["scrap_change"]
 
