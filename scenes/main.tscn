@@ -19,6 +19,7 @@
 [ext_resource type="PackedScene" uid="uid://b7k3m6qv4n8y" path="res://scenes/ui/objective_complete_scene_dialog.tscn" id="14_objective_complete"]
 [ext_resource type="PackedScene" uid="uid://c8k4m7qv5pa0" path="res://scenes/ui/enemy_elimination_scene_dialog.tscn" id="15_enemy_elimination"]
 [ext_resource type="PackedScene" uid="uid://c5h7k8nan0p1q" path="res://scenes/ui/trading_dialog.tscn" id="17_trading"]
+[ext_resource type="PackedScene" path="res://scenes/ui/barracks_menu.tscn" id="18_barracks"]
 
 [node name="Main" type="Node" unique_id=588289983]
 script = ExtResource("1_main")
@@ -203,6 +204,8 @@ visible = false
 
 [node name="TradingDialog" parent="DialogLayer" unique_id=1316561826 instance=ExtResource("17_trading")]
 visible = false
+
+[node name="BarracksMenu" parent="DialogLayer" unique_id=1316561827 instance=ExtResource("18_barracks")]
 
 [node name="FadeTransitionLayer" type="CanvasLayer" parent="." unique_id=1428451194]
 layer = 100

@@ -146,9 +146,9 @@ Refactored from a simple roster to a persistent RPG system.
 Officers gain XP from missions to unlock new tiers of abilities.
 
 **XP Sources:**
-- **Kills**: +10 XP (Killer).
-- **Survival**: +20 XP (All living squad members).
-- **Objective**: +15% XP Multiplier (if successful).
+- **Kills**: +30 XP (Killer).
+- **Survival**: +60 XP (All living squad members).
+- **Objective**: +45% XP Multiplier (if successful).
 
 **Tech Tree Unlocks:**
 Purchased with **XP** + **Data Logs** in the Barracks.
@@ -202,6 +202,27 @@ Final Hit Chance = clamp(Base - DefenderCover + AttackerBonus, 20%, 95%)
 
 **LOS Forgiveness:**
 The Line of Sight algorithm includes "forgiveness" logic, allowing units to see slightly around corners and through adjacent cover to reduce frustration in tight tactical environments.
+```
+
+#### 3.5.1 Technical Hooks (Unit.gd)
+The Unit class in the Tactical Layer supports dynamic modifiers based on unlocked officer abilities.
+
+**Cooldown Modification:**
+```gdscript
+func get_ability_cooldown(ability_name: String) -> int:
+    # Example: Captain Level 3 "Warlord"
+    if ability_name == "Execute" and "warlord" in data.unlocked_abilities:
+        return 0 # Cooldown removed
+    return base_cooldown
+```
+
+**Damage Modification:**
+```gdscript
+func get_damage_modifier(target: Unit) -> float:
+    # Example: Sniper Level 3 "Apex Predator"
+    if "apex_predator" in data.unlocked_abilities and target.hp == target.max_hp:
+        return 2.0 # Double damage vs full health
+    return 1.0
 ```
 
 **Class Accuracy Profiles:**
@@ -315,6 +336,17 @@ Enemies scale based on `GameState.total_jumps_made`:
 - **Tier 1 (Standard)**: Base Stats.
 - **Tier 2 (Veteran)**: +30% HP, +Damage. Visual: Red Tint. Spawns more frequently after Jump 15.
 - **Tier 3 (Elite)**: +60% HP, New Passives. Visual: Black/Gold Tint. Spawns after Jump 30.
+
+**Spawn Logic (MapGenerator.gd):**
+Determine the spawn list based on game depth.
+* **Depth 0-15:** 90% Tier 1, 10% Tier 2.
+* **Depth 16-30:** 50% Tier 1, 50% Tier 2.
+* **Depth 31+:** 100% Tier 2 + Tier 3 Elites.
+
+#### 3.9.2 Dynamic Boss Scaling
+
+Bosses (Station, Asteroid, Planet) are no longer static.
+* **Formula:** `BossHP = BaseHP * (1.0 + (Average_Squad_Level * 0.5))`
 
 ### 3.10 Biome System
 
@@ -759,19 +791,19 @@ Interface icons used throughout the game for resource displays, combat info, and
 
 ## 7. Implementation Phases: Voyage 2.0 Update
 
-### Phase 1: Foundation & Economy Refactor
+### Phase 1: Foundation & Economy Refactor [COMPLETED]
 **Goal:** Establish the new data structures and remove legacy "Oregon Trail" systems to prevent logic conflicts.
 
-- [ ] **GameState.gd Cleanup**: Remove `colonists` and `cryo_stability` (management). Add `cash`, `intel`, `data_logs`.
-- [ ] **MarketMenu.tscn**: Implement static transactions (Buy Fuel/Scrap, Repair Hull).
-- [ ] **HUD Update**: Replace Colonist counter with Economy counters.
+- [x] **GameState.gd Cleanup**: Remove `colonists` and `cryo_stability` (management). Add `cash`, `intel`, `data_logs`.
+- [x] **MarketMenu.tscn**: Implement static transactions (Buy Fuel/Scrap, Repair Hull).
+- [x] **HUD Update**: Replace Colonist counter with Economy counters.
 
-### Phase 2: The Infinite Map System
+### Phase 2: The Infinite Map System [COMPLETED]
 **Goal:** Replace the linear node graph with the procedural, infinite web.
 
-- [ ] **InfiniteGridGenerator.gd**: Implement coordinate-based generation (40% Scavenge / 40% Empty).
-- [ ] **VoyageManager.gd**: Add grid tracking `Vector2`, movement logic (adjacent nodes), and fuel consumption.
-- [ ] **Node State System**: Implement UNVISITED, CLEARED, STORY states.
+- [x] **InfiniteGridGenerator.gd**: Implement coordinate-based generation (40% Scavenge / 40% Empty).
+- [x] **VoyageManager.gd**: Add grid tracking `Vector2`, movement logic (adjacent nodes), and fuel consumption.
+- [x] **Node State System**: Implement UNVISITED, CLEARED, STORY states.
 
 ### Phase 3: The RPG Layer (Officers)
 **Goal:** Convert static units into evolving characters with persistent data.

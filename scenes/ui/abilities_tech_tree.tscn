@@ -1,0 +1,99 @@
+[gd_scene load_steps=3 format=3 uid="uid://abilities_tech_tree_001"]
+
+[ext_resource type="Script" path="res://scripts/ui/abilities_tech_tree.gd" id="1_tech_tree"]
+[ext_resource type="Script" path="res://scripts/ui/ability_tree_connections.gd" id="2_connections"]
+
+[node name="AbilitiesTechTree" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_tech_tree")
+
+[node name="Overlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.705882)
+
+[node name="Panel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(900, 600)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -450.0
+offset_top = -300.0
+offset_right = 450.0
+offset_bottom = 300.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+
+[node name="Header" type="HBoxContainer" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="TitleLabel" type="Label" parent="Panel/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "CAPTAIN ABILITIES"
+
+[node name="DataLogsLabel" type="Label" parent="Panel/VBox/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.843137, 0, 1)
+text = "Data Logs: 0"
+
+[node name="CloseButton" type="Button" parent="Panel/VBox/Header"]
+layout_mode = 2
+text = " X "
+
+[node name="DescriptionBox" type="PanelContainer" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="Panel/VBox/DescriptionBox"]
+layout_mode = 2
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_bottom = 10
+
+[node name="DescriptionLabel" type="Label" parent="Panel/VBox/DescriptionBox/Margin"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.9, 0.9, 0.8)
+theme_override_font_sizes/font_size = 16
+text = "Hover over an ability to see details."
+autowrap_mode = 3
+
+[node name="TreeArea" type="Panel" parent="Panel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="TreeContent" type="Control" parent="Panel/VBox/TreeArea"]
+custom_minimum_size = Vector2(900, 500)
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ConnectionLayer" type="Control" parent="Panel/VBox/TreeArea/TreeContent"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_connections")

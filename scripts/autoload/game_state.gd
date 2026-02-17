@@ -9,9 +9,77 @@ signal cash_changed(new_value: int)
 signal intel_changed(new_value: int)
 signal data_logs_changed(new_value: int)
 signal officer_died(officer_type: String)
+signal officer_injured(officer_key: String)
 signal game_over(reason: String)
 signal game_won(ending_type: String)
 signal developer_mode_changed(enabled: bool)
+
+# --- Ability & Officer Definitions ---
+const OFFICER_COLOR = {
+	"captain": Color(1.0, 0.69, 0.0),
+	"scout":   Color(0.2, 1.0, 0.5),
+	"tech":    Color(0.4, 0.9, 1.0),
+	"medic":   Color(1.0, 0.5, 0.8),
+	"heavy":   Color(1.0, 0.4, 0.3),
+	"sniper":  Color(0.6, 0.55, 0.7),
+}
+
+# Ability definitions: id → {name, desc, level, slot}
+const ABILITY_DEFS: Dictionary = {
+	"execute":            {"name": "Execute",            "desc": "Guaranteed kill on any enemy within 4 tiles that is below 50% HP. 2-turn cooldown.",                                                            "level": 1, "slot": "base"},
+	"overwatch":          {"name": "Overwatch",          "desc": "Take a reaction shot at the first enemy that moves in Line of Sight. Guaranteed hit. 2-turn cooldown.",                                          "level": 1, "slot": "base"},
+	"turret":             {"name": "Turret",             "desc": "Deploy an auto-firing sentry on an adjacent tile. Lasts 3 turns. 2-turn cooldown.",                                                              "level": 1, "slot": "base"},
+	"patch":              {"name": "Patch",              "desc": "Heal yourself or an ally within 3 tiles for 62.5% Max HP. 2-turn cooldown.",                                                                    "level": 1, "slot": "base"},
+	"charge":             {"name": "Charge",             "desc": "Rush an enemy within 4 tiles. Instant-kills basic enemies; deals 2x Base Damage to heavy enemies. 2-turn cooldown.",                             "level": 1, "slot": "base"},
+	"precision_shot":     {"name": "Precision Shot",     "desc": "Guaranteed hit on any visible enemy. Deals 2x Base Damage. 2-turn cooldown.",                                                                   "level": 1, "slot": "base"},
+
+	# Captain
+	"lead_by_example":    {"name": "Lead by Example",    "desc": "When the Captain kills an enemy, all other squad members gain +1 AP on their next turn.",                                                       "level": 2, "slot": "a"},
+	"coordinate_fire":    {"name": "Coordinate Fire",    "desc": "Mark a target. All allies gain +20% Accuracy and +25% Critical Chance against that target for 1 turn. (1 AP, active)",                        "level": 2, "slot": "b"},
+	"warlord":            {"name": "Warlord",            "desc": "Execute no longer has a cooldown. Chain multiple executions in a single turn if you have enough AP.",                                            "level": 3, "slot": "a"},
+	"no_one_left_behind": {"name": "No One Left Behind", "desc": "If an ally within 5 tiles takes lethal damage, they survive with 1 HP and become immune to all damage for 1 turn. (Once per ally per mission)", "level": 3, "slot": "b"},
+	"command_presence":   {"name": "Command Presence",   "desc": "All allies within 4 tiles gain +10% Accuracy and +15% Critical Chance. The Captain gains +10 Defense per nearby ally.",                          "level": 3, "slot": "c"},
+	# Scout
+	"hit_and_run":        {"name": "Hit & Run",          "desc": "If the Scout moves and shoots in the same turn, they immediately gain +3 Movement Points to retreat or reposition.",                             "level": 2, "slot": "a"},
+	"deep_scanner":       {"name": "Deep Scanner",       "desc": "Reveals all enemies in a large radius (15 tiles) for 1 turn, even through walls. (0 AP, 3-turn cooldown)",                                      "level": 2, "slot": "b"},
+	"killzone":           {"name": "Killzone",           "desc": "Overwatch now triggers on every enemy that moves in Line of Sight during the enemy turn, not just the first.",                                   "level": 3, "slot": "a"},
+	"phantom":            {"name": "Phantom",            "desc": "Become Invisible for 2 turns. First attack from invisibility deals +100% Damage but reveals you. (1 AP, active)",                               "level": 3, "slot": "b"},
+	"untouchable":        {"name": "Untouchable",        "desc": "If you kill an enemy during your turn, the next attack against you during the enemy turn is guaranteed to Miss.",                                 "level": 3, "slot": "c"},
+	# Tech
+	"combat_engineer":    {"name": "Combat Engineer",    "desc": "Turrets gain a 20 HP shield barrier and their duration is extended to 5 turns.",                                                                 "level": 2, "slot": "a"},
+	"sapper":             {"name": "Sapper",             "desc": "Throw a localized EMP grenade. Stuns robotic enemies and disables weapons in a 3×3 area for 1 turn. (1 AP, active)",                            "level": 2, "slot": "b"},
+	"twin_link":          {"name": "Twin-Link",          "desc": "You can have 2 Turrets active simultaneously. Deploying a second turret does not destroy the first.",                                            "level": 3, "slot": "a"},
+	"overclock":          {"name": "Overclock",          "desc": "Target your active Turret. It fires 3 times at random enemies, then self-destructs with 20 area damage. (0 AP)",                                 "level": 3, "slot": "b"},
+	"haywire_protocol":   {"name": "Haywire Protocol",   "desc": "Hack a robotic enemy. It fights for you for 2 turns, then shuts down for 1 turn. (1 AP, 4-turn cooldown)",                                      "level": 3, "slot": "c"},
+	# Medic
+	"adrenaline_patch":   {"name": "Adrenaline Patch",   "desc": "Patch also grants the target +2 Movement and +15% Accuracy for 2 turns.",                                                                       "level": 2, "slot": "a"},
+	"field_surgeon":      {"name": "Field Surgeon",      "desc": "Automatically stabilize any ally who drops to 0 HP within 4 tiles, preventing death (unless Medic is also killed).",                            "level": 2, "slot": "b"},
+	"miracle_worker":     {"name": "Miracle Worker",     "desc": "Global Heal: instantly restore 50% HP to all squad members regardless of distance. (2 AP, once per mission)",                                    "level": 3, "slot": "a"},
+	"toxicologist":       {"name": "Toxicologist",       "desc": "Attacks apply Poison (5 DMG/turn, -20% Aim). Patch removes all status effects from allies.",                                                     "level": 3, "slot": "b"},
+	"stim_injector":      {"name": "Stim Injector",      "desc": "Inject an ally: they gain +2 AP and take -50% damage for 1 turn. (1 AP, 3-turn cooldown)",                                                      "level": 3, "slot": "c"},
+	# Heavy
+	"bulldozer":          {"name": "Bulldozer",          "desc": "Charge destroys all cover in its path. Gain +20 Armor after charging.",                                                                          "level": 2, "slot": "a"},
+	"suppression_fire":   {"name": "Suppression Fire",   "desc": "Deal light damage to all enemies in a cone and remove their ability to move next turn (Pin Down). (2 AP, active)",                               "level": 2, "slot": "b"},
+	"juggernaut":         {"name": "Juggernaut",         "desc": "Immune to Critical Hits and Knockback. If you end your turn without attacking, regenerate 15% Max HP.",                                          "level": 3, "slot": "a"},
+	"rocket_salvo":       {"name": "Rocket Salvo",       "desc": "Launch a micro-missile swarm at a 3×3 area: 40 area damage and destroys all cover. (2 AP, 3-turn cooldown)",                                    "level": 3, "slot": "b"},
+	"intimidate":         {"name": "Intimidate",         "desc": "Enemies within 3 tiles suffer -20% Accuracy and cannot use Overwatch or Reaction Fire.",                                                         "level": 3, "slot": "c"},
+	# Sniper
+	"damn_good_ground":   {"name": "Damn Good Ground",   "desc": "If you have not moved this turn, gain +15% Critical Chance and +2 Sight Range.",                                                                 "level": 2, "slot": "a"},
+	"snap_shot":          {"name": "Snap Shot",          "desc": "Precision Shot has no cooldown — move and shoot or fire multiple precision shots in the same turn.",                                              "level": 2, "slot": "b"},
+	"serial":             {"name": "Serial",             "desc": "Killing an enemy with your main weapon fully refunds your Action Points. Chain kills until you miss or run out of targets.",                     "level": 3, "slot": "a"},
+	"apex_predator":      {"name": "Apex Predator",      "desc": "Deal +100% damage against enemies at full health. Designed for one-shotting high-value targets.",                                                 "level": 3, "slot": "b"},
+	"double_tap":         {"name": "Double Tap",         "desc": "Fire two shots at the same target: second shot has -15% accuracy penalty. (1 AP, 2-turn cooldown)",                                              "level": 3, "slot": "c"},
+}
+
+# Per-officer ability lists: [L1, L2-A, L2-B, L3-A, L3-B, L3-C]
+const OFFICER_ABILITIES: Dictionary = {
+	"captain": ["execute", "lead_by_example", "coordinate_fire", "warlord", "no_one_left_behind", "command_presence"],
+	"scout":   ["overwatch", "hit_and_run",     "deep_scanner",    "killzone", "phantom",            "untouchable"],
+	"tech":    ["turret", "combat_engineer", "sapper",          "twin_link","overclock",           "haywire_protocol"],
+	"medic":   ["patch", "adrenaline_patch","field_surgeon",   "miracle_worker","toxicologist",   "stim_injector"],
+	"heavy":   ["charge", "bulldozer",       "suppression_fire","juggernaut","rocket_salvo",       "intimidate"],
+	"sniper":  ["precision_shot", "damn_good_ground","snap_shot",       "serial",   "apex_predator",       "double_tap"],
+}
 
 var developer_mode: bool = false:
 	set(value):
@@ -78,14 +146,8 @@ func process_tactical_turn() -> void:
 	# Ship takes structural damage over time during tactical missions
 	damage_ship(HULL_DAMAGE_PER_TURN)
 
-var officers: Dictionary = {
-	"captain": {"alive": true, "deployed": false},
-	"scout": {"alive": true, "deployed": false},
-	"tech": {"alive": true, "deployed": false},
-	"medic": {"alive": true, "deployed": false},
-	"heavy": {"alive": true, "deployed": false},
-	"sniper": {"alive": true, "deployed": false},
-}
+## Officer roster — values are OfficerData instances, populated in _init_officers()
+var officers: Dictionary = {}
 
 # Game progression
 # REFACTORED: Map state is now handled by VoyageManager (infinite graph system).
@@ -108,7 +170,30 @@ var total_tactical_turns: int = 0
 
 
 func _ready() -> void:
-	pass
+	_init_officers()
+
+
+## Create fresh OfficerData for all 6 officers
+func _init_officers() -> void:
+	for key in ["captain", "scout", "tech", "medic", "heavy", "sniper"]:
+		var od = OfficerData.new()
+		od.initialize(key)
+		# Unlock Level 1 ability by default
+		var abilities = OFFICER_ABILITIES.get(key, [])
+		if not abilities.is_empty():
+			od.unlock_ability(abilities[0])
+		officers[key] = od
+
+
+## Get OfficerData for a given officer key
+func get_officer(key: String) -> OfficerData:
+	return officers.get(key, null)
+
+
+## Returns true if officer is alive AND not injured (available for deployment)
+func is_officer_available(key: String) -> bool:
+	var od: OfficerData = get_officer(key)
+	return od != null and od.is_available()
 
 
 func reset_game() -> void:
@@ -130,9 +215,7 @@ func reset_game() -> void:
 	if VoyageManager:
 		VoyageManager._initialize_voyage()
 
-	for officer_key in officers:
-		officers[officer_key]["alive"] = true
-		officers[officer_key]["deployed"] = false
+	_init_officers()
 
 
 ## Add mission stats to cumulative totals (called after successful missions)
@@ -159,25 +242,27 @@ func exit_tactical_mode() -> void:
 
 
 func kill_officer(officer_key: String) -> void:
-	if officers.has(officer_key):
-		officers[officer_key]["alive"] = false
+	var od: OfficerData = get_officer(officer_key)
+	if od:
+		od.alive = false
+		od.current_hp = 0
 		officer_died.emit(officer_key)
-	
+
 	# Check for crew wipe game over
 	var any_alive = false
 	for key in officers:
-		if officers[key]["alive"]:
+		var o: OfficerData = officers[key]
+		if o.alive:
 			any_alive = true
 			break
-	
+
 	if not any_alive:
-		_trigger_game_over("crew_wipe") 
+		_trigger_game_over("crew_wipe")
 
 
 func is_officer_alive(officer_key: String) -> bool:
-	if officers.has(officer_key):
-		return officers[officer_key]["alive"]
-	return false
+	var od: OfficerData = get_officer(officer_key)
+	return od != null and od.alive
 
 
 func damage_ship(amount: int) -> void:
@@ -230,15 +315,20 @@ var saved_star_map_data: Dictionary = {}
 
 ## Save the current game state to disk
 func save_game() -> bool:
+	# Serialize officer progression
+	var officers_data: Dictionary = {}
+	for key in officers:
+		officers_data[key] = (officers[key] as OfficerData).to_dict()
+
 	var save_data = {
-		"version": 5, # Voyage 2.0 (Infinite Map)
+		"version": 6, # Voyage 2.0 + RPG layer (Phase 3/4)
 		"fuel": fuel,
 		"ship_integrity": ship_integrity,
 		"scrap": scrap,
 		"cash": cash,
 		"intel": intel,
 		"data_logs": data_logs,
-		"officers": officers,
+		"officers": officers_data,
 		# VoyageManager Data
 		"voyage_data": VoyageManager.get_save_data(),
 		# Cumulative mission stats (v3)
@@ -295,7 +385,7 @@ func load_game() -> bool:
 		print("Save version %d is too old (requires 5). Deleting save..." % version)
 		delete_save()
 		return false
-	
+
 	# Restore game state
 	fuel = int(save_data.get("fuel", 10))
 	ship_integrity = int(save_data.get("ship_integrity", 100))
@@ -303,17 +393,24 @@ func load_game() -> bool:
 	cash = int(save_data.get("cash", 100))
 	intel = int(save_data.get("intel", 0))
 	data_logs = int(save_data.get("data_logs", 0))
-	
+
 	# Restore VoyageManager Data
 	if save_data.has("voyage_data"):
 		VoyageManager.load_save_data(save_data["voyage_data"])
-	
-	# Restore officers
+
+	# Restore officers (must be initialised first so keys exist)
+	_init_officers()
 	var loaded_officers = save_data.get("officers", {})
-	for officer_key in loaded_officers.keys():
-		if officers.has(officer_key):
-			officers[officer_key]["alive"] = loaded_officers[officer_key].get("alive", true)
-			officers[officer_key]["deployed"] = loaded_officers[officer_key].get("deployed", false)
+	for officer_key in officers.keys():
+		var od: OfficerData = get_officer(officer_key)
+		if loaded_officers.has(officer_key):
+			if version >= 6:
+				# Full v6 restore
+				od.from_dict(loaded_officers[officer_key])
+			else:
+				# v5 migration: only restore alive flag, reset HP to full
+				od.alive = loaded_officers[officer_key].get("alive", true)
+				od.current_hp = od.max_hp
 	
 	# Restore cumulative mission stats
 	total_fuel_collected = int(save_data.get("total_fuel_collected", 0))

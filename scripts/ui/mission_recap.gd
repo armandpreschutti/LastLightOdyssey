@@ -4,7 +4,13 @@ extends Control
 
 signal recap_dismissed
 
-@onready var background: ColorRect = $Background
+@onready var fuel_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/FuelRow
+@onready var scrap_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/ScrapRow
+@onready var enemies_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/EnemiesRow
+@onready var turns_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/TurnsRow
+@onready var objectives_header: Label = $PanelContainer/MarginContainer/VBoxContainer/ObjectivesHeader
+@onready var objectives_border: ColorRect = $PanelContainer/MarginContainer/VBoxContainer/ObjectivesBorder
+@onready var objectives_container: VBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/ObjectivesContainer
 # Updated paths for new icon-based layout
 @onready var title_label: Label = $PanelContainer/MarginContainer/VBoxContainer/HeaderContainer/TitleLabel
 @onready var outcome_label: Label = $PanelContainer/MarginContainer/VBoxContainer/OutcomeLabel
@@ -13,20 +19,13 @@ signal recap_dismissed
 @onready var enemies_label: Label = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/EnemiesRow/EnemiesLabel
 @onready var turns_label: Label = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/TurnsRow/TurnsLabel
 @onready var officers_container: VBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/OfficersContainer
-@onready var continue_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ContinueButton
-@onready var objectives_header: Label = $PanelContainer/MarginContainer/VBoxContainer/ObjectivesHeader
-@onready var objectives_border: ColorRect = $PanelContainer/MarginContainer/VBoxContainer/ObjectivesBorder
-@onready var objectives_container: VBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/ObjectivesContainer
-
-# Icon rows for animation
-@onready var fuel_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/FuelRow
-@onready var scrap_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/ScrapRow
-@onready var enemies_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/EnemiesRow
-@onready var turns_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/TurnsRow
 @onready var stats_container: VBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer
+@onready var continue_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ContinueButton
 
 var cash_row: HBoxContainer
 var cash_label: Label
+var xp_row: HBoxContainer
+var xp_label: Label
 var _stat_tween: Tween = null
 
 var _objective_labels: Array[Label] = []
@@ -62,6 +61,37 @@ func _ready() -> void:
 	else:
 		cash_row = stats_container.get_node("CashRow")
 		cash_label = cash_row.get_node("CashLabel")
+
+	# Create XP Row programmatically if not in scene
+	if not stats_container.has_node("XPRow"):
+		xp_row = HBoxContainer.new()
+		xp_row.name = "XPRow"
+		xp_row.add_theme_constant_override("separation", 10)
+		
+		var xp_icon = TextureRect.new()
+		xp_icon.custom_minimum_size = Vector2(24, 24)
+		xp_icon.texture = load("res://assets/sprites/ui/icons/icon_ap.png") # Reuse AP icon for progression theme
+		xp_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		xp_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		xp_row.add_child(xp_icon)
+		
+		xp_label = Label.new()
+		xp_label.name = "XPLabel"
+		xp_label.add_theme_color_override("font_color", Color(0.4, 0.9, 1.0)) # Cyan
+		xp_label.add_theme_font_override("font", load("res://assets/fonts/VT323-Regular.ttf"))
+		xp_label.add_theme_font_size_override("font_size", 20)
+		xp_row.add_child(xp_label)
+		
+		stats_container.add_child(xp_row)
+		# Position it after cash
+		stats_container.move_child(xp_row, 3)
+	else:
+		xp_row = stats_container.get_node("XPRow")
+		xp_label = xp_row.get_node("XPLabel")
+
+
+	# Cash and XP rows are handled programmatically above
+
 
 
 
@@ -111,6 +141,9 @@ func show_recap(stats: Dictionary) -> void:
 	fuel_label.text = "FUEL COLLECTED: +%d" % fuel_collected
 	scrap_label.text = "SCRAP COLLECTED: +%d" % scrap_collected
 	cash_label.text = "CASH EARNED: +%d CR" % total_cash
+	
+	var total_xp: int = stats.get("xp_awarded", 0)
+	xp_label.text = "TOTAL XP AWARDED: +%d XP" % total_xp
 	
 	# Add cash breakdown tooltip-like text or modify label to show breakdown if successful
 	if total_cash > 0:
@@ -210,9 +243,13 @@ func show_recap(stats: Dictionary) -> void:
 		var is_alive = officer_data.get("alive", false)
 		var hp = officer_data.get("hp", 0)
 		var max_hp = officer_data.get("max_hp", 100)
+		var xp_earned = officer_data.get("xp_earned", 0)
 		
 		if is_alive:
-			officer_label.text = "  %s - HP: %d/%d" % [officer_name, hp, max_hp]
+			var xp_text = ""
+			if xp_earned > 0:
+				xp_text = " (+%d XP)" % xp_earned
+			officer_label.text = "  %s - HP: %d/%d%s" % [officer_name, hp, max_hp, xp_text]
 			officer_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))
 		else:
 			officer_label.text = "  %s - K.I.A." % officer_name
@@ -235,6 +272,7 @@ func _animate_recap_in() -> void:
 	fuel_row.modulate.a = 0.0
 	scrap_row.modulate.a = 0.0
 	cash_row.modulate.a = 0.0
+	xp_row.modulate.a = 0.0
 	enemies_row.modulate.a = 0.0
 	turns_row.modulate.a = 0.0
 
@@ -263,6 +301,8 @@ func _animate_recap_in() -> void:
 	_stat_tween.tween_property(scrap_row, "modulate:a", 1.0, 0.3)
 	_stat_tween.tween_interval(0.15)
 	_stat_tween.tween_property(cash_row, "modulate:a", 1.0, 0.3)
+	_stat_tween.tween_interval(0.15)
+	_stat_tween.tween_property(xp_row, "modulate:a", 1.0, 0.3)
 	_stat_tween.tween_interval(0.15)
 	_stat_tween.tween_property(enemies_row, "modulate:a", 1.0, 0.3)
 	_stat_tween.tween_interval(0.15)
@@ -322,6 +362,7 @@ func _input(event: InputEvent) -> void:
 			fuel_row.modulate.a = 1.0
 			scrap_row.modulate.a = 1.0
 			cash_row.modulate.a = 1.0
+			xp_row.modulate.a = 1.0
 			enemies_row.modulate.a = 1.0
 			turns_row.modulate.a = 1.0
 

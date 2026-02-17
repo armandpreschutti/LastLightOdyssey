@@ -36,6 +36,8 @@ var is_scavenger_mission: bool = false  # Track if this is a scavenger mission
 var mission_objectives: Array[MissionObjective] = []  # Current mission objectives
 var stored_player_zoom: Vector2 = Vector2(1.0, 1.0)  # Store player's zoom level between turns
 var mission_roster: Array[String] = []  # Track all officers who were deployed (including those who died)
+var officer_kills: Dictionary = {}  # {officer_key: int} — per-officer kill count for XP
+var _last_attacker_key: String = ""  # Set before take_damage to attribute kills
 
 var FuelCrateScene: PackedScene
 var ScrapPileScene: PackedScene
@@ -171,6 +173,8 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	mission_fuel_collected = 0
 	mission_scrap_collected = 0
 	mission_enemies_killed = 0
+	officer_kills.clear()
+	_last_attacker_key = ""
 	deployed_officers.clear()
 	enemies.clear()
 	active_turrets.clear()
@@ -1569,6 +1573,20 @@ func _end_mission(success: bool) -> void:
 	# Clear attackable highlights
 	_clear_attackable_highlights()
 
+	# Calculate XP and identify objective completion early for recap data
+	var obj_complete: bool = is_scavenger_mission and not mission_objectives.is_empty() and mission_objectives[0].completed
+	var xp_mult: float = 1.45 if obj_complete else 1.0
+	var individual_xp_map: Dictionary = {}
+	var total_xp_awarded_mission: int = 0
+	
+	for officer_key in mission_roster:
+		var od: OfficerData = GameState.get_officer(officer_key)
+		if od and od.alive:
+			var officer_xp: int = int(60 * xp_mult) # survival
+			officer_xp += int(30 * officer_kills.get(officer_key, 0) * xp_mult) # kills
+			individual_xp_map[officer_key] = officer_xp
+			total_xp_awarded_mission += officer_xp
+
 	# Collect officer stats from FULL ROSTER (including dead ones)
 	var officers_status: Array = []
 	
@@ -1598,6 +1616,7 @@ func _end_mission(success: bool) -> void:
 			"alive": officer_hp > 0,
 			"hp": officer_hp,
 			"max_hp": officer_max_hp,
+			"xp_earned": individual_xp_map.get(officer_key, 0)
 		})
 	
 	# Check objective completion and apply bonus rewards
@@ -1672,7 +1691,7 @@ func _end_mission(success: bool) -> void:
 		"enemies_killed": mission_enemies_killed,
 		"turns_taken": current_turn,
 		"officers_status": officers_status,
-		"objective_completed": is_scavenger_mission and not mission_objectives.is_empty() and mission_objectives[0].completed,
+		"objective_completed": obj_complete,
 		"bonus_fuel": bonus_fuel,
 		"bonus_scrap": bonus_scrap,
 		"bonus_hull_repair": bonus_hull_repair,
@@ -1682,7 +1701,8 @@ func _end_mission(success: bool) -> void:
 		"cash_objective_bonus": objective_cash,
 		"cash_full_clear_bonus": full_clear_bonus,
 		"cash_no_casualties_bonus": no_casualties_bonus,
-		"total_cash": base_cash + objective_cash + full_clear_bonus + no_casualties_bonus
+		"total_cash": base_cash + objective_cash + full_clear_bonus + no_casualties_bonus,
+		"xp_awarded": total_xp_awarded_mission
 	}
 	
 	# Apply all resources and rewards to GameState only on successful extraction
@@ -1703,6 +1723,36 @@ func _end_mission(success: bool) -> void:
 		# Accumulate stats to GameState for voyage recap
 		GameState.add_mission_stats(mission_fuel_collected, mission_scrap_collected, mission_enemies_killed, current_turn)
 
+	# --- Phase 3: Injury detection + HP write-back ---
+	for officer_key in mission_roster:
+		var od: OfficerData = GameState.get_officer(officer_key)
+		if od == null:
+			continue
+		var node: Node2D = _get_officer_node(officer_key)
+		if node and "current_hp" in node and node.current_hp > 0:
+			od.current_hp = node.current_hp
+			if node.current_hp < node.max_hp * 0.5:
+				od.injury_jumps = 2
+				GameState.officer_injured.emit(officer_key)
+		# Dead officers: kill_officer() already fired during combat → od.alive=false, current_hp=0
+
+	# --- Phase 4: Apply XP + grant intel/data-log rewards ---
+	for officer_key in mission_roster:
+		var od: OfficerData = GameState.get_officer(officer_key)
+		if od and od.alive:
+			od.xp += individual_xp_map.get(officer_key, 0)
+
+	var intel_gained: int = 0
+	var data_logs_gained: int = 0
+	if success:
+		intel_gained = 5 if obj_complete else 2
+		GameState.intel += intel_gained
+		data_logs_gained = randi_range(1, 3)
+		GameState.data_logs += data_logs_gained
+
+	# Append intel/data-log fields to mission_stats
+	mission_stats["intel_gained"] = intel_gained
+	mission_stats["data_logs_gained"] = data_logs_gained
 
 	# Play beam-up animation on successful extraction
 	if success and deployed_officers.size() > 0:
@@ -2244,6 +2294,19 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 		_set_animating(false)
 		return
 	
+	# Track attacker for kill attribution
+	if shooter in deployed_officers and "officer_key" in shooter:
+		_last_attacker_key = shooter.officer_key
+	else:
+		_last_attacker_key = ""
+
+	# Apex Predator: 2x damage vs full-HP targets (Phase 4 ability hook)
+	if hit and shooter in deployed_officers and is_instance_valid(target):
+		var _apex_od: OfficerData = GameState.get_officer(shooter.officer_key)
+		if _apex_od and _apex_od.has_ability("apex_predator"):
+			if "current_hp" in target and "max_hp" in target and target.current_hp >= target.max_hp:
+				damage *= 2
+
 	# PHASE 3: IMPACT (0.9s - balanced impact reaction)
 	# Target may have been freed - _phase_impact already has a null check
 	var valid_target = target if is_instance_valid(target) else null
@@ -2589,7 +2652,12 @@ func _safe_add_interactable(interactable: Node2D, grid_pos: Vector2i) -> bool:
 
 func _on_enemy_died(enemy: Node2D) -> void:
 	mission_enemies_killed += 1
-	
+
+	# Attribute kill to the last attacking officer
+	if _last_attacker_key != "":
+		officer_kills[_last_attacker_key] = officer_kills.get(_last_attacker_key, 0) + 1
+	_last_attacker_key = ""
+
 	# Update objectives based on enemy kills (only if objective matches)
 	_update_objective_progress("clear_passages", 1)  # Enemies killed count as clearing passages for asteroid
 	# Note: clear_nests objective is completed by interacting with nest structures, not by killing enemies
@@ -3040,6 +3108,7 @@ func _check_overwatch_shots(enemy: Node2D, enemy_pos: Vector2i) -> void:
 				tactical_hud.show_combat_message("OVERWATCH FLANKING HIT!", Color(1, 0.5, 0.1))
 			else:
 				tactical_hud.show_combat_message("OVERWATCH HIT!", Color(0.2, 1, 0.2))
+			_last_attacker_key = officer.officer_key
 			enemy.take_damage(damage)
 			_spawn_damage_popup(damage, true, enemy.position, false, is_flanking)
 		
@@ -3552,17 +3621,21 @@ func _perform_charge_melee_attack(attacker: Node2D, target: Node2D, damage: int,
 	# Check if attacker has officer_type property and verify it's a heavy unit
 	if not "officer_type" in attacker or attacker.officer_type != "heavy":
 		# If attacker is not a heavy unit, just deal damage without animation
+		if "officer_key" in attacker:
+			_last_attacker_key = attacker.officer_key
 		target.take_damage(damage)
 		_spawn_damage_popup(damage, true, target.position)
 		return
-	
+
 	# Validate attacker is still valid
 	if not is_instance_valid(attacker):
 		return
-	
+
 	var attacker_sprite = attacker.get_node_or_null("Sprite")
 	if not attacker_sprite or not is_instance_valid(attacker_sprite):
 		# Fallback: just deal damage without animation
+		if "officer_key" in attacker:
+			_last_attacker_key = attacker.officer_key
 		target.take_damage(damage)
 		_spawn_damage_popup(damage, true, target.position)
 		return
@@ -3658,7 +3731,10 @@ func _perform_charge_melee_attack(attacker: Node2D, target: Node2D, damage: int,
 		# Play charge SFX right as the hit connects
 		if SFXManager:
 			SFXManager.play_sfx_by_name("combat", "charge")
-		
+
+		# Attribute kill to charging officer
+		if "officer_key" in attacker:
+			_last_attacker_key = attacker.officer_key
 		target.take_damage(damage)
 		var enemy_died = target.current_hp <= 0 and enemy_hp_before > 0
 		_spawn_damage_popup(damage, true, target.position, false, true)  # Use flank style for charge hits
@@ -3834,6 +3910,7 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 	
 	# Apply lethal damage
 	tactical_hud.show_combat_message("EXECUTED!", Color(1, 0.1, 0.1))
+	_last_attacker_key = selected_unit.officer_key
 	target_enemy.take_damage(execute_damage)
 	_spawn_damage_popup(execute_damage, true, target_enemy.position)
 	
@@ -3935,6 +4012,7 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 
 	# Guaranteed hit with 2x damage
 	tactical_hud.show_combat_message("PRECISION HIT!", Color(0.6, 0.55, 0.8))
+	_last_attacker_key = selected_unit.officer_key
 	target_enemy.take_damage(precision_damage)
 	_spawn_damage_popup(precision_damage, true, target_enemy.position)
 	
@@ -3955,6 +4033,14 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 	
 	# Check if unit is out of AP and auto-end turn
 	_check_auto_end_turn()
+
+
+## Find a deployed OfficerUnit node by officer_key
+func _get_officer_node(key: String) -> Node2D:
+	for officer in deployed_officers:
+		if "officer_key" in officer and officer.officer_key == key:
+			return officer
+	return null
 
 
 ## Update objective progress by ID (only if it matches current mission objective)

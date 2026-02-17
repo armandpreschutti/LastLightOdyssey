@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://b8m4lan2qr7yp"]
+[gd_scene format=3 uid="uid://ctdlk7m57bosk"]
 
 [ext_resource type="Script" path="res://scripts/tactical/power_core.gd" id="1_power"]
 [ext_resource type="Texture2D" path="res://assets/sprites/objects/power_core.png" id="2_sprite"]

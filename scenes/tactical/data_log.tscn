@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://b8m4lan2qr7yp"]
+[gd_scene format=3 uid="uid://dhr15gxkskcp"]
 
 [ext_resource type="Script" path="res://scripts/tactical/data_log.gd" id="1_datalog"]
 [ext_resource type="Texture2D" path="res://assets/sprites/objects/data_log.png" id="2_sprite"]

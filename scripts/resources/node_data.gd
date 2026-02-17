@@ -40,6 +40,9 @@ enum DifficultyGrade {
 
 # UI Helper Properties
 @export var fuel_cost_to_enter: int = 1
+@export var event_penalty_text: String = "" # e.g. "-15 HULL"
+@export var event_mitigation_text: String = "" # e.g. "+10 WITH TECH"
+@export var pending_event_id: int = -1 # Pre-rolled random event ID
 
 func _init(p_id: String = "", p_pos: Vector2 = Vector2.ZERO, p_type: int = EventManager.NodeType.EMPTY_SPACE) -> void:
 	id = p_id

@@ -5,17 +5,17 @@ extends Control
 signal quit_to_menu_pressed
 signal view_recap_pressed
 signal market_pressed
+signal barracks_pressed
 signal deploy_pressed
 
 # Updated paths for new icon-based layout
 @onready var cash_label: Label = $MarginContainer/VBoxContainer/StatsContainer/CashRow/CashLabel
-@onready var intel_label: Label = $MarginContainer/VBoxContainer/StatsContainer/IntelRow/IntelLabel
-@onready var data_logs_label: Label = $MarginContainer/VBoxContainer/StatsContainer/DataRow/DataLabel
 @onready var fuel_label: Label = $MarginContainer/VBoxContainer/StatsContainer/FuelRow/FuelLabel
 @onready var integrity_label: Label = $MarginContainer/VBoxContainer/StatsContainer/IntegrityRow/IntegrityLabel
 @onready var scrap_label: Label = $MarginContainer/VBoxContainer/StatsContainer/ScrapRow/ScrapLabel
 @onready var status_label: Label = $MarginContainer/VBoxContainer/StatusLabel
 @onready var market_button: Button = $MarginContainer/VBoxContainer/MarketButton
+@onready var barracks_button: Button = $MarginContainer/VBoxContainer/BarracksButton
 @onready var deploy_button: Button = $DeployPanel/DeployButton
 @onready var quit_button: Button = $TopLeftPanel/QuitButton
 
@@ -49,12 +49,12 @@ func _update_glass_style() -> void:
 
 func _connect_signals() -> void:
 	GameState.cash_changed.connect(_on_cash_changed)
-	GameState.intel_changed.connect(_on_intel_changed)
-	GameState.data_logs_changed.connect(_on_data_logs_changed)
 	GameState.fuel_changed.connect(_on_fuel_changed)
 	GameState.integrity_changed.connect(_on_integrity_changed)
 	GameState.scrap_changed.connect(_on_scrap_changed)
 	market_button.pressed.connect(_on_market_pressed)
+	if barracks_button:
+		barracks_button.pressed.connect(_on_barracks_pressed)
 	deploy_button.pressed.connect(_on_deploy_pressed)
 	deploy_button.mouse_entered.connect(_on_deploy_hover)
 	deploy_button.mouse_exited.connect(_on_deploy_unhover)
@@ -69,6 +69,10 @@ func _on_quit_pressed() -> void:
 
 func _on_market_pressed() -> void:
 	market_pressed.emit()
+
+
+func _on_barracks_pressed() -> void:
+	barracks_pressed.emit()
 
 
 func _on_deploy_pressed() -> void:
@@ -128,8 +132,6 @@ func _stop_pulse() -> void:
 
 func _update_all_stats() -> void:
 	_on_cash_changed(GameState.cash)
-	_on_intel_changed(GameState.intel)
-	_on_data_logs_changed(GameState.data_logs)
 	_on_fuel_changed(GameState.fuel)
 	_on_integrity_changed(GameState.ship_integrity)
 	_on_scrap_changed(GameState.scrap)
@@ -139,12 +141,7 @@ func _on_cash_changed(new_value: int) -> void:
 	cash_label.text = "CASH: %d" % new_value
 
 
-func _on_intel_changed(new_value: int) -> void:
-	intel_label.text = "INTEL: %d" % new_value
 
-
-func _on_data_logs_changed(new_value: int) -> void:
-	data_logs_label.text = "DATA LOGS: %d" % new_value
 
 
 func _on_fuel_changed(new_value: int) -> void:
@@ -173,6 +170,8 @@ func set_view_recap_mode(enabled: bool) -> void:
 		
 	if enabled:
 		market_button.visible = false # Hide market in recap mode
+		if barracks_button:
+			barracks_button.visible = false
 		if has_node("DeployPanel"):
 			$DeployPanel.visible = false # Hide deploy panel in recap mode
 		quit_button.text = "[ VIEW RECAP ]"
@@ -180,6 +179,8 @@ func set_view_recap_mode(enabled: bool) -> void:
 		quit_button.pressed.connect(_on_view_recap_pressed)
 	else:
 		market_button.visible = true
+		if barracks_button:
+			barracks_button.visible = true
 		if has_node("DeployPanel"):
 			$DeployPanel.visible = true
 		quit_button.text = "[ QUIT TO MENU ]"

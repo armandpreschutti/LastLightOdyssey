@@ -99,6 +99,9 @@ func generate_options(source_node: NodeData, incoming_vector: Vector2, override_
 		if new_node.node_type == EventManager.NodeType.SCAVENGE_SITE:
 			new_node.biome_type = _roll_biome_type()
 			_assign_difficulty_grade(new_node)
+		elif new_node.node_type == EventManager.NodeType.EMPTY_SPACE:
+			# Pre-roll random event ID (0 to 9)
+			new_node.pending_event_id = rng.randi_range(0, 9)
 		
 		# Connect
 		source_node.connections.append(new_id)

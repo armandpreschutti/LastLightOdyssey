@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://b8m4lan2qr7yp"]
+[gd_scene format=3 uid="uid://kicfkp2qdo1f"]
 
 [ext_resource type="Script" path="res://scripts/tactical/nest.gd" id="1_nest"]
 [ext_resource type="Texture2D" path="res://assets/sprites/objects/nest.png" id="2_sprite"]

@@ -94,7 +94,13 @@ func attempt_jump(target_node: NodeData) -> bool:
 	
 	ship_moved.emit(target_node.position, target_node, 1.0)
 	map_updated.emit()
-	
+
+	# Phase 3: Injury recovery — reduce injury_jumps by 1 for each officer
+	for key in GameState.officers:
+		var od: OfficerData = GameState.get_officer(key)
+		if od and od.injury_jumps > 0:
+			od.injury_jumps -= 1
+
 	return true
 
 

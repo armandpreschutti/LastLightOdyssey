@@ -182,6 +182,9 @@ func _update_visual() -> void:
 	
 	# Update cleared marker if it's a scavenge site
 	_update_cleared_marker()
+	
+	# Update event results (penalty/mitigation)
+	_update_event_result_visuals()
 
 func _update_difficulty_visuals() -> void:
 	if not node_data or node_data.node_type != EventManager.NodeType.SCAVENGE_SITE:
@@ -286,6 +289,38 @@ func _update_cleared_marker() -> void:
 	
 	cl.text = "[ CLEARED ]"
 	cl.visible = true
+
+
+func _update_event_result_visuals() -> void:
+	if not node_data:
+		return
+		
+	# Penalty Label - only show for UNVISITED nodes
+	var pl = get_node_or_null("PenaltyLabel")
+	var penalty_text = node_data.event_penalty_text
+	
+	# Forecast for penalty
+	if penalty_text == "" and current_state == NodeState.AVAILABLE and node_data.pending_event_id >= 0:
+		var event = EventManager.random_events[node_data.pending_event_id]
+		var integrity_loss = event.get("integrity_loss", 0)
+		if integrity_loss > 0:
+			penalty_text = "-" + str(integrity_loss) + " HULL"
+
+	if penalty_text != "" and node_data.state == NodeData.NodeState.UNVISITED:
+		if not pl:
+			pl = Label.new()
+			pl.name = "PenaltyLabel"
+			add_child(pl)
+			pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			pl.add_theme_font_size_override("font_size", 16) # Much bigger (was 11)
+			pl.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3, 1.0)) # Red
+		
+		pl.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+		pl.position.y -= 38 # Shifted up for larger font
+		pl.text = penalty_text
+		pl.visible = true
+	elif pl:
+		pl.visible = false
 
 
 ## Update the sprite texture based on node type

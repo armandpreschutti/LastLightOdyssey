@@ -29,7 +29,7 @@ Transactions: Implement functions that directly modify GameState.
 * **buy_scrap():** Check cash >= 10. If true: cash -= 10, scrap += 10.
 * **repair_hull():** Check cash >= 50. If true: cash -= 50, hull_integrity += 10.0 (Clamp at 100.0).
 
-## 2. The Infinite Map System (VoyageManager.gd) [PARTIAL]
+## 2. The Infinite Map System (VoyageManager.gd) [COMPLETED]
 
 ### 2.1 Coordinate-Based Generation
 Replace the linear array-based StarMapGenerator with an InfiniteGridGenerator.
@@ -99,9 +99,9 @@ var injury_jumps: int   # 0 = Ready. >0 = Unavailable for selection.
 
 ### 3.3 XP & Leveling Logic
 **XP Sources (TacticalManager):**
-* **Kills:** +10 XP (to killer).
-* **Survival:** +20 XP (to all living squad members).
-* **Objective:** +15% Multiplier to total XP (if successful).
+* **Kills:** +30 XP (to killer).
+* **Survival:** +60 XP (to all living squad members).
+* **Objective:** +45% Multiplier to total XP (if successful).
 
 **Tech Tree Implementation (BarracksMenu.gd):**
 Create a UI for unlocking skills.
@@ -184,22 +184,22 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 **HUD Update**
 * Replace the "Colonist Count" display with Cash, Intel, and Data Logs counters in the top bar.
 
-### Phase 2: The Infinite Map System [PARTIAL]
+### Phase 2: The Infinite Map System [COMPLETED]
 **Goal:** Replace the linear node graph with the procedural, infinite web.
 
-**InfiniteGridGenerator.gd**
-* Create this new script to handle coordinate-based generation.
-* Implement logic to generate NodeData for (x+1, y), (x-1, y), (x, y+1), (x, y-1) relative to the player.
-* **Logic:** 40% Scavenge, 40% Empty/Event.
+* [x] **InfiniteGridGenerator.gd**
+* [x] Create this new script to handle coordinate-based generation.
+* [x] Implement logic to generate NodeData for (x+1, y), (x-1, y), (x, y+1), (x, y-1) relative to the player.
+* [x] **Logic:** 40% Scavenge, 40% Empty/Event.
 
-**VoyageManager.gd Navigation Update**
-* **Grid Tracking:** Add `current_grid_position` (Vector2) to track the ship.
-* **Movement Logic:** Allow clicking any adjacent node (removing the "forward-only" restriction).
-* **Fuel Consumption:** 1 Fuel per jump. If fuel == 0, apply -5% Hull Damage.
+* [x] **VoyageManager.gd Navigation Update**
+* [x] **Grid Tracking:** Add `current_grid_position` (Vector2) to track the ship.
+* [x] **Movement Logic:** Allow clicking any adjacent node (removing the "forward-only" restriction).
+* [x] **Fuel Consumption:** 1 Fuel per jump. If fuel == 0, apply -5% Hull Damage.
 
-**Node State System**
-* Update NodeData to track states: UNVISITED, CLEARED, STORY.
-* **Dead Zones:** If state is CLEARED, disable the "Scavenge" button (traversal only).
+* [x] **Node State System**
+* [x] Update NodeData to track states: UNVISITED, CLEARED, STORY.
+* [x] **Dead Zones:** If state is CLEARED, disable the "Scavenge" button (traversal only).
 
 ### Phase 3: The RPG Layer (Officers) [PENDING]
 **Goal:** Convert static units into evolving characters with persistent data.

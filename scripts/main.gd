@@ -4,6 +4,7 @@ extends Node
 
 @onready var management_hud: Control = $ManagementLayer/ManagementHUD
 @onready var star_map: Control = $ManagementLayer/StarMap
+@onready var barracks_menu: Control = $DialogLayer/BarracksMenu
 @onready var event_scene_dialog: Control = $DialogLayer/EventSceneDialog
 @onready var event_dialog: Control = $DialogLayer/EventDialog
 
@@ -26,7 +27,6 @@ extends Node
 var _pending_ending_type: String = ""  # Store ending type for the win sequence
 var _pending_officer_keys: Array[String] = []  # Store selected officers for mission start
 var _pending_objectives: Array[MissionObjective] = []  # Store selected objectives for mission start
-var _pending_mission_recap_stats: Dictionary = {}
 var _pending_game_over_reason: String = ""  # Store game over reason for the sequence
 
 enum GamePhase { IDLE, EVENT_DISPLAY, TEAM_SELECT, TACTICAL, TRADING, GAME_OVER, GAME_WON }
@@ -88,6 +88,7 @@ func _connect_signals() -> void:
 	management_hud.quit_to_menu_pressed.connect(_on_quit_to_menu)
 	management_hud.view_recap_pressed.connect(_on_view_recap_from_map)
 	management_hud.market_pressed.connect(_on_market_pressed)
+	management_hud.barracks_pressed.connect(_on_barracks_pressed)
 	management_hud.deploy_pressed.connect(_on_deploy_pressed)
 	GameState.game_over.connect(_on_game_over)
 	GameState.game_won.connect(_on_game_won)
@@ -137,10 +138,6 @@ func _on_node_clicked(node_data: NodeData) -> void:
 	
 	# If clicking the current node (e.g., re-clicking an SCAVENGER or WORMHOLE), skip jump and process directly
 	if node_data.id == current_node_id:
-		# Block interactions when tutorial is active
-		if tutorial_overlay and tutorial_overlay.is_showing():
-			return
-		
 		# Allow re-entry logic
 		var node_type = node_data.node_type
 		if node_type == EventManager.NodeType.WORMHOLE:
@@ -212,7 +209,7 @@ func _show_fuel_warning(node_data: NodeData, fuel_cost: int) -> void:
 
 
 ## Execute jump with ship animation
-func _execute_jump_with_animation(node_data: NodeData, fuel_cost: int) -> void:
+func _execute_jump_with_animation(node_data: NodeData, _fuel_cost: int) -> void:
 	# Capture visited state BEFORE jump attempt changes it
 	var was_visited = node_data.state != NodeData.NodeState.UNVISITED
 	
@@ -294,7 +291,8 @@ func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) ->
 			
 			# Show mission scene first, then team selection
 			current_phase = GamePhase.EVENT_DISPLAY
-			mission_scene_dialog.show_scene(pending_biome_type)
+			# mission_scene_dialog.show_scene(pending_biome_type)
+			_on_mission_scene_dismissed()
 
 		EventManager.NodeType.WORMHOLE:
 			# Show wormhole interaction dialog
@@ -311,29 +309,48 @@ func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) ->
 
 
 func _trigger_random_event() -> void:
-	current_event = EventManager.roll_random_event()
-	current_phase = GamePhase.EVENT_DISPLAY
+	var current_node = VoyageManager.get_current_node()
+	if current_node and current_node.pending_event_id >= 0:
+		current_event = EventManager.random_events[current_node.pending_event_id]
+	else:
+		current_event = EventManager.roll_random_event()
 	
+	# Determine if we can mitigate
+	var use_specialist = EventManager.can_mitigate_event(current_event)
+	
+	# Resolve event instantly
+	var result = EventManager.resolve_event(current_event, use_specialist)
+	
+	# Store results in node data for display
+	if current_node:
+		var integrity_loss = current_event.get("integrity_loss", 0)
+		if integrity_loss > 0:
+			current_node.event_penalty_text = "-" + str(integrity_loss) + " HULL"
+		
+		# Log to message log
+		var log_msg = "Event: " + current_event.get("name", "Unknown")
+		VoyageManager.message_log_added.emit(log_msg)
+		
+		# Refresh map to show results
+		star_map.refresh()
+
 	# Tutorial: Show event intro if this is the first event
 	if not _first_event_seen and TutorialManager.is_active():
 		_first_event_seen = true
-		# Advance past resources_intro if we're still there
 		if TutorialManager.is_at_step("resources_intro"):
 			TutorialManager.acknowledge_step()
 	
-	# Show Oregon Trail-style event scene first, then the choice dialog
-	event_scene_dialog.show_scene(current_event)
+	# Phase is back to IDLE since no dialog is shown
+	current_phase = GamePhase.IDLE
+	current_event = {}
+	
+	# Tutorial: Notify that an event was closed (since it's automatic now)
+	TutorialManager.notify_trigger("event_closed")
 
 
 func _on_event_scene_dismissed() -> void:
-	# After the scene is dismissed, show the event choice dialog
-	event_dialog.show_event(current_event)
-	
-	# Tutorial: Trigger event_intro after event dialog is visible
-	if TutorialManager.is_active() and TutorialManager.is_at_step("event_intro"):
-		# Wait a frame for dialog to become visible, then queue the step
-		await get_tree().process_frame
-		TutorialManager.queue_step(TutorialManager.current_step_index)
+	# Event dialog no longer shown for random events (now automated)
+	pass
 
 
 func _on_event_choice_made(use_specialist: bool) -> void:
@@ -519,7 +536,8 @@ func _on_game_over(reason: String) -> void:
 	management_background.visible = true
 
 	# Show game over scene dialog first
-	game_over_scene_dialog.show_scene(reason)
+	# game_over_scene_dialog.show_scene(reason)
+	_on_game_over_scene_dismissed()
 
 
 func _on_game_won(ending_type: String) -> void:
@@ -531,7 +549,8 @@ func _on_game_won(ending_type: String) -> void:
 	management_background.visible = true
 
 	# Show New Earth arrival scene first
-	new_earth_scene.show_scene(ending_type)
+	# new_earth_scene.show_scene(ending_type)
+	_on_new_earth_scene_dismissed()
 
 
 func _on_new_earth_scene_dismissed() -> void:
@@ -547,7 +566,8 @@ func _on_game_over_scene_dismissed() -> void:
 func _show_voyage_intro() -> void:
 	# Show voyage intro scene when starting a new voyage
 	current_phase = GamePhase.EVENT_DISPLAY  # Use EVENT_DISPLAY phase to block interaction
-	voyage_intro_scene_dialog.show_scene()
+	# voyage_intro_scene_dialog.show_scene()
+	_on_voyage_intro_scene_dismissed()
 	
 	# Start navigation music immediately
 	MusicManager.play_navigation_music()
@@ -762,3 +782,8 @@ func _on_market_pressed() -> void:
 func _on_market_menu_closed() -> void:
 	current_phase = GamePhase.IDLE
 	star_map.refresh()
+
+
+func _on_barracks_pressed() -> void:
+	if barracks_menu:
+		barracks_menu.show_barracks()

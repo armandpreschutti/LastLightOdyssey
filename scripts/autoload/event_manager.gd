@@ -139,11 +139,8 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
 	if can_mitigate:
 		result["mitigated"] = true
 		result["integrity_change"] = -event.get("mitigated_integrity_loss", event.get("integrity_loss", 0))
-		# Deduct scrap cost for mitigation (with dynamic scaling, capped at 15)
-		var base_cost = event.get("mitigation_scrap_cost", 0)
-		var cost_multiplier = get_mitigation_cost_multiplier()
-		var scrap_cost = mini(int(base_cost * cost_multiplier), 15)
-		result["scrap_change"] -= scrap_cost
+		# Scrap cost for mitigation removed per user request
+		result["scrap_change"] = 0
 	else:
 		result["integrity_change"] = -event.get("integrity_loss", 0)
 
@@ -162,17 +159,8 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
 	return result
 
 
-func can_mitigate_event(event: Dictionary) -> bool:
-	var specialist_key = event.get("specialist_mitigation", "")
-	if specialist_key == "":
-		return false
-	if not GameState.is_officer_alive(specialist_key):
-		return false
-	# Check if player has enough scrap (with dynamic scaling, capped at 15)
-	var base_cost = event.get("mitigation_scrap_cost", 0)
-	var cost_multiplier = get_mitigation_cost_multiplier()
-	var scrap_cost = mini(int(base_cost * cost_multiplier), 15)
-	return GameState.scrap >= scrap_cost
+func can_mitigate_event(_event: Dictionary) -> bool:
+	return false
 
 
 func get_node_type(node_index: int = -1) -> NodeType:

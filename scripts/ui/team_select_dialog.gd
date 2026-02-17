@@ -23,6 +23,7 @@ var selected_officers: Array[String] = []
 var current_biome_type: int = -1  # BiomeConfig.BiomeType
 var expanded_officers: Dictionary = {}  # officer_key -> bool (track expanded state)
 var officer_detail_containers: Dictionary = {}  # officer_key -> VBoxContainer (detail sections)
+const ABILITY_ICON_PATH = "res://assets/sprites/ui/icons/abilities/"
 var officer_expand_buttons: Dictionary = {}  # officer_key -> Button (expand/collapse buttons)
 var current_objectives: Array[MissionObjective] = []  # Store the objectives selected for this mission
 const PORTRAIT_PATH = "res://assets/sprites/portraits/"
@@ -209,10 +210,17 @@ func _populate_officers() -> void:
 		if not GameState.is_officer_alive(officer_key):
 			continue
 
+		var od: OfficerData = GameState.get_officer(officer_key)
+		var is_injured: bool = od != null and od.is_injured()
+
 		# --- NEW GLASSMORPHISM CARD ---
 		var glass_panel = PanelContainer.new()
 		var card_color = _get_officer_color(officer_key)
+		if is_injured:
+			card_color = Color(0.5, 0.5, 0.5, 1.0)
 		glass_panel.add_theme_stylebox_override("panel", _get_glass_style(card_color))
+		if is_injured:
+			glass_panel.modulate = Color(0.5, 0.5, 0.5, 1.0)
 		
 		# Add some margin inside the panel
 		var margin_container = MarginContainer.new()
@@ -253,16 +261,32 @@ func _populate_officers() -> void:
 		header_hbox.add_theme_constant_override("separation", 8)
 		right_vbox.add_child(header_hbox)
 		
+		# --- NEW: Upgrade Slots Display ---
+		var slots_hbox = _create_upgrade_slots(officer_key, 24)
+		right_vbox.add_child(slots_hbox)
+		
 		# Checkbox for selection
 		var check = CheckButton.new()
 		check.text = _get_officer_display_name(officer_key)
 		check.add_theme_color_override("font_color", card_color)
 		check.add_theme_font_size_override("font_size", 18)
-		check.toggled.connect(_on_officer_toggled.bind(officer_key))
 		check.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if is_injured:
+			check.disabled = true
+			check.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1.0))
+		else:
+			check.toggled.connect(_on_officer_toggled.bind(officer_key))
 
 		officer_buttons[officer_key] = check
 		header_hbox.add_child(check)
+
+		# Injured status label
+		if is_injured:
+			var injury_label = Label.new()
+			injury_label.text = "INJURED (%d JUMPS)" % od.injury_jumps
+			injury_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.2, 1.0))
+			injury_label.add_theme_font_size_override("font_size", 13)
+			header_hbox.add_child(injury_label)
 		
 		# Expand/collapse button
 		var expand_button = Button.new()
@@ -422,7 +446,14 @@ func _build_detail_sections(container: VBoxContainer, officer_key: String) -> vo
 	container.add_child(stats_label)
 	
 	var stats = _get_officer_stats(officer_key)
-	var stats_text = "  HP: %d  |  Move Range: %d tiles  |  Attack Range: %d tiles" % [stats.hp, stats.move_range, stats.attack_range]
+	
+	# Current HP Bar (Persistent data from GameState)
+	var od = GameState.get_officer(officer_key)
+	if od:
+		var hp_bar = _create_progress_bar(od.current_hp, od.max_hp, Color(0.2, 0.9, 0.4), "HP: %d / %d" % [od.current_hp, od.max_hp])
+		container.add_child(hp_bar)
+	
+	var stats_text = "  Move Range: %d tiles  |  Attack Range: %d tiles" % [stats.move_range, stats.attack_range]
 	var stats_value_label = Label.new()
 	stats_value_label.text = stats_text
 	stats_value_label.add_theme_color_override("font_color", Color(0.6, 0.8, 0.9))
@@ -550,6 +581,76 @@ func _update_selected_label() -> void:
 	selected_label.text = "SELECTED: %d / %d" % [selected_officers.size(), MAX_TEAM_SIZE]
 
 
+func _create_upgrade_slots(officer_key: String, icon_size: int) -> HBoxContainer:
+	var hbox = HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 6)
+	
+	var od = GameState.get_officer(officer_key)
+	if not od: return hbox
+	
+	var abilities = GameState.OFFICER_ABILITIES.get(officer_key, [])
+	if abilities.size() < 6: return hbox # Safety check
+	
+	# Levels 1, 2, 3
+	var tiers = [
+		[abilities[0]],                   # L1
+		[abilities[1], abilities[2]],      # L2
+		[abilities[3], abilities[4], abilities[5]] # L3
+	]
+	
+	var accent = GameState.OFFICER_COLOR.get(officer_key, Color.WHITE)
+	
+	for i in range(3):
+		var slot_panel = PanelContainer.new()
+		slot_panel.custom_minimum_size = Vector2(icon_size + 4, icon_size + 4)
+		
+		# Glassy background for the slot
+		var sb = StyleBoxFlat.new()
+		sb.bg_color = Color(accent.r, accent.g, accent.b, 0.05)
+		sb.border_width_left = 1
+		sb.border_width_top = 1
+		sb.border_width_right = 1
+		sb.border_width_bottom = 1
+		sb.border_color = Color(accent.r, accent.g, accent.b, 0.2)
+		sb.set_corner_radius_all(4)
+		slot_panel.add_theme_stylebox_override("panel", sb)
+		
+		var icon_rect = TextureRect.new()
+		icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_rect.custom_minimum_size = Vector2(icon_size, icon_size)
+		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		
+		# Find if an ability is unlocked in this tier
+		var unlocked_ab_id = ""
+		for ab_id in tiers[i]:
+			if od.has_ability(ab_id):
+				unlocked_ab_id = ab_id
+				break
+		
+		if unlocked_ab_id != "":
+			var tooltip_handler = preload("res://scripts/ui/ability_tooltip_handler.gd").new()
+			slot_panel.add_child(tooltip_handler)
+			tooltip_handler.setup(slot_panel, unlocked_ab_id)
+			
+			var icon_file = "%s_%s.png" % [officer_key, unlocked_ab_id]
+			var tex = load(ABILITY_ICON_PATH + icon_file)
+			if tex:
+				icon_rect.texture = tex
+				icon_rect.modulate = Color(1, 1, 1, 1)
+			else:
+				# Fallback modulation if icon missing
+				icon_rect.modulate = Color(accent.r, accent.g, accent.b, 0.5)
+		else:
+			# Not unlocked yet
+			icon_rect.modulate = Color(0.2, 0.2, 0.2, 0.3)
+		
+		slot_panel.add_child(icon_rect)
+		hbox.add_child(slot_panel)
+		
+	return hbox
+
+
 func _on_deploy_pressed() -> void:
 	if selected_officers.size() >= MIN_TEAM_SIZE and selected_officers.size() <= MAX_TEAM_SIZE:
 
@@ -559,3 +660,39 @@ func _on_deploy_pressed() -> void:
 func _on_cancel_pressed() -> void:
 	visible = false
 	cancelled.emit()
+func _create_progress_bar(val: float, max_val: float, bar_color: Color, label_text: String) -> ProgressBar:
+	var bar = ProgressBar.new()
+	bar.min_value = 0
+	bar.max_value = max_val
+	bar.value = val
+	bar.show_percentage = false
+	bar.custom_minimum_size = Vector2(0, 16)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	
+	# Background style
+	var sb_bg = StyleBoxFlat.new()
+	sb_bg.bg_color = Color(0, 0, 0, 0.3)
+	sb_bg.set_corner_radius_all(2)
+	bar.add_theme_stylebox_override("background", sb_bg)
+	
+	# Fill style
+	var sb_fill = StyleBoxFlat.new()
+	sb_fill.bg_color = bar_color
+	sb_fill.bg_color.a = 0.7
+	sb_fill.set_corner_radius_all(2)
+	sb_fill.border_width_right = 1
+	sb_fill.border_color = Color(1, 1, 1, 0.3)
+	bar.add_theme_stylebox_override("fill", sb_fill)
+	
+	# Overlaying text
+	var label = Label.new()
+	label.text = label_text
+	label.add_theme_font_size_override("font_size", 10)
+	label.add_theme_color_override("font_color", Color.WHITE)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	bar.add_child(label)
+	
+	return bar

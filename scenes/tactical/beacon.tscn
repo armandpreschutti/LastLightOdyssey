@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://b8m4lan2qr7yp"]
+[gd_scene format=3 uid="uid://deu1iui7r615q"]
 
 [ext_resource type="Script" path="res://scripts/tactical/beacon.gd" id="1_beacon"]
 [ext_resource type="Texture2D" path="res://assets/sprites/objects/beacon.png" id="2_sprite"]

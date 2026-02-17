@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://b8m4lan2qr7yp"]
+[gd_scene format=3 uid="uid://ooho2ccfab1b"]
 
 [ext_resource type="Script" path="res://scripts/tactical/mining_equipment.gd" id="1_mining"]
 [ext_resource type="Texture2D" path="res://assets/sprites/objects/mining_equipment.png" id="2_sprite"]

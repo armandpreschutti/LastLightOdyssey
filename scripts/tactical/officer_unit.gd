@@ -93,8 +93,14 @@ func initialize(key: String) -> void:
 	move_range = data["move_range"]
 	sight_range = data["sight_range"]
 	max_hp = data["max_hp"]
-	current_hp = max_hp
-	
+
+	# Use persistent HP from GameState if the officer survived a previous mission
+	var _od: OfficerData = GameState.get_officer(key)
+	if _od and _od.current_hp > 0:
+		current_hp = _od.current_hp
+	else:
+		current_hp = max_hp
+
 	# Apply specialist bonuses
 	_apply_specialist_bonuses()
 
@@ -571,14 +577,18 @@ func use_charge() -> bool:
 func use_execute() -> bool:
 	if officer_type != "captain":
 		return false
-	
+
 	if is_ability_on_cooldown():
 		return false
-	
+
 	if not use_ap(1):
 		return false
-	
+
 	_start_cooldown()
+	# Warlord: Execute has no cooldown
+	var _od: OfficerData = GameState.get_officer(officer_key)
+	if _od and _od.has_ability("warlord"):
+		ability_cooldown = 0
 	return true
 
 
@@ -586,14 +596,19 @@ func use_execute() -> bool:
 func use_precision_shot() -> bool:
 	if officer_type != "sniper":
 		return false
-	
+
 	if is_ability_on_cooldown():
 		return false
-	
+
 	if not use_ap(1):
 		return false
-	
-	_start_cooldown()
+
+	# Snap Shot: Precision Shot costs 0 cooldown (can fire again this turn or next)
+	var _od: OfficerData = GameState.get_officer(officer_key)
+	if _od and _od.has_ability("snap_shot"):
+		pass  # no cooldown applied
+	else:
+		_start_cooldown()
 	return true
 
 
