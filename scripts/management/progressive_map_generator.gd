@@ -36,7 +36,7 @@ func generate_start_node() -> Dictionary: # Returns { "start_node": NodeData, "i
 	}
 
 ## Generate new options from a source node, biased by the incoming direction
-func generate_options(source_node: NodeData, incoming_vector: Vector2, override_count: int = -1, ignore_direction: bool = false) -> Array[NodeData]:
+func generate_options(source_node: NodeData, incoming_vector: Vector2, override_count: int = -1, ignore_direction: bool = false, existing_nodes: Dictionary = {}) -> Array[NodeData]:
 	var new_nodes: Array[NodeData] = []
 	
 	var count = 0
@@ -59,7 +59,7 @@ func generate_options(source_node: NodeData, incoming_vector: Vector2, override_
 		current_spread_angle = 360.0
 	
 	var attempts = 0
-	var max_attempts = count * 5 # Safety break
+	var max_attempts = count * 10 # Increased safety break
 	
 	while new_nodes.size() < count and attempts < max_attempts:
 		attempts += 1
@@ -79,8 +79,20 @@ func generate_options(source_node: NodeData, incoming_vector: Vector2, override_
 		
 		# ---- OVERLAP CHECK ----
 		var too_close = false
+		
+		# Check against currently generating batch
 		for existing_new_node in new_nodes:
-			if new_pos.distance_to(existing_new_node.position) < (MIN_DISTANCE * 0.8): # 80% of min travel distance
+			if new_pos.distance_to(existing_new_node.position) < (MIN_DISTANCE * 0.8): 
+				too_close = true
+				break
+		
+		if too_close:
+			continue
+
+		# Check against ALL existing nodes in the world
+		for id in existing_nodes:
+			var existing_node = existing_nodes[id]
+			if new_pos.distance_to(existing_node.position) < (MIN_DISTANCE * 0.8):
 				too_close = true
 				break
 		

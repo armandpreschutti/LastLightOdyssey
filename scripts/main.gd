@@ -164,6 +164,8 @@ func _connect_signals() -> void:
 	management_hud.market_pressed.connect(_on_market_pressed)
 	management_hud.barracks_pressed.connect(_on_barracks_pressed)
 	management_hud.deploy_pressed.connect(_on_deploy_pressed)
+	if barracks_menu.has_signal("closed"):
+		barracks_menu.closed.connect(_on_barracks_menu_closed)
 	GameState.game_over.connect(_on_game_over)
 	GameState.game_won.connect(_on_game_won)
 
@@ -422,19 +424,17 @@ func _trigger_random_event() -> void:
 			effects.append(prefix + str(integrity_change) + "% HULL")
 			
 		var cash_change = result.get("cash_change", 0)
+		if cash_change == 0:
+			cash_change = result.get("cash_change", 0)
+			
 		if cash_change != 0:
 			var prefix = "+" if cash_change > 0 else ""
-			effects.append(prefix + str(cash_change) + " CASH")
+			effects.append(prefix + str(cash_change) + " CR")
 			
 		var fuel_change = result.get("fuel_change", 0)
 		if fuel_change != 0:
 			var prefix = "+" if fuel_change > 0 else ""
 			effects.append(prefix + str(fuel_change) + " FUEL")
-			
-		var scrap_change = result.get("scrap_change", 0)
-		if scrap_change != 0:
-			var prefix = "+" if scrap_change > 0 else ""
-			effects.append(prefix + str(scrap_change) + " SCRAP")
 		
 		# Combine effects into a single string
 		if effects.is_empty():
@@ -527,6 +527,9 @@ func _on_team_select_cancelled() -> void:
 	pending_biome_type = -1
 	_pending_officer_keys.clear()
 	_pending_objectives.clear()
+	
+	# Re-enable deploy button if appropriate
+	_update_deploy_button_visibility()
 
 
 func _on_mission_scene_dismissed() -> void:
@@ -561,9 +564,7 @@ func _on_mission_scene_dismissed() -> void:
 	else:
 		# New flow - show deploy button after scene
 		current_phase = GamePhase.IDLE # Allow clicking other nodes
-		var current_node = VoyageManager.get_current_node()
-		if current_node:
-			management_hud.set_deploy_active(true)
+		_update_deploy_button_visibility()
 
 
 ## Handle [DEPLOY] button press
@@ -571,6 +572,9 @@ func _on_deploy_pressed() -> void:
 	if current_phase != GamePhase.IDLE and current_phase != GamePhase.EVENT_DISPLAY:
 		return
 		
+	# Disable button immediately to prevent double-click or stale state
+	management_hud.set_deploy_active(false)
+	
 	# Transition to team select
 	_transition_to_team_select()
 
@@ -601,6 +605,9 @@ func _on_mission_complete(success: bool, stats: Dictionary) -> void:
 	tactical_mode.visible = false
 	management_layer.visible = true
 	management_background.visible = true
+	
+	# Ensure deploy button is inactive when returning from mission
+	management_hud.set_deploy_active(false)
 
 	# Fade in from black
 	_fade_in(0.6)
@@ -699,11 +706,7 @@ func _on_post_story_flow_complete() -> void:
 	star_map.center_view_on_ship(false)
 
 	# Re-show deploy button if we are still at a scavenger site and it's not cleared
-	var current_node = VoyageManager.get_current_node()
-	if current_node and current_node.node_type == EventManager.NodeType.SCAVENGE_SITE and current_node.state != NodeData.NodeState.CLEARED:
-		management_hud.set_deploy_active(true)
-	else:
-		management_hud.set_deploy_active(false)
+	_update_deploy_button_visibility()
 
 
 
@@ -975,11 +978,19 @@ func _on_market_pressed() -> void:
 func _on_market_menu_closed() -> void:
 	current_phase = GamePhase.IDLE
 	star_map.refresh()
+	_update_deploy_button_visibility()
 
 
 func _on_barracks_pressed() -> void:
 	if barracks_menu:
+		current_phase = GamePhase.TRADING # Treat as menu phase
 		barracks_menu.show_barracks()
+
+
+func _on_barracks_menu_closed() -> void:
+	current_phase = GamePhase.IDLE
+	star_map.refresh()
+	_update_deploy_button_visibility()
 
 
 func _show_story_beat_scene() -> void:
@@ -1028,3 +1039,12 @@ func _fade_out(duration: float = 0.6) -> void:
 		await fade_transition.fade_complete
 	else:
 		fade_transition.set_black()
+
+
+## Helper to refresh DEPLOY button state based on current node
+func _update_deploy_button_visibility() -> void:
+	var current_node = VoyageManager.get_current_node()
+	if current_node and current_node.node_type == EventManager.NodeType.SCAVENGE_SITE and current_node.state != NodeData.NodeState.CLEARED:
+		management_hud.set_deploy_active(true)
+	else:
+		management_hud.set_deploy_active(false)

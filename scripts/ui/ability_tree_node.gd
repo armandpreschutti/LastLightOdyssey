@@ -54,7 +54,11 @@ func setup(ab_id: String, off_key: String):
 		icon_rect.modulate = Color(0.5, 0.5, 0.5, 0.5)
 	
 	ability_desc = def.get("desc", "")
-	# tooltip_area.tooltip_text = ability_desc # No longer using tooltips
+	var ab_name = def.get("name", "???")
+	if ability_desc != "":
+		tooltip_area.tooltip_text = "%s: %s" % [ab_name, ability_desc]
+	else:
+		tooltip_area.tooltip_text = ab_name
 
 
 func update_state(locked_out: bool, available: bool, cost: int):

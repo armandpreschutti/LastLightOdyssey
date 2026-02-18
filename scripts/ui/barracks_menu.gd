@@ -1,6 +1,8 @@
 extends Control
 ## Barracks Menu — Officer progression, ability unlock, and status viewer
 
+signal closed
+
 const PORTRAIT_PATH = "res://assets/sprites/portraits/"
 const PORTRAIT_MAP = {
 	"captain": "captain_officer_portait.png",
@@ -22,6 +24,13 @@ func _ready() -> void:
 	visible = false
 	if close_button:
 		close_button.pressed.connect(_on_close_pressed)
+	if tech_tree_popup:
+		tech_tree_popup.visibility_changed_to.connect(_on_tech_tree_visibility_changed)
+
+
+func _on_tech_tree_visibility_changed(is_visible: bool) -> void:
+	if not is_visible and visible:
+		_populate()
 
 
 func show_barracks() -> void:
@@ -30,6 +39,7 @@ func show_barracks() -> void:
 
 
 func _on_close_pressed() -> void:
+	closed.emit()
 	visible = false
 
 
@@ -240,10 +250,16 @@ func _create_upgrade_slots(officer_key: String, icon_size: int) -> HBoxContainer
 				break
 		
 		if unlocked_ab_id != "":
-			var tooltip_handler = preload("res://scripts/ui/ability_tooltip_handler.gd").new()
-			slot_panel.add_child(tooltip_handler)
-			tooltip_handler.setup(slot_panel, unlocked_ab_id)
-			
+			var def = GameState.ABILITY_DEFS.get(unlocked_ab_id, {})
+			var ab_name = def.get("name", "Unknown")
+			var ab_desc = def.get("desc", "")
+			var tooltip_text = "%s: %s" % [ab_name, ab_desc]
+
+			# Use tooltip_area for proper tooltip support
+			slot_panel.set_script(preload("res://scripts/ui/tooltip_area.gd"))
+			slot_panel.tooltip_delay_sec = 0.25
+			slot_panel.tooltip_text = tooltip_text
+
 			var icon_file = "%s_%s.png" % [officer_key, unlocked_ab_id]
 			var tex = load(ABILITY_ICON_PATH + icon_file)
 			if tex:

@@ -60,6 +60,16 @@ const ABILITY_MAX_COOLDOWN: int = 2
 # Status effects/buffs tracking: {effect_name: remaining_turns}
 var status_effects: Dictionary = {}
 
+# Per-turn state tracking (reset at start of each turn)
+var moved_this_turn: bool = false
+var attacked_this_turn: bool = false
+var shots_fired_this_turn: int = 0  # For Ambush (first-shot crit)
+
+# Persistent mission-state tracking
+var war_machine_bonus_damage: int = 0        # Heavy: +5 per kill, accumulates
+var emergency_protocol_triggered: bool = false  # Tech: one-time trigger
+var no_one_left_behind_saved: Array[String] = []  # Captain: track saved allies
+
 var _moving: bool = false
 var _move_path: PackedVector2Array = []
 var _move_speed: float = 150.0
@@ -229,6 +239,10 @@ func has_ap(amount: int = 1) -> bool:
 func reset_ap() -> void:
 	current_ap = max_ap
 	_update_ap_display()
+	# Reset per-turn state at the start of each new turn
+	moved_this_turn = false
+	attacked_this_turn = false
+	shots_fired_this_turn = 0
 
 
 ## Reduce all ability cooldowns by 1 (called at start of each round)
@@ -264,16 +278,27 @@ func _start_cooldown(ability_id: String, cooldown_turns: int = ABILITY_MAX_COOLD
 
 
 func take_damage(amount: int) -> void:
-	var actual_damage = amount
+	var actual_damage = calculate_damage_received(amount)
 	current_hp -= actual_damage
 	_update_hp_bar()
-	
+
 	# Play damage SFX
 	if SFXManager:
 		SFXManager.play_sfx_by_name("combat", "hit")
-	
+
 	# Damage flash effect
 	_flash_damage()
+
+	# Emergency Protocol: first time Tech drops below 25% HP, gain +2 AP + reset turret CD
+	if officer_type == "tech" and not emergency_protocol_triggered:
+		var threshold = int(max_hp * 0.25)
+		if current_hp <= threshold and current_hp > 0:
+			var od: OfficerData = GameState.get_officer(officer_key)
+			if od and od.has_ability("emergency_protocol"):
+				emergency_protocol_triggered = true
+				gain_bonus_ap(2)
+				ability_cooldowns.erase("turret")  # Reset turret cooldown to 0
+				_flash_emergency_protocol()
 
 	if current_hp <= 0:
 		current_hp = 0
@@ -370,11 +395,14 @@ func can_shoot_at(target_pos: Vector2i) -> bool:
 func shoot_at(target_pos: Vector2i, hit_chance: float, damage: int = -1) -> bool:
 	if not use_ap(1):
 		return false
-	
-	var actual_damage = damage if damage > 0 else base_damage
+
+	var actual_damage = damage if damage > 0 else (base_damage + war_machine_bonus_damage)
 	var roll = randf()
 	var hit = roll <= (hit_chance / 100.0)
-	
+
+	attacked_this_turn = true
+	shots_fired_this_turn += 1
+
 	shot_fired.emit(target_pos, hit, actual_damage if hit else 0)
 	return hit
 
@@ -738,8 +766,14 @@ func has_status_effect(effect_name: String) -> bool:
 	return effect_name in status_effects and status_effects[effect_name] > 0
 
 
-## Decrement all status effect durations (call at end of turn)
+## Decrement all status effect durations (call at end of enemy turn)
 func tick_status_effects() -> void:
+	# Apply poison damage before decrementing
+	if has_status_effect("poison"):
+		current_hp = maxi(1, current_hp - 5)  # Poison: 5 DMG/turn, doesn't kill outright
+		_update_hp_bar()
+		_flash_damage()
+
 	var effects_to_remove = []
 	for effect_name in status_effects:
 		status_effects[effect_name] -= 1
@@ -780,8 +814,36 @@ func _apply_status_visual_feedback(effect_name: String) -> void:
 			tween.tween_property(sprite, "modulate", Color(1.5, 0.5, 0.5, 1.0), 0.15)
 			tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.15)
 
+		"poison":
+			var tween = create_tween()
+			tween.tween_property(sprite, "modulate", Color(0.4, 1.2, 0.2, 1.0), 0.2)
+			tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.3)
 
-## Gain bonus AP (used by abilities like Lead by Example)
+		"pin_down":
+			var tween = create_tween()
+			tween.tween_property(sprite, "modulate", Color(1.0, 0.4, 0.1, 1.0), 0.15)
+			tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+
+		"untouchable":
+			var tween = create_tween()
+			tween.set_loops(3)
+			tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.8, 1.0), 0.1)
+			tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.1)
+
+		"juggernaut":
+			var tween = create_tween()
+			tween.tween_property(sprite, "modulate", Color(1.4, 0.7, 0.2, 1.0), 0.2)
+			tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.3)
+
+		"war_machine":
+			var tween = create_tween()
+			tween.tween_property(sprite, "modulate", Color(1.8, 0.4, 0.1, 1.0), 0.1)
+			tween.tween_property(sprite, "scale", Vector2(1.15, 1.15), 0.1)
+			tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.25)
+			tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.25)
+
+
+## Gain bonus AP (used by abilities like Lead by Example, Inspire)
 func gain_bonus_ap(amount: int) -> void:
 	current_ap = mini(current_ap + amount, max_ap)
 	_update_ap_display()
@@ -789,13 +851,22 @@ func gain_bonus_ap(amount: int) -> void:
 
 ## Gain bonus movement (used by abilities like Hit & Run)
 func gain_bonus_movement(amount: int) -> void:
-	var original_range = move_range
 	move_range += amount
 
 
 ## Calculate damage taken considering status effects
 func calculate_damage_received(base_damage: int) -> int:
 	var actual_damage = base_damage
+
+	# Immune: no damage at all
+	if has_status_effect("immune"):
+		return 0
+
+	# Untouchable: next attack misses (caller already checked this for hit logic,
+	# but if damage is passed directly, absorb it)
+	if has_status_effect("untouchable"):
+		remove_status_effect("untouchable")
+		return 0
 
 	# Stim reduces damage by 50%
 	if has_status_effect("stim"):
@@ -810,6 +881,18 @@ func calculate_damage_received(base_damage: int) -> int:
 		actual_damage = maxi(1, actual_damage - 20)
 
 	return actual_damage
+
+
+## Flash effect when Emergency Protocol triggers
+func _flash_emergency_protocol() -> void:
+	if not sprite:
+		return
+	var tween = create_tween()
+	tween.tween_property(sprite, "modulate", Color(0.3, 1.8, 2.0, 1.0), 0.05)
+	tween.parallel().tween_property(sprite, "scale", Vector2(1.3, 1.3), 0.05)
+	tween.tween_property(sprite, "modulate", Color(1.0, 1.6, 1.8, 1.0), 0.1)
+	tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.15)
+	tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
 
 
 ## Get accuracy modifier from status effects
@@ -879,12 +962,16 @@ func get_execute_cooldown_with_warlord() -> int:
 	return 2
 
 
-## Captain Level 3B: No One Left Behind - Save ally from death
+## Captain Level 3B: No One Left Behind - Save ally from death (once per ally)
 func try_save_ally(target: Node2D) -> bool:
 	var od = GameState.get_officer(officer_key)
 	if not od or not od.has_ability("no_one_left_behind"):
 		return false
 	if target.current_hp > 0:
+		return false
+	# Only save each ally once per mission
+	var target_key = target.officer_key if "officer_key" in target else ""
+	if target_key != "" and target_key in no_one_left_behind_saved:
 		return false
 
 	# Restore to 1 HP and grant 1-turn immunity
@@ -892,16 +979,39 @@ func try_save_ally(target: Node2D) -> bool:
 	target._update_hp_bar()
 	if target.has_method("add_status_effect"):
 		target.add_status_effect("immune", 1)
+	if target_key != "":
+		no_one_left_behind_saved.append(target_key)
 
 	return true
 
 
-## Captain Level 3C: Command Presence - Aura buff to nearby allies
-func get_command_presence_range() -> int:
+## Captain Level 3C: Inspire - Grant one ally +1 AP immediately
+func apply_inspire(target: Node2D) -> bool:
+	if not use_ap(1):
+		return false
+	if is_ability_on_cooldown("inspire"):
+		return false
+
 	var od = GameState.get_officer(officer_key)
-	if od and od.has_ability("command_presence"):
-		return 4
-	return 0
+	if not od or not od.has_ability("inspire"):
+		return false
+
+	target.gain_bonus_ap(1)
+
+	# Visual: gold pulse on target
+	if target.has_method("_apply_status_visual_feedback"):
+		target._apply_status_visual_feedback("inspire_flash")
+	else:
+		var sp = target.get_node_or_null("Sprite")
+		if sp:
+			var tween = target.create_tween()
+			tween.tween_property(sp, "modulate", Color(2.0, 1.6, 0.3, 1.0), 0.1)
+			tween.tween_property(sp, "scale", Vector2(1.2, 1.2), 0.08)
+			tween.tween_property(sp, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+			tween.parallel().tween_property(sp, "scale", Vector2(1.0, 1.0), 0.2)
+
+	_start_cooldown("inspire", 3)
+	return true
 
 
 # SCOUT ABILITIES
@@ -934,10 +1044,17 @@ func apply_deep_scanner() -> bool:
 	return true
 
 
-## Scout Level 3A: Killzone - Overwatch triggers on all enemies
-func apply_killzone_upgrade() -> bool:
+## Scout Level 3A: Ambush - First shot is auto-crit if Scout hasn't moved
+## Returns true if the next shot should be a critical hit
+func check_ambush_crit() -> bool:
+	if officer_type != "scout":
+		return false
+	if moved_this_turn:
+		return false
+	if shots_fired_this_turn > 0:
+		return false  # Only first shot
 	var od = GameState.get_officer(officer_key)
-	return od != null and od.has_ability("killzone")
+	return od != null and od.has_ability("ambush")
 
 
 ## Scout Level 3B: Phantom - Become invisible for 2 turns
@@ -991,20 +1108,31 @@ func get_turret_stats_with_engineer() -> Dictionary:
 	return stats
 
 
-## Tech Level 2B: Sapper - EMP grenade attack
-func apply_sapper_emp(target_pos: Vector2i) -> bool:
-	if not use_ap(1):
+## Tech Level 2B: Field Repair - Heal nearest turret
+func apply_field_repair(turret: Node2D) -> bool:
+	if is_ability_on_cooldown("field_repair"):
 		return false
-	if is_ability_on_cooldown("sapper"):
-		return false
-
+	# 0 AP cost
 	var od = GameState.get_officer(officer_key)
-	if not od or not od.has_ability("sapper"):
+	if not od or not od.has_ability("field_repair"):
 		return false
 
-	# Stuns enemies in 3x3 area
-	# This would be called by tactical controller with target_pos
-	_start_cooldown("sapper")
+	# Heal turret 25 HP and extend duration by 1
+	if turret.has_method("repair"):
+		turret.repair(25)
+	elif "current_hp" in turret:
+		turret.current_hp = mini(turret.current_hp + 25, turret.max_hp if "max_hp" in turret else 100)
+
+	if "duration_remaining" in turret:
+		turret.duration_remaining += 1
+
+	# Visual: cyan healing pulse on tech unit
+	if sprite:
+		var tween = create_tween()
+		tween.tween_property(sprite, "modulate", Color(0.3, 1.8, 2.0, 1.0), 0.1)
+		tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+
+	_start_cooldown("field_repair", 3)
 	return true
 
 
@@ -1016,37 +1144,13 @@ func get_max_turrets_with_twinlink() -> int:
 	return 1
 
 
-## Tech Level 3B: Overclock - Turret fires multiple times then explodes
-func apply_overclock_to_turret(turret: Node2D) -> bool:
+## Tech Level 3B: Remote Detonation — returns true so controller can handle explosion
+func can_remote_detonate() -> bool:
 	var od = GameState.get_officer(officer_key)
-	if not od or not od.has_ability("overclock"):
-		return false
-
-	# Turret fires 3 times then self-destructs with area damage
-	# This is handled by the turret itself when overclock is applied
-	if turret.has_method("trigger_overclock"):
-		turret.trigger_overclock()
-
-	return true
+	return od != null and od.has_ability("remote_detonation") and officer_type == "tech"
 
 
-## Tech Level 3C: Haywire Protocol - Control enemy robot
-func apply_haywire_protocol(target: Node2D) -> bool:
-	if not use_ap(1):
-		return false
-	if is_ability_on_cooldown("haywire_protocol"):
-		return false
-
-	var od = GameState.get_officer(officer_key)
-	if not od or not od.has_ability("haywire_protocol"):
-		return false
-
-	# Target fights for you for 2 turns, then stuns for 1
-	if target.has_method("charm_unit"):
-		target.charm_unit(2)
-
-	_start_cooldown("haywire_protocol", 4)
-	return true
+## Tech Level 3C: Emergency Protocol — handled in take_damage
 
 
 # MEDIC ABILITIES
@@ -1144,19 +1248,23 @@ func apply_stim_injector(target: Node2D) -> bool:
 # HEAVY ABILITIES
 #===================
 
-## Heavy Level 2A: Bulldozer - Charge destroys cover, grant armor
+## Heavy Level 2A: Bulldozer - Charge grants armor
 func apply_bulldozer_armor() -> void:
 	var od = GameState.get_officer(officer_key)
 	if not od or not od.has_ability("bulldozer"):
 		return
+	add_status_effect("bulldozer_armor", 2)
+	# Visual: orange armor flash
+	if sprite:
+		var tween = create_tween()
+		tween.tween_property(sprite, "modulate", Color(1.6, 0.8, 0.2, 1.0), 0.1)
+		tween.tween_property(sprite, "scale", Vector2(1.15, 1.15), 0.1)
+		tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+		tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.2)
 
-	# Add armor status (+20 defense reduction)
-	if has_method("add_status_effect"):
-		add_status_effect("bulldozer_armor", 2)
 
-
-## Heavy Level 2B: Suppression Fire - Cone attack that pins enemies
-func apply_suppression_fire(target_pos: Vector2i) -> bool:
+## Heavy Level 2B: Suppression Fire - all visible enemies -25% accuracy for 1 turn
+func apply_suppression_fire() -> bool:
 	if not use_ap(2):
 		return false
 	if is_ability_on_cooldown("suppression_fire"):
@@ -1166,30 +1274,46 @@ func apply_suppression_fire(target_pos: Vector2i) -> bool:
 	if not od or not od.has_ability("suppression_fire"):
 		return false
 
-	# Deal damage in cone and pin down enemies
-	# Caller will apply pin_down status to hit enemies
+	attacked_this_turn = true
 	_start_cooldown("suppression_fire")
+	# Visual: orange muzzle blast
+	if sprite:
+		var tween = create_tween()
+		tween.tween_property(sprite, "modulate", Color(1.8, 0.6, 0.1, 1.0), 0.04)
+		tween.parallel().tween_property(sprite, "scale", Vector2(1.1, 0.9), 0.04)
+		tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+		tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.2)
 	return true
 
 
-## Heavy Level 3A: Juggernaut - Immunity + regen passive
+## Heavy Level 3A: Juggernaut - Crit immunity + regen if idle this turn
 func apply_juggernaut_regeneration() -> void:
 	var od = GameState.get_officer(officer_key)
 	if not od or not od.has_ability("juggernaut"):
 		return
+	if attacked_this_turn:
+		return  # Only regen if Heavy didn't attack
 
-	# Regenerate 15% max HP if didn't attack this turn
 	var regen_amount = int(max_hp * 0.15)
 	heal(regen_amount)
 
-	# Visual feedback
-	var tween = create_tween()
-	tween.tween_property(sprite, "modulate", Color(1.2, 1.5, 0.8, 1.0), 0.2)
-	tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+	# Visual: green-gold regen pulse
+	if sprite:
+		var tween = create_tween()
+		tween.tween_property(sprite, "modulate", Color(1.0, 1.8, 0.5, 1.0), 0.15)
+		tween.parallel().tween_property(sprite, "scale", Vector2(1.1, 1.1), 0.15)
+		tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.25)
+		tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.25)
 
 
-## Heavy Level 3B: Rocket Salvo - Area damage and cover destruction
-func apply_rocket_salvo(target_pos: Vector2i) -> bool:
+## Check if Juggernaut crit immunity is active
+func is_juggernaut_crit_immune() -> bool:
+	var od = GameState.get_officer(officer_key)
+	return od != null and od.has_ability("juggernaut")
+
+
+## Heavy Level 3B: Rocket Salvo - 40 damage in 3x3 area (no cover destruction)
+func apply_rocket_salvo(_target_pos: Vector2i) -> bool:
 	if not use_ap(2):
 		return false
 	if is_ability_on_cooldown("rocket_salvo"):
@@ -1199,18 +1323,19 @@ func apply_rocket_salvo(target_pos: Vector2i) -> bool:
 	if not od or not od.has_ability("rocket_salvo"):
 		return false
 
-	# Deal 40 area damage in 3x3 and destroy cover
-	# Caller applies damage to affected units
+	attacked_this_turn = true
 	_start_cooldown("rocket_salvo", 3)
 	return true
 
 
-## Heavy Level 3C: Intimidate - Aura that debuffs enemies
-func get_intimidate_range() -> int:
+## Heavy Level 3C: War Machine - +5 base damage per kill (called by controller on kill)
+func apply_war_machine_kill() -> void:
 	var od = GameState.get_officer(officer_key)
-	if od and od.has_ability("intimidate"):
-		return 3
-	return 0
+	if not od or not od.has_ability("war_machine"):
+		return
+	war_machine_bonus_damage += 5
+	# Visual: red-orange power surge
+	_apply_status_visual_feedback("war_machine")
 
 
 # SNIPER ABILITIES

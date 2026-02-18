@@ -166,25 +166,6 @@ theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 20
 text = "FUEL COLLECTED: +0"
 
-[node name="ScrapRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/StatsContainer"]
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="ScrapIcon" type="TextureRect" parent="PanelContainer/MarginContainer/VBoxContainer/StatsContainer/ScrapRow"]
-custom_minimum_size = Vector2(24, 24)
-layout_mode = 2
-texture = ExtResource("4_scrap")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="ScrapLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/StatsContainer/ScrapRow"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_colors/font_color = Color(1.0, 0.7, 0.2, 1)
-theme_override_fonts/font = ExtResource("2_font")
-theme_override_font_sizes/font_size = 20
-text = "SCRAP COLLECTED: +0"
-
 [node name="EnemiesRow" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/StatsContainer"]
 layout_mode = 2
 theme_override_constants/separation = 10

@@ -3,10 +3,9 @@ extends Node
 ## Manages resources, officers, and game progression
 
 signal fuel_changed(new_value: int)
-signal integrity_changed(new_value: int)
-signal scrap_changed(new_value: int)
 signal cash_changed(new_value: int)
 signal intel_changed(new_value: int)
+signal integrity_changed(new_value: int)
 signal officer_died(officer_type: String)
 signal officer_injured(officer_key: String)
 signal game_over(reason: String)
@@ -44,25 +43,25 @@ const ABILITY_DEFS: Dictionary = {
 	# CAPTAIN - Level 3
 	"warlord":            {"name": "Warlord",            "desc": "Execute no longer has a cooldown. Chain multiple executions in a single turn if you have enough AP.",                                            "level": 3, "slot": "a", "type": "passive", "cooldown_override": 0, "modifies": "execute"},
 	"no_one_left_behind": {"name": "No One Left Behind", "desc": "If an ally within 5 tiles takes lethal damage, they survive with 1 HP and become immune to all damage for 1 turn. (Once per ally per mission)", "level": 3, "slot": "b", "type": "passive"},
-	"command_presence":   {"name": "Command Presence",   "desc": "All allies within 4 tiles gain +10% Accuracy and +15% Critical Chance. The Captain gains +10 Defense per nearby ally.",                          "level": 3, "slot": "c", "type": "passive", "aura_range": 4},
+	"inspire":            {"name": "Inspire",            "desc": "Grant one ally within 5 tiles +1 AP immediately. (1 AP, 3-turn cooldown)",                                                                       "level": 3, "slot": "c", "type": "active", "cost": 1, "cooldown": 3},
 
 	# SCOUT - Level 2
 	"hit_and_run":        {"name": "Hit & Run",          "desc": "If the Scout moves and shoots in the same turn, they immediately gain +3 Movement Points to retreat or reposition.",                             "level": 2, "slot": "a", "type": "passive"},
 	"deep_scanner":       {"name": "Deep Scanner",       "desc": "Reveals all enemies in a large radius (15 tiles) for 1 turn, even through walls. (0 AP, 3-turn cooldown)",                                      "level": 2, "slot": "b", "type": "active", "cost": 0, "cooldown": 3},
 
 	# SCOUT - Level 3
-	"killzone":           {"name": "Killzone",           "desc": "Overwatch now triggers on every enemy that moves in Line of Sight during the enemy turn, not just the first.",                                   "level": 3, "slot": "a", "type": "passive", "modifies": "overwatch"},
+	"ambush":             {"name": "Ambush",             "desc": "If you have not moved this turn, your first shot is an automatic critical hit.",                                                                  "level": 3, "slot": "a", "type": "passive"},
 	"phantom":            {"name": "Phantom",            "desc": "Become Invisible for 2 turns. First attack from invisibility deals +100% Damage but reveals you. (1 AP, active)",                               "level": 3, "slot": "b", "type": "active", "cost": 1, "duration": 2},
 	"untouchable":        {"name": "Untouchable",        "desc": "If you kill an enemy during your turn, the next attack against you during the enemy turn is guaranteed to Miss.",                                 "level": 3, "slot": "c", "type": "passive"},
 
 	# TECH - Level 2
 	"combat_engineer":    {"name": "Combat Engineer",    "desc": "Turrets gain a 20 HP shield barrier and their duration is extended to 5 turns.",                                                                 "level": 2, "slot": "a", "type": "passive", "modifies": "turret", "turret_hp_bonus": 20, "turret_duration": 5},
-	"sapper":             {"name": "Sapper",             "desc": "Throw a localized EMP grenade. Stuns robotic enemies and disables weapons in a 3×3 area for 1 turn. (1 AP, active)",                            "level": 2, "slot": "b", "type": "active", "cost": 1},
+	"field_repair":       {"name": "Field Repair",       "desc": "Instantly restore 25 HP and +1 turn duration to your nearest active turret. (0 AP, 3-turn cooldown)",                                           "level": 2, "slot": "b", "type": "active", "cost": 0, "cooldown": 3},
 
 	# TECH - Level 3
 	"twin_link":          {"name": "Twin-Link",          "desc": "You can have 2 Turrets active simultaneously. Deploying a second turret does not destroy the first.",                                            "level": 3, "slot": "a", "type": "passive", "modifies": "turret", "max_turrets": 2},
-	"overclock":          {"name": "Overclock",          "desc": "Target your active Turret. It fires 3 times at random enemies, then self-destructs with 20 area damage. (0 AP)",                                 "level": 3, "slot": "b", "type": "active", "cost": 0},
-	"haywire_protocol":   {"name": "Haywire Protocol",   "desc": "Hack a robotic enemy. It fights for you for 2 turns, then shuts down for 1 turn. (1 AP, 4-turn cooldown)",                                      "level": 3, "slot": "c", "type": "active", "cost": 1, "cooldown": 4},
+	"remote_detonation":  {"name": "Remote Detonation",  "desc": "Destroy your nearest active turret. It explodes, dealing 30 damage to all enemies within 2 tiles. (0 AP)",                                      "level": 3, "slot": "b", "type": "active", "cost": 0, "cooldown": 0},
+	"emergency_protocol": {"name": "Emergency Protocol", "desc": "When Tech's HP drops below 25% for the first time, instantly gain +2 AP and reset the Turret cooldown. (Passive, once per mission)",            "level": 3, "slot": "c", "type": "passive"},
 
 	# MEDIC - Level 2
 	"adrenaline_patch":   {"name": "Adrenaline Patch",   "desc": "Patch also grants the target +2 Movement and +15% Accuracy for 2 turns.",                                                                       "level": 2, "slot": "a", "type": "passive", "modifies": "patch"},
@@ -78,9 +77,9 @@ const ABILITY_DEFS: Dictionary = {
 	"suppression_fire":   {"name": "Suppression Fire",   "desc": "Deal light damage to all enemies in a cone and remove their ability to move next turn (Pin Down). (2 AP, active)",                               "level": 2, "slot": "b", "type": "active", "cost": 2},
 
 	# HEAVY - Level 3
-	"juggernaut":         {"name": "Juggernaut",         "desc": "Immune to Critical Hits and Knockback. If you end your turn without attacking, regenerate 15% Max HP.",                                          "level": 3, "slot": "a", "type": "passive"},
-	"rocket_salvo":       {"name": "Rocket Salvo",       "desc": "Launch a micro-missile swarm at a 3×3 area: 40 area damage and destroys all cover. (2 AP, 3-turn cooldown)",                                    "level": 3, "slot": "b", "type": "active", "cost": 2, "cooldown": 3},
-	"intimidate":         {"name": "Intimidate",         "desc": "Enemies within 3 tiles suffer -20% Accuracy and cannot use Overwatch or Reaction Fire.",                                                         "level": 3, "slot": "c", "type": "passive", "aura_range": 3},
+	"juggernaut":         {"name": "Juggernaut",         "desc": "Immune to Critical Hits. If you end your turn without attacking, regenerate 15% Max HP.",                                                        "level": 3, "slot": "a", "type": "passive"},
+	"rocket_salvo":       {"name": "Rocket Salvo",       "desc": "Launch a micro-missile swarm. Deals 40 damage to all enemies in a 3×3 area. (2 AP, 3-turn cooldown)",                                          "level": 3, "slot": "b", "type": "active", "cost": 2, "cooldown": 3},
+	"war_machine":        {"name": "War Machine",        "desc": "Each enemy killed this mission permanently grants +5 Base Damage. The Heavy grows more dangerous as the fight goes on.",                         "level": 3, "slot": "c", "type": "passive"},
 
 	# SNIPER - Level 2
 	"damn_good_ground":   {"name": "Damn Good Ground",   "desc": "If you have not moved this turn, gain +15% Critical Chance and +2 Sight Range.",                                                                 "level": 2, "slot": "a", "type": "passive"},
@@ -94,12 +93,12 @@ const ABILITY_DEFS: Dictionary = {
 
 # Per-officer ability lists: [L1, L2-A, L2-B, L3-A, L3-B, L3-C]
 const OFFICER_ABILITIES: Dictionary = {
-	"captain": ["execute", "lead_by_example", "coordinate_fire", "warlord", "no_one_left_behind", "command_presence"],
-	"scout":   ["overwatch", "hit_and_run",     "deep_scanner",    "killzone", "phantom",            "untouchable"],
-	"tech":    ["turret", "combat_engineer", "sapper",          "twin_link","overclock",           "haywire_protocol"],
-	"medic":   ["patch", "adrenaline_patch","field_surgeon",   "miracle_worker","toxicologist",   "stim_injector"],
-	"heavy":   ["charge", "bulldozer",       "suppression_fire","juggernaut","rocket_salvo",       "intimidate"],
-	"sniper":  ["precision_shot", "damn_good_ground","snap_shot",       "serial",   "apex_predator",       "double_tap"],
+	"captain": ["execute", "lead_by_example",  "coordinate_fire",  "warlord",          "no_one_left_behind", "inspire"],
+	"scout":   ["overwatch", "hit_and_run",   "deep_scanner",     "ambush",           "phantom",            "untouchable"],
+	"tech":    ["turret",  "combat_engineer", "field_repair",     "twin_link",        "remote_detonation",  "emergency_protocol"],
+	"medic":   ["patch",   "adrenaline_patch","field_surgeon",    "miracle_worker",   "toxicologist",       "stim_injector"],
+	"heavy":   ["charge",  "bulldozer",       "suppression_fire", "juggernaut",       "rocket_salvo",       "war_machine"],
+	"sniper":  ["precision_shot", "damn_good_ground", "snap_shot", "serial",          "apex_predator",      "double_tap"],
 }
 
 var developer_mode: bool = false:
@@ -108,7 +107,7 @@ var developer_mode: bool = false:
 		developer_mode_changed.emit(developer_mode)
 
 # Primary Statistics (Voyage 2.0 Economy)
-var fuel: int = 10:
+var fuel: int = 3:
 	set(value):
 		if developer_mode and value < fuel:
 			value = fuel
@@ -124,12 +123,6 @@ var ship_integrity: int = 100:
 		if ship_integrity <= 0:
 			_trigger_game_over("ship_destroyed")
 
-var scrap: int = 25:
-	set(value):
-		if developer_mode and value < scrap:
-			value = scrap
-		scrap = maxi(0, value)
-		scrap_changed.emit(scrap)
 
 var cash: int = 100:
 	set(value):
@@ -182,7 +175,6 @@ var tactical_turn_count: int = 0
 
 # Cumulative mission statistics (tracked across entire voyage)
 var total_fuel_collected: int = 0
-var total_scrap_collected: int = 0
 var total_enemies_killed: int = 0
 var total_missions_completed: int = 0
 var total_tactical_turns: int = 0
@@ -259,9 +251,8 @@ func is_officer_available(key: String) -> bool:
 
 
 func reset_game() -> void:
-	fuel = 10
+	fuel = 3
 	ship_integrity = 100
-	scrap = 25
 	cash = 100
 	intel = 0
 	story_chapters_completed = 0
@@ -269,7 +260,6 @@ func reset_game() -> void:
 	
 	# Reset cumulative stats
 	total_fuel_collected = 0
-	total_scrap_collected = 0
 	total_enemies_killed = 0
 	total_missions_completed = 0
 	total_tactical_turns = 0
@@ -282,9 +272,8 @@ func reset_game() -> void:
 
 
 ## Add mission stats to cumulative totals (called after successful missions)
-func add_mission_stats(fuel_collected: int, scrap_collected: int, enemies_killed: int, turns_taken: int) -> void:
+func add_mission_stats(fuel_collected: int, enemies_killed: int, turns_taken: int) -> void:
 	total_fuel_collected += fuel_collected
-	total_scrap_collected += scrap_collected
 	total_enemies_killed += enemies_killed
 	total_tactical_turns += turns_taken
 	total_missions_completed += 1
@@ -403,7 +392,6 @@ func save_game() -> bool:
 		"version": 7, # Voyage 2.0 + story progression (Phase 5)
 		"fuel": fuel,
 		"ship_integrity": ship_integrity,
-		"scrap": scrap,
 		"cash": cash,
 		"intel": intel,
 		"story_chapters_completed": story_chapters_completed,
@@ -413,7 +401,6 @@ func save_game() -> bool:
 		"voyage_data": VoyageManager.get_save_data(),
 		# Cumulative mission stats (v3)
 		"total_fuel_collected": total_fuel_collected,
-		"total_scrap_collected": total_scrap_collected,
 		"total_enemies_killed": total_enemies_killed,
 		"total_missions_completed": total_missions_completed,
 		"total_tactical_turns": total_tactical_turns,
@@ -467,9 +454,8 @@ func load_game() -> bool:
 		return false
 
 	# Restore game state
-	fuel = int(save_data.get("fuel", 10))
+	fuel = int(save_data.get("fuel", 3))
 	ship_integrity = int(save_data.get("ship_integrity", 100))
-	scrap = int(save_data.get("scrap", 0))
 	cash = int(save_data.get("cash", 100))
 	intel = int(save_data.get("intel", 0))
 	story_chapters_completed = int(save_data.get("story_chapters_completed", 0))
@@ -495,7 +481,6 @@ func load_game() -> bool:
 	
 	# Restore cumulative mission stats
 	total_fuel_collected = int(save_data.get("total_fuel_collected", 0))
-	total_scrap_collected = int(save_data.get("total_scrap_collected", 0))
 	total_enemies_killed = int(save_data.get("total_enemies_killed", 0))
 	total_missions_completed = int(save_data.get("total_missions_completed", 0))
 	total_tactical_turns = int(save_data.get("total_tactical_turns", 0))

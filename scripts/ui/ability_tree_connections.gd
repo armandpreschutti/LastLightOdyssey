@@ -10,7 +10,7 @@ func _draw():
 	
 	var nodes = []
 	for child in parent.get_children():
-		if child is Control and child != self:
+		if child is Control and child != self and not child.is_queued_for_deletion():
 			nodes.append(child)
 	
 	if nodes.is_empty(): return
@@ -50,18 +50,18 @@ func _draw_connection(from, to, color):
 	var start = from.position + from.size / 2
 	var end = to.position + to.size / 2
 	
-	# Determine line style based on "to" node state
+	# Determine line style based on both from and to node state.
+	# A connection is only highlighted if the source node is unlocked.
 	var line_color = color
 	var line_width = 2.0
 	var alpha = 0.2 # Default faint
-	
-	if to.is_unlocked:
+
+	if from.is_unlocked and to.is_unlocked:
 		alpha = 0.8
 		line_width = 3.0
-	elif to.is_available:
+	elif from.is_unlocked and to.is_available:
 		alpha = 0.5
 		line_width = 2.5
-		# Pulse effect? (For now just brighter)
 	
 	line_color.a = alpha
 	

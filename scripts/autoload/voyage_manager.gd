@@ -21,10 +21,11 @@ var pending_branch_choice: String = ""       # Player's chosen next mission
 # Constants
 const FUEL_COST_PER_JUMP: int = 1
 const HULL_DAMAGE_NO_FUEL: int = 5
-const STORY_INTEL_THRESHOLD: int = 10
+const STORY_INTEL_THRESHOLD: int = 3
 const STORY_INTEL_THRESHOLD_DEV: int = 1
 const STORY_CHAIN_LENGTH: int = 5
 const STORY_RANGE_UNITS: float = 1200.0 # Approx 3 jumps in world-space terms
+const PROXIMITY_CONNECT_DISTANCE: float = 450.0 # Auto-connect nodes within this distance
 
 # Campaign tree structure
 const CAMPAIGN_TREE: Dictionary = {
@@ -63,6 +64,7 @@ func _initialize_voyage() -> void:
 	for node in initial_nodes:
 		nodes[node.id] = node
 		
+	_apply_proximity_connections()
 	_try_spawn_story_node()
 	map_updated.emit()
 
@@ -247,16 +249,11 @@ func is_path_traveled(node_a: NodeData, node_b: NodeData) -> bool:
 	if not node_a or not node_b:
 		return false
 		
-	# Both nodes must be visited (or cleared)
-	if node_a.state == NodeData.NodeState.UNVISITED or node_b.state == NodeData.NodeState.UNVISITED:
-		return false
-		
-	# Must have a parent-child relationship
-	# Logic: If both are visited, and one is the parent of the other, it's a traveled path.
-	if node_a.parent_id == node_b.id or node_b.parent_id == node_a.id:
-		return true
-		
-	return false
+	# Both nodes must be visited/cleared/story — only UNVISITED means not traveled
+	var a_visited = node_a.state != NodeData.NodeState.UNVISITED
+	var b_visited = node_b.state != NodeData.NodeState.UNVISITED
+	
+	return a_visited and b_visited
 
 ## Generate new nodes upon arrival at a fresh node
 func _handle_arrival_generation(target_node: NodeData, previous_node: NodeData) -> void:
@@ -264,7 +261,7 @@ func _handle_arrival_generation(target_node: NodeData, previous_node: NodeData) 
 	var incoming_vector = target_node.position - previous_node.position
 	
 	# Generate new options
-	var new_nodes = generator.generate_options(target_node, incoming_vector)
+	var new_nodes = generator.generate_options(target_node, incoming_vector, -1, false, nodes)
 	
 	# Register and link new nodes
 	for node in new_nodes:
@@ -272,6 +269,9 @@ func _handle_arrival_generation(target_node: NodeData, previous_node: NodeData) 
 		# Connection logic is handled inside generator (bidirectional link)
 		# Just need to make sure the target_node's connections are updated if not already done by reference?
 		# GDScript objects are passed by reference, so modifying source_node.connections in generator works.
+	
+	# Auto-connect any nodes that are within proximity distance
+	_apply_proximity_connections()
 
 func _on_intel_changed(_new_value: int) -> void:
 	_try_spawn_story_node()
@@ -307,7 +307,7 @@ func _try_spawn_story_node() -> void:
 	var candidate: NodeData = _find_reachable_story_candidate(current_node)
 	if candidate == null:
 		# Force-generate options from the current node so the story node is actionable immediately.
-		var generated = generator.generate_options(current_node, Vector2.RIGHT, 4, false)
+		var generated = generator.generate_options(current_node, Vector2.RIGHT, 4, false, nodes)
 		for n in generated:
 			nodes[n.id] = n
 		candidate = _find_reachable_story_candidate(current_node)
@@ -512,5 +512,20 @@ func load_save_data(data: Dictionary) -> void:
 				active_story_node_id = id
 				break
 
+	_apply_proximity_connections()
 	_try_spawn_story_node()
 #endregion
+
+
+## Auto-connect any two nodes within PROXIMITY_CONNECT_DISTANCE of each other (bidirectional)
+func _apply_proximity_connections() -> void:
+	var node_ids = nodes.keys()
+	for i in range(node_ids.size()):
+		var node_a: NodeData = nodes[node_ids[i]]
+		for j in range(i + 1, node_ids.size()):
+			var node_b: NodeData = nodes[node_ids[j]]
+			if node_a.position.distance_to(node_b.position) <= PROXIMITY_CONNECT_DISTANCE:
+				if not node_b.id in node_a.connections:
+					node_a.connections.append(node_b.id)
+				if not node_a.id in node_b.connections:
+					node_b.connections.append(node_a.id)

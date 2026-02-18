@@ -1,5 +1,5 @@
 extends Label
-## Pickup popup - Shows scrap/fuel collection text that floats upward and fades
+## Pickup popup - Shows resource collection text that floats upward and fades
 ## Smaller and subtler than damage popups
 
 var _velocity: Vector2 = Vector2(0, -50)  # Float upward
@@ -34,9 +34,9 @@ func _process(delta: float) -> void:
 func initialize(item_type: String, amount: int, world_pos: Vector2) -> void:
 	position = world_pos
 	
-	if item_type == "scrap":
-		text = "+%d SCRAP" % amount
-		add_theme_color_override("font_color", Color(0.8, 0.8, 0.9))  # Gray/silver for scrap
+	if item_type == "cash":
+		text = "+%d CR" % amount
+		add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))  # Green for cash
 	elif item_type == "fuel":
 		text = "+%d FUEL" % amount
 		add_theme_color_override("font_color", Color(1.0, 0.8, 0.2))  # Yellow/orange for fuel

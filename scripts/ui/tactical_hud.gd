@@ -8,6 +8,8 @@ signal ability_used(ability_type: String)
 signal pause_pressed
 signal ability_cancelled
 
+const ABILITY_ICON_PATH = "res://assets/sprites/ui/icons/abilities/"
+
 # Pause button panel (top left) - includes panel, glow, and border
 @onready var pause_panel: PanelContainer = $TopLeftPanel
 @onready var pause_glow: ColorRect = $TopLeftGlow
@@ -21,7 +23,6 @@ signal ability_cancelled
 @onready var integrity_bar: ProgressBar = $TopBar/HBox/IntegrityContainer/IntegrityBar
 @onready var haul_container: VBoxContainer = $TopBar/HBox/HaulContainer
 @onready var fuel_label: Label = $TopBar/HBox/HaulContainer/FuelRow/FuelLabel
-@onready var scrap_label: Label = $TopBar/HBox/HaulContainer/ScrapRow/ScrapLabel
 
 # Side panel elements - updated paths for icon-based layout
 @onready var side_panel: PanelContainer = $SidePanel
@@ -38,16 +39,21 @@ signal ability_cancelled
 @onready var cover_bonus_label: Label = $SidePanel/VBox/CoverBonusLabel
 @onready var status_label: Label = $SidePanel/VBox/StatusLabel
 
-# Ability section
-@onready var ability_container: VBoxContainer = $SidePanel/VBox/AbilityContainer
-@onready var ability_header: Label = $SidePanel/VBox/AbilityContainer/AbilityHeader
-@onready var ability_button: Button = $SidePanel/VBox/AbilityContainer/AbilityButton
-@onready var ability_desc: Label = $SidePanel/VBox/AbilityContainer/AbilityDesc
-@onready var cancel_button: Button = $SidePanel/VBox/AbilityContainer/CancelButton
+# Actions panel (bottom-right, shown only when a unit is selected)
+@onready var actions_panel: PanelContainer = $ActionsPanel
+@onready var ability_preview_row: HBoxContainer = $ActionsPanel/VBox/AbilityPreviewRow
+@onready var passives_label: Label = $ActionsPanel/VBox/PassivesLabel
 
-# Action buttons
-@onready var end_turn_button: Button = $SidePanel/VBox/ButtonContainer/EndTurnButton
-@onready var extract_button: Button = $SidePanel/VBox/ButtonContainer/ExtractButton
+# Ability section (inside ActionsPanel)
+@onready var ability_container: VBoxContainer = $ActionsPanel/VBox/AbilityContainer
+@onready var ability_header: Label = $ActionsPanel/VBox/AbilityContainer/AbilityHeader
+@onready var ability_button: Button = $ActionsPanel/VBox/AbilityContainer/AbilityButton
+@onready var ability_desc: Label = $ActionsPanel/VBox/AbilityContainer/AbilityDesc
+@onready var cancel_button: Button = $ActionsPanel/VBox/AbilityContainer/CancelButton
+
+# Action buttons (inside ActionsPanel)
+@onready var end_turn_button: Button = $ActionsPanel/VBox/ButtonContainer/EndTurnButton
+@onready var extract_button: Button = $ActionsPanel/VBox/ButtonContainer/ExtractButton
 
 # Objectives panel
 @onready var objectives_panel: PanelContainer = $ObjectivesPanel
@@ -71,9 +77,7 @@ func _ready() -> void:
 	extract_button.pressed.connect(_on_extract_pressed)
 	ability_button.pressed.connect(_on_ability_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
-	extract_button.visible = false
-	ability_container.visible = false
-	cancel_button.visible = false
+	actions_panel.visible = false
 
 	# Load and setup ability panel
 	var ability_panel_scene = preload("res://scenes/ui/ability_panel.tscn")
@@ -92,23 +96,52 @@ func _ready() -> void:
 	_setup_tooltips()
 
 
+const _TOOLTIP_BTN  = preload("res://scripts/ui/tooltip_button.gd")
+const _TOOLTIP_LBL  = preload("res://scripts/ui/tooltip_label.gd")
+const _TOOLTIP_BAR  = preload("res://scripts/ui/tooltip_progress_bar.gd")
+const _TOOLTIP_VBOX = preload("res://scripts/ui/tooltip_vbox.gd")
+const _TOOLTIP_HBOX = preload("res://scripts/ui/tooltip_hbox.gd")
+
 func _setup_tooltips() -> void:
-	# Pause button tooltip
+	# Apply tooltip scripts so _make_custom_tooltip fires on each node
+	pause_button.set_script(_TOOLTIP_BTN)
 	pause_button.tooltip_text = "Pause the mission.\nYou can abandon the mission at the cost of forfeiting all collected resources."
-	
-	# Top bar tooltips
+
+	turn_label.set_script(_TOOLTIP_LBL)
 	turn_label.tooltip_text = "Current turn number. Each turn, the ship takes structural damage (−1% Integrity)."
+
+	integrity_container.set_script(_TOOLTIP_VBOX)
 	integrity_container.tooltip_text = "Ship Integrity: Structural health of the ship.\nDecreases 1% per tactical turn. At 0%, the voyage fails."
+
+	integrity_label.set_script(_TOOLTIP_LBL)
 	integrity_label.tooltip_text = "Ship Integrity: Structural health of the ship.\nDecreases 1% per tactical turn. At 0%, the voyage fails."
+
+	integrity_bar.set_script(_TOOLTIP_BAR)
 	integrity_bar.tooltip_text = "Ship Integrity: Structural health of the ship.\nDecreases 1% per tactical turn. At 0%, the voyage fails."
-	haul_container.tooltip_text = "Resources collected during this mission.\nWalk over fuel crates and scrap piles to collect them."
-	
-	# Side panel tooltips
+
+	haul_container.set_script(_TOOLTIP_VBOX)
+	haul_container.tooltip_text = "Resources collected during this mission.\nWalk over fuel crates to collect them."
+
+	hp_container.set_script(_TOOLTIP_HBOX)
 	hp_container.tooltip_text = "Health Points: Unit's remaining health.\nIf HP reaches 0, the unit dies permanently."
+
+	ap_container.set_script(_TOOLTIP_HBOX)
 	ap_container.tooltip_text = "Action Points: Used for moving and attacking.\nMovement costs 1 AP. Shooting costs 1 AP. Resets each round."
+
+	end_turn_button.set_script(_TOOLTIP_BTN)
 	end_turn_button.tooltip_text = "End this unit's turn and move to the next unit.\nAfter all units act, enemies take their turn."
+
+	extract_button.set_script(_TOOLTIP_BTN)
 	extract_button.tooltip_text = "Extract units from the mission.\nAt least 1 unit must be on extraction tiles (green areas).\nUnits not in the extraction zone will be left behind (KIA)."
 
+	# Apply to static ability button and labels that get tooltip_text set later
+	ability_button.set_script(_TOOLTIP_BTN)
+	status_label.set_script(_TOOLTIP_LBL)
+	move_label.set_script(_TOOLTIP_LBL)
+	attack_label.set_script(_TOOLTIP_LBL)
+	cover_bonus_label.set_script(_TOOLTIP_LBL)
+	fuel_label.set_script(_TOOLTIP_LBL)
+	passives_label.set_script(_TOOLTIP_LBL)
 
 func update_turn(turn_number: int) -> void:
 	turn_label.text = "TURN: %d" % turn_number
@@ -215,11 +248,9 @@ func _update_cover_bonus_display(cover_level: int) -> void:
 			cover_bonus_label.visible = false
 
 
-func update_haul(fuel: int, scrap: int) -> void:
+func update_haul(fuel: int, cash: int) -> void:
 	fuel_label.text = "FUEL: +%d" % fuel
-	scrap_label.text = "SCRAP: +%d" % scrap
 	fuel_label.tooltip_text = "Fuel cells collected this mission.\nFuel is used to jump between star systems."
-	scrap_label.tooltip_text = "Scrap collected this mission.\nScrap can be traded for repairs and supplies."
 
 
 
@@ -260,6 +291,9 @@ func _on_extract_pressed() -> void:
 
 
 func update_ability_buttons(officer_type: String, current_ap: int, unit_ref: Object = null) -> void:
+	actions_panel.visible = true
+	_current_officer_key = officer_type
+
 	# Clear dynamic buttons from previous call
 	for btn in _dynamic_ability_buttons:
 		if is_instance_valid(btn):
@@ -350,6 +384,7 @@ func update_ability_buttons(officer_type: String, current_ap: int, unit_ref: Obj
 			var cd_remaining: int = unit_ref.get_ability_cooldown(ab_id) if unit_ref else 0
 			var on_cd := cd_remaining > 0
 			var btn := Button.new()
+			btn.set_script(_TOOLTIP_BTN)
 			if on_cd:
 				btn.text = "[ %s ] - %d AP (CD: %d)" % [def.get("name", ab_id).to_upper(), ab_cost, cd_remaining]
 			else:
@@ -361,6 +396,9 @@ func update_ability_buttons(officer_type: String, current_ap: int, unit_ref: Obj
 			ability_container.add_child(btn)
 			ability_container.visible = true
 			_dynamic_ability_buttons.append(btn)
+
+	_update_ability_preview(officer_type)
+	_update_passives_label(officer_type)
 
 
 func _on_ability_pressed() -> void:
@@ -448,6 +486,93 @@ func hide_pause_button() -> void:
 	pause_panel.visible = false
 	pause_glow.visible = false
 	pause_border.visible = false
+
+
+func _update_ability_preview(officer_type: String) -> void:
+	for child in ability_preview_row.get_children():
+		child.free()
+	if officer_type == "":
+		return
+	var od = GameState.get_officer(officer_type)
+	if not od: return
+	var abilities = GameState.OFFICER_ABILITIES.get(officer_type, [])
+	if abilities.size() < 6: return
+	var accent = GameState.OFFICER_COLOR.get(officer_type, Color(0.4, 0.9, 1.0))
+	var tiers = [[abilities[0]], [abilities[1], abilities[2]], [abilities[3], abilities[4], abilities[5]]]
+	for i in range(3):
+		var unlocked_ab_id = ""
+		for ab_id in tiers[i]:
+			if od.has_ability(ab_id):
+				unlocked_ab_id = ab_id
+				break
+		var slot = PanelContainer.new()
+		slot.custom_minimum_size = Vector2(32, 32)
+		var sb = StyleBoxFlat.new()
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(3)
+		if unlocked_ab_id != "":
+			sb.bg_color = Color(accent.r, accent.g, accent.b, 0.12)
+			sb.border_color = Color(accent.r, accent.g, accent.b, 0.7)
+		else:
+			sb.bg_color = Color(0.04, 0.06, 0.1, 0.6)
+			sb.border_color = Color(0.25, 0.25, 0.3, 0.4)
+		slot.add_theme_stylebox_override("panel", sb)
+		var icon_rect = TextureRect.new()
+		icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_rect.custom_minimum_size = Vector2(28, 28)
+		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if unlocked_ab_id != "":
+			var def = GameState.ABILITY_DEFS.get(unlocked_ab_id, {})
+			var ab_name = def.get("name", "Unknown")
+			var ab_desc = def.get("desc", "")
+			var tooltip_text = "%s: %s" % [ab_name, ab_desc]
+
+			# Use tooltip_area for proper tooltip support
+			slot.set_script(preload("res://scripts/ui/tooltip_area.gd"))
+			slot.tooltip_delay_sec = 0.25
+			slot.tooltip_text = tooltip_text
+
+			var tex = load(ABILITY_ICON_PATH + "%s_%s.png" % [officer_type, unlocked_ab_id])
+			if tex:
+				icon_rect.texture = tex
+				icon_rect.modulate = Color(1, 1, 1, 1)
+			else:
+				icon_rect.modulate = Color(accent.r, accent.g, accent.b, 0.7)
+		else:
+			icon_rect.modulate = Color(0.25, 0.25, 0.3, 0.5)
+		slot.add_child(icon_rect)
+		ability_preview_row.add_child(slot)
+
+
+func _update_passives_label(officer_type: String) -> void:
+	if officer_type == "":
+		passives_label.visible = false
+		return
+	var od = GameState.get_officer(officer_type)
+	if not od:
+		passives_label.visible = false
+		return
+	var passive_names: Array[String] = []
+	var passive_tooltips: Array[String] = []
+	for ab_id in GameState.OFFICER_ABILITIES.get(officer_type, []):
+		if not od.has_ability(ab_id): continue
+		var def = GameState.ABILITY_DEFS.get(ab_id, {})
+		if def.get("type", "") == "passive":
+			var p_name = def.get("name", ab_id)
+			var p_desc = def.get("desc", "")
+			passive_names.append(p_name)
+			if p_desc != "":
+				passive_tooltips.append("%s: %s" % [p_name, p_desc])
+			else:
+				passive_tooltips.append(p_name)
+	
+	if passive_names.is_empty():
+		passives_label.visible = false
+	else:
+		passives_label.text = "◈ " + "  ◈ ".join(passive_names)
+		passives_label.tooltip_text = "\n\n".join(passive_tooltips)
+		passives_label.visible = true
 
 
 ## Show upgraded abilities panel for current officer

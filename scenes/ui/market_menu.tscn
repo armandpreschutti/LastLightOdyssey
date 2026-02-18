@@ -81,19 +81,6 @@ text = "15 CR"
 layout_mode = 2
 text = "BUY"
 
-[node name="ScrapLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/GridContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Scrap Bundle (+5)"
-
-[node name="ScrapPrice" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/GridContainer"]
-layout_mode = 2
-text = "10 CR"
-
-[node name="BuyScrapButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/GridContainer"]
-layout_mode = 2
-text = "BUY"
-
 [node name="RepairLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/GridContainer"]
 layout_mode = 2
 size_flags_horizontal = 3

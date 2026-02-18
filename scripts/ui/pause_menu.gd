@@ -18,11 +18,10 @@ signal abandon_pressed
 # Ship status labels
 @onready var fuel_value: Label = $PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid/FuelValue
 @onready var integrity_value: Label = $PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid/IntegrityValue
-@onready var scrap_value: Label = $PanelContainer/MarginContainer/VBoxContainer/ShipStatusContainer/StatusGrid/ScrapValue
 
 # Track resources collected during this mission (to forfeit on abandon)
 var mission_fuel_collected: int = 0
-var mission_scrap_collected: int = 0
+var mission_cash_collected: int = 0
 
 
 func _ready() -> void:
@@ -73,9 +72,9 @@ func show_menu() -> void:
 
 
 ## Set the resources collected during this mission (to show forfeiture warning)
-func set_mission_haul(fuel: int, scrap: int) -> void:
+func set_mission_haul(fuel: int, cash: int) -> void:
 	mission_fuel_collected = fuel
-	mission_scrap_collected = scrap
+	mission_cash_collected = cash
 
 
 func _update_cost_label() -> void:
@@ -85,8 +84,8 @@ func _update_cost_label() -> void:
 	var forfeit_parts: Array[String] = []
 	if mission_fuel_collected > 0:
 		forfeit_parts.append("%d fuel" % mission_fuel_collected)
-	if mission_scrap_collected > 0:
-		forfeit_parts.append("%d scrap" % mission_scrap_collected)
+	if mission_cash_collected > 0:
+		forfeit_parts.append("%d cash" % mission_cash_collected)
 	
 	if forfeit_parts.size() > 0:
 		cost_text += "\nYou will lose: " + ", ".join(forfeit_parts)
@@ -97,7 +96,6 @@ func _update_cost_label() -> void:
 func _update_ship_status() -> void:
 	fuel_value.text = str(GameState.fuel)
 	integrity_value.text = "%d%%" % GameState.ship_integrity
-	scrap_value.text = str(GameState.scrap)
 	
 	# Color code fuel if at 0 (drift mode)
 	if GameState.fuel == 0:

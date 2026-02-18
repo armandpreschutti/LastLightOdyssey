@@ -12,7 +12,6 @@ signal deploy_pressed
 @onready var cash_label: Label = $MarginContainer/VBoxContainer/StatsContainer/CashRow/CashLabel
 @onready var fuel_label: Label = $MarginContainer/VBoxContainer/StatsContainer/FuelRow/FuelLabel
 @onready var integrity_label: Label = $MarginContainer/VBoxContainer/StatsContainer/IntegrityRow/IntegrityLabel
-@onready var scrap_label: Label = $MarginContainer/VBoxContainer/StatsContainer/ScrapRow/ScrapLabel
 @onready var status_label: Label = $MarginContainer/VBoxContainer/StatusLabel
 @onready var market_button: Button = $MarginContainer/VBoxContainer/MarketButton
 @onready var barracks_button: Button = $MarginContainer/VBoxContainer/BarracksButton
@@ -24,7 +23,6 @@ var _pulse_tween: Tween
 var _last_cash: int = 0
 var _last_fuel: int = 0
 var _last_integrity: int = 0
-var _last_scrap: int = 0
 var _last_intel: int = 0
 
 var intel_label: Label
@@ -35,7 +33,6 @@ func _ready() -> void:
 	_last_cash = GameState.cash
 	_last_fuel = GameState.fuel
 	_last_integrity = GameState.ship_integrity
-	_last_scrap = GameState.scrap
 	_last_intel = GameState.intel
 	
 	_setup_additional_stats()
@@ -68,7 +65,6 @@ func _connect_signals() -> void:
 	GameState.cash_changed.connect(_on_cash_changed)
 	GameState.fuel_changed.connect(_on_fuel_changed)
 	GameState.integrity_changed.connect(_on_integrity_changed)
-	GameState.scrap_changed.connect(_on_scrap_changed)
 	GameState.intel_changed.connect(_on_intel_changed)
 	market_button.pressed.connect(_on_market_pressed)
 	if barracks_button:
@@ -221,7 +217,6 @@ func _update_all_stats() -> void:
 	_on_cash_changed(GameState.cash)
 	_on_fuel_changed(GameState.fuel)
 	_on_integrity_changed(GameState.ship_integrity)
-	_on_scrap_changed(GameState.scrap)
 	_on_intel_changed(GameState.intel)
 
 
@@ -254,11 +249,6 @@ func _on_integrity_changed(new_value: int) -> void:
 	integrity_label.text = "HULL: %d%%" % new_value
 
 
-func _on_scrap_changed(new_value: int) -> void:
-	var delta = new_value - _last_scrap
-	_spawn_stat_change_indicator(scrap_label, delta)
-	_last_scrap = new_value
-	scrap_label.text = "SCRAP: %d" % new_value
 
 
 func _on_intel_changed(new_value: int) -> void:

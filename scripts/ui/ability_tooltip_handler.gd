@@ -1,19 +1,15 @@
 extends Node
-## Robust handles two-stage tooltips for ability slots.
+## Handles tooltips for ability slots.
 ## Uses proactive rect detection to bypass signal blockage.
 
 var _target: Control
 var _ab_id: String
 var _is_hovering: bool = false
-var _hover_start_time: float = 0.0
 var _desc_box: PanelContainer = null
 
 func setup(target: Control, ab_id: String) -> void:
 	_target = target
 	_ab_id = ab_id
-	
-	var def = GameState.ABILITY_DEFS.get(ab_id, {})
-	_target.tooltip_text = def.get("name", "Unknown")
 
 
 func _process(_delta: float) -> void:
@@ -29,10 +25,7 @@ func _process(_delta: float) -> void:
 	if is_inside:
 		if not _is_hovering:
 			_is_hovering = true
-			_hover_start_time = Time.get_ticks_msec() / 1000.0
-		else:
-			var elapsed = (Time.get_ticks_msec() / 1000.0) - _hover_start_time
-			if elapsed >= 1.25 and not _desc_box:
+			if not _desc_box:
 				_show_desc()
 	else:
 		if _is_hovering:

@@ -9,7 +9,6 @@ extends Control
 @onready var losses_label: Label = $PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesLabel
 @onready var hull_loss_label: Label = $PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/HullLoss/HullLossLabel
 @onready var fuel_gain_label: Label = $PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/FuelGain/FuelGainLabel
-@onready var scrap_gain_label: Label = $PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ScrapGain/ScrapGainLabel
 @onready var losses_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow
 @onready var mitigated_label: Label = $PanelContainer/MarginContainer/VBoxContainer/LossesContainer/MitigatedLabel
 @onready var accept_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/AcceptButton
@@ -35,10 +34,10 @@ func show_event(event: Dictionary) -> void:
 	# Determine if event is positive (has gains, no losses) or negative (has losses)
 	var integrity_loss = event.get("integrity_loss", 0)
 	var fuel_gain = event.get("fuel_gain", 0)
-	var scrap_gain = event.get("scrap_gain", 0)
+	var cash_gain = event.get("cash_change", 0)
 	
-	var has_losses = integrity_loss > 0
-	var has_gains = fuel_gain > 0 or scrap_gain > 0
+	var has_losses = integrity_loss > 0 or (cash_gain < 0)
+	var has_gains = fuel_gain > 0 or cash_gain > 0
 	var is_positive_event = has_gains and not has_losses
 	
 	# Update header label text based on event type
@@ -70,12 +69,8 @@ func show_event(event: Dictionary) -> void:
 	else:
 		fuel_gain_label.get_parent().visible = false
 	
-	if scrap_gain > 0:
-		scrap_gain_label.text = "SCRAP: +%d" % scrap_gain
-		scrap_gain_label.get_parent().visible = true
-	else:
-		scrap_gain_label.get_parent().visible = false
-	
+	# Cash display removed - cash handling moved to other systems
+
 	# Show losses row if there are any losses or gains
 	losses_row.visible = has_losses or has_gains
 
@@ -88,26 +83,28 @@ func show_event(event: Dictionary) -> void:
 		var specialist_name = _get_specialist_display_name(specialist_key)
 		var specialist_desc = _get_specialist_description(specialist_key)
 		var is_alive = GameState.is_officer_alive(specialist_key)
-		# Calculate dynamic scrap cost based on voyage progress (capped at 15)
-		var base_cost = event.get("mitigation_scrap_cost", 0)
+		# Calculate dynamic cash cost based on voyage progress
+		var base_cost = event.get("mitigation_cash_cost", 0)
+		if base_cost == 0: base_cost = event.get("cash_cost", 0) # Use cash_cost from consolidated data
+		
 		var cost_multiplier = EventManager.get_mitigation_cost_multiplier()
-		var scrap_cost = mini(int(base_cost * cost_multiplier), 15)
-		var has_enough_scrap = GameState.scrap >= scrap_cost
+		var cash_cost = maxi(int(base_cost * cost_multiplier), 10)
+		var has_enough_cash = GameState.cash >= cash_cost
 		
 		if is_alive:
-			if has_enough_scrap:
-				mitigate_button.text = "[ DEPLOY %s ] (COST: %d SCRAP)" % [specialist_name, scrap_cost]
+			if has_enough_cash:
+				mitigate_button.text = "[ DEPLOY %s ] (COST: %d CR)" % [specialist_name, cash_cost]
 				mitigate_button.disabled = false
 			else:
-				mitigate_button.text = "[ DEPLOY %s ] (NEED %d SCRAP)" % [specialist_name, scrap_cost]
+				mitigate_button.text = "[ DEPLOY %s ] (NEED %d CR)" % [specialist_name, cash_cost]
 				mitigate_button.disabled = true
 		else:
 			mitigate_button.text = "[ %s - DECEASED ]" % specialist_name
 			mitigate_button.disabled = true
 		
 		var mitigated_text = _build_losses_text(event, true)
-		var scrap_cost_text = "SCRAP: -%d" % scrap_cost
-		mitigated_label.text = "WITH %s:\n%s\n%s\n%s" % [specialist_name, specialist_desc, scrap_cost_text, mitigated_text]
+		var cash_cost_text = "CASH: -%d" % cash_cost
+		mitigated_label.text = "WITH %s:\n%s\n%s\n%s" % [specialist_name, specialist_desc, cash_cost_text, mitigated_text]
 		mitigated_label.visible = true
 	else:
 		mitigate_button.visible = false
@@ -127,14 +124,14 @@ func _build_losses_text(event: Dictionary, mitigated: bool) -> String:
 		integrity_loss = event.get("integrity_loss", 0)
 
 	var fuel_gain = event.get("fuel_gain", 0)
-	var scrap_gain = event.get("scrap_gain", 0)
+	var cash_gain = event.get("cash_change", 0)
 	
 	if integrity_loss > 0:
 		lines.append("HULL: -%d%%" % integrity_loss)
 	if fuel_gain > 0:
 		lines.append("FUEL: +%d" % fuel_gain)
-	if scrap_gain > 0:
-		lines.append("SCRAP: +%d" % scrap_gain)
+	if cash_gain != 0:
+		lines.append("CASH: %+d" % cash_gain)
 
 	if lines.is_empty():
 		return "NO EFFECT"

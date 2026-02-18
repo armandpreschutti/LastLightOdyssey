@@ -185,25 +185,6 @@ theme_override_colors/font_color = Color(0.2, 1.0, 0.5, 1)
 theme_override_font_sizes/font_size = 16
 text = "FUEL: +2"
 
-[node name="ScrapGain" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow"]
-visible = false
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="ScrapIcon" type="TextureRect" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ScrapGain"]
-custom_minimum_size = Vector2(20, 20)
-layout_mode = 2
-texture = ExtResource("5_scrap")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="ScrapGainLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer/LossesRow/ScrapGain"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_colors/font_color = Color(0.2, 1.0, 0.5, 1)
-theme_override_font_sizes/font_size = 16
-text = "SCRAP: +15"
-
 [node name="LossesLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/LossesContainer"]
 visible = false
 layout_mode = 2

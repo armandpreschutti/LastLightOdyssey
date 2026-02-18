@@ -16,20 +16,20 @@ var random_events: Array[Dictionary] = [
 	{ "id": 4, "name": "Event 4", "integrity_change_pct": -20, "specialist_mitigation": "tech", "mitigated_integrity_change_pct": -10 },
 	{ "id": 5, "name": "Event 5", "integrity_change_pct": -30, "specialist_mitigation": "heavy", "mitigated_integrity_change_pct": -15 },
 	{ "id": 6, "name": "Event 6", "cash_change": -50, "integrity_change_pct": -10, "specialist_mitigation": "scout", "mitigated_integrity_change_pct": 0 },
-	{ "id": 7, "name": "Event 7", "fuel_change": -2, "scrap_change": -15 },
+	{ "id": 7, "name": "Event 7", "fuel_change": -2, "cash_change": -15 },
 	{ "id": 8, "name": "Event 8", "integrity_change_pct": -10, "specialist_mitigation": "tech", "mitigated_integrity_change_pct": -5 },
 	{ "id": 9, "name": "Event 9", "cash_change": -75 },
 	{ "id": 10, "name": "Event 10", "integrity_change_pct": 0 }, # Clear skies
 	{ "id": 11, "name": "Event 11", "cash_change": 100 },
 	{ "id": 12, "name": "Event 12", "fuel_change": 3 },
 	{ "id": 13, "name": "Event 13", "integrity_change_pct": 15 },
-	{ "id": 14, "name": "Event 14", "scrap_change": 40 },
+	{ "id": 14, "name": "Event 14", "cash_change": 40 },
 	{ "id": 15, "name": "Event 15", "cash_change": 50, "fuel_change": 1 },
 	{ "id": 16, "name": "Event 16", "fuel_change": 2, "integrity_change_pct": 10 },
-	{ "id": 17, "name": "Event 17", "scrap_change": 20, "cash_change": 30 },
-	{ "id": 18, "name": "Event 18", "integrity_change_pct": 10, "scrap_change": 15 },
-	{ "id": 19, "name": "Event 19", "cash_change": 40, "fuel_change": 1, "scrap_change": 10 },
-	{ "id": 20, "name": "Event 20", "cash_change": 20, "fuel_change": 1, "integrity_change_pct": 5, "scrap_change": 5 },
+	{ "id": 17, "name": "Event 17", "cash_change": 50 },
+	{ "id": 18, "name": "Event 18", "integrity_change_pct": 10, "cash_change": 15 },
+	{ "id": 19, "name": "Event 19", "cash_change": 50, "fuel_change": 1 },
+	{ "id": 20, "name": "Event 20", "cash_change": 25, "fuel_change": 1, "integrity_change_pct": 5 },
 ]
 
 
@@ -63,7 +63,6 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
 		"integrity_change": 0,
 		"cash_change": 0,
 		"fuel_change": 0,
-		"scrap_change": 0,
 		"mitigated": false,
 	}
 
@@ -81,13 +80,11 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
 	# Handle other resource changes
 	result["cash_change"] = event.get("cash_change", 0)
 	result["fuel_change"] = event.get("fuel_change", 0)
-	result["scrap_change"] = event.get("scrap_change", 0)
 
 	# Apply changes to game state
 	GameState.ship_integrity += result["integrity_change"]
 	GameState.cash += result["cash_change"]
 	GameState.fuel += result["fuel_change"]
-	GameState.scrap += result["scrap_change"]
 
 	# warning-ignore: INCOMPATIBLE_TERNARY
 	event_resolved.emit("mitigated" if result["mitigated"] else "standard")

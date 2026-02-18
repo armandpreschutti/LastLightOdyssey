@@ -130,25 +130,6 @@ mouse_filter = 2
 alignment = 1
 theme_override_constants/separation = 30
 
-[node name="ScrapDisplay" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/ResourcesContainer"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = 8
-
-[node name="ScrapIcon" type="TextureRect" parent="PanelContainer/MarginContainer/VBoxContainer/ResourcesContainer/ScrapDisplay"]
-custom_minimum_size = Vector2(24, 24)
-layout_mode = 2
-texture = ExtResource("2_scrap")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="ScrapLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/ResourcesContainer/ScrapDisplay"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_colors/font_color = Color(1.0, 0.69, 0.0, 1)
-theme_override_font_sizes/font_size = 18
-text = "SCRAP: 0"
-
 [node name="FuelDisplay" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/ResourcesContainer"]
 layout_mode = 2
 mouse_filter = 2
@@ -213,7 +194,7 @@ theme_override_colors/font_color = Color(0.4, 0.8, 1.0, 1)
 theme_override_colors/font_hover_color = Color(0.6, 0.9, 1.0, 1)
 theme_override_colors/font_pressed_color = Color(0.2, 0.5, 0.7, 1)
 theme_override_font_sizes/font_size = 18
-text = "[ BUY FUEL CELL: 10 SCRAP ]"
+text = "[ BUY FUEL CELL: 10 CR ]"
 
 [node name="RepairTradeButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/TradesContainer"]
 custom_minimum_size = Vector2(400, 50)
@@ -222,7 +203,7 @@ theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
 theme_override_colors/font_hover_color = Color(0.7, 0.9, 1.0, 1)
 theme_override_colors/font_pressed_color = Color(0.3, 0.5, 0.6, 1)
 theme_override_font_sizes/font_size = 18
-text = "[ REPAIR HULL +10%: 15 SCRAP ]"
+text = "[ REPAIR HULL +10%: 15 CR ]"
 
 [node name="HSeparator2" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer"]
 custom_minimum_size = Vector2(0, 1)

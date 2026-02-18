@@ -1,6 +1,8 @@
 extends Control
 ## Ability Panel - Shows available abilities for selected officer during tactical missions
 
+const _TOOLTIP_BTN = preload("res://scripts/ui/tooltip_button.gd")
+
 signal ability_selected(ability_id: String)
 signal panel_closed
 
@@ -74,6 +76,7 @@ func _populate_abilities() -> void:
 ## Create a button for an ability
 func _create_ability_button(ability_id: String, ability_def: Dictionary) -> Button:
 	var button = Button.new()
+	button.set_script(_TOOLTIP_BTN)
 	var name_text = ability_def.get("name", ability_id)
 	var cost = ability_def.get("cost", 1)
 	var level = ability_def.get("level", 1)

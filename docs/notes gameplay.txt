@@ -1,0 +1,17 @@
+- inspire did not add +1 ap to ally unit
+
+- run and gun did not trigger, make this it's own button, the ability must be initiated
+
+- invisiblilty doesn't work, enemy saw me right next to them one tile away
+
+- 'deep scanner broke the game
+
+E 0:16:53:111   _activate_deep_scanner: Invalid call. Nonexistent function 'reveal_tile' in base 'Node2D (tactical_map.gd)'.
+  <GDScript Source>tactical_controller.gd:3993 @ _activate_deep_scanner()
+  <Stack Trace> tactical_controller.gd:3993 @ _activate_deep_scanner()
+                tactical_controller.gd:3314 @ _use_upgraded_ability()
+                tactical_controller.gd:3144 @ _on_ability_used()
+                tactical_hud.gd:360 @ <anonymous lambda>()
+
+
+- stim injector did nothing

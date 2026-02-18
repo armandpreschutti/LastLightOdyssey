@@ -14,12 +14,10 @@ signal view_map_requested(show_map: bool)
 # Final state labels
 @onready var fuel_label: Label = $PanelContainer/MarginContainer/VBoxContainer/FinalStateContainer/FuelLabel
 @onready var integrity_label: Label = $PanelContainer/MarginContainer/VBoxContainer/FinalStateContainer/IntegrityLabel
-@onready var scrap_label: Label = $PanelContainer/MarginContainer/VBoxContainer/FinalStateContainer/ScrapLabel
 @onready var officers_container: VBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/OfficersContainer
 
 # Cumulative stats labels
 @onready var total_fuel_label: Label = $PanelContainer/MarginContainer/VBoxContainer/CumulativeContainer/TotalFuelLabel
-@onready var total_scrap_label: Label = $PanelContainer/MarginContainer/VBoxContainer/CumulativeContainer/TotalScrapLabel
 @onready var total_enemies_label: Label = $PanelContainer/MarginContainer/VBoxContainer/CumulativeContainer/TotalEnemiesLabel
 @onready var total_missions_label: Label = $PanelContainer/MarginContainer/VBoxContainer/CumulativeContainer/TotalMissionsLabel
 @onready var total_turns_label: Label = $PanelContainer/MarginContainer/VBoxContainer/CumulativeContainer/TotalTurnsLabel
@@ -80,7 +78,6 @@ func show_recap(reason: String) -> void:
 	# Set final state stats
 	fuel_label.text = "FUEL RESERVES: %d" % GameState.fuel
 	integrity_label.text = "SHIP INTEGRITY: %d%%" % GameState.ship_integrity
-	scrap_label.text = "SCRAP STOCKPILE: %d" % GameState.scrap
 	
 	# Clear old officer status labels
 	for child in officers_container.get_children():
@@ -115,7 +112,6 @@ func show_recap(reason: String) -> void:
 	
 	# Set cumulative mission stats
 	total_fuel_label.text = "TOTAL FUEL COLLECTED: %d" % GameState.total_fuel_collected
-	total_scrap_label.text = "TOTAL SCRAP COLLECTED: %d" % GameState.total_scrap_collected
 	total_enemies_label.text = "TOTAL HOSTILES ELIMINATED: %d" % GameState.total_enemies_killed
 	total_missions_label.text = "MISSIONS COMPLETED: %d" % GameState.total_missions_completed
 	total_turns_label.text = "TACTICAL TURNS SURVIVED: %d" % GameState.total_tactical_turns
@@ -139,9 +135,7 @@ func _animate_recap_in() -> void:
 	reason_desc_label.modulate.a = 0.0
 	fuel_label.modulate.a = 0.0
 	integrity_label.modulate.a = 0.0
-	scrap_label.modulate.a = 0.0
 	total_fuel_label.modulate.a = 0.0
-	total_scrap_label.modulate.a = 0.0
 	total_enemies_label.modulate.a = 0.0
 	total_missions_label.modulate.a = 0.0
 	total_turns_label.modulate.a = 0.0
@@ -168,8 +162,6 @@ func _animate_recap_in() -> void:
 	_stat_tween.tween_property(fuel_label, "modulate:a", 1.0, 0.25)
 	_stat_tween.tween_interval(0.1)
 	_stat_tween.tween_property(integrity_label, "modulate:a", 1.0, 0.25)
-	_stat_tween.tween_interval(0.1)
-	_stat_tween.tween_property(scrap_label, "modulate:a", 1.0, 0.25)
 	_stat_tween.tween_interval(0.2)
 	
 	# Reveal officer statuses
@@ -181,8 +173,6 @@ func _animate_recap_in() -> void:
 	
 	# Reveal cumulative stats
 	_stat_tween.tween_property(total_fuel_label, "modulate:a", 1.0, 0.25)
-	_stat_tween.tween_interval(0.1)
-	_stat_tween.tween_property(total_scrap_label, "modulate:a", 1.0, 0.25)
 	_stat_tween.tween_interval(0.1)
 	_stat_tween.tween_property(total_enemies_label, "modulate:a", 1.0, 0.25)
 	_stat_tween.tween_interval(0.1)
@@ -253,9 +243,7 @@ func _skip_animation() -> void:
 	reason_desc_label.modulate.a = 1.0
 	fuel_label.modulate.a = 1.0
 	integrity_label.modulate.a = 1.0
-	scrap_label.modulate.a = 1.0
 	total_fuel_label.modulate.a = 1.0
-	total_scrap_label.modulate.a = 1.0
 	total_enemies_label.modulate.a = 1.0
 	total_missions_label.modulate.a = 1.0
 	total_turns_label.modulate.a = 1.0

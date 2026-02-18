@@ -57,7 +57,7 @@ const COLOR_IMPOSSIBLE = Color(0.6, 0.0, 1.0, 1.0) # Purple/Black (Using Purple 
 # Question mark sprite for LOCKED nodes
 const QUESTION_MARK_TEXTURE = preload("res://assets/sprites/navigation/question_mark.png")
 const SKULL_TEXTURE = preload("res://assets/sprites/navigation/skull_icon.png")
-const STORY_TEXTURE = preload("res://assets/sprites/navigation/node_target.png")
+const STORY_TEXTURE = preload("res://assets/sprites/navigation/story_signal.png")
 const COLOR_STORY = Color(0.95, 0.45, 1.0, 1.0)
 
 var is_hovered: bool = false
@@ -362,17 +362,12 @@ func _update_event_result_visuals() -> void:
 		var cash_change = event.get("cash_change", 0)
 		if cash_change != 0:
 			var prefix = "+" if cash_change > 0 else ""
-			effects.append(prefix + str(cash_change) + " CASH")
+			effects.append(prefix + str(cash_change) + " CR")
 			
 		var fuel_change = event.get("fuel_change", 0)
 		if fuel_change != 0:
 			var prefix = "+" if fuel_change > 0 else ""
 			effects.append(prefix + str(fuel_change) + " FUEL")
-			
-		var scrap_change = event.get("scrap_change", 0)
-		if scrap_change != 0:
-			var prefix = "+" if scrap_change > 0 else ""
-			effects.append(prefix + str(scrap_change) + " SCRAP")
 		
 		if not effects.is_empty():
 			penalty_text = ", ".join(effects)

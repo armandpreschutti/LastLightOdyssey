@@ -5,7 +5,6 @@ extends Control
 signal recap_dismissed
 
 @onready var fuel_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/FuelRow
-@onready var scrap_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/ScrapRow
 @onready var enemies_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/EnemiesRow
 @onready var turns_row: HBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/TurnsRow
 @onready var objectives_header: Label = $PanelContainer/MarginContainer/VBoxContainer/ObjectivesHeader
@@ -15,7 +14,6 @@ signal recap_dismissed
 @onready var title_label: Label = $PanelContainer/MarginContainer/VBoxContainer/HeaderContainer/TitleLabel
 @onready var outcome_label: Label = $PanelContainer/MarginContainer/VBoxContainer/OutcomeLabel
 @onready var fuel_label: Label = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/FuelRow/FuelLabel
-@onready var scrap_label: Label = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/ScrapRow/ScrapLabel
 @onready var enemies_label: Label = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/EnemiesRow/EnemiesLabel
 @onready var turns_label: Label = $PanelContainer/MarginContainer/VBoxContainer/StatsContainer/TurnsRow/TurnsLabel
 @onready var officers_container: VBoxContainer = $PanelContainer/MarginContainer/VBoxContainer/OfficersContainer
@@ -29,6 +27,7 @@ var xp_label: Label
 var _stat_tween: Tween = null
 
 var _objective_labels: Array[Label] = []
+var _mission_success: bool = false
 
 
 func _ready() -> void:
@@ -56,7 +55,7 @@ func _ready() -> void:
 		cash_row.add_child(cash_label)
 		
 		stats_container.add_child(cash_row)
-		# Position it after scrap (fuel is 0, scrap is 1)
+		# Position it after fuel
 		stats_container.move_child(cash_row, 2)
 	else:
 		cash_row = stats_container.get_node("CashRow")
@@ -96,8 +95,8 @@ func _ready() -> void:
 
 func show_recap(stats: Dictionary) -> void:
 	var success: bool = stats.get("success", false)
+	_mission_success = success
 	var fuel_collected: int = stats.get("fuel_collected", 0)
-	var scrap_collected: int = stats.get("scrap_collected", 0)
 	var enemies_killed: int = stats.get("enemies_killed", 0)
 	var turns_taken: int = stats.get("turns_taken", 0)
 	var officers_status: Array = stats.get("officers_status", [])
@@ -138,7 +137,6 @@ func show_recap(stats: Dictionary) -> void:
 	
 	# Set stats (initially hidden for animation)
 	fuel_label.text = "FUEL COLLECTED: +%d" % fuel_collected
-	scrap_label.text = "SCRAP COLLECTED: +%d" % scrap_collected
 	cash_label.text = "CASH EARNED: +%d CR" % total_cash
 	
 	var total_xp: int = stats.get("xp_awarded", 0)
@@ -168,7 +166,7 @@ func show_recap(stats: Dictionary) -> void:
 	
 	# Get bonus rewards from stats
 	var bonus_fuel = stats.get("bonus_fuel", 0)
-	var bonus_scrap = stats.get("bonus_scrap", 0)
+	var bonus_cash = stats.get("bonus_cash", 0)
 	var bonus_hull_repair = stats.get("bonus_hull_repair", 0)
 	
 	# Add objective rows
@@ -191,8 +189,8 @@ func show_recap(stats: Dictionary) -> void:
 				var reward_parts: Array[String] = []
 				if bonus_fuel > 0:
 					reward_parts.append("+%d FUEL" % bonus_fuel)
-				if bonus_scrap > 0:
-					reward_parts.append("+%d SCRAP" % bonus_scrap)
+				if bonus_cash > 0:
+					reward_parts.append("+%d CR" % bonus_cash)
 				if bonus_hull_repair > 0:
 					reward_parts.append("+%d%% HULL" % bonus_hull_repair)
 				
@@ -203,8 +201,8 @@ func show_recap(stats: Dictionary) -> void:
 				var reward_parts: Array[String] = []
 				if potential_rewards.get("fuel", 0) > 0:
 					reward_parts.append("%d FUEL" % potential_rewards.get("fuel", 0))
-				if potential_rewards.get("scrap", 0) > 0:
-					reward_parts.append("%d SCRAP" % potential_rewards.get("scrap", 0))
+				if potential_rewards.get("cash", 0) > 0:
+					reward_parts.append("%d CR" % potential_rewards.get("cash", 0))
 				if potential_rewards.get("hull_repair", 0) > 0:
 					reward_parts.append("%d%% HULL" % potential_rewards.get("hull_repair", 0))
 				
@@ -236,27 +234,27 @@ func show_recap(stats: Dictionary) -> void:
 	# Add officer status rows
 	# Add officer status rows
 	for officer_data in officers_status:
-		var officer_row = _create_officer_xp_row(officer_data)
+		var officer_row = _create_officer_xp_row(officer_data, success)
 		officers_container.add_child(officer_row)
 	
 	# Animate in
 	_animate_recap_in(stats)
 
 
-func _create_officer_xp_row(data: Dictionary) -> VBoxContainer:
+func _create_officer_xp_row(data: Dictionary, mission_success: bool) -> VBoxContainer:
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 2)
-	
+
 	var name = data.get("name", "UNKNOWN").to_upper()
 	var alive = data.get("alive", false)
 	var hp = data.get("hp", 0)
 	var max_hp = data.get("max_hp", 100)
 	var xp_earned = data.get("xp_earned", 0)
-	
+
 	var header = HBoxContainer.new()
 	header.add_theme_constant_override("separation", 10)
 	vbox.add_child(header)
-	
+
 	var name_label = Label.new()
 	name_label.text = " " + name
 	name_label.add_theme_font_size_override("font_size", 16)
@@ -265,7 +263,7 @@ func _create_officer_xp_row(data: Dictionary) -> VBoxContainer:
 	else:
 		name_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))
 	header.add_child(name_label)
-	
+
 	if not alive:
 		var kia_label = Label.new()
 		kia_label.text = " - K.I.A."
@@ -282,24 +280,24 @@ func _create_officer_xp_row(data: Dictionary) -> VBoxContainer:
 	hp_label.add_theme_color_override("font_color", Color(0.6, 0.8, 0.6))
 	header.add_child(hp_label)
 
-	# XP Bar
+	# XP Display (static bar on failure, animated on success)
 	var od = GameState.get_officer(name.to_lower())
 	if od:
 		var xp_total = od.xp
 		var xp_start = xp_total - xp_earned
 		var level_start = _calculate_level_for_xp(xp_start)
 		var threshold = _get_threshold_for_level(level_start)
-		
+
 		var xp_hbox = HBoxContainer.new()
 		xp_hbox.add_theme_constant_override("separation", 8)
 		vbox.add_child(xp_hbox)
-		
+
 		var xp_title = Label.new()
 		xp_title.text = "  XP:"
 		xp_title.add_theme_font_size_override("font_size", 14)
 		xp_title.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0))
 		xp_hbox.add_child(xp_title)
-		
+
 		var bar = ProgressBar.new()
 		bar.name = "XPBar_" + name
 		bar.min_value = 0
@@ -307,20 +305,20 @@ func _create_officer_xp_row(data: Dictionary) -> VBoxContainer:
 		bar.value = xp_start
 		bar.show_percentage = false
 		bar.custom_minimum_size = Vector2(280, 14)
-		
+
 		# Styles (reusing logic from barracks)
 		var sb_bg = StyleBoxFlat.new()
 		sb_bg.bg_color = Color(0, 0, 0, 0.4)
 		sb_bg.set_corner_radius_all(2)
 		bar.add_theme_stylebox_override("background", sb_bg)
-		
+
 		var sb_fill = StyleBoxFlat.new()
 		sb_fill.bg_color = Color(0.2, 0.6, 1.0, 0.7)
 		sb_fill.set_corner_radius_all(2)
 		bar.add_theme_stylebox_override("fill", sb_fill)
-		
+
 		xp_hbox.add_child(bar)
-		
+
 		var level_label = Label.new()
 		level_label.name = "LevelLabel_" + name
 		level_label.text = "LVL %d" % level_start
@@ -328,27 +326,18 @@ func _create_officer_xp_row(data: Dictionary) -> VBoxContainer:
 		level_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.4))
 		level_label.pivot_offset = Vector2(25, 10) # For scaling flash
 		xp_hbox.add_child(level_label)
-		
-		var gain_label = Label.new()
-		gain_label.name = "GainLabel_" + name
-		gain_label.text = "+%d XP" % xp_earned
-		gain_label.add_theme_font_size_override("font_size", 14)
-		gain_label.add_theme_color_override("font_color", Color(0.4, 0.9, 1.0))
-		gain_label.modulate.a = 0.0 # Initially hidden
-		xp_hbox.add_child(gain_label)
+
+		# Gain label only shown on success (animated)
+		if mission_success:
+			var gain_label = Label.new()
+			gain_label.name = "GainLabel_" + name
+			gain_label.text = "+%d XP" % xp_earned
+			gain_label.add_theme_font_size_override("font_size", 14)
+			gain_label.add_theme_color_override("font_color", Color(0.4, 0.9, 1.0))
+			gain_label.modulate.a = 0.0 # Initially hidden
+			xp_hbox.add_child(gain_label)
 
 	return vbox
-
-
-func _calculate_level_for_xp(xp_val: int) -> int:
-	var lvl = 1
-	while xp_val >= _get_threshold_for_level(lvl):
-		lvl += 1
-	return lvl
-
-
-func _get_threshold_for_level(lvl: int) -> int:
-	return 50 * lvl * (lvl + 1)
 
 
 func _animate_recap_in(stats: Dictionary) -> void:
@@ -360,7 +349,6 @@ func _animate_recap_in(stats: Dictionary) -> void:
 	
 	# Fade rows (with icons)
 	fuel_row.modulate.a = 0.0
-	scrap_row.modulate.a = 0.0
 	cash_row.modulate.a = 0.0
 	xp_row.modulate.a = 0.0
 	enemies_row.modulate.a = 0.0
@@ -388,8 +376,6 @@ func _animate_recap_in(stats: Dictionary) -> void:
 	# Reveal stats one by one with typewriter feel (animate rows with icons)
 	_stat_tween.tween_property(fuel_row, "modulate:a", 1.0, 0.3)
 	_stat_tween.tween_interval(0.15)
-	_stat_tween.tween_property(scrap_row, "modulate:a", 1.0, 0.3)
-	_stat_tween.tween_interval(0.15)
 	_stat_tween.tween_property(cash_row, "modulate:a", 1.0, 0.3)
 	_stat_tween.tween_interval(0.15)
 	_stat_tween.tween_property(xp_row, "modulate:a", 1.0, 0.3)
@@ -411,28 +397,29 @@ func _animate_recap_in(stats: Dictionary) -> void:
 			_stat_tween.tween_interval(0.1)
 		_stat_tween.tween_interval(0.2)
 	
-	# Reveal officer statuses and animate XP
+	# Reveal officer statuses and animate XP (only on success)
 	for i in range(officers_container.get_child_count()):
 		var child = officers_container.get_child(i)
 		_stat_tween.tween_property(child, "modulate:a", 1.0, 0.25)
-		
-		# If child has an XP bar, animate it
-		var xp_bar = child.find_child("XPBar_*", true, false)
-		if xp_bar:
-			var name_split = xp_bar.name.split("_")
-			if name_split.size() > 1:
-				var officer_name = name_split[1]
-				# Find the original data for this officer to get gain
-				var gain = 0
-				for st in stats.get("officers_status", []):
-					if st.get("name", "").to_upper() == officer_name:
-						gain = st.get("xp_earned", 0)
-						break
-				
-				if gain > 0:
-					_stat_tween.tween_callback(_animate_officer_xp.bind(child, officer_name, gain))
-					_stat_tween.tween_interval(0.6) # Allow some time for animation to start
-		
+
+		# If child has an XP bar, animate it only on mission success
+		if _mission_success:
+			var xp_bar = child.find_child("XPBar_*", true, false)
+			if xp_bar:
+				var name_split = xp_bar.name.split("_")
+				if name_split.size() > 1:
+					var officer_name = name_split[1]
+					# Find the original data for this officer to get gain
+					var gain = 0
+					for st in stats.get("officers_status", []):
+						if st.get("name", "").to_upper() == officer_name:
+							gain = st.get("xp_earned", 0)
+							break
+
+					if gain > 0:
+						_stat_tween.tween_callback(_animate_officer_xp.bind(child, officer_name, gain))
+						_stat_tween.tween_interval(0.6) # Allow some time for animation to start
+
 		_stat_tween.tween_interval(0.1)
 	
 	_stat_tween.tween_interval(0.3)
@@ -442,24 +429,39 @@ func _animate_recap_in(stats: Dictionary) -> void:
 	_stat_tween.tween_callback(func(): continue_button.disabled = false)
 
 
+
+
+
+
+func _calculate_level_for_xp(xp_val: int) -> int:
+	var lvl = 1
+	while xp_val >= _get_threshold_for_level(lvl):
+		lvl += 1
+	return lvl
+
+
+func _get_threshold_for_level(lvl: int) -> int:
+	return 50 * lvl * (lvl + 1)
+
+
 func _animate_officer_xp(vbox: Control, officer_name: String, total_gain: int) -> void:
 	var xp_bar: ProgressBar = vbox.find_child("XPBar_" + officer_name, true, false)
 	var lvl_label: Label = vbox.find_child("LevelLabel_" + officer_name, true, false)
 	var gain_label: Label = vbox.find_child("GainLabel_" + officer_name, true, false)
-	
+
 	if not xp_bar or not total_gain: return
-	
+
 	# Show the gain label with a fade-in
 	var label_tween = create_tween()
 	label_tween.tween_property(gain_label, "modulate:a", 1.0, 0.2)
-	
+
 	var start_xp = xp_bar.value
 	var end_xp = start_xp + total_gain
-	
+
 	var main_tween = create_tween()
 	main_tween.set_ease(Tween.EASE_OUT)
 	main_tween.set_trans(Tween.TRANS_QUAD)
-	
+
 	# We use a custom method to handle potential level-ups during animation
 	main_tween.tween_method(
 		func(val: float):
@@ -468,19 +470,19 @@ func _animate_officer_xp(vbox: Control, officer_name: String, total_gain: int) -
 		end_xp,
 		1.2
 	)
-	
+
 	# Subtle scale pulse on the bar during animation
 	var pulse = create_tween().set_loops()
 	pulse.tween_property(xp_bar, "custom_minimum_size:y", 16, 0.3)
 	pulse.tween_property(xp_bar, "custom_minimum_size:y", 14, 0.3)
-	
+
 	main_tween.finished.connect(func(): pulse.kill())
 
 
 func _update_xp_bar_during_tween(bar: ProgressBar, lvl_label: Label, current_total_xp: float) -> void:
 	var current_lvl = _calculate_level_for_xp(int(current_total_xp))
 	var threshold = _get_threshold_for_level(current_lvl)
-	
+
 	# Check if we just leveled up manually to trigger a flash (visual only)
 	var displayed_lvl = int(lvl_label.text.split(" ")[1])
 	if current_lvl > displayed_lvl:
@@ -493,7 +495,7 @@ func _update_xp_bar_during_tween(bar: ProgressBar, lvl_label: Label, current_tot
 		create_tween().tween_property(bf, "bg_color", Color(0.2, 0.6, 1.0, 0.7), 0.3)
 		if SFXManager:
 			SFXManager.play_sfx_by_name("ui", "objective_complete") # Reusing a positive fan-fare
-	
+
 	bar.max_value = threshold
 	bar.value = current_total_xp
 
@@ -533,7 +535,6 @@ func _input(event: InputEvent) -> void:
 				_stat_tween.kill()
 			modulate.a = 1.0
 			fuel_row.modulate.a = 1.0
-			scrap_row.modulate.a = 1.0
 			cash_row.modulate.a = 1.0
 			xp_row.modulate.a = 1.0
 			enemies_row.modulate.a = 1.0

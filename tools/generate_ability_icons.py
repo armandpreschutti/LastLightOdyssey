@@ -101,6 +101,9 @@ ABILITIES = {
         ("twin_link", "mastery"),
         ("overclock", "active"),
         ("haywire_protocol", "active"),
+        ("field_repair", "active"),
+        ("remote_detonation", "active"),
+        ("emergency_protocol", "passive"),
     ],
     # Medic
     "medic": [

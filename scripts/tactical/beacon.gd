@@ -1,6 +1,6 @@
 extends ActivatableInteractable
 ## Beacon - Objective interactable for planet missions
-## Stays on map after activation (unlike fuel/scrap which disappear)
+## Stays on map after activation (unlike fuel which disappears)
 ## Now uses sprite-based graphics
 
 

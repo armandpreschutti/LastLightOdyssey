@@ -1,189 +1,122 @@
 # Ability System - Quick Reference Card
 
-**All 18 Abilities at a Glance**
+**All 18 Abilities at a Glance** *(revised roster)*
 
 ---
 
 ## CAPTAIN (Yellow - #FFC700)
 
-| Ability | Type | Cost | Cooldown | Effect |
-|---------|------|------|----------|--------|
-| **Execute** | Active | 1 AP | 2 | Guaranteed kill on enemy <50% HP |
-| **Lead by Example** | Passive | — | — | Squad gains +1 AP when you kill |
-| **Coordinate Fire** | Active | 1 AP | 2 | Mark target +20% acc/crit to allies |
+| Ability | Type | Cost | CD | Effect |
+|---------|------|------|----|--------|
+| **Execute** | Active | 1 AP | 2 | Guaranteed kill on enemy <50% HP within 4 tiles |
+| **Lead by Example** | Passive | — | — | Squad gains +1 AP when Captain kills |
+| **Coordinate Fire** | Active | 1 AP | 2 | Mark enemy: allies +20% acc/crit vs target for 1 turn |
 | **Warlord** | Passive | — | — | Execute has no cooldown |
-| **No One Left Behind** | Passive | — | — | Save ally from death with 1 HP |
-| **Command Presence** | Passive | — | — | Aura: allies +10% acc/crit |
+| **No One Left Behind** | Passive | — | — | Ally near death survives with 1 HP + 1-turn immunity |
+| **Inspire** | Active | 1 AP | 3 | Grant one ally within 5 tiles +1 AP immediately |
 
 ---
 
 ## SCOUT (Green - #20FF80)
 
-| Ability | Type | Cost | Cooldown | Effect |
-|---------|------|------|----------|--------|
-| **Overwatch** | Active | 1 AP | 2 | React shot on enemy movement |
-| **Hit & Run** | Passive | — | — | +3 movement after shooting |
-| **Deep Scanner** | Active | 0 AP | 3 | Reveal enemies through walls |
-| **Killzone** | Passive | — | — | Overwatch triggers on ALL enemies |
-| **Phantom** | Active | 1 AP | 2 | Invisible 2 turns (+100% dmg on first hit) |
-| **Untouchable** | Passive | — | — | Next attack after kill = miss |
+| Ability | Type | Cost | CD | Effect |
+|---------|------|------|----|--------|
+| **Overwatch** | Active | 1 AP | 2 | React shot on first enemy movement in LOS |
+| **Hit & Run** | Passive | — | — | +3 movement after shooting if also moved this turn |
+| **Deep Scanner** | Active | 0 AP | 3 | Reveal all enemies within 15 tiles through walls |
+| **Ambush** | Passive | — | — | First shot each turn is auto-crit if Scout hasn't moved |
+| **Phantom** | Active | 1 AP | 2 | Invisible 2 turns (+100% dmg on first hit from stealth) |
+| **Untouchable** | Passive | — | — | Kill an enemy → next attack against Scout guaranteed miss |
 
 ---
 
 ## TECH (Cyan - #64E9FF)
 
-| Ability | Type | Cost | Cooldown | Effect |
-|---------|------|------|----------|--------|
-| **Turret** | Active | 1 AP | 2 | Deploy sentry (3 turns, 15 DMG) |
-| **Combat Engineer** | Passive | — | — | Turrets +20 HP shield, 5 turn duration |
-| **Sapper** | Active | 1 AP | 2 | EMP stuns robots, disables weapons |
-| **Twin-Link** | Passive | — | — | Deploy 2 turrets simultaneously |
-| **Overclock** | Active | 0 AP | 2 | Turret fires 3x then explodes (area dmg) |
-| **Haywire Protocol** | Active | 1 AP | 4 | Control enemy robot 2 turns |
+| Ability | Type | Cost | CD | Effect |
+|---------|------|------|----|--------|
+| **Turret** | Active | 1 AP | 2 | Deploy sentry (3 turns, 45 DMG) |
+| **Combat Engineer** | Passive | — | — | Turrets gain +20 HP shield, 5-turn duration |
+| **Field Repair** | Active | 0 AP | 3 | Restore 25 HP and +1 turn to nearest turret |
+| **Twin-Link** | Passive | — | — | Deploy up to 2 turrets simultaneously |
+| **Remote Detonation** | Active | 0 AP | 0 | Destroy nearest turret — 30 AoE damage within 2 tiles |
+| **Emergency Protocol** | Passive | — | — | First time HP <25%: gain +2 AP + reset Turret cooldown |
 
 ---
 
 ## MEDIC (Magenta - #FF80CC)
 
-| Ability | Type | Cost | Cooldown | Effect |
-|---------|------|------|----------|--------|
-| **Patch** | Active | 1 AP | 2 | Heal 62.5% HP within 3 tiles |
-| **Adrenaline Patch** | Passive | — | — | Patch grants +movement/accuracy |
-| **Field Surgeon** | Passive | — | — | Auto-stabilize allies within 4 tiles |
-| **Miracle Worker** | Active | 2 AP | ∞ | Global heal 50% HP all squad |
-| **Toxicologist** | Passive | — | — | Attacks apply poison (5 DMG/turn, -20% aim) |
-| **Stim Injector** | Active | 1 AP | 3 | +2 AP and -50% damage 1 turn |
+| Ability | Type | Cost | CD | Effect |
+|---------|------|------|----|--------|
+| **Patch** | Active | 1 AP | 2 | Heal ally within 3 tiles for 62.5% HP |
+| **Adrenaline Patch** | Passive | — | — | Patch also grants +2 movement, +15% accuracy for 2 turns |
+| **Field Surgeon** | Passive | — | — | Auto-stabilize allies within 4 tiles from death |
+| **Miracle Worker** | Active | 2 AP | ∞ | Heal all squad members 50% HP (once per mission) |
+| **Toxicologist** | Passive | — | — | Attacks apply poison (5 DMG/turn, -20% aim, 3 turns) |
+| **Stim Injector** | Active | 1 AP | 3 | Inject ally: +2 AP and -50% damage taken for 1 turn |
 
 ---
 
 ## HEAVY (Orange-Red - #FF6633)
 
-| Ability | Type | Cost | Cooldown | Effect |
-|---------|------|------|----------|--------|
-| **Charge** | Active | 1 AP | 2 | Rush enemy (instant kill basic, 2x dmg heavy) |
-| **Bulldozer** | Passive | — | — | Charge destroys cover, gain +20 armor |
-| **Suppression Fire** | Active | 2 AP | 2 | Cone attack pins enemies |
-| **Juggernaut** | Passive | — | — | Crit immune, regen 15% HP if idle |
-| **Rocket Salvo** | Active | 2 AP | 3 | Area damage 3x3, destroys cover |
-| **Intimidate** | Passive | — | — | Aura debuffs enemies -20% accuracy |
+| Ability | Type | Cost | CD | Effect |
+|---------|------|------|----|--------|
+| **Charge** | Active | 1 AP | 2 | Rush enemy — instant kill basic, 2x damage heavy |
+| **Bulldozer** | Passive | — | — | Charge grants +20 armor for 2 turns |
+| **Suppression Fire** | Active | 2 AP | 2 | All visible enemies get -25% accuracy for 1 turn |
+| **Juggernaut** | Passive | — | — | Crit immune; regen 15% HP if Heavy didn't attack this turn |
+| **Rocket Salvo** | Active | 2 AP | 3 | 40 damage to all enemies in a 3×3 area |
+| **War Machine** | Passive | — | — | Each kill this mission: permanently +5 base damage |
 
 ---
 
 ## SNIPER (Purple - #9888B3)
 
-| Ability | Type | Cost | Cooldown | Effect |
-|---------|------|------|----------|--------|
-| **Precision Shot** | Active | 1 AP | 2 | Guaranteed hit, 2x damage |
-| **Damn Good Ground** | Passive | — | — | Stationary +15% crit, +2 sight range |
+| Ability | Type | Cost | CD | Effect |
+|---------|------|------|----|--------|
+| **Precision Shot** | Active | 1 AP | 2 | Guaranteed hit on any visible enemy, 2x damage |
+| **Damn Good Ground** | Passive | — | — | If stationary this turn: +15% critical chance |
 | **Snap Shot** | Passive | — | — | Precision Shot has no cooldown |
-| **Serial** | Passive | — | — | Refund AP on kills (chain kills) |
+| **Serial** | Passive | — | — | Killing an enemy refunds all AP (chain kills) |
 | **Apex Predator** | Passive | — | — | 2x damage vs full-health enemies |
-| **Double Tap** | Active | 1 AP | 2 | Fire twice (-15% accuracy on 2nd) |
+| **Double Tap** | Active | 1 AP | 2 | Fire twice at same target (-15% acc on 2nd shot) |
 
 ---
 
-## Status Effects Applied
+## Status Effects
 
 ```
-PHANTOM       → 50% damage reduction, invisibility (2 turns)
-IMMUNE        → No damage taken (1 turn)
-STIM          → 50% damage reduction, +2 AP (1 turn)
-ADRENALINE    → +2 movement, +15% accuracy (2 turns)
-POISON        → 5 DMG/turn, -20% accuracy (3 turns)
-MARKED        → Visual indicator (1 turn)
-BULLDOZER_ARM → +20 damage reduction (2 turns)
-UNTOUCHABLE   → Next attack misses (1 turn)
-JUGGERNAUT    → Crit immunity, HP regen (passive)
-```
-
----
-
-## How to Use in Missions
-
-### Player Flow
-1. Select officer
-2. Click **ABILITIES** button
-3. See list of unlocked abilities
-4. Click ability to use
-5. Ability applies immediately
-
-### Developer Flow
-1. **Define** in `GameState.ABILITY_DEFS`
-2. **Implement** in `OfficerUnit` (apply_* methods)
-3. **Test** with unlock via `OfficerData.unlock_ability()`
-
----
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `GameState.gd` | ABILITY_DEFS + lookup helpers |
-| `OfficerUnit.gd` | All ability implementations |
-| `TacticalController.gd` | Ability usage handler |
-| `AbilityPanel.gd` | HUD panel controller |
-| `ability_panel.tscn` | UI scene |
-| `ABILITY_SYSTEM_GUIDE.md` | Full documentation |
-
----
-
-## Common Commands
-
-```gdscript
-# Unlock ability for an officer
-var od = GameState.get_officer("captain")
-od.unlock_ability("warlord")
-
-# Check if unlocked
-if od.has_ability("warlord"):
-    print("Warlord unlocked!")
-
-# Apply status effect
-unit.add_status_effect("stim", 1)
-
-# Check status
-if unit.has_status_effect("phantom"):
-    print("Unit is invisible!")
-
-# Get ability info
-var def = GameState.get_ability_def("phantom")
-print(def.get("desc"))
+PHANTOM        → 50% dmg reduction, invisible (2 turns); first hit = +100% dmg
+IMMUNE         → No damage taken (1 turn)
+STIM           → 50% dmg reduction, +2 AP (1 turn)
+ADRENALINE     → +2 movement, +15% accuracy (2 turns)
+POISON         → 5 DMG/turn, -20% accuracy (3 turns) — ticks on enemy turn end
+MARKED         → Allies +20% acc/crit vs target (1 turn)
+BULLDOZER_ARMOR→ +20 damage reduction (2 turns)
+UNTOUCHABLE    → Next attack against Scout guaranteed miss (1 turn)
+PIN_DOWN       → -25% accuracy (1 turn) — applied by Suppression Fire
 ```
 
 ---
 
-## AP Cost Summary
+## Key State Tracking (per officer turn)
 
-| Cost | Abilities |
-|------|-----------|
-| 0 AP | Deep Scanner, Overclock |
-| 1 AP | Most abilities (majority) |
-| 2 AP | Miracle Worker, Suppression Fire, Rocket Salvo |
-
----
-
-## Cooldown Summary
-
-| Cooldown | Abilities |
-|----------|-----------|
-| 0 | Warlord (Execute), Snap Shot (Precision Shot) |
-| 2 | Most base abilities & upgrades |
-| 3 | Deep Scanner, Stim Injector, Rocket Salvo |
-| 4 | Haywire Protocol |
-| ∞ | Miracle Worker (once per mission) |
+| Variable | Reset | Used By |
+|----------|-------|---------|
+| `moved_this_turn` | Start of turn | Ambush, Damn Good Ground, Hit & Run |
+| `attacked_this_turn` | Start of turn | Juggernaut regen check |
+| `shots_fired_this_turn` | Start of turn | Ambush (first-shot only) |
+| `war_machine_bonus_damage` | Never (mission) | War Machine kill stacking |
+| `emergency_protocol_triggered` | Never (mission) | Emergency Protocol one-time |
 
 ---
 
-## Ready to Test!
+## Implementation Status
 
 ✅ All 18 abilities implemented
-✅ Status effects system ready
-✅ HUD integration complete
-✅ Damage modifiers working
-✅ Cooldown tracking enabled
-
-**Start a tactical mission and unlock abilities via the Barracks to test!**
-
----
-
-*For detailed implementation info, see ABILITY_SYSTEM_GUIDE.md*
+✅ Kill hooks: Lead by Example, Serial, Untouchable, War Machine
+✅ Attack hooks: Hit & Run, Toxicologist, Ambush, Phantom reveal
+✅ Death prevention: No One Left Behind, Field Surgeon
+✅ Passive upgrades: Adrenaline Patch, Combat Engineer, Twin-Link
+✅ Crit system: Ambush (auto), Damn Good Ground (+15%), Juggernaut immunity
+✅ Active abilities: all 10 actives have targeting modes or no-target activation
+✅ Turret upgrades: Field Repair, Remote Detonation, Emergency Protocol

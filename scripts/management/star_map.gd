@@ -69,7 +69,6 @@ func refresh() -> void:
 	_clear_visuals()
 	_draw_nodes()
 	_draw_connections()
-	_draw_connections()
 	
 	# Ensure ship position is updated/reset correctly (e.g. restart)
 	# BUT only if we are not currently animating a jump
@@ -132,12 +131,15 @@ func _draw_connections() -> void:
 				var is_traveled = false
 				var is_potential = false
 				
-				# Check parent relationship and visited status
-				# Logic encapsulated in VoyageManager
-				if VoyageManager.is_path_traveled(source_node, target_node):
+				# A path is "traveled" (amber) if both endpoints have been visited/cleared/story.
+				# This covers parent-child, proximity, and story connections.
+				var source_visited = source_node.state != NodeData.NodeState.UNVISITED
+				var target_visited = target_node.state != NodeData.NodeState.UNVISITED
+				if source_visited and target_visited:
 					is_traveled = true
 				
-				# Check if this is a potential path (Current -> Unvisited)
+				# A path is "potential" (pulsing blue) if one end is the current node
+				# and the other is unvisited — i.e. a jump the player can make right now.
 				if not is_traveled:
 					var current_id = VoyageManager.current_node_id
 					if (source_id == current_id and target_node.state == NodeData.NodeState.UNVISITED) or \

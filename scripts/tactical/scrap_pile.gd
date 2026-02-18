@@ -1,16 +1,14 @@
 extends TacticalInteractable
-## Scrap Pile - Gives +5 scrap when looted
-## Now uses sprite-based graphics
+## Valuables Pile - Gives +Cash when looted
 
-var scrap_amount: int = 5
-
+@export var cash_amount: int = 50
 @onready var icon_label: Label = $IconLabel
 
 
 func _ready() -> void:
 	super._ready()
 	if icon_label:
-		icon_label.text = "+%d" % scrap_amount
+		icon_label.text = "+%d" % cash_amount
 
 
 func interact() -> void:
@@ -19,12 +17,12 @@ func interact() -> void:
 
 
 func get_interaction_text() -> String:
-	return "COLLECT SCRAP (+%d)" % scrap_amount
+	return "COLLECT VALUABLES (+%d CR)" % cash_amount
 
 
 func get_item_type() -> String:
-	return "scrap"
+	return "cash"
 
 
-func get_scrap_amount() -> int:
-	return scrap_amount
+func get_cash_amount() -> int:
+	return cash_amount

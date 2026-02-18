@@ -1,6 +1,8 @@
 extends Control
 ## Dialog for selecting the next story mission branch
 
+const _TOOLTIP_BTN = preload("res://scripts/ui/tooltip_button.gd")
+
 signal choice_made(mission_id: String)
 
 @onready var choice_a_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ChoicesContainer/ChoiceAButton
@@ -38,7 +40,9 @@ func setup(choices: Array[String], options_data: Dictionary) -> void:
 	# Optionally set tooltip or additional info
 	var desc_a = option_a.get("text", "")
 	var desc_b = option_b.get("text", "")
+	choice_a_button.set_script(_TOOLTIP_BTN)
 	choice_a_button.tooltip_text = desc_a
+	choice_b_button.set_script(_TOOLTIP_BTN)
 	choice_b_button.tooltip_text = desc_b
 
 
@@ -59,3 +63,4 @@ func _on_choice_a_pressed() -> void:
 func _on_choice_b_pressed() -> void:
 	choice_made.emit(_choice_b_id)
 	hide_dialog()
+

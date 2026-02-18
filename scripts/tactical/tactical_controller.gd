@@ -20,8 +20,13 @@ var execute_mode: bool = false  # When true, clicking selects execute target
 var charge_mode: bool = false  # When true, clicking selects charge target
 var is_charging: bool = false  # Track when a CHARGE movement is in progress to prevent movement_finished callback interference
 var turret_mode: bool = false  # When true, clicking selects turret placement tile
-var patch_mode: bool = false  # When true, clicking selects patch target
+var patch_mode: bool = false   # When true, clicking selects patch target
 var precision_mode: bool = false  # When true, clicking selects precision shot target (Sniper)
+var coordinate_fire_mode: bool = false  # Captain: mark enemy
+var inspire_mode: bool = false         # Captain: grant ally +1 AP
+var stim_mode: bool = false            # Medic: stim injector ally target
+var rocket_salvo_mode: bool = false    # Heavy: area attack tile selection
+var double_tap_mode: bool = false      # Sniper: fire twice at one target
 var current_turn: int = 0
 var current_unit_index: int = 0  # Which unit's turn it is (0-based index)
 var mission_active: bool = false
@@ -30,7 +35,7 @@ var extraction_in_progress: bool = false
 var is_animating: bool = false  # Track when animations are playing to prevent input
 var extraction_positions: Array[Vector2i] = []
 var mission_fuel_collected: int = 0  # Fuel collected during this mission
-var mission_scrap_collected: int = 0  # Scrap collected during this mission
+var mission_cash_collected: int = 0  # Cash collected during this mission
 var mission_enemies_killed: int = 0  # Enemies killed during this mission
 var current_biome: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION
 var is_scavenger_mission: bool = false  # Track if this is a scavenger mission
@@ -43,7 +48,6 @@ var officer_kills: Dictionary = {}  # {officer_key: int} — per-officer kill co
 var _last_attacker_key: String = ""  # Set before take_damage to attribute kills
 
 var FuelCrateScene: PackedScene
-var ScrapPileScene: PackedScene
 var HealthPackScene: PackedScene
 var MiningEquipmentScene: PackedScene
 var SecurityTerminalScene: PackedScene
@@ -83,7 +87,6 @@ const NO_CASUALTIES_REWARD_CASH: int = 30
 
 func _ready() -> void:
 	FuelCrateScene = load("res://scenes/tactical/fuel_crate.tscn")
-	ScrapPileScene = load("res://scenes/tactical/scrap_pile.tscn")
 	HealthPackScene = load("res://scenes/tactical/health_pack.tscn")
 	MiningEquipmentScene = load("res://scenes/tactical/mining_equipment.tscn")
 	SecurityTerminalScene = load("res://scenes/tactical/security_terminal.tscn")
@@ -113,7 +116,8 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") and mission_active and not is_paused:
 		# Cancel any active ability mode
-		if turret_mode or charge_mode or execute_mode or precision_mode or patch_mode:
+		if turret_mode or charge_mode or execute_mode or precision_mode or patch_mode \
+				or coordinate_fire_mode or inspire_mode or stim_mode or rocket_salvo_mode or double_tap_mode:
 			_cancel_ability_mode()
 			get_viewport().set_input_as_handled()
 			return
@@ -135,7 +139,7 @@ func _show_pause_menu() -> void:
 	ui_layer.add_child(current_pause_menu)
 	
 	# Pass the mission haul so it can be forfeited on abandon
-	current_pause_menu.set_mission_haul(mission_fuel_collected, mission_scrap_collected)
+	current_pause_menu.set_mission_haul(mission_fuel_collected, mission_cash_collected)
 	current_pause_menu.show_menu()
 
 
@@ -176,10 +180,15 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	turret_mode = false
 	patch_mode = false
 	precision_mode = false
+	coordinate_fire_mode = false
+	inspire_mode = false
+	stim_mode = false
+	rocket_salvo_mode = false
+	double_tap_mode = false
 	current_turn = 1
 	current_unit_index = 0
 	mission_fuel_collected = 0
-	mission_scrap_collected = 0
+	mission_cash_collected = 0
 	mission_enemies_killed = 0
 	officer_kills.clear()
 	_last_attacker_key = ""
@@ -445,10 +454,6 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 				loot.amount = maxi(1, int(1 * difficulty))
 		elif loot_data["type"] == "health_pack":
 			loot = HealthPackScene.instantiate()
-		else:
-			loot = ScrapPileScene.instantiate()
-			if loot.has_method("set_amount"):
-				loot.amount = maxi(1, int(5 * difficulty))
 		_safe_add_interactable(loot, loot_pos)
 	
 	# Spawn enemies with difficulty-based scaling
@@ -568,7 +573,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		tactical_map.clear_movement_range()
 	
 	# Update haul display
-	tactical_hud.update_haul(mission_fuel_collected, mission_scrap_collected)
+	tactical_hud.update_haul(mission_fuel_collected, mission_cash_collected)
 	
 	# Tutorial: Trigger tactical_movement after first turn begins
 	if TutorialManager.is_active() and TutorialManager.is_at_step("tactical_movement"):
@@ -804,9 +809,29 @@ func _on_tile_clicked(grid_pos: Vector2i) -> void:
 	if patch_mode and selected_unit and selected_unit.officer_type == "medic":
 		_try_patch_target(grid_pos)
 		return
-	
+
 	if turret_mode and selected_unit and selected_unit.officer_type == "tech":
 		_try_place_turret(grid_pos)
+		return
+
+	if coordinate_fire_mode and selected_unit:
+		_try_coordinate_fire(grid_pos)
+		return
+
+	if inspire_mode and selected_unit:
+		_try_inspire_target(grid_pos)
+		return
+
+	if stim_mode and selected_unit:
+		_try_stim_target(grid_pos)
+		return
+
+	if rocket_salvo_mode and selected_unit:
+		_try_rocket_salvo(grid_pos)
+		return
+
+	if double_tap_mode and selected_unit:
+		_try_double_tap(grid_pos)
 		return
 	
 	if charge_mode and selected_unit and selected_unit.officer_type == "heavy":
@@ -989,7 +1014,11 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 	# CHARGE handles all movement completion logic internally and this callback would interfere
 	if is_charging:
 		return
-	
+
+	# Track movement for passive abilities (Hit & Run, Ambush, Damn Good Ground)
+	if unit in deployed_officers and "moved_this_turn" in unit:
+		unit.moved_this_turn = true
+
 	var pos = unit.get_grid_position()
 
 	# Mark new position as solid
@@ -1176,7 +1205,7 @@ func _pickup_item(interactable: Node2D, unit: Node2D) -> void:
 			return
 	
 	# Track what was collected by type (normal loot)
-	# NOTE: Fuel and scrap do NOT count toward objectives - only objective-specific interactables do
+	# NOTE: Fuel and cash do NOT count toward objectives - only objective-specific interactables do
 	if interactable.has_method("get_item_type"):
 		var item_type = interactable.get_item_type()
 		var amount: int = 0
@@ -1186,16 +1215,16 @@ func _pickup_item(interactable: Node2D, unit: Node2D) -> void:
 				SFXManager.play_sfx_by_name("interactions", "fuel_pickup")
 			mission_fuel_collected += 1
 			amount = 1
-		elif item_type == "scrap":
-			# Play scrap pickup SFX
+		elif item_type == "cash":
+			# Play cash pickup SFX
 			if SFXManager:
-				SFXManager.play_sfx_by_name("interactions", "scrap_pickup")
-			if interactable.has_method("get_scrap_amount"):
-				amount = interactable.get_scrap_amount()
-				mission_scrap_collected += amount
+				SFXManager.play_sfx_by_name("interactions", "cash_pickup")
+			if interactable.has_method("get_cash_amount"):
+				amount = interactable.get_cash_amount()
+				mission_cash_collected += amount
 			else:
 				amount = 5
-				mission_scrap_collected += 5
+				mission_cash_collected += 5
 		elif item_type == "health_pack":
 			# Check if unit is at full health - don't consume health pack if so
 			if unit.current_hp >= unit.max_hp:
@@ -1228,7 +1257,7 @@ func _pickup_item(interactable: Node2D, unit: Node2D) -> void:
 	interactable.interact()
 	
 	# Update haul display
-	tactical_hud.update_haul(mission_fuel_collected, mission_scrap_collected)
+	tactical_hud.update_haul(mission_fuel_collected, mission_cash_collected)
 
 
 ## Update cover indicator for a single unit
@@ -1316,11 +1345,20 @@ func _on_end_turn_pressed() -> void:
 		# Process turn (hull damage) - only once per round
 		GameState.process_tactical_turn()
 		
+		# Juggernaut: regen HP for Heavy units that didn't attack
+		for _jug_officer in deployed_officers:
+			if _jug_officer.officer_type == "heavy" and _jug_officer.current_hp > 0:
+				_jug_officer.apply_juggernaut_regeneration()
+
+		# Tick status effects (poison, adrenaline, etc.) at end of enemy phase
+		for officer in deployed_officers:
+			officer.tick_status_effects()
+
 		# Reset AP and reduce cooldowns for all officers at start of new round
 		for officer in deployed_officers:
 			officer.reset_ap()
 			officer.reduce_cooldown()
-		
+
 		# Process turret auto-fire before player actions
 		await _process_turrets()
 		
@@ -1594,18 +1632,49 @@ func _on_extraction_warning_confirmed(units_outside_zone: Array[Node2D]) -> void
 
 
 func _on_officer_died(officer_key: String) -> void:
-	# Find the officer and play death animation
+	# Find the dying officer
 	var dying_officer: Node2D = null
 	var officer_index: int = -1
-	
+
 	for i in range(deployed_officers.size()):
 		if deployed_officers[i].officer_key == officer_key:
 			dying_officer = deployed_officers[i]
 			officer_index = i
 			break
-	
+
 	if dying_officer == null:
 		return
+
+	# --- Death-prevention passive hooks (check BEFORE removing from list) ---
+
+	# No One Left Behind (Captain): save ally if captain within 5 tiles
+	for _cap in deployed_officers:
+		if _cap == dying_officer or _cap.current_hp <= 0:
+			continue
+		if _cap.officer_type == "captain":
+			var dist = abs(_cap.grid_position.x - dying_officer.grid_position.x) \
+					 + abs(_cap.grid_position.y - dying_officer.grid_position.y)
+			if dist <= 5:
+				if _cap.try_save_ally(dying_officer):
+					tactical_hud.show_combat_message(
+						"NO ONE LEFT BEHIND — %s SAVED!" % officer_key.to_upper(),
+						Color.YELLOW)
+					await get_tree().create_timer(1.2).timeout
+					tactical_hud.hide_combat_message()
+					return  # Unit survived — abort death sequence
+
+	# Field Surgeon (Medic): auto-stabilize if medic within 4 tiles
+	for _med in deployed_officers:
+		if _med == dying_officer or _med.current_hp <= 0:
+			continue
+		if _med.officer_type == "medic":
+			if _med.try_auto_stabilize(dying_officer):
+				tactical_hud.show_combat_message(
+					"FIELD SURGEON — %s STABILIZED!" % officer_key.to_upper(),
+					Color(1.0, 0.5, 0.8))
+				await get_tree().create_timer(1.2).timeout
+				tactical_hud.hide_combat_message()
+				return  # Unit survived — abort death sequence
 	
 	# Clear position from map immediately
 	# Removed: tactical_map.set_unit_position_solid(pos, false)
@@ -1707,7 +1776,7 @@ func _end_mission(success: bool) -> void:
 	
 	# Check objective completion and apply bonus rewards
 	var bonus_fuel = 0
-	var bonus_scrap = 0
+	var bonus_cash = 0
 	var bonus_hull_repair = 0
 	var objectives_data: Array = []
 	if is_scavenger_mission and not mission_objectives.is_empty():
@@ -1721,7 +1790,7 @@ func _end_mission(success: bool) -> void:
 			if objective.completed:
 				var bonuses = MissionObjective.ObjectiveManager.get_bonus_rewards(objective)
 				bonus_fuel += bonuses.get("fuel", 0)
-				bonus_scrap += bonuses.get("scrap", 0)
+				bonus_cash += bonuses.get("cash", 0)
 				bonus_hull_repair += bonuses.get("hull_repair", 0)
 		
 		# Note: Bonuses are tracked separately and applied to GameState separately
@@ -1773,13 +1842,13 @@ func _end_mission(success: bool) -> void:
 	var mission_stats: Dictionary = {
 		"success": success,
 		"fuel_collected": mission_fuel_collected,
-		"scrap_collected": mission_scrap_collected,
+		"cash_collected": mission_cash_collected,
 		"enemies_killed": mission_enemies_killed,
 		"turns_taken": current_turn,
 		"officers_status": officers_status,
 		"objective_completed": obj_complete,
 		"bonus_fuel": bonus_fuel,
-		"bonus_scrap": bonus_scrap,
+		"bonus_cash": bonus_cash,
 		"bonus_hull_repair": bonus_hull_repair,
 		"objectives": objectives_data,
 		"biome_type": current_biome,
@@ -1793,13 +1862,13 @@ func _end_mission(success: bool) -> void:
 	
 	# Apply all resources and rewards to GameState only on successful extraction
 	if success:
-		# Apply collected resources (fuel and scrap picked up during mission)
+		# Apply collected resources (fuel and cash picked up during mission)
 		GameState.fuel += mission_fuel_collected
-		GameState.scrap += mission_scrap_collected
+		GameState.cash += mission_cash_collected # This tracks cash picked up from piles
 		
 		# Apply bonus rewards from completed objectives (separate from collected resources)
 		GameState.fuel += bonus_fuel
-		GameState.scrap += bonus_scrap
+		GameState.cash += bonus_cash
 		if bonus_hull_repair > 0:
 			GameState.repair_ship(bonus_hull_repair)
 		
@@ -1807,7 +1876,7 @@ func _end_mission(success: bool) -> void:
 		GameState.cash += mission_stats["total_cash"]
 		
 		# Accumulate stats to GameState for voyage recap
-		GameState.add_mission_stats(mission_fuel_collected, mission_scrap_collected, mission_enemies_killed, current_turn)
+		GameState.add_mission_stats(mission_fuel_collected, mission_enemies_killed, current_turn)
 
 	# --- Phase 3: Injury detection + HP write-back ---
 	for officer_key in mission_roster:
@@ -2359,31 +2428,61 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 	# Check for critical hit AFTER hit confirmation (only for player units and only if hit)
 	var is_critical = false
 	if hit and shooter in deployed_officers and "critical_hit_chance" in shooter:
-		var crit_roll = randf() * 100.0
-		if crit_roll <= shooter.critical_hit_chance:
+		var effective_crit_chance = shooter.critical_hit_chance
+
+		# Ambush (Scout L3A): first shot is auto-crit if Scout hasn't moved
+		if not is_critical and shooter.has_method("check_ambush_crit") and shooter.check_ambush_crit():
 			is_critical = true
-			# Apply 2.5x damage multiplier (stacks with flanking)
+
+		# Damn Good Ground (Sniper L2A): +15% crit if stationary
+		if not is_critical and shooter.officer_type == "sniper" and not shooter.moved_this_turn:
+			var _dgg_od = GameState.get_officer(shooter.officer_key)
+			if _dgg_od and _dgg_od.has_ability("damn_good_ground"):
+				effective_crit_chance += 15.0
+
+		if not is_critical:
+			var crit_roll = randf() * 100.0
+			if crit_roll <= effective_crit_chance:
+				is_critical = true
+
+		if is_critical:
 			damage = int(damage * 2.5)
-	
+
+	# Juggernaut (Heavy L3A): Immune to critical hits when targeted
+	if is_critical and is_instance_valid(target) and target in deployed_officers:
+		if target.has_method("is_juggernaut_crit_immune") and target.is_juggernaut_crit_immune():
+			is_critical = false
+			damage = int(damage / 2.5)  # Undo the crit multiplier
+
 	# Safety: abort if shooter was freed during firing phase
 	if not is_instance_valid(shooter):
 		tactical_hud.hide_combat_message()
 		combat_camera.return_to_tactical()
 		_set_animating(false)
 		return
-	
+
 	# Track attacker for kill attribution
 	if shooter in deployed_officers and "officer_key" in shooter:
 		_last_attacker_key = shooter.officer_key
 	else:
 		_last_attacker_key = ""
 
-	# Apex Predator: 2x damage vs full-HP targets (Phase 4 ability hook)
+	# Apex Predator: 2x damage vs full-HP targets
 	if hit and shooter in deployed_officers and is_instance_valid(target):
 		var _apex_od: OfficerData = GameState.get_officer(shooter.officer_key)
 		if _apex_od and _apex_od.has_ability("apex_predator"):
 			if "current_hp" in target and "max_hp" in target and target.current_hp >= target.max_hp:
 				damage *= 2
+
+	# Phantom (Scout L3B): first attack from invisibility = +100% damage, then reveals
+	if hit and shooter in deployed_officers and shooter.has_method("has_status_effect"):
+		if shooter.has_status_effect("phantom"):
+			damage = int(damage * 2.0)
+			shooter.remove_status_effect("phantom")
+			var _ph_sprite = shooter.get_node_or_null("Sprite")
+			if _ph_sprite:
+				var _ph_tween = create_tween()
+				_ph_tween.tween_property(_ph_sprite, "modulate:a", 1.0, 0.2)
 
 	# PHASE 3: IMPACT (0.9s - balanced impact reaction)
 	# Target may have been freed - _phase_impact already has a null check
@@ -2463,7 +2562,8 @@ func _phase_firing(shooter: Node2D, _shooter_pos: Vector2i, target_pos: Vector2i
 
 
 ## Phase 3: Impact
-func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: bool, damage: int, is_flanking: bool = false, is_critical: bool = false) -> void:
+func _phase_impact(impact_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: bool, damage: int, is_flanking: bool = false, is_critical: bool = false) -> void:
+	var _shooter: Node2D = impact_shooter  # alias for ability hooks below
 	# Display hit/miss message with flanking and critical indicators
 	if hit:
 		# Play hit SFX
@@ -2492,6 +2592,12 @@ func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: 
 				shake_tween.tween_property(combat_camera, "offset", camera_offset, 0.06)
 			target.take_damage(damage)
 
+			# Toxicologist (Medic L3B): poison enemies on hit
+			if _shooter in deployed_officers and _shooter.officer_type == "medic":
+				var _tox_od = GameState.get_officer(_shooter.officer_key)
+				if _tox_od and _tox_od.has_ability("toxicologist") and target.has_method("add_status_effect"):
+					target.add_status_effect("poison", 3)
+
 			# Show damage popup (pass critical flag)
 			_spawn_damage_popup(damage, true, target.position, false, is_flanking, is_critical)
 		else:
@@ -2517,6 +2623,21 @@ func _phase_impact(_shooter: Node2D, target_pos: Vector2i, target: Node2D, hit: 
 func _phase_resolution(shooter: Node2D) -> void:
 	# Hide combat message
 	tactical_hud.hide_combat_message()
+
+	if not is_instance_valid(shooter) or shooter not in deployed_officers:
+		return
+
+	# Hit & Run (Scout L2A): gain +3 movement after shooting if also moved this turn
+	if shooter.officer_type == "scout" and shooter.moved_this_turn:
+		var _hnr_od = GameState.get_officer(shooter.officer_key)
+		if _hnr_od and _hnr_od.has_ability("hit_and_run"):
+			shooter.gain_bonus_movement(3)
+			tactical_hud.show_combat_message("HIT & RUN — +3 MOVE!", Color(0.2, 1.0, 0.4))
+			await get_tree().create_timer(0.7).timeout
+			tactical_hud.hide_combat_message()
+
+	# Toxicologist (Medic L3B): attacks apply poison to target
+	# This is resolved in _phase_impact; handled via last_target tracking below
 	
 	# Return camera to tactical view (only for player units, enemies stay focused on action)
 	if shooter in deployed_officers:
@@ -2574,7 +2695,7 @@ func _spawn_damage_popup(damage: int, is_hit: bool, world_pos: Vector2, is_heal:
 	popup.initialize(damage, is_hit, world_pos, is_heal, is_flank, is_critical)
 
 
-## Spawn a pickup popup for scrap or fuel
+## Spawn a pickup popup for cash or fuel
 func _spawn_pickup_popup(item_type: String, amount: int, world_pos: Vector2) -> void:
 	var popup = Label.new()
 	popup.script = load("res://scripts/tactical/pickup_popup.gd")
@@ -2750,6 +2871,46 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	# Attribute kill to the last attacking officer
 	if _last_attacker_key != "":
 		officer_kills[_last_attacker_key] = officer_kills.get(_last_attacker_key, 0) + 1
+
+	# --- Kill-triggered passive ability hooks ---
+	var killer: Node2D = null
+	for officer in deployed_officers:
+		if "officer_key" in officer and officer.officer_key == _last_attacker_key:
+			killer = officer
+			break
+
+	if killer:
+		# Lead by Example (Captain): all other squad members gain +1 AP
+		if killer.officer_type == "captain":
+			var _lbe_od = GameState.get_officer(killer.officer_key)
+			if _lbe_od and _lbe_od.has_ability("lead_by_example"):
+				for _ally in deployed_officers:
+					if _ally != killer and _ally.current_hp > 0:
+						_ally.gain_bonus_ap(1)
+				tactical_hud.show_combat_message("LEAD BY EXAMPLE — SQUAD +1 AP", Color.YELLOW)
+				get_tree().create_timer(1.0).timeout
+
+		# Serial (Sniper): refund all AP on kill
+		if killer.officer_type == "sniper":
+			var _serial_od = GameState.get_officer(killer.officer_key)
+			if _serial_od and _serial_od.has_ability("serial"):
+				killer.reset_ap()
+				tactical_hud.show_combat_message("SERIAL — AP REFUNDED!", Color(0.7, 0.5, 1.0))
+
+		# Untouchable (Scout): next attack against scout guaranteed miss
+		if killer.officer_type == "scout":
+			var _untch_od = GameState.get_officer(killer.officer_key)
+			if _untch_od and _untch_od.has_ability("untouchable"):
+				killer.add_status_effect("untouchable", 1)
+
+		# War Machine (Heavy): +5 permanent base damage per kill
+		if killer.officer_type == "heavy":
+			killer.apply_war_machine_kill()
+			if killer.war_machine_bonus_damage > 0:
+				tactical_hud.show_combat_message(
+					"WAR MACHINE — +%d DMG TOTAL" % killer.war_machine_bonus_damage,
+					Color(1.0, 0.4, 0.1))
+
 	_last_attacker_key = ""
 
 	# Update objectives based on enemy kills (only if objective matches)
@@ -2780,52 +2941,19 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	# Check if enemy should drop resources (10-15% chance)
 	var drop_chance = randi_range(10, 15)  # Random chance between 10% and 15%
 	var should_drop = randf() * 100.0 < drop_chance
-	
+
 	# Only spawn resource drop if chance succeeds
 	if should_drop:
-		# Spawn resource drop at enemy's death position
-		var resource_amount = _calculate_enemy_resource_drop(enemy_type)
-		
-		# Bosses drop bonus loot (2-3x normal)
+		# Bosses drop bonus loot
 		if enemy_type == "boss":
-			resource_amount = resource_amount * randi_range(2, 3)
-			# Bosses drop both fuel and scrap, but at different positions within 2x2 area
-			# Try to drop fuel at center first, then scrap at a different corner
+			# Bosses drop fuel
 			var fuel_amount = randi_range(2, 4)
 			var boss_center_pos = pos + Vector2i(1, 1)  # Center of 2x2 area
-			
+
 			# Try to drop fuel at center
 			var fuel_crate = FuelCrateScene.instantiate()
 			fuel_crate.fuel_amount = fuel_amount
-			var fuel_dropped = _safe_add_interactable(fuel_crate, boss_center_pos)
-			
-			# Try to drop scrap at a different position within the 2x2 area
-			# Try corners of the 2x2 area: (0,0), (1,0), (0,1)
-			var scrap_positions = [
-				pos + Vector2i(0, 0),  # Top-left
-				pos + Vector2i(1, 0),   # Top-right
-				pos + Vector2i(0, 1)    # Bottom-left
-			]
-			
-			var scrap_dropped = false
-			for scrap_pos in scrap_positions:
-				var scrap_pile = ScrapPileScene.instantiate()
-				scrap_pile.scrap_amount = resource_amount
-				if _safe_add_interactable(scrap_pile, scrap_pos):
-					scrap_dropped = true
-					break
-			
-			# If scrap couldn't be dropped at any corner and fuel wasn't dropped at center,
-			# try dropping scrap at center (only if center is free)
-			if not scrap_dropped and not fuel_dropped:
-				var scrap_pile = ScrapPileScene.instantiate()
-				scrap_pile.scrap_amount = resource_amount
-				_safe_add_interactable(scrap_pile, boss_center_pos)
-		else:
-			# Regular enemies drop at their position
-			var scrap_pile = ScrapPileScene.instantiate()
-			scrap_pile.scrap_amount = resource_amount
-			_safe_add_interactable(scrap_pile, pos)
+			_safe_add_interactable(fuel_crate, boss_center_pos)
 	
 	# Remove node
 	enemy.queue_free()
@@ -3096,26 +3224,26 @@ func _on_ability_used(ability_id: String) -> void:
 			tactical_hud.show_cancel_button()
 
 
-## Handle upgraded ability usage
+## Handle upgraded ability usage — routes each ability to its implementation
 func _use_upgraded_ability(ability_id: String, ability_def: Dictionary) -> void:
 	var ability_type = ability_def.get("type", "passive")
 	var cost = ability_def.get("cost", 1)
 
-	# Passive abilities don't require usage
+	# Passive abilities: display info, no activation
 	if ability_type == "passive":
-		tactical_hud.show_combat_message("PASSIVE ABILITY", Color(0.4, 0.9, 1.0))
+		tactical_hud.show_combat_message("%s — PASSIVE" % ability_def.get("name","").to_upper(), Color(0.4, 0.9, 1.0))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		return
 
-	# Check AP cost
+	# AP check
 	if not selected_unit.has_ap(cost):
 		tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		return
 
-	# Check cooldown
+	# Cooldown check
 	if selected_unit.is_ability_on_cooldown(ability_id):
 		var remaining = selected_unit.get_ability_cooldown(ability_id)
 		tactical_hud.show_combat_message("COOLDOWN: %d TURNS" % remaining, Color(1, 0.5, 0))
@@ -3123,20 +3251,80 @@ func _use_upgraded_ability(ability_id: String, ability_def: Dictionary) -> void:
 		tactical_hud.hide_combat_message()
 		return
 
-	# Show ability name
-	var ability_name = ability_def.get("name", ability_id)
-	tactical_hud.show_combat_message("USING: %s" % ability_name.to_upper(), Color(0.4, 0.9, 1.0))
-	await get_tree().create_timer(0.8).timeout
-	tactical_hud.hide_combat_message()
+	# Route to specific implementation
+	match ability_id:
 
-	# Most upgraded abilities will require targeting or further interaction
-	# For now, mark that an ability was used
-	selected_unit.use_ap(cost)
-	var cooldown = ability_def.get("cooldown", 2)
-	selected_unit._start_cooldown(ability_id, cooldown)
+		# ── CAPTAIN ──────────────────────────────────────────
+		"coordinate_fire":
+			# Enter enemy-targeting mode; mark is applied on confirm
+			coordinate_fire_mode = true
+			tactical_map.clear_movement_range()
+			tactical_hud.show_combat_message("SELECT ENEMY TO MARK (+20% ACC/CRIT)", Color(1.0, 0.8, 0.2))
+			tactical_hud.show_cancel_button()
 
-	_select_unit(selected_unit)
-	_check_auto_end_turn()
+		"inspire":
+			# Enter ally-targeting mode
+			inspire_mode = true
+			tactical_map.clear_movement_range()
+			tactical_map.set_heal_range(selected_unit.get_grid_position(), 5, selected_unit, deployed_officers)
+			tactical_hud.show_combat_message("SELECT ALLY TO INSPIRE (+1 AP)", Color(1.0, 0.9, 0.3))
+			tactical_hud.show_cancel_button()
+
+		# ── SCOUT ─────────────────────────────────────────────
+		"deep_scanner":
+			_activate_deep_scanner()
+
+		"phantom":
+			_activate_phantom()
+
+		# ── TECH ──────────────────────────────────────────────
+		"field_repair":
+			_activate_field_repair()
+
+		"remote_detonation":
+			_activate_remote_detonation()
+
+		# ── MEDIC ─────────────────────────────────────────────
+		"miracle_worker":
+			_activate_miracle_worker()
+
+		"stim_injector":
+			stim_mode = true
+			tactical_map.clear_movement_range()
+			tactical_map.set_heal_range(selected_unit.get_grid_position(), 5, selected_unit, deployed_officers)
+			tactical_hud.show_combat_message("SELECT ALLY FOR STIM (+2 AP, -50% DMG)", Color(1.0, 0.5, 0.8))
+			tactical_hud.show_cancel_button()
+
+		# ── HEAVY ─────────────────────────────────────────────
+		"suppression_fire":
+			_activate_suppression_fire()
+
+		"rocket_salvo":
+			rocket_salvo_mode = true
+			tactical_map.clear_movement_range()
+			# Highlight all tiles in shoot range as valid targets
+			tactical_map.set_execute_range(selected_unit.get_grid_position(), selected_unit.shoot_range)
+			tactical_hud.show_combat_message("SELECT TARGET TILE — 3×3 BLAST (40 DMG)", Color(1.0, 0.4, 0.1))
+			tactical_hud.show_cancel_button()
+
+		# ── SNIPER ────────────────────────────────────────────
+		"double_tap":
+			double_tap_mode = true
+			tactical_map.clear_movement_range()
+			tactical_hud.show_combat_message("SELECT ENEMY — DOUBLE TAP (2ND SHOT -15% ACC)", Color(0.6, 0.4, 0.9))
+			_update_precision_mode_highlights()
+			tactical_hud.show_cancel_button()
+
+		_:
+			# Fallback: consume AP/CD with a message
+			var ability_name = ability_def.get("name", ability_id)
+			tactical_hud.show_combat_message("USING: %s" % ability_name.to_upper(), Color(0.4, 0.9, 1.0))
+			await get_tree().create_timer(0.8).timeout
+			tactical_hud.hide_combat_message()
+			selected_unit.use_ap(cost)
+			selected_unit._start_cooldown(ability_id, ability_def.get("cooldown", 2))
+			_select_unit(selected_unit)
+			_check_auto_end_turn()
 
 
 ## Cancel any active ability targeting mode
@@ -3193,10 +3381,53 @@ func _cancel_ability_mode() -> void:
 		tactical_map.clear_heal_range()
 		tactical_hud.hide_combat_message()
 		tactical_hud.hide_cancel_button()
-		# Restore movement range if unit still has AP
 		if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
-			var unit_pos = selected_unit.get_grid_position()
-			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
+			tactical_map.set_movement_range(selected_unit.get_grid_position(), selected_unit.move_range)
+		return
+
+	if coordinate_fire_mode:
+		coordinate_fire_mode = false
+		tactical_hud.hide_combat_message()
+		tactical_hud.hide_cancel_button()
+		if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			tactical_map.set_movement_range(selected_unit.get_grid_position(), selected_unit.move_range)
+		return
+
+	if inspire_mode:
+		inspire_mode = false
+		tactical_map.clear_heal_range()
+		tactical_hud.hide_combat_message()
+		tactical_hud.hide_cancel_button()
+		if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			tactical_map.set_movement_range(selected_unit.get_grid_position(), selected_unit.move_range)
+		return
+
+	if stim_mode:
+		stim_mode = false
+		tactical_map.clear_heal_range()
+		tactical_hud.hide_combat_message()
+		tactical_hud.hide_cancel_button()
+		if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			tactical_map.set_movement_range(selected_unit.get_grid_position(), selected_unit.move_range)
+		return
+
+	if rocket_salvo_mode:
+		rocket_salvo_mode = false
+		tactical_map.clear_execute_range()
+		tactical_hud.hide_combat_message()
+		tactical_hud.hide_cancel_button()
+		if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			tactical_map.set_movement_range(selected_unit.get_grid_position(), selected_unit.move_range)
+		return
+
+	if double_tap_mode:
+		double_tap_mode = false
+		tactical_map.clear_execute_range()
+		tactical_hud.hide_combat_message()
+		_update_attackable_highlights()
+		tactical_hud.hide_cancel_button()
+		if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			tactical_map.set_movement_range(selected_unit.get_grid_position(), selected_unit.move_range)
 		return
 
 
@@ -3420,15 +3651,22 @@ func _try_patch_target(grid_pos: Vector2i) -> void:
 		# Play patch SFX
 		if SFXManager:
 			SFXManager.play_sfx_by_name("combat", "patch")
-		
+
 		# Focus camera on healing action
 		var medic_world = selected_unit.position
 		var target_world = target_unit.position
 		combat_camera.focus_on_action(medic_world, target_world)
 		await get_tree().create_timer(0.2).timeout  # Wait for camera to zoom in
-		
+
 		var heal_amount = int(target_unit.max_hp * 0.5 * selected_unit.get_healing_bonus())
-		tactical_hud.show_combat_message("HEALED %s (+%d HP)" % [target_unit.officer_key.to_upper(), heal_amount], Color(0.2, 1, 0.2))
+
+		# Adrenaline Patch (Medic L2A): also grant movement/accuracy buff
+		var _adrpatch_od = GameState.get_officer(selected_unit.officer_key)
+		if _adrpatch_od and _adrpatch_od.has_ability("adrenaline_patch"):
+			target_unit.add_status_effect("adrenaline", 2)
+			tactical_hud.show_combat_message("ADRENALINE PATCH — +2 MOV, +15% ACC!", Color(1.0, 0.5, 0.9))
+		else:
+			tactical_hud.show_combat_message("HEALED %s (+%d HP)" % [target_unit.officer_key.to_upper(), heal_amount], Color(0.2, 1, 0.2))
 		
 		# Show heal popup
 		_spawn_damage_popup(heal_amount, true, target_unit.position, true)
@@ -3547,17 +3785,29 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
+	# Twin-Link (Tech L3A): allow max 2 turrets, otherwise destroy old one first
+	var max_turrets = selected_unit.get_max_turrets_with_twinlink()
+	while active_turrets.size() >= max_turrets:
+		var old_turret = active_turrets[0]
+		active_turrets.remove_at(0)
+		if is_instance_valid(old_turret):
+			old_turret.queue_free()
+
 	# Use the ability (spends AP and starts cooldown)
 	if selected_unit.use_turret():
 		# Play turret SFX
 		if SFXManager:
 			SFXManager.play_sfx_by_name("combat", "turret")
-		
+
 		var turret = TurretUnitScene.instantiate()
 		turret.set_grid_position(grid_pos)
 		turret.position = Vector2(grid_pos.x * 32 + 16, grid_pos.y * 32 + 16)
 		tactical_map.add_child(turret)
-		turret.initialize()
+
+		# Combat Engineer (Tech L2A): boosted turret stats
+		var _ceng_od = GameState.get_officer(selected_unit.officer_key)
+		var turret_stats = selected_unit.get_turret_stats_with_engineer()
+		turret.initialize(turret_stats)
 		active_turrets.append(turret)
 		
 		# Mark turret tile as solid so units cannot move through it
@@ -3589,6 +3839,476 @@ func _try_place_turret(grid_pos: Vector2i) -> void:
 	else:
 		_set_animating(false)
 		# Update ability buttons (ability not used, button should be re-enabled)
+		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
+
+
+## ═══════════════════════════════════════════════════════════════
+## ACTIVE ABILITY IMPLEMENTATIONS
+## ═══════════════════════════════════════════════════════════════
+
+## Coordinate Fire (Captain L2B): mark enemy → +20% acc/crit for allies for 1 turn
+func _try_coordinate_fire(grid_pos: Vector2i) -> void:
+	coordinate_fire_mode = false
+	tactical_hud.hide_combat_message()
+	tactical_hud.hide_cancel_button()
+
+	# Find enemy at tile
+	var target_enemy: Node2D = null
+	for enemy in enemies:
+		if enemy.get_grid_position() == grid_pos and enemy.current_hp > 0:
+			target_enemy = enemy
+			break
+
+	if not target_enemy or not _is_enemy_visible(target_enemy):
+		tactical_hud.show_combat_message("NO VISIBLE ENEMY THERE", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_restore_movement_range()
+		return
+
+	if not selected_unit.has_ap(1):
+		tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_restore_movement_range()
+		return
+
+	selected_unit.apply_coordinate_fire(target_enemy)
+
+	# Visual: rapid yellow flash on marked enemy
+	var enemy_sprite = target_enemy.get_node_or_null("Sprite")
+	if enemy_sprite:
+		var tween = create_tween()
+		tween.tween_property(enemy_sprite, "modulate", Color(2.0, 1.5, 0.2, 1.0), 0.08)
+		tween.tween_property(enemy_sprite, "modulate", Color(1.5, 0.5, 0.2, 1.0), 0.08)
+		tween.tween_property(enemy_sprite, "modulate", Color(2.0, 1.5, 0.2, 1.0), 0.08)
+		tween.tween_property(enemy_sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.15)
+
+	tactical_hud.show_combat_message("COORDINATE FIRE — TARGET MARKED!", Color(1.0, 0.8, 0.2))
+	await get_tree().create_timer(1.2).timeout
+	tactical_hud.hide_combat_message()
+	_select_unit(selected_unit)
+	_check_auto_end_turn()
+
+
+## Inspire (Captain L3C): grant one ally +1 AP
+func _try_inspire_target(grid_pos: Vector2i) -> void:
+	inspire_mode = false
+	tactical_map.clear_heal_range()
+	tactical_hud.hide_combat_message()
+	tactical_hud.hide_cancel_button()
+
+	var target_unit = tactical_map.get_unit_at(grid_pos)
+	if not target_unit or target_unit not in deployed_officers or target_unit == selected_unit:
+		tactical_hud.show_combat_message("SELECT A DIFFERENT ALLY", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_restore_movement_range()
+		return
+
+	var dist = abs(grid_pos.x - selected_unit.grid_position.x) + abs(grid_pos.y - selected_unit.grid_position.y)
+	if dist > 5:
+		tactical_hud.show_combat_message("OUT OF RANGE (MAX 5 TILES)", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_restore_movement_range()
+		return
+
+	if selected_unit.apply_inspire(target_unit):
+		combat_camera.focus_on_action(selected_unit.position, target_unit.position)
+		tactical_hud.show_combat_message(
+			"INSPIRED %s — +1 AP!" % target_unit.officer_key.to_upper(), Color(1.0, 0.9, 0.3))
+		await get_tree().create_timer(1.2).timeout
+		tactical_hud.hide_combat_message()
+		combat_camera.return_to_tactical()
+		_select_unit(selected_unit)
+		_check_auto_end_turn()
+	else:
+		_restore_movement_range()
+
+
+## Deep Scanner (Scout L2B): reveal all enemies in 15-tile radius through walls
+func _activate_deep_scanner() -> void:
+	if not selected_unit.apply_deep_scanner():
+		return
+
+	_set_animating(true)
+
+	# Visual: expanding cyan ring on scout
+	if selected_unit.get_node_or_null("Sprite"):
+		var sp = selected_unit.get_node_or_null("Sprite")
+		var tween = create_tween()
+		tween.tween_property(sp, "modulate", Color(0.2, 1.8, 2.0, 1.0), 0.1)
+		tween.tween_property(sp, "scale", Vector2(1.3, 1.3), 0.1)
+		tween.tween_property(sp, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.3)
+		tween.parallel().tween_property(sp, "scale", Vector2(1.0, 1.0), 0.3)
+
+	tactical_hud.show_combat_message("DEEP SCAN — ENEMIES REVEALED!", Color(0.2, 1.0, 0.5))
+
+	# Reveal all enemies through walls
+	var scanner_pos = selected_unit.get_grid_position()
+	for enemy in enemies:
+		var enemy_pos = enemy.get_grid_position()
+		var dist = abs(enemy_pos.x - scanner_pos.x) + abs(enemy_pos.y - scanner_pos.y)
+		if dist <= 15:
+			tactical_map.reveal_tile(enemy_pos)
+			enemy.visible = true
+			# Brief highlight on each revealed enemy
+			var esp = enemy.get_node_or_null("Sprite")
+			if esp:
+				var et = create_tween()
+				et.tween_property(esp, "modulate", Color(1.0, 2.0, 0.5, 1.0), 0.15)
+				et.tween_property(esp, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.3)
+
+	_update_enemy_visibility()
+	_update_attackable_highlights()
+
+	await get_tree().create_timer(1.2).timeout
+	tactical_hud.hide_combat_message()
+	_set_animating(false)
+	_select_unit(selected_unit)
+	_check_auto_end_turn()
+
+
+## Phantom (Scout L3B): become invisible for 2 turns
+func _activate_phantom() -> void:
+	if not selected_unit.apply_phantom_invisibility():
+		tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+
+	tactical_hud.show_combat_message("PHANTOM — INVISIBLE FOR 2 TURNS!", Color(0.4, 1.0, 0.6))
+	await get_tree().create_timer(1.2).timeout
+	tactical_hud.hide_combat_message()
+	_select_unit(selected_unit)
+	_check_auto_end_turn()
+
+
+## Field Repair (Tech L2B): instantly heal nearest turret
+func _activate_field_repair() -> void:
+	if active_turrets.is_empty():
+		tactical_hud.show_combat_message("NO ACTIVE TURRETS", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+
+	# Find nearest turret
+	var nearest: Node2D = null
+	var nearest_dist := 9999
+	for t in active_turrets:
+		if not is_instance_valid(t):
+			continue
+		var d = abs(t.grid_position.x - selected_unit.grid_position.x) \
+			  + abs(t.grid_position.y - selected_unit.grid_position.y)
+		if d < nearest_dist:
+			nearest_dist = d
+			nearest = t
+
+	if not nearest or not selected_unit.apply_field_repair(nearest):
+		tactical_hud.show_combat_message("COOLDOWN — CANNOT REPAIR YET", Color(1, 0.5, 0))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+
+	combat_camera.focus_on_action(selected_unit.position, nearest.position)
+	tactical_hud.show_combat_message("FIELD REPAIR — TURRET RESTORED +25 HP, +1 TURN!", Color(0.3, 1.0, 1.0))
+	await get_tree().create_timer(1.2).timeout
+	tactical_hud.hide_combat_message()
+	combat_camera.return_to_tactical()
+	_select_unit(selected_unit)
+	_check_auto_end_turn()
+
+
+## Remote Detonation (Tech L3B): destroy nearest turret for 30 AoE damage
+func _activate_remote_detonation() -> void:
+	if active_turrets.is_empty():
+		tactical_hud.show_combat_message("NO ACTIVE TURRETS", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+
+	if not selected_unit.can_remote_detonate():
+		return
+
+	# Find nearest turret to detonate
+	var detonated: Node2D = null
+	var det_dist := 9999
+	for t in active_turrets:
+		if not is_instance_valid(t):
+			continue
+		var d = abs(t.grid_position.x - selected_unit.grid_position.x) \
+			  + abs(t.grid_position.y - selected_unit.grid_position.y)
+		if d < det_dist:
+			det_dist = d
+			detonated = t
+
+	if not detonated:
+		return
+
+	var det_pos = detonated.grid_position
+	active_turrets.erase(detonated)
+
+	# Explosion visual on turret
+	var tsp = detonated.get_node_or_null("Sprite")
+	if tsp:
+		var tween = create_tween()
+		tween.tween_property(tsp, "modulate", Color(2.0, 1.2, 0.2, 1.0), 0.05)
+		tween.parallel().tween_property(tsp, "scale", Vector2(2.0, 2.0), 0.1)
+		tween.tween_property(tsp, "modulate:a", 0.0, 0.15)
+		tween.parallel().tween_property(tsp, "scale", Vector2(0.1, 0.1), 0.15)
+		await tween.finished
+
+	detonated.queue_free()
+
+	combat_camera.focus_on_action(selected_unit.position,
+		Vector2(det_pos.x * 32 + 16, det_pos.y * 32 + 16))
+	tactical_hud.show_combat_message("REMOTE DETONATION — 30 AoE DAMAGE!", Color(1.0, 0.5, 0.1))
+
+	# Deal 30 damage to enemies within 2 tiles
+	var hit_count := 0
+	for enemy in enemies.duplicate():
+		var ep = enemy.get_grid_position()
+		var d = abs(ep.x - det_pos.x) + abs(ep.y - det_pos.y)
+		if d <= 2:
+			_last_attacker_key = selected_unit.officer_key
+			enemy.take_damage(30)
+			_spawn_damage_popup(30, true, enemy.position, false, true)
+			hit_count += 1
+
+	if hit_count == 0:
+		tactical_hud.show_combat_message("REMOTE DETONATION — NO ENEMIES IN RANGE", Color(1.0, 0.7, 0.3))
+
+	await get_tree().create_timer(1.2).timeout
+	tactical_hud.hide_combat_message()
+	combat_camera.return_to_tactical()
+	_select_unit(selected_unit)
+	_check_auto_end_turn()
+
+
+## Miracle Worker (Medic L3A): heal all squad 50% HP
+func _activate_miracle_worker() -> void:
+	_set_animating(true)
+
+	if not selected_unit.apply_miracle_worker(deployed_officers):
+		tactical_hud.show_combat_message("NOT ENOUGH AP OR ALREADY USED", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_set_animating(false)
+		return
+
+	# Visual: magenta wave across all allies
+	tactical_hud.show_combat_message("MIRACLE WORKER — ALL ALLIES HEALED 50%!", Color(1.0, 0.4, 0.8))
+	for ally in deployed_officers:
+		if not is_instance_valid(ally) or ally.current_hp <= 0:
+			continue
+		var sp = ally.get_node_or_null("Sprite")
+		if sp:
+			var tween = create_tween()
+			tween.tween_property(sp, "modulate", Color(1.8, 0.5, 1.6, 1.0), 0.1)
+			tween.tween_property(sp, "scale", Vector2(1.2, 1.2), 0.1)
+			tween.tween_property(sp, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.3)
+			tween.parallel().tween_property(sp, "scale", Vector2(1.0, 1.0), 0.3)
+		var heal_amount = int(ally.max_hp * 0.5)
+		_spawn_damage_popup(heal_amount, true, ally.position, true)
+
+	await get_tree().create_timer(1.5).timeout
+	tactical_hud.hide_combat_message()
+	_set_animating(false)
+	_select_unit(selected_unit)
+	_check_auto_end_turn()
+
+
+## Stim Injector (Medic L3C): inject ally with +2 AP and -50% damage for 1 turn
+func _try_stim_target(grid_pos: Vector2i) -> void:
+	stim_mode = false
+	tactical_map.clear_heal_range()
+	tactical_hud.hide_combat_message()
+	tactical_hud.hide_cancel_button()
+
+	var target_unit = tactical_map.get_unit_at(grid_pos)
+	if not target_unit or target_unit not in deployed_officers:
+		tactical_hud.show_combat_message("SELECT AN ALLY", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_restore_movement_range()
+		return
+
+	if selected_unit.apply_stim_injector(target_unit):
+		combat_camera.focus_on_action(selected_unit.position, target_unit.position)
+		tactical_hud.show_combat_message(
+			"STIM — %s GAINS +2 AP & -50%% DMG!" % target_unit.officer_key.to_upper(),
+			Color(1.0, 0.5, 0.8))
+		await get_tree().create_timer(1.2).timeout
+		tactical_hud.hide_combat_message()
+		combat_camera.return_to_tactical()
+		_select_unit(selected_unit)
+		_check_auto_end_turn()
+	else:
+		_restore_movement_range()
+
+
+## Suppression Fire (Heavy L2B): all visible enemies -25% accuracy for 1 turn
+func _activate_suppression_fire() -> void:
+	if not selected_unit.apply_suppression_fire():
+		tactical_hud.show_combat_message("NOT ENOUGH AP OR COOLDOWN", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+
+	_set_animating(true)
+	tactical_hud.show_combat_message("SUPPRESSION FIRE — ENEMIES PINNED!", Color(1.0, 0.5, 0.1))
+
+	# Apply pin_down to all visible enemies
+	var suppressed_count := 0
+	for enemy in enemies:
+		if _is_enemy_visible(enemy):
+			if enemy.has_method("add_status_effect"):
+				enemy.add_status_effect("pin_down", 1)
+			# Visual: brief orange flash on each enemy
+			var esp = enemy.get_node_or_null("Sprite")
+			if esp:
+				var et = create_tween()
+				et.tween_property(esp, "modulate", Color(1.8, 0.5, 0.1, 1.0), 0.08)
+				et.tween_property(esp, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+			suppressed_count += 1
+
+	if suppressed_count == 0:
+		tactical_hud.show_combat_message("NO VISIBLE ENEMIES TO SUPPRESS", Color(1, 0.5, 0))
+
+	await get_tree().create_timer(1.2).timeout
+	tactical_hud.hide_combat_message()
+	_set_animating(false)
+	_select_unit(selected_unit)
+	_check_auto_end_turn()
+
+
+## Rocket Salvo (Heavy L3B): 40 damage in 3x3 at target tile
+func _try_rocket_salvo(grid_pos: Vector2i) -> void:
+	rocket_salvo_mode = false
+	tactical_map.clear_execute_range()
+	tactical_hud.hide_combat_message()
+	tactical_hud.hide_cancel_button()
+
+	if not selected_unit.apply_rocket_salvo(grid_pos):
+		tactical_hud.show_combat_message("CANNOT USE ROCKET SALVO", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_restore_movement_range()
+		return
+
+	_set_animating(true)
+	_last_attacker_key = selected_unit.officer_key
+
+	var target_world = Vector2(grid_pos.x * 32 + 16, grid_pos.y * 32 + 16)
+	combat_camera.focus_on_action(selected_unit.position, target_world)
+	tactical_hud.show_combat_message("ROCKET SALVO — INCOMING!", Color(1.0, 0.3, 0.1))
+
+	# Brief launch delay
+	await get_tree().create_timer(0.4).timeout
+
+	# Shake camera to simulate impact
+	if combat_camera.has_method("shake"):
+		combat_camera.shake(0.4, 8.0)
+
+	# Deal 40 damage to all enemies in 3x3 area
+	var hit_count := 0
+	for enemy in enemies.duplicate():
+		var ep = enemy.get_grid_position()
+		if abs(ep.x - grid_pos.x) <= 1 and abs(ep.y - grid_pos.y) <= 1:
+			enemy.take_damage(40)
+			_spawn_damage_popup(40, true, enemy.position, false, true)
+			hit_count += 1
+
+	var msg = "DIRECT HIT — %d ENEMIES HIT!" % hit_count if hit_count > 0 else "ROCKET SALVO — AREA CLEAR"
+	tactical_hud.show_combat_message(msg, Color(1.0, 0.5, 0.1))
+
+	await get_tree().create_timer(1.0).timeout
+	tactical_hud.hide_combat_message()
+	combat_camera.return_to_tactical()
+	_set_animating(false)
+	_select_unit(selected_unit)
+	_check_auto_end_turn()
+
+
+## Double Tap (Sniper L3C): fire twice at same target, -15% acc on 2nd shot
+func _try_double_tap(grid_pos: Vector2i) -> void:
+	double_tap_mode = false
+	tactical_map.clear_execute_range()
+	tactical_hud.hide_combat_message()
+	tactical_hud.hide_cancel_button()
+
+	# Find enemy at tile
+	var target_enemy: Node2D = null
+	for enemy in enemies:
+		if enemy.get_grid_position() == grid_pos and enemy.current_hp > 0:
+			target_enemy = enemy
+			break
+
+	if not target_enemy or not _is_enemy_visible(target_enemy):
+		tactical_hud.show_combat_message("NO VISIBLE ENEMY THERE", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_restore_movement_range()
+		return
+
+	# Calculate hit chance (same logic as normal shot)
+	var base_acc = 75.0
+	var hit_chance_1 = base_acc + selected_unit.get_accuracy_modifier_from_effects() \
+		+ selected_unit.get_accuracy_bonus()
+	var hit_chance_2 = hit_chance_1 - 15.0  # Second shot penalty
+
+	var result = selected_unit.apply_double_tap(grid_pos, hit_chance_1)
+	if not result.get("success", false):
+		tactical_hud.show_combat_message("NOT ENOUGH AP OR COOLDOWN", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_restore_movement_range()
+		return
+
+	_set_animating(true)
+	_last_attacker_key = selected_unit.officer_key
+	var hits: Array = result.get("hits", [false, false])
+	var damage = selected_unit.base_damage + selected_unit.war_machine_bonus_damage
+
+	# SHOT 1
+	combat_camera.focus_on_action(selected_unit.position, target_enemy.position)
+	tactical_hud.show_combat_message("DOUBLE TAP — SHOT 1...", Color(0.6, 0.4, 0.9))
+	selected_unit.play_attack_animation()
+	await get_tree().create_timer(0.5).timeout
+
+	if hits[0] and is_instance_valid(target_enemy):
+		target_enemy.take_damage(damage)
+		_spawn_damage_popup(damage, true, target_enemy.position)
+	else:
+		_spawn_damage_popup(0, false, target_enemy.position)
+	await get_tree().create_timer(0.5).timeout
+
+	# SHOT 2 (only if target survived)
+	if is_instance_valid(target_enemy) and target_enemy.current_hp > 0:
+		tactical_hud.show_combat_message("DOUBLE TAP — SHOT 2 (-15%% ACC)...", Color(0.5, 0.3, 0.8))
+		selected_unit.play_attack_animation()
+		await get_tree().create_timer(0.5).timeout
+
+		if hits[1] and is_instance_valid(target_enemy):
+			target_enemy.take_damage(damage)
+			_spawn_damage_popup(damage, true, target_enemy.position)
+		else:
+			_spawn_damage_popup(0, false, target_enemy.position)
+		await get_tree().create_timer(0.4).timeout
+
+	tactical_hud.hide_combat_message()
+	combat_camera.return_to_tactical()
+	_set_animating(false)
+	_select_unit(selected_unit)
+	_check_auto_end_turn()
+
+
+## Helper: restore movement range display after cancelled ability
+func _restore_movement_range() -> void:
+	if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+		tactical_map.set_movement_range(selected_unit.get_grid_position(), selected_unit.move_range)
+	if selected_unit:
 		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 
 
@@ -3716,8 +4436,12 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 	heavy_unit.face_towards(grid_pos)
 	
 	# Perform melee attack animation - use stored heavy_unit reference
+	heavy_unit.attacked_this_turn = true
 	await _perform_charge_melee_attack(heavy_unit, target_enemy, charge_damage, is_instant_kill)
-	
+
+	# Bulldozer: grant +20 armor after charging
+	heavy_unit.apply_bulldozer_armor()
+
 	await get_tree().create_timer(0.5).timeout
 	tactical_hud.hide_combat_message()
 	
@@ -4380,8 +5104,8 @@ func _show_objective_complete_notification(objective: MissionObjective) -> void:
 	
 	if bonuses.get("fuel", 0) > 0:
 		reward_parts.append("+%d FUEL" % bonuses.get("fuel", 0))
-	if bonuses.get("scrap", 0) > 0:
-		reward_parts.append("+%d SCRAP" % bonuses.get("scrap", 0))
+	if bonuses.get("cash", 0) > 0:
+		reward_parts.append("+%d CR" % bonuses.get("cash", 0))
 	if bonuses.get("hull_repair", 0) > 0:
 		reward_parts.append("+%d%% HULL" % bonuses.get("hull_repair", 0))
 	

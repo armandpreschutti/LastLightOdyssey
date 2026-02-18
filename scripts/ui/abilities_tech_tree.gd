@@ -26,14 +26,14 @@ func _ready():
 func _refresh_header_stats():
 	var od = GameState.get_officer(current_officer_key)
 	if not od: return
-	
+
 	data_logs_label.text = "Data Logs: %d" % od.data_logs
-	
+
 	# Update XP bar and Level if they exist
 	var level_lbl = $Panel/VBox/Header.get_node_or_null("LevelLabel")
 	if level_lbl:
 		level_lbl.text = "LEVEL %d" % od.level
-		
+
 	var xp_bar = $Panel/VBox/Header.get_node_or_null("XPBar")
 	if xp_bar:
 		var next_xp = od.get_next_xp_threshold()
@@ -68,14 +68,14 @@ func show_tree(officer_key: String):
 
 func _setup_header_progression(accent: Color):
 	var header = $Panel/VBox/Header
-	
+
 	# Remove existing custom elements to avoid duplicates
 	# Must remove_child first so they leave the layout immediately; queue_free alone is deferred
 	for child in [header.get_node_or_null("LevelLabel"), header.get_node_or_null("XPBar")]:
 		if child:
 			header.remove_child(child)
 			child.queue_free()
-	
+
 	# Level Label
 	var level_lbl = Label.new()
 	level_lbl.name = "LevelLabel"
@@ -83,24 +83,24 @@ func _setup_header_progression(accent: Color):
 	level_lbl.add_theme_color_override("font_color", Color(0.9, 0.85, 0.4))
 	header.add_child(level_lbl)
 	header.move_child(level_lbl, 1) # Put it after title
-	
+
 	# XP Bar (matching BarracksMenu style)
 	var bar = ProgressBar.new()
 	bar.name = "XPBar"
 	bar.show_percentage = false
 	bar.custom_minimum_size = Vector2(250, 20)
 	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	
+
 	var sb_bg = StyleBoxFlat.new()
 	sb_bg.bg_color = Color(0, 0, 0, 0.3)
 	sb_bg.set_corner_radius_all(2)
 	bar.add_theme_stylebox_override("background", sb_bg)
-	
+
 	var sb_fill = StyleBoxFlat.new()
 	sb_fill.bg_color = Color(0.2, 0.6, 1.0, 0.7)
 	sb_fill.set_corner_radius_all(2)
 	bar.add_theme_stylebox_override("fill", sb_fill)
-	
+
 	var val_label = Label.new()
 	val_label.name = "XPText"
 	val_label.add_theme_font_size_override("font_size", 12)
@@ -108,7 +108,7 @@ func _setup_header_progression(accent: Color):
 	val_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	val_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	bar.add_child(val_label)
-	
+
 	header.add_child(bar)
 	header.move_child(bar, 2)
 
@@ -217,6 +217,30 @@ func _update_unlock_states():
 		if tier_locked:
 			is_available = false
 			
+		# Connectivity check: Node must be connected to an unlocked node
+		if not is_unlocked and is_available:
+			var all_abs = GameState.OFFICER_ABILITIES[current_officer_key]
+			var idx = all_abs.find(ab_id)
+			
+			if tier == 2:
+				# Level 2 nodes (idx 1, 2) require Level 1 (idx 0)
+				if not od.has_ability(all_abs[0]):
+					is_available = false
+			elif tier == 3:
+				# Level 3 nodes (idx 3, 4, 5) requirements based on layout:
+				# idx 3 (Left) requires idx 1 (Left L2)
+				# idx 4 (Center) requires idx 1 OR idx 2 (Either L2)
+				# idx 5 (Right) requires idx 2 (Right L2)
+				if idx == 3:
+					if not od.has_ability(all_abs[1]):
+						is_available = false
+				elif idx == 4:
+					if not (od.has_ability(all_abs[1]) or od.has_ability(all_abs[2])):
+						is_available = false
+				elif idx == 5:
+					if not od.has_ability(all_abs[2]):
+						is_available = false
+
 		node.update_state(is_unlocked, is_available, cost)
 	
 	if connection_layer:
@@ -297,9 +321,9 @@ func _setup_footer():
 func _update_footer_slots():
 	if not footer_slots_container: return
 	
-	# Clear previous
+	# Clear previous (use immediate free to avoid one-frame doubling with deferred queue_free)
 	for child in footer_slots_container.get_children():
-		child.queue_free()
+		child.free()
 		
 	var od = GameState.get_officer(current_officer_key)
 	if not od: return
@@ -356,16 +380,19 @@ func _update_footer_slots():
 		
 		if unlocked_ab_id != "":
 			var def = GameState.ABILITY_DEFS.get(unlocked_ab_id, {})
-			
-			# Extended Tooltip Handler (floating)
-			var tooltip_handler = preload("res://scripts/ui/ability_tooltip_handler.gd").new()
-			slot_panel.add_child(tooltip_handler)
-			tooltip_handler.setup(slot_panel, unlocked_ab_id)
-			
+			var ab_name = def.get("name", "Unknown")
+			var ab_desc = def.get("desc", "")
+			var tooltip_text = "%s: %s" % [ab_name, ab_desc]
+
+			# Use tooltip_area for proper tooltip support
+			slot_panel.set_script(preload("res://scripts/ui/tooltip_area.gd"))
+			slot_panel.tooltip_delay_sec = 0.25
+			slot_panel.tooltip_text = tooltip_text
+
 			# Also update the static description box immediately on hover
 			slot_panel.mouse_entered.connect(_on_node_hovered.bind(def.get("desc", "")))
 			slot_panel.mouse_exited.connect(_on_node_unhovered)
-			
+
 			var icon_file = "%s_%s.png" % [current_officer_key, unlocked_ab_id]
 			var tex = load(ABILITY_ICON_PATH + icon_file)
 			if tex:

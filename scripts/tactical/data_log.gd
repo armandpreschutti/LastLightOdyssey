@@ -1,6 +1,6 @@
 extends TacticalInteractable
 ## Data Log - Objective interactable for station missions
-## Removed after collection (like fuel/scrap)
+## Removed after collection (like fuel)
 ## Now uses sprite-based graphics
 
 

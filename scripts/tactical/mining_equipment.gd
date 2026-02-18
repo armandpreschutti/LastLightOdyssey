@@ -1,6 +1,6 @@
 extends ActivatableInteractable
 ## Mining Equipment - Objective interactable for asteroid missions
-## Stays on map after activation (unlike fuel/scrap which disappear)
+## Stays on map after activation (unlike fuel which disappears)
 ## Now uses sprite-based graphics
 
 

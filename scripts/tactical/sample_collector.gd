@@ -1,6 +1,6 @@
 extends TacticalInteractable
 ## Sample Collector - Objective interactable for planet missions
-## Removed after collection (like fuel/scrap)
+## Removed after collection (like fuel)
 ## Now uses sprite-based graphics
 
 

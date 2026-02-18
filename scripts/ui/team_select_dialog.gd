@@ -123,8 +123,8 @@ func _build_objective_description(biome: BiomeConfig.BiomeType, objective: Missi
 	
 	if potential_rewards.get("fuel", 0) > 0:
 		reward_parts.append("%d FUEL" % potential_rewards.get("fuel", 0))
-	if potential_rewards.get("scrap", 0) > 0:
-		reward_parts.append("%d SCRAP" % potential_rewards.get("scrap", 0))
+	if potential_rewards.get("cash", 0) > 0:
+		reward_parts.append("%d CR" % potential_rewards.get("cash", 0))
 	if potential_rewards.get("hull_repair", 0) > 0:
 		reward_parts.append("%d%% HULL REPAIR" % potential_rewards.get("hull_repair", 0))
 	

@@ -154,20 +154,20 @@ const LOOT_CONFIG := {
 	BiomeType.STATION: {
 		"min_fuel": 2,
 		"max_fuel": 4,
-		"min_scrap": 4,
-		"max_scrap": 6,
+		"min_cash": 4,
+		"max_cash": 6,
 	},
 	BiomeType.ASTEROID: {
 		"min_fuel": 1,
 		"max_fuel": 3,
-		"min_scrap": 5,
-		"max_scrap": 8,  # More scrap in mines
+		"min_cash": 5,
+		"max_cash": 8,  # More cash in mines
 	},
 	BiomeType.PLANET: {
 		"min_fuel": 3,
 		"max_fuel": 5,
-		"min_scrap": 3,
-		"max_scrap": 5,
+		"min_cash": 3,
+		"max_cash": 5,
 	},
 }
 
