@@ -7,7 +7,7 @@ extends RefCounted
 
 const MIN_DISTANCE: float = 300.0
 const MAX_DISTANCE: float = 500.0
-const SPREAD_ANGLE: float = 60.0 # Degrees
+const SPREAD_ANGLE: float = 140.0 # Degrees
 const NODE_COUNT_MIN: int = 2
 const NODE_COUNT_MAX: int = 3
 const NOISE_SEED = 12345

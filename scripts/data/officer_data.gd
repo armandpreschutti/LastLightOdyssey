@@ -81,7 +81,18 @@ func get_next_xp_threshold() -> int:
 	# L4: 600
 	# L5: 1000
 	# Formula: threshold = 50 * level * (level + 1) -> 1=100, 2=300, 3=600, 4=1000
-	return 50 * level * (level + 1)
+	return threshold_for_level(level)
+
+
+static func threshold_for_level(lvl: int) -> int:
+	return 50 * lvl * (lvl + 1)
+
+
+static func level_for_xp(xp_val: int) -> int:
+	var lvl: int = 1
+	while xp_val >= threshold_for_level(lvl):
+		lvl += 1
+	return lvl
 
 
 func can_unlock_level2(_logs_count: int) -> bool:
