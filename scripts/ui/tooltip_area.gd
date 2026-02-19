@@ -5,15 +5,26 @@ extends Control
 var tooltip_delay_sec: float = 0.0
 var _tooltip_timer: Timer = null
 var _pending_tooltip: String = ""
+var _original_tooltip: String = ""
 
 func _ready() -> void:
+	# Capture tooltip_text via deferred call so it picks up any text set
+	# after set_script() (e.g. in tactical_hud._update_ability_preview)
+	call_deferred("_capture_original_tooltip")
 	if tooltip_delay_sec > 0:
 		mouse_entered.connect(_on_mouse_entered)
 		mouse_exited.connect(_on_mouse_exited)
 
+func _capture_original_tooltip() -> void:
+	if _original_tooltip.is_empty():
+		_original_tooltip = tooltip_text
+
 func _on_mouse_entered() -> void:
-	if tooltip_delay_sec > 0 and not tooltip_text.is_empty():
-		_pending_tooltip = tooltip_text
+	# Re-capture if tooltip_text was updated externally after initial capture
+	if not tooltip_text.is_empty():
+		_original_tooltip = tooltip_text
+	if tooltip_delay_sec > 0 and not _original_tooltip.is_empty():
+		_pending_tooltip = _original_tooltip
 		tooltip_text = ""  # Clear to prevent immediate tooltip
 
 		if _tooltip_timer == null:
@@ -27,7 +38,6 @@ func _on_mouse_exited() -> void:
 	if _tooltip_timer:
 		_tooltip_timer.stop()
 	tooltip_text = ""
-	_pending_tooltip = ""
 
 func _on_tooltip_timer_timeout() -> void:
 	if _tooltip_timer:

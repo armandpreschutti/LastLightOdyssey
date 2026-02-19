@@ -29,6 +29,23 @@ const STORY_CHAIN_LENGTH: int = 5
 const STORY_RANGE_UNITS: float = 1200.0 # Approx 3 jumps in world-space terms
 const STORY_SPAWN_DISTANCE_MIN: float = 1200.0 # Min distance to spawn new story nodes
 const STORY_SPAWN_DISTANCE_MAX: float = 1500.0 # Max distance to spawn new story nodes
+
+# Story node biomes and difficulty by tier (1-indexed)
+const STORY_BIOMES := {
+	1: BiomeConfig.BiomeType.STATION,
+	2: BiomeConfig.BiomeType.ASTEROID,
+	3: BiomeConfig.BiomeType.PLANET,
+	4: BiomeConfig.BiomeType.ASTEROID,
+	5: BiomeConfig.BiomeType.STATION,
+}
+
+const STORY_DIFFICULTY := {
+	1: NodeData.DifficultyGrade.EASY,
+	2: NodeData.DifficultyGrade.MEDIUM,
+	3: NodeData.DifficultyGrade.HARD,
+	4: NodeData.DifficultyGrade.IMPOSSIBLE,
+	5: NodeData.DifficultyGrade.IMPOSSIBLE,
+}
 const PROXIMITY_CONNECT_DISTANCE: float = 450.0 # Auto-connect nodes within this distance
 
 # Campaign tree structure
@@ -327,8 +344,9 @@ func _try_spawn_story_node() -> void:
 	# Add to dictionary
 	nodes[new_id] = new_node
 
-	# Setup as story node
-	_mark_node_as_story(new_node)
+	# Setup as story node with tier (chapters_completed + 1 = current tier)
+	var story_tier = GameState.story_chapters_completed + 1
+	_mark_node_as_story(new_node, story_tier)
 	new_node.campaign_mission_id = pending_branch_choice
 	print("DEBUG VoyageManager: Spawned story node %s at %s with campaign_mission_id=%s" % [new_node.id, spawn_pos, pending_branch_choice])
 	
@@ -373,14 +391,22 @@ func _find_story_spawn_position(from_position: Vector2) -> Vector2:
 	return from_position + (best_direction * random_dist)
 
 
-func _mark_node_as_story(node: NodeData) -> void:
+func _mark_node_as_story(node: NodeData, story_tier: int = 0) -> void:
 	if node == null:
 		return
 	node.state = NodeData.NodeState.STORY
 	node.is_story_node = true
 	node.node_type = EventManager.NodeType.SCAVENGE_SITE
-	if node.biome_type < 0:
+
+	# Set biome based on story tier (1-5)
+	if story_tier > 0 and story_tier <= STORY_CHAIN_LENGTH:
+		node.biome_type = STORY_BIOMES.get(story_tier, BiomeConfig.BiomeType.STATION)
+		node.difficulty_grade = STORY_DIFFICULTY.get(story_tier, NodeData.DifficultyGrade.MEDIUM)
+	else:
+		# Fallback for non-standard tiers
 		node.biome_type = generator._roll_biome_type()
+		node.difficulty_grade = NodeData.DifficultyGrade.MEDIUM
+
 	active_story_node_id = node.id
 
 ## Get current node data

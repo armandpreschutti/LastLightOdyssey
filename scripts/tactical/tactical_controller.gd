@@ -79,10 +79,10 @@ const FULL_COVER_ATTACK_BONUS: float = 10.0   # +10% hit chance when firing from
 const HALF_COVER_ATTACK_BONUS: float = 5.0   # +5% hit chance when firing from half cover
 
 # Reward constants
-const BASE_REWARD_CASH: int = 2
-const OBJECTIVE_REWARD_CASH: int = 1
-const FULL_CLEAR_REWARD_CASH: int = 2
-const NO_CASUALTIES_REWARD_CASH: int = 1
+const BASE_REWARD_CASH: int = 8
+const OBJECTIVE_REWARD_CASH: int = 4
+const FULL_CLEAR_REWARD_CASH: int = 8
+const NO_CASUALTIES_REWARD_CASH: int = 4
 
 
 
@@ -217,7 +217,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	
 	# Initialize mission objectives based on biome (only for scavenger missions)
 	mission_objectives.clear()
-	if is_scavenger_mission:
+	if is_story_mission:
 		# Use provided objectives if available, otherwise generate random ones
 		if not provided_objectives.is_empty():
 			mission_objectives = provided_objectives.duplicate()
@@ -298,7 +298,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	var mission_tile_positions: Array[Vector2i] = []
 	
 	# Spawn mining equipment for asteroid biome missions with mining-related objectives
-	if current_biome == BiomeConfig.BiomeType.ASTEROID and is_scavenger_mission:
+	if current_biome == BiomeConfig.BiomeType.ASTEROID and is_story_mission:
 		# Check if mission has mining-related objectives
 		var has_activate_mining = false
 		var has_extract_minerals = false
@@ -338,7 +338,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 					tactical_map.add_interactable(mining_equipment, mining_pos)
 	
 	# Spawn objective interactables for STATION biome missions
-	if current_biome == BiomeConfig.BiomeType.STATION and is_scavenger_mission:
+	if current_biome == BiomeConfig.BiomeType.STATION and is_story_mission:
 		# Check if mission has station-related objectives
 		var has_hack_security = false
 		var has_retrieve_logs = false
@@ -383,7 +383,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 					tactical_map.add_interactable(power_core, core_pos)
 	
 	# Spawn objective interactables for PLANET biome missions
-	if current_biome == BiomeConfig.BiomeType.PLANET and is_scavenger_mission:
+	if current_biome == BiomeConfig.BiomeType.PLANET and is_story_mission:
 		# Check if mission has planet-related objectives
 		var has_collect_samples = false
 		var collect_samples_max = 5
@@ -460,9 +460,12 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		var loot: Node2D
 		var difficulty = GameState.get_mission_difficulty()
 		if loot_data["type"] == "fuel":
+			# Skip fuel drops during story missions
+			if is_story_mission:
+				continue
 			loot = FuelCrateScene.instantiate()
 			if loot.has_method("set_amount"): # Assuming loot has a way to scale? If not, I'll just scale the pickup logic or spawn more
-				loot.amount = maxi(1, int(1 * difficulty * 0.04))
+				loot.amount = maxi(1, int(1 * difficulty * 0.1))
 		elif loot_data["type"] == "health_pack":
 			loot = HealthPackScene.instantiate()
 		if loot:
@@ -1491,6 +1494,17 @@ func _center_camera_on_all_units() -> void:
 	combat_camera.snap_to_position(camera_pos, true)  # true = use combat zoom
 
 
+func _are_all_objectives_completed() -> bool:
+	if mission_objectives.is_empty():
+		return true
+		
+	for objective in mission_objectives:
+		if not objective.completed:
+			return false
+			
+	return true
+
+
 func _check_extraction_available() -> void:
 	var any_on_extraction = false
 	var any_alive = false
@@ -1506,10 +1520,17 @@ func _check_extraction_available() -> void:
 	# Show extract button if:
 	# 1. Normal extraction: at least one unit is in extraction zone and at least one unit is alive
 	# 2. Scavenger mission with all enemies killed: all enemies are dead and at least one unit is alive
-	var all_enemies_dead = enemies.is_empty()
-	var can_extract_after_kill = is_scavenger_mission and all_enemies_dead and any_alive
-	
-	tactical_hud.set_extract_visible((any_on_extraction and any_alive) or can_extract_after_kill)
+	# Story Mode: Must complete objectives to extract. Killing all enemies does NOT trigger auto-extract capability.
+	if is_story_mission:
+		var objectives_complete = _are_all_objectives_completed()
+		# Only show button if objectives are done AND units are in extraction zone
+		# (Story missions require manual extraction after objectives)
+		tactical_hud.set_extract_visible(objectives_complete and any_on_extraction and any_alive)
+	else:
+		# Standard Mode: Extract if in zone OR if all enemies dead (Scavenger clear)
+		var all_enemies_dead = enemies.is_empty()
+		var can_extract_after_kill = is_scavenger_mission and all_enemies_dead and any_alive
+		tactical_hud.set_extract_visible((any_on_extraction and any_alive) or can_extract_after_kill)
 
 
 ## End all unit turns by setting AP to 0 (used during extraction to freeze all actions)
@@ -1541,33 +1562,45 @@ func _on_extract_pressed() -> void:
 	if extraction_in_progress:
 		return
 
-	# Check if all enemies are dead in a scavenger mission - if so, extract all units from anywhere
-	var all_enemies_dead = enemies.is_empty()
-	if is_scavenger_mission and all_enemies_dead:
-		# Center camera on all units for beam-up animation
-		var any_alive = false
-		var avg_pos = Vector2.ZERO
-		var alive_count = 0
-		
-		for officer in deployed_officers:
-			if officer.current_hp > 0:
-				any_alive = true
-				var world_pos = tactical_map.grid_to_world(officer.get_grid_position())
-				avg_pos += world_pos
-				alive_count += 1
-		
-		if any_alive:
-			# Center camera on average position of all units
-			if alive_count > 0:
-				avg_pos /= alive_count
-				combat_camera.center_on_position_with_zoom(avg_pos, Vector2(1.5, 1.5))
+	if is_story_mission:
+		# Story Mode strict rules:
+		# 1. Objectives must be complete
+		if not _are_all_objectives_completed():
+			tactical_hud.show_combat_message("OBJECTIVES INCOMPLETE!", Color(1, 0.3, 0.3))
+			await get_tree().create_timer(1.5).timeout
+			tactical_hud.hide_combat_message()
+			return
+
+		# 2. Must use extraction zone (killing enemies doesn't trigger auto-extract)
+		# 3. Check if units are in zone (handled below by standard logic)
+	else:
+		# Non-Story Mode: Check if all enemies are dead in a scavenger mission - if so, extract all units from anywhere
+		var all_enemies_dead = enemies.is_empty()
+		if is_scavenger_mission and all_enemies_dead:
+			# Center camera on all units for beam-up animation
+			var any_alive = false
+			var avg_pos = Vector2.ZERO
+			var alive_count = 0
 			
-			# Freeze all actions immediately during extraction
-			_begin_extraction_lock()
+			for officer in deployed_officers:
+				if officer.current_hp > 0:
+					any_alive = true
+					var world_pos = tactical_map.grid_to_world(officer.get_grid_position())
+					avg_pos += world_pos
+					alive_count += 1
 			
-			# Extract all surviving units directly (beam-up animation will play in _end_mission)
-			_end_mission(true)
-		return
+			if any_alive:
+				# Center camera on average position of all units
+				if alive_count > 0:
+					avg_pos /= alive_count
+					combat_camera.center_on_position_with_zoom(avg_pos, Vector2(1.5, 1.5))
+				
+				# Freeze all actions immediately during extraction
+				_begin_extraction_lock()
+				
+				# Extract all surviving units directly (beam-up animation will play in _end_mission)
+				_end_mission(true)
+			return
 
 	# Normal extraction logic (requires units to be in extraction zone)
 	# Center camera on extraction zone with zoom
@@ -2974,10 +3007,10 @@ func _on_enemy_died(enemy: Node2D) -> void:
 
 	# Only spawn resource drop if chance succeeds
 	if should_drop:
-		# Bosses drop bonus loot
-		if enemy_type == "boss":
+		# Bosses drop bonus loot (skip fuel during story missions)
+		if enemy_type == "boss" and not is_story_mission:
 			# Bosses drop fuel
-			var fuel_amount = randi_range(2, 4)
+			var fuel_amount = randi_range(5, 10)
 			var boss_center_pos = pos + Vector2i(1, 1)  # Center of 2x2 area
 
 			# Try to drop fuel at center

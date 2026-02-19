@@ -1138,22 +1138,22 @@ func get_loot_positions() -> Array[Dictionary]:
 	var loot_config = BiomeConfig.get_loot_config(_biome_type)
 	
 	# Biome-specific spawn rate multipliers
-	var fuel_multiplier: float = 0.2  # 80% reduction
-	var cash_multiplier: float = 0.2  # 80% reduction
+	var fuel_multiplier: float = 0.5  # 2.5x boost from 0.2
+	var cash_multiplier: float = 0.8  # 4x boosted
 	
 	match _biome_type:
 		BiomeConfig.BiomeType.STATION:
 			# Space Station: More fuel crates vs valuables piles
-			fuel_multiplier = 0.3   # Reduced from 0.75 by proportional scaling (0.75 * 0.2 / 0.5?) No, let's just use 0.2 as base.
-			cash_multiplier = 0.1   # Reduced from 0.25 (0.25 * 0.2 / 0.5)
+			fuel_multiplier = 0.75  # 2.5x boost from 0.3
+			cash_multiplier = 0.4   # 4x boosted
 		BiomeConfig.BiomeType.ASTEROID:
 			# Asteroid: More valuables piles vs fuel crates
-			fuel_multiplier = 0.1   # Reduced from 0.25
-			cash_multiplier = 0.3   # Reduced from 0.75
+			fuel_multiplier = 0.25  # 2.5x boost from 0.1
+			cash_multiplier = 1.2   # 4x boosted
 		BiomeConfig.BiomeType.PLANET:
-			# Planetary Surface: No change (80% reduction for both)
-			fuel_multiplier = 0.2
-			cash_multiplier = 0.2
+			# Planetary Surface: 4x boosted
+			fuel_multiplier = 0.5   # 2.5x boost from 0.2
+			cash_multiplier = 0.8
 	
 	# Fuel crates
 	var num_fuel = randi_range(loot_config["min_fuel"], loot_config["max_fuel"])

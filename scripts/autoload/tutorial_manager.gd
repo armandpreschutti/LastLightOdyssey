@@ -24,7 +24,7 @@ var tutorial_steps: Array[Dictionary] = [
 	},
 	{
 		"id": "resources_intro",
-		"text": "Monitor your resources carefully:\n- FUEL: Required for each jump\n- HULL: Ship integrity - reaches 0 and you're lost\n- CASH: Trade currency and upgrades",
+		"text": "Monitor your resources carefully:\n- FUEL: Required for each jump\n- HULL: Ship integrity - reaches 0 and you're lost\n- CREDITS: Trade currency and upgrades",
 		"target": "management_hud",
 		"trigger": "acknowledged",
 		"position": "right",

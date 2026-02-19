@@ -138,6 +138,7 @@ func _update_glass_style() -> void:
 
 func _connect_signals() -> void:
 	GameState.cash_changed.connect(_on_cash_changed)
+	GameState.cash_changed.connect(func(_v): _check_market_pulse())
 	GameState.fuel_changed.connect(_on_fuel_changed)
 	GameState.integrity_changed.connect(_on_integrity_changed)
 	GameState.intel_changed.connect(_on_intel_changed)
@@ -227,8 +228,8 @@ func _start_pulse(target_btn: Button) -> void:
 		# For highlight, top is fine (additive/transparent).
 		
 	var tween = create_tween().set_loops()
-	tween.tween_property(glow_rect, "color:a", 0.1, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tween.tween_property(glow_rect, "color:a", 0.4, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(glow_rect, "color:a", 0.05, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(glow_rect, "color:a", 0.2, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_pulse_tweens[target_btn] = tween
 
 
@@ -258,8 +259,9 @@ func _check_barracks_pulse() -> void:
 func _check_market_pulse() -> void:
 	if not market_button: return
 	
-	# Pulse if Drift Mode (Fuel == 0) or Critical Hull (<= 25%)
-	if GameState.fuel == 0 or GameState.ship_integrity <= 25:
+	# Pulse if Drift Mode (Fuel == 0) or Critical Hull (<= 25%) AND player can afford something
+	var can_afford_anything := GameState.cash >= 15  # Cheapest item = fuel at 15 CR
+	if (GameState.fuel == 0 or GameState.ship_integrity <= 25) and can_afford_anything:
 		_start_pulse(market_button)
 	else:
 		_stop_pulse(market_button)
@@ -346,7 +348,7 @@ func _on_cash_changed(new_value: int) -> void:
 	var delta = new_value - _last_cash
 	_spawn_stat_change_indicator(cash_label, delta)
 	_last_cash = new_value
-	cash_label.text = "CASH: %d" % new_value
+	cash_label.text = "CREDITS: %d" % new_value
 	# Cash changes technically don't trigger market need, but if we buy fix, we might want to stop pulse.
 	# Actually, pulse condition is fuel/hull state.
 	# Buying fuel/hull changes those values, which triggers their signals.

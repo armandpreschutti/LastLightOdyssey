@@ -141,7 +141,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.4, 0.8, 0.4, 1)
 theme_override_font_sizes/font_size = 18
-text = "CASH: 100"
+text = "CREDITS: 100"
 
 [node name="FuelRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StatsContainer" unique_id=425559611]
 layout_mode = 2
@@ -193,7 +193,7 @@ theme_override_colors/font_color = Color(0.4, 0.8, 0.4, 1)
 theme_override_colors/font_pressed_color = Color(0.2, 0.6, 0.2, 1)
 theme_override_colors/font_hover_color = Color(0.6, 1, 0.6, 1)
 theme_override_font_sizes/font_size = 16
-text = "[ MARKET ]"
+text = "[ TRADING TERMINAL ]"
 
 [node name="BarracksButton" type="Button" parent="MarginContainer/VBoxContainer" unique_id=2119121708]
 layout_mode = 2

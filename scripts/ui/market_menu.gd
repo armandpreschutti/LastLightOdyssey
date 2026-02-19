@@ -43,7 +43,7 @@ func setup_prices() -> void:
 
 func update_ui() -> void:
 	if cash_label:
-		cash_label.text = "CASH: %d CR" % GameState.cash
+		cash_label.text = "CREDITS: %d CR" % GameState.cash
 	
 	# Update button states based on affordability
 	if buy_fuel_button:

@@ -103,7 +103,7 @@ func show_event(event: Dictionary) -> void:
 			mitigate_button.disabled = true
 		
 		var mitigated_text = _build_losses_text(event, true)
-		var cash_cost_text = "CASH: -%d" % cash_cost
+		var cash_cost_text = "CREDITS: -%d" % cash_cost
 		mitigated_label.text = "WITH %s:\n%s\n%s\n%s" % [specialist_name, specialist_desc, cash_cost_text, mitigated_text]
 		mitigated_label.visible = true
 	else:
@@ -131,7 +131,7 @@ func _build_losses_text(event: Dictionary, mitigated: bool) -> String:
 	if fuel_gain > 0:
 		lines.append("FUEL: +%d" % fuel_gain)
 	if cash_gain != 0:
-		lines.append("CASH: %+d" % cash_gain)
+		lines.append("CREDITS: %+d" % cash_gain)
 
 	if lines.is_empty():
 		return "NO EFFECT"
