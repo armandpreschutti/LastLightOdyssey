@@ -27,7 +27,7 @@ func _ready() -> void:
 	if tech_tree_popup:
 		tech_tree_popup.visibility_changed_to.connect(_on_tech_tree_visibility_changed)
 	
-	GameState.officer_progression_changed.connect(func(): if visible: _populate())
+	GameState.officer_progression_changed.connect(func(): if visible: _populate(), CONNECT_DEFERRED)
 
 
 func _on_tech_tree_visibility_changed(is_visible: bool) -> void:
@@ -50,9 +50,9 @@ func _populate() -> void:
 	if has_node("MenuPanel/Layout/MarginWrap/HeaderBar/DataLogsLabel"):
 		$MenuPanel/Layout/MarginWrap/HeaderBar/DataLogsLabel.visible = false
 
-	# Clear existing cards
+	# Clear existing cards (queue_free to avoid freeing while signals are emitting)
 	for child in cards_container.get_children():
-		child.free()
+		child.queue_free()
 
 	# Build one card per officer
 	for officer_key in ["captain", "scout", "tech", "medic", "heavy", "sniper"]:
@@ -189,7 +189,7 @@ func _build_officer_card(officer_key: String) -> Control:
 
 func _start_pulse(target_btn: Button) -> void:
 	if not target_btn: return
-	
+
 	var glow_rect = target_btn.get_node_or_null("GlowRect")
 	if not glow_rect:
 		glow_rect = ColorRect.new()
@@ -198,8 +198,9 @@ func _start_pulse(target_btn: Button) -> void:
 		glow_rect.color = Color(1, 1, 1, 0) # Start transparent
 		glow_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		target_btn.add_child(glow_rect)
-		
-	var tween = create_tween().set_loops()
+
+	# Use glow_rect's own tween so it stops automatically when the node is freed
+	var tween = glow_rect.create_tween().set_loops()
 	tween.tween_property(glow_rect, "color:a", 0.1, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tween.tween_property(glow_rect, "color:a", 0.4, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
@@ -207,10 +208,6 @@ func _start_pulse(target_btn: Button) -> void:
 func _on_ability_tree_requested(officer_key: String) -> void:
 	if tech_tree_popup:
 		tech_tree_popup.show_tree(officer_key)
-
-
-	GameState.save_game()
-	_populate()
 
 
 func _glass_style(accent: Color) -> StyleBoxFlat:

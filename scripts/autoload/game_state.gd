@@ -51,7 +51,7 @@ const ABILITY_DEFS: Dictionary = {
 	"deep_scanner":       {"name": "Deep Scanner",       "desc": "Reveals all enemies in a large radius (15 tiles) for 1 turn, even through walls. (0 AP, 3-turn cooldown)",                                      "level": 2, "slot": "b", "type": "active", "cost": 0, "cooldown": 3},
 
 	# SCOUT - Level 3
-	"ambush":             {"name": "Ambush",             "desc": "If you have not moved this turn, your first shot is an automatic critical hit.",                                                                  "level": 3, "slot": "a", "type": "passive"},
+	"ambush":             {"name": "Explosive Ambush",   "desc": "Plant a hidden explosive trap on your current tile. The first enemy to walk over it takes 60 damage and is pinned. (0 AP, 3-turn cooldown)", "level": 3, "slot": "a", "type": "active", "cost": 0, "cooldown": 3},
 	"phantom":            {"name": "Phantom",            "desc": "Become Invisible for 2 turns. First attack from invisibility deals +100% Damage but reveals you. (1 AP, active)",                               "level": 3, "slot": "b", "type": "active", "cost": 1, "duration": 2},
 	"untouchable":        {"name": "Untouchable",        "desc": "If you kill an enemy during your turn, the next attack against you during the enemy turn is guaranteed to Miss.",                                 "level": 3, "slot": "c", "type": "passive"},
 
@@ -60,9 +60,9 @@ const ABILITY_DEFS: Dictionary = {
 	"field_repair":       {"name": "Field Repair",       "desc": "Instantly restore 25 HP and +1 turn duration to your nearest active turret. (0 AP, 3-turn cooldown)",                                           "level": 2, "slot": "b", "type": "active", "cost": 0, "cooldown": 3},
 
 	# TECH - Level 3
-	"twin_link":          {"name": "Twin-Link",          "desc": "You can have 2 Turrets active simultaneously. Deploying a second turret does not destroy the first.",                                            "level": 3, "slot": "a", "type": "passive", "modifies": "turret", "max_turrets": 2},
+	"twin_link":          {"name": "Overcharge",         "desc": "All active turrets deal 2× damage for 2 turns. Also allows 2 turrets simultaneously. (1 AP, 3-turn cooldown)",                              "level": 3, "slot": "a", "type": "active", "cost": 1, "cooldown": 3, "modifies": "turret", "max_turrets": 2},
 	"remote_detonation":  {"name": "Remote Detonation",  "desc": "Destroy your nearest active turret. It explodes, dealing 30 damage to all enemies within 2 tiles. (0 AP)",                                      "level": 3, "slot": "b", "type": "active", "cost": 0, "cooldown": 0},
-	"emergency_protocol": {"name": "Emergency Protocol", "desc": "When Tech's HP drops below 25% for the first time, instantly gain +2 AP and reset the Turret cooldown. (Passive, once per mission)",            "level": 3, "slot": "c", "type": "passive"},
+	"emergency_protocol": {"name": "System Reboot",      "desc": "Reset all officer ability cooldowns and grant every deployed ally +1 AP. (1 AP, once per mission)",                                           "level": 3, "slot": "c", "type": "active", "cost": 1, "uses_per_mission": 1},
 
 	# MEDIC - Level 2
 	"adrenaline_patch":   {"name": "Adrenaline Patch",   "desc": "Patch also grants the target +2 Movement and +15% Accuracy for 2 turns.",                                                                       "level": 2, "slot": "a", "type": "passive", "modifies": "patch"},
@@ -83,7 +83,7 @@ const ABILITY_DEFS: Dictionary = {
 	"war_machine":        {"name": "War Machine",        "desc": "Each enemy killed this mission permanently grants +5 Base Damage. The Heavy grows more dangerous as the fight goes on.",                         "level": 3, "slot": "c", "type": "passive"},
 
 	# SNIPER - Level 2
-	"damn_good_ground":   {"name": "Damn Good Ground",   "desc": "If you have not moved this turn, gain +15% Critical Chance and +2 Sight Range.",                                                                 "level": 2, "slot": "a", "type": "passive"},
+	"damn_good_ground":   {"name": "Last Stand",         "desc": "Your next shot is a guaranteed hit, ignores all cover penalties. (1 AP, 2-turn cooldown)",                                                     "level": 2, "slot": "a", "type": "active", "cost": 1, "cooldown": 2},
 	"snap_shot":          {"name": "Snap Shot",          "desc": "Precision Shot has no cooldown — move and shoot or fire multiple precision shots in the same turn.",                                              "level": 2, "slot": "b", "type": "passive", "modifies": "precision_shot", "cooldown_override": 0},
 
 	# SNIPER - Level 3

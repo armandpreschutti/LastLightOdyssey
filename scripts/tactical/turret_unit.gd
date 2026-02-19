@@ -9,32 +9,16 @@ var grid_position: Vector2i = Vector2i.ZERO
 var turns_remaining: int = 3
 var shoot_range: int = 10
 var base_damage: int = 45
-var current_hp: int = 0   # 0 = no HP pool (standard); >0 = has shield (Combat Engineer)
-var max_hp: int = 0
-# Alias so Field Repair can use duration_remaining
-var duration_remaining: int:
-	get: return turns_remaining
-	set(v): turns_remaining = v
-
+# HP Removed per user request
 
 func initialize(stats: Dictionary = {}) -> void:
 	turns_remaining = stats.get("duration", 3)
-	if stats.get("hp", 0) > 0:
-		max_hp = stats["hp"]
-		current_hp = max_hp
 	update_visual()
 
 
-## Heal turret HP (Field Repair)
+## Repair removed - turrets have no HP
 func repair(amount: int) -> void:
-	if max_hp > 0:
-		current_hp = mini(current_hp + amount, max_hp)
-		# Visual: bright cyan repair flash
-		if sprite:
-			var tween = create_tween()
-			tween.tween_property(sprite, "modulate", Color(0.3, 2.0, 1.5, 1.0), 0.08)
-			tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.25)
-	update_visual()
+	pass
 
 
 func set_grid_position(pos: Vector2i) -> void:

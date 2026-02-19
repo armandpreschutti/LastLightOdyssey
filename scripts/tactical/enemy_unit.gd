@@ -67,6 +67,7 @@ var base_damage: int = 20
 var overwatch_range: int = 0  # Automatic overwatch range (0 = disabled)
 var overwatch_cooldown: int = 0  # Current cooldown turns
 const OVERWATCH_COOLDOWN_TURNS: int = 3  # Turns to wait after shooting
+var status_effects: Dictionary = {}  # {effect_name: remaining_turns}
 var grid_position: Vector2i = Vector2i.ZERO
 var unit_size: Vector2i = Vector2i(1, 1)  # 1x1 for regular enemies, 2x2 for bosses
 
@@ -482,6 +483,29 @@ func update_cover_indicator(cover_level: int) -> void:
 		half_cover_indicator.visible = (cover_level == 1)
 	if full_cover_indicator:
 		full_cover_indicator.visible = (cover_level == 2)
+
+
+## Add a status effect
+func add_status_effect(effect: String, duration: int) -> void:
+	status_effects[effect] = duration
+
+
+## Check if a status effect is active
+func has_status_effect(effect: String) -> bool:
+	return status_effects.get(effect, 0) > 0
+
+
+## Tick all status effects down by 1 turn. Apply poison damage first.
+func tick_status_effects() -> void:
+	if has_status_effect("poison"):
+		take_damage(5)
+	var to_remove: Array[String] = []
+	for key in status_effects.keys():
+		status_effects[key] -= 1
+		if status_effects[key] <= 0:
+			to_remove.append(key)
+	for key in to_remove:
+		status_effects.erase(key)
 
 
 ## Start overwatch cooldown (called when sniper shoots)

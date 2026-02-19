@@ -27,12 +27,22 @@ var inspire_mode: bool = false         # Captain: grant ally +1 AP
 var stim_mode: bool = false            # Medic: stim injector ally target
 var rocket_salvo_mode: bool = false    # Heavy: area attack tile selection
 var double_tap_mode: bool = false      # Sniper: fire twice at one target
+var hit_and_run_mode: bool = false     # Scout: free 3-tile dash after any shot
+var untouchable_dash_mode: bool = false  # Scout: free 3-tile dash after kill
+var ambush_trap_positions: Array[Vector2i] = []  # Explosive Ambush trap positions
+var overcharge_active: bool = false    # Tech Twin Link: turrets deal 2x damage
+var overcharge_turns_remaining: int = 0
 var current_turn: int = 0
 var current_unit_index: int = 0  # Which unit's turn it is (0-based index)
 var mission_active: bool = false
 var is_paused: bool = false  # Track pause state
 var extraction_in_progress: bool = false
 var is_animating: bool = false  # Track when animations are playing to prevent input
+
+# Ability State Tracking
+var lead_by_example_pending: Dictionary = {}  # {officer_key: bonus_ap_amount} for allies who already acted
+var system_reboot_used: bool = false  # Track active ability usage separate from passive trigger
+
 var extraction_positions: Array[Vector2i] = []
 var mission_fuel_collected: int = 0  # Fuel collected during this mission
 var mission_cash_collected: int = 0  # Cash collected during this mission
@@ -905,13 +915,23 @@ func _on_tile_clicked(grid_pos: Vector2i) -> void:
 			_interact_with(interactable)
 			return
 
+	# Hit & Run (Scout): free 3-tile dash after shooting
+	if hit_and_run_mode and selected_unit and selected_unit.officer_type == "scout":
+		_try_hit_and_run_move(grid_pos)
+		return
+
+	# Untouchable Dash (Scout): free 3-tile dash after kill
+	if untouchable_dash_mode and selected_unit and selected_unit.officer_type == "scout":
+		_try_untouchable_dash(grid_pos)
+		return
+
 	# Try to move selected unit (only if it's their turn)
 	if selected_unit:
 		print("DEBUG: Checking movement conditions for ", selected_unit.name)
 		print("DEBUG: Is current turn unit: ", selected_unit == deployed_officers[current_unit_index])
 		print("DEBUG: Has AP: ", selected_unit.has_ap())
 		print("DEBUG: Is moving: ", selected_unit.is_moving())
-	
+
 	if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap() and not selected_unit.is_moving():
 		_try_move_unit(selected_unit, grid_pos)
 
@@ -966,6 +986,60 @@ func _select_unit(unit: Node2D) -> void:
 	
 	# Update attackable enemy highlights
 	_update_attackable_highlights()
+
+
+## Hit & Run free 3-tile dash (Scout — after any shot, 0 AP)
+func _try_hit_and_run_move(target_pos: Vector2i) -> void:
+	if not selected_unit or not hit_and_run_mode:
+		return
+	hit_and_run_mode = false
+	tactical_map.clear_movement_range()
+	tactical_hud.hide_combat_message()
+
+	var current_pos = selected_unit.get_grid_position()
+	var path = tactical_map.find_path(current_pos, target_pos)
+	if path.is_empty() or (path.size() - 1) > 3 or tactical_map.has_turret_at(target_pos):
+		return
+
+	_set_animating(true)
+	selected_unit.set_grid_position(target_pos)
+	selected_unit.move_along_path(path)
+	selected_unit.moved_this_turn = true
+	tactical_hud.show_combat_message("HIT & RUN DASH!", Color(0.2, 1.0, 0.4))
+	await selected_unit.movement_finished
+	tactical_hud.hide_combat_message()
+	tactical_map.reveal_around(target_pos, selected_unit.sight_range)
+	_update_enemy_visibility()
+	_select_unit(selected_unit)
+	_set_animating(false)
+	_check_auto_end_turn()
+
+
+## Untouchable free 3-tile dash (Scout — after kill)
+func _try_untouchable_dash(target_pos: Vector2i) -> void:
+	if not selected_unit or not untouchable_dash_mode:
+		return
+	untouchable_dash_mode = false
+	tactical_map.clear_movement_range()
+	tactical_hud.hide_combat_message()
+
+	var current_pos = selected_unit.get_grid_position()
+	var path = tactical_map.find_path(current_pos, target_pos)
+	if path.is_empty() or (path.size() - 1) > 3 or tactical_map.has_turret_at(target_pos):
+		return
+
+	_set_animating(true)
+	selected_unit.set_grid_position(target_pos)
+	selected_unit.move_along_path(path)
+	selected_unit.moved_this_turn = true
+	tactical_hud.show_combat_message("UNTOUCHABLE DASH!", Color(0.3, 1.0, 0.6))
+	await selected_unit.movement_finished
+	tactical_hud.hide_combat_message()
+	tactical_map.reveal_around(target_pos, selected_unit.sight_range)
+	_update_enemy_visibility()
+	_select_unit(selected_unit)
+	_set_animating(false)
+	_check_auto_end_turn()
 
 
 func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
@@ -1332,6 +1406,9 @@ func _on_end_turn_pressed() -> void:
 		precision_mode = false
 		tactical_hud.hide_combat_message()
 		_update_precision_mode_highlights()
+	# Clear dash modes on turn end
+	hit_and_run_mode = false
+	untouchable_dash_mode = false
 	if not mission_active:
 		return
 	
@@ -1382,7 +1459,13 @@ func _on_end_turn_pressed() -> void:
 		# Reset AP and reduce cooldowns for all officers at start of new round
 		for officer in deployed_officers:
 			officer.reset_ap()
+			# Lead by Example: Apply pending retroactive AP from previous round
+			if lead_by_example_pending.has(officer.officer_key):
+				officer.gain_bonus_ap(lead_by_example_pending[officer.officer_key])
 			officer.reduce_cooldown()
+		
+		# Clear pending AP
+		lead_by_example_pending.clear()
 
 		# Process turret auto-fire before player actions
 		await _process_turrets()
@@ -2176,27 +2259,41 @@ func _apply_forgiveness_curve(hit_chance: float) -> float:
 ## Calculate hit chance for a shot from shooter_pos to target_pos
 func calculate_hit_chance(shooter_pos: Vector2i, target_pos: Vector2i, shooter: Node2D = null) -> float:
 	var distance = abs(target_pos.x - shooter_pos.x) + abs(target_pos.y - shooter_pos.y)
-	
+
+	# Last Stand (Sniper Damn Good Ground): guaranteed hit, ignore cover
+	if shooter != null and shooter.has_method("has_status_effect") and shooter.has_status_effect("last_stand"):
+		return MAX_PLAYER_HIT_CHANCE
+
 	# Base hit chance varies by class and distance
 	var hit_chance = _get_base_hit_chance_for_shooter(shooter, distance)
-	
-	# Cover modifier (defender's cover reduces hit chance)
+
+	# Cover modifier (defender's cover reduces hit chance) — skip if shooter has last_stand
 	var cover_modifier = _get_cover_modifier(shooter_pos, target_pos)
 	hit_chance -= cover_modifier
-	
+
 	# Attacker's cover bonus (shooting from cover provides stability)
 	var attacker_cover_bonus = _get_attacker_cover_bonus(shooter_pos)
 	hit_chance += attacker_cover_bonus
-	
+
+	# Pin Down (Suppression Fire): enemy's hit chance reduced by 25% while pinned
+	if shooter != null and shooter.has_method("has_status_effect") and shooter.has_status_effect("pin_down"):
+		hit_chance -= 25.0
+
 	# Clamp to valid range
 	hit_chance = clampf(hit_chance, MIN_HIT_CHANCE, MAX_HIT_CHANCE)
-	
+
 	# Apply forgiveness curve for player units if hit chance is above 65%
 	if shooter != null and shooter in deployed_officers:
 		hit_chance = _apply_forgiveness_curve(hit_chance)
 		# Re-clamp after applying curve (shouldn't exceed MAX_PLAYER_HIT_CHANCE, but safety check)
 		hit_chance = minf(hit_chance, MAX_PLAYER_HIT_CHANCE)
-	
+
+	# Coordinate Fire Mark: Marked targets are guaranteed to be hit (100% accuracy)
+	var target_unit = tactical_map.get_unit_at(target_pos)
+	if target_unit and target_unit != shooter and target_unit.has_method("has_status_effect"):
+		if target_unit.has_status_effect("marked"):
+			return MAX_PLAYER_HIT_CHANCE
+
 	return hit_chance
 
 
@@ -2546,6 +2643,11 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 				var _ph_tween = create_tween()
 				_ph_tween.tween_property(_ph_sprite, "modulate:a", 1.0, 0.2)
 
+	# Last Stand (Sniper Damn Good Ground): consume the status effect after the shot
+	if shooter in deployed_officers and shooter.has_method("has_status_effect"):
+		if shooter.has_status_effect("last_stand"):
+			shooter.remove_status_effect("last_stand")
+
 	# PHASE 3: IMPACT (0.9s - balanced impact reaction)
 	# Target may have been freed - _phase_impact already has a null check
 	var valid_target = target if is_instance_valid(target) else null
@@ -2689,13 +2791,16 @@ func _phase_resolution(shooter: Node2D) -> void:
 	if not is_instance_valid(shooter) or shooter not in deployed_officers:
 		return
 
-	# Hit & Run (Scout L2A): gain +3 movement after shooting if also moved this turn
-	if shooter.officer_type == "scout" and shooter.moved_this_turn:
+	# Hit & Run (Scout L2A): after any shot, enable free 3-tile dash
+	if shooter.officer_type == "scout":
 		var _hnr_od = GameState.get_officer(shooter.officer_key)
-		if _hnr_od and _hnr_od.has_ability("hit_and_run"):
-			shooter.gain_bonus_movement(3)
-			tactical_hud.show_combat_message("HIT & RUN — +3 MOVE!", Color(0.2, 1.0, 0.4))
-			await get_tree().create_timer(0.7).timeout
+		if _hnr_od and _hnr_od.has_ability("hit_and_run") and not hit_and_run_mode:
+			hit_and_run_mode = true
+			# Show 3-tile movement range regardless of AP
+			if shooter == selected_unit:
+				tactical_map.set_movement_range(shooter.get_grid_position(), 3)
+			tactical_hud.show_combat_message("HIT & RUN — CLICK TILE TO DASH!", Color(0.2, 1.0, 0.4))
+			await get_tree().create_timer(0.8).timeout
 			tactical_hud.hide_combat_message()
 
 	# Toxicologist (Medic L3B): attacks apply poison to target
@@ -2740,7 +2845,9 @@ func _phase_resolution(shooter: Node2D) -> void:
 		
 		# Check if unit is out of AP and auto-end turn
 		if shooter == deployed_officers[current_unit_index]:
-			_check_auto_end_turn()
+			# Hit & Run: Don't auto-end turn if dash is available
+			if not hit_and_run_mode:
+				_check_auto_end_turn()
 	else:
 		# For non-player shooters (enemies), just re-enable the button
 		_set_animating(false)
@@ -2775,6 +2882,17 @@ func _execute_enemy_turn() -> void:
 		if is_instance_valid(enemy) and enemy.has_method("reduce_overwatch_cooldown"):
 			enemy.reduce_overwatch_cooldown()
 	
+	# Tick Twin Link Overcharge duration
+	if overcharge_active:
+		overcharge_turns_remaining -= 1
+		if overcharge_turns_remaining <= 0:
+			overcharge_active = false
+			# Restore original turret damage (halve back from 2x)
+			for turret in active_turrets:
+				if is_instance_valid(turret):
+					turret.base_damage = turret.base_damage / 2
+			tactical_hud.show_combat_message("OVERCHARGE EXPIRED", Color(0.4, 0.8, 1.0))
+	
 	for enemy in enemies:
 		if not mission_active or extraction_in_progress:
 			return
@@ -2787,6 +2905,19 @@ func _execute_enemy_turn() -> void:
 		
 		# Enemies always act (they can see and move even if players can't see them)
 		# The AI itself will handle whether they can detect players
+		
+		# Tick status effects at the start of this enemy's turn
+		if enemy.has_method("tick_status_effects"):
+			enemy.tick_status_effects()
+			# Update coordinate fire marker label
+			var _cf_marker = enemy.get_node_or_null("CoordFireMarker")
+			if _cf_marker:
+				if enemy.has_method("has_status_effect") and enemy.has_status_effect("marked"):
+					_cf_marker.text = "⚡ MARKED [%d]" % enemy.status_effects.get("marked", 0)
+				else:
+					_cf_marker.queue_free()
+			if not is_instance_valid(enemy) or enemy.current_hp <= 0:
+				continue
 		
 		# Safety counter to prevent infinite loops
 		var max_actions = 10
@@ -2845,9 +2976,22 @@ func _execute_enemy_turn() -> void:
 					# Update grid position after animation completes
 					enemy.set_grid_position(new_pos)
 
+					# Check for Explosive Ambush trap
+					if ambush_trap_positions.has(new_pos):
+						ambush_trap_positions.erase(new_pos)
+						if is_instance_valid(enemy):
+							enemy.take_damage(60)
+							enemy.add_status_effect("pin_down", 1)
+							tactical_hud.show_combat_message("EXPLOSIVE AMBUSH — TRIGGERED!", Color(1.0, 0.6, 0.1))
+							await get_tree().create_timer(0.5).timeout
+							if not mission_active or extraction_in_progress:
+								return
+							if not is_instance_valid(enemy):
+								break
+
 					# Mark new position as solid
 					# Removed: tactical_map.set_unit_position_solid(new_pos, true)
-					
+
 					# Update enemy visibility after movement
 					_update_enemy_visibility()
 					
@@ -2949,9 +3093,17 @@ func _on_enemy_died(enemy: Node2D) -> void:
 			if _lbe_od and _lbe_od.has_ability("lead_by_example"):
 				for _ally in deployed_officers:
 					if _ally != killer and _ally.current_hp > 0:
-						_ally.gain_bonus_ap(1)
+						# check if ally has already acted this round based on turn order
+						var ally_idx = deployed_officers.find(_ally)
+						if ally_idx < current_unit_index:
+							# Turn already passed, queue AP for next round
+							var current_pending = lead_by_example_pending.get(_ally.officer_key, 0)
+							lead_by_example_pending[_ally.officer_key] = current_pending + 1
+						else:
+							# Turn pending or current, grant immediately
+							_ally.gain_bonus_ap(1)
 				tactical_hud.show_combat_message("LEAD BY EXAMPLE — SQUAD +1 AP", Color.YELLOW)
-				get_tree().create_timer(1.0).timeout
+				await get_tree().create_timer(1.0).timeout
 
 		# Serial (Sniper): refund all AP on kill
 		if killer.officer_type == "sniper":
@@ -2960,11 +3112,14 @@ func _on_enemy_died(enemy: Node2D) -> void:
 				killer.reset_ap()
 				tactical_hud.show_combat_message("SERIAL — AP REFUNDED!", Color(0.7, 0.5, 1.0))
 
-		# Untouchable (Scout): next attack against scout guaranteed miss
+		# Untouchable (Scout): after kill, scout gets a free 3-tile dash
 		if killer.officer_type == "scout":
 			var _untch_od = GameState.get_officer(killer.officer_key)
 			if _untch_od and _untch_od.has_ability("untouchable"):
-				killer.add_status_effect("untouchable", 1)
+				untouchable_dash_mode = true
+				if killer == selected_unit:
+					tactical_map.set_movement_range(killer.get_grid_position(), 3)
+				tactical_hud.show_combat_message("UNTOUCHABLE — CLICK TILE TO DASH!", Color(0.3, 1.0, 0.6))
 
 		# War Machine (Heavy): +5 permanent base damage per kill
 		if killer.officer_type == "heavy":
@@ -3253,18 +3408,21 @@ func _on_ability_used(ability_id: String) -> void:
 		"execute":
 			if selected_unit.officer_type != "captain":
 				return
-			
+
 			if not selected_unit.has_ap(1):
 				tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
 				await get_tree().create_timer(1.0).timeout
 				tactical_hud.hide_combat_message()
 				return
-			
+
 			# Enter execute targeting mode - show red range tiles
 			execute_mode = true
 			tactical_map.clear_movement_range()
 			tactical_map.set_execute_range(selected_unit.get_grid_position(), 4)
-			tactical_hud.show_combat_message("SELECT ENEMY WITHIN 4 TILES (<50%% HP)", Color(1, 0.2, 0.2))
+			var _exec_od = GameState.get_officer(selected_unit.officer_key)
+			var _exec_has_warlord = _exec_od and _exec_od.has_ability("warlord")
+			var _exec_msg = "SELECT ANY ENEMY (WARLORD)" if _exec_has_warlord else "SELECT ENEMY WITHIN 4 TILES (<50%% HP)"
+			tactical_hud.show_combat_message(_exec_msg, Color(1, 0.2, 0.2))
 			tactical_hud.show_cancel_button()
 		
 		"precision_shot":
@@ -3339,6 +3497,18 @@ func _use_upgraded_ability(ability_id: String, ability_def: Dictionary) -> void:
 
 		"phantom":
 			_activate_phantom()
+
+		"ambush":
+			_activate_explosive_ambush()
+
+		"twin_link":
+			_activate_twin_link_overcharge()
+
+		"emergency_protocol":
+			_activate_emergency_protocol()
+
+		"damn_good_ground":
+			_activate_damn_good_ground()
 
 		# ── TECH ──────────────────────────────────────────────
 		"field_repair":
@@ -3491,6 +3661,20 @@ func _cancel_ability_mode() -> void:
 		tactical_hud.hide_cancel_button()
 		if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			tactical_map.set_movement_range(selected_unit.get_grid_position(), selected_unit.move_range)
+		return
+
+	if hit_and_run_mode:
+		hit_and_run_mode = false
+		tactical_map.clear_movement_range()
+		tactical_hud.hide_combat_message()
+		tactical_hud.hide_cancel_button()
+		return
+
+	if untouchable_dash_mode:
+		untouchable_dash_mode = false
+		tactical_map.clear_movement_range()
+		tactical_hud.hide_combat_message()
+		tactical_hud.hide_cancel_button()
 		return
 
 
@@ -3947,6 +4131,19 @@ func _try_coordinate_fire(grid_pos: Vector2i) -> void:
 		tween.tween_property(enemy_sprite, "modulate", Color(2.0, 1.5, 0.2, 1.0), 0.08)
 		tween.tween_property(enemy_sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.15)
 
+	# Add floating timer label above enemy
+	var old_marker = target_enemy.get_node_or_null("CoordFireMarker")
+	if old_marker:
+		old_marker.queue_free()
+	var marker_label = Label.new()
+	marker_label.name = "CoordFireMarker"
+	marker_label.text = "⚡ MARKED [2]"
+	marker_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
+	marker_label.add_theme_font_size_override("font_size", 11)
+	marker_label.position = Vector2(-20, -40)
+	marker_label.z_index = 10
+	target_enemy.add_child(marker_label)
+
 	tactical_hud.show_combat_message("COORDINATE FIRE — TARGET MARKED!", Color(1.0, 0.8, 0.2))
 	await get_tree().create_timer(1.2).timeout
 	tactical_hud.hide_combat_message()
@@ -4008,13 +4205,14 @@ func _activate_deep_scanner() -> void:
 
 	tactical_hud.show_combat_message("DEEP SCAN — ENEMIES REVEALED!", Color(0.2, 1.0, 0.5))
 
-	# Reveal all enemies through walls
+	# Reveal all enemies through walls (reveal_around with range 0 exposes just the tile)
 	var scanner_pos = selected_unit.get_grid_position()
 	for enemy in enemies:
 		var enemy_pos = enemy.get_grid_position()
 		var dist = abs(enemy_pos.x - scanner_pos.x) + abs(enemy_pos.y - scanner_pos.y)
-		if dist <= 15:
-			tactical_map.reveal_tile(enemy_pos)
+		# Deep Scanner now reveals ALL enemies regardless of distance
+		if dist >= 0:
+			tactical_map.reveal_around(enemy_pos, 0)
 			enemy.visible = true
 			# Brief highlight on each revealed enemy
 			var esp = enemy.get_node_or_null("Sprite")
@@ -4075,7 +4273,7 @@ func _activate_field_repair() -> void:
 		return
 
 	combat_camera.focus_on_action(selected_unit.position, nearest.position)
-	tactical_hud.show_combat_message("FIELD REPAIR — TURRET RESTORED +25 HP, +1 TURN!", Color(0.3, 1.0, 1.0))
+	tactical_hud.show_combat_message("FIELD REPAIR — TURRET TIMER RESET!", Color(0.3, 1.0, 1.0))
 	await get_tree().create_timer(1.2).timeout
 	tactical_hud.hide_combat_message()
 	combat_camera.return_to_tactical()
@@ -4128,16 +4326,30 @@ func _activate_remote_detonation() -> void:
 		Vector2(det_pos.x * 32 + 16, det_pos.y * 32 + 16))
 	tactical_hud.show_combat_message("REMOTE DETONATION — 30 AoE DAMAGE!", Color(1.0, 0.5, 0.1))
 
-	# Deal 30 damage to enemies within 2 tiles
+	# Deal 30 damage to enemies within 3 tiles
 	var hit_count := 0
 	for enemy in enemies.duplicate():
 		var ep = enemy.get_grid_position()
 		var d = abs(ep.x - det_pos.x) + abs(ep.y - det_pos.y)
-		if d <= 2:
+		if d <= 3:
 			_last_attacker_key = selected_unit.officer_key
 			enemy.take_damage(30)
 			_spawn_damage_popup(30, true, enemy.position, false, true)
 			hit_count += 1
+			
+	# Explosion FX
+	var det_world_pos = Vector2(det_pos.x * 32 + 16, det_pos.y * 32 + 16)
+	var exp_rect = ColorRect.new()
+	exp_rect.color = Color(1.0, 0.5, 0.1, 0.6)
+	exp_rect.size = Vector2(192, 192)
+	exp_rect.position = det_world_pos - Vector2(96, 96)
+	get_node("MapContainer/EffectsLayer").add_child(exp_rect)
+	var exp_tween = create_tween()
+	exp_tween.tween_property(exp_rect, "color:a", 0.0, 0.5)
+	exp_tween.tween_callback(exp_rect.queue_free)
+	
+	if combat_camera.has_method("shake"):
+		combat_camera.shake(0.5, 8.0)
 
 	if hit_count == 0:
 		tactical_hud.show_combat_message("REMOTE DETONATION — NO ENEMIES IN RANGE", Color(1.0, 0.7, 0.3))
@@ -4145,6 +4357,132 @@ func _activate_remote_detonation() -> void:
 	await get_tree().create_timer(1.2).timeout
 	tactical_hud.hide_combat_message()
 	combat_camera.return_to_tactical()
+	_select_unit(selected_unit)
+	_check_auto_end_turn()
+
+
+## Explosive Ambush (Scout L3A): place hidden trap at current tile (0 AP, cooldown 3)
+func _activate_explosive_ambush() -> void:
+	var od = GameState.get_officer(selected_unit.officer_key)
+	if not od or not od.has_ability("ambush"):
+		return
+	if selected_unit.is_ability_on_cooldown("ambush"):
+		tactical_hud.show_combat_message("AMBUSH ON COOLDOWN", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+
+	var trap_pos = selected_unit.get_grid_position()
+	if not ambush_trap_positions.has(trap_pos):
+		ambush_trap_positions.append(trap_pos)
+
+	selected_unit._start_cooldown("ambush", 3)
+	tactical_hud.show_combat_message("EXPLOSIVE AMBUSH TRAP SET!", Color(0.6, 0.2, 1.0))
+	# Flash the trap tile
+	var trap_world = Vector2(trap_pos.x * 32 + 16, trap_pos.y * 32 + 16)
+	var trap_rect = ColorRect.new()
+	trap_rect.color = Color(0.5, 0.1, 0.8, 0.7)
+	trap_rect.size = Vector2(32, 32)
+	trap_rect.position = trap_world - Vector2(16, 16)
+	get_node("MapContainer/EffectsLayer").add_child(trap_rect)
+	var trap_tween = create_tween()
+	trap_tween.tween_property(trap_rect, "color:a", 0.3, 0.8)
+	return
+	# Persistent trap visual - cleared when triggered/mission ends
+	# trap_tween.tween_property(trap_rect, "color:a", 0.0, 0.4)
+	# trap_tween.tween_callback(trap_rect.queue_free)
+	await get_tree().create_timer(1.2).timeout
+	tactical_hud.hide_combat_message()
+	_select_unit(selected_unit)
+
+
+## Twin Link Overcharge (Tech L3A): both turrets deal 2x damage for 2 turns
+func _activate_twin_link_overcharge() -> void:
+	if active_turrets.is_empty():
+		tactical_hud.show_combat_message("NO ACTIVE TURRETS", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+
+	var od = GameState.get_officer(selected_unit.officer_key)
+	if not od or not od.has_ability("twin_link"):
+		return
+	if selected_unit.is_ability_on_cooldown("twin_link"):
+		tactical_hud.show_combat_message("OVERCHARGE ON COOLDOWN", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+	if not selected_unit.use_ap(1):
+		tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+
+	for turret in active_turrets:
+		if is_instance_valid(turret):
+			turret.base_damage *= 2
+	overcharge_active = true
+	overcharge_turns_remaining = 2
+	selected_unit._start_cooldown("twin_link", 3)
+	tactical_hud.show_combat_message("OVERCHARGE — TURRETS 2× DAMAGE FOR 2 TURNS!", Color(0.2, 1.0, 1.0))
+	await get_tree().create_timer(1.2).timeout
+	tactical_hud.hide_combat_message()
+	_select_unit(selected_unit)
+	_check_auto_end_turn()
+
+
+## Emergency Protocol System Reboot (Tech L3C): reset all officer cooldowns + grant each +1 AP (1/mission)
+func _activate_emergency_protocol() -> void:
+	var od = GameState.get_officer(selected_unit.officer_key)
+	if not od or not od.has_ability("emergency_protocol"):
+		return
+	if system_reboot_used:
+		tactical_hud.show_combat_message("SYSTEM REBOOT ALREADY USED THIS MISSION", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+	if not selected_unit.use_ap(1):
+		tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+
+	system_reboot_used = true
+	selected_unit._start_cooldown("emergency_protocol", 999)  # One use per mission
+	_set_animating(true)
+	tactical_hud.show_combat_message("SYSTEM REBOOT — ALL COOLDOWNS RESET!", Color(0.3, 1.0, 1.0))
+
+	for officer in deployed_officers:
+		if not is_instance_valid(officer) or officer.current_hp <= 0:
+			continue
+		officer.ability_cooldowns.clear()
+		officer.gain_bonus_ap(1)
+		var sp = officer.get_node_or_null("Sprite")
+		if sp:
+			var tween = create_tween()
+			tween.tween_property(sp, "modulate", Color(0.3, 1.8, 2.0, 1.0), 0.1)
+			tween.tween_property(sp, "scale", Vector2(1.2, 1.2), 0.08)
+			tween.tween_property(sp, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.25)
+			tween.parallel().tween_property(sp, "scale", Vector2(1.0, 1.0), 0.25)
+
+	await get_tree().create_timer(1.5).timeout
+	tactical_hud.hide_combat_message()
+	_set_animating(false)
+	_select_unit(selected_unit)
+	_check_auto_end_turn()
+
+
+## Damn Good Ground Last Stand (Sniper L2A): next shot guaranteed hit, ignore cover
+func _activate_damn_good_ground() -> void:
+	if not selected_unit.apply_damn_good_ground():
+		tactical_hud.show_combat_message("NOT ENOUGH AP OR COOLDOWN", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+
+	tactical_hud.show_combat_message("LAST STAND — NEXT SHOT GUARANTEED HIT!", Color(0.8, 0.6, 1.0))
+	await get_tree().create_timer(1.2).timeout
+	tactical_hud.hide_combat_message()
 	_select_unit(selected_unit)
 	_check_auto_end_turn()
 
@@ -4213,6 +4551,18 @@ func _try_stim_target(grid_pos: Vector2i) -> void:
 
 ## Suppression Fire (Heavy L2B): all visible enemies -25% accuracy for 1 turn
 func _activate_suppression_fire() -> void:
+	# First check for visible enemies
+	var visible_enemies = []
+	for enemy in enemies:
+		if _is_enemy_visible(enemy):
+			visible_enemies.append(enemy)
+			
+	if visible_enemies.is_empty():
+		tactical_hud.show_combat_message("NO VISIBLE ENEMIES TO SUPPRESS", Color(1, 0.5, 0))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		return
+
 	if not selected_unit.apply_suppression_fire():
 		tactical_hud.show_combat_message("NOT ENOUGH AP OR COOLDOWN", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
@@ -4220,27 +4570,41 @@ func _activate_suppression_fire() -> void:
 		return
 
 	_set_animating(true)
+	
+	# Play attack animation and visuals
+	combat_camera.focus_on_action(selected_unit.position, selected_unit.position) # Focus on shooter
+	selected_unit.play_attack_animation()
+	
+	# Muzzle flash effect
+	var muzzle_rect = ColorRect.new()
+	muzzle_rect.color = Color(1.0, 0.7, 0.2, 0.8)
+	muzzle_rect.size = Vector2(40, 40)
+	muzzle_rect.position = selected_unit.position - Vector2(20, 20)
+	get_node("MapContainer/EffectsLayer").add_child(muzzle_rect)
+	var flash_tween = create_tween()
+	flash_tween.tween_property(muzzle_rect, "scale", Vector2(2.0, 2.0), 0.1)
+	flash_tween.parallel().tween_property(muzzle_rect, "modulate:a", 0.0, 0.15)
+	flash_tween.tween_callback(muzzle_rect.queue_free)
+	
+	if combat_camera.has_method("shake"):
+		combat_camera.shake(0.3, 6.0)
+		
 	tactical_hud.show_combat_message("SUPPRESSION FIRE — ENEMIES PINNED!", Color(1.0, 0.5, 0.1))
 
 	# Apply pin_down to all visible enemies
-	var suppressed_count := 0
-	for enemy in enemies:
-		if _is_enemy_visible(enemy):
-			if enemy.has_method("add_status_effect"):
-				enemy.add_status_effect("pin_down", 1)
-			# Visual: brief orange flash on each enemy
-			var esp = enemy.get_node_or_null("Sprite")
-			if esp:
-				var et = create_tween()
-				et.tween_property(esp, "modulate", Color(1.8, 0.5, 0.1, 1.0), 0.08)
-				et.tween_property(esp, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
-			suppressed_count += 1
-
-	if suppressed_count == 0:
-		tactical_hud.show_combat_message("NO VISIBLE ENEMIES TO SUPPRESS", Color(1, 0.5, 0))
-
+	for enemy in visible_enemies:
+		if enemy.has_method("add_status_effect"):
+			enemy.add_status_effect("pin_down", 1)
+		# Visual: brief orange flash on each enemy
+		var esp = enemy.get_node_or_null("Sprite")
+		if esp:
+			var et = create_tween()
+			et.tween_property(esp, "modulate", Color(1.8, 0.5, 0.1, 1.0), 0.08)
+			et.tween_property(esp, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+			
 	await get_tree().create_timer(1.2).timeout
 	tactical_hud.hide_combat_message()
+	combat_camera.return_to_tactical()
 	_set_animating(false)
 	_select_unit(selected_unit)
 	_check_auto_end_turn()
@@ -4267,18 +4631,33 @@ func _try_rocket_salvo(grid_pos: Vector2i) -> void:
 	combat_camera.focus_on_action(selected_unit.position, target_world)
 	tactical_hud.show_combat_message("ROCKET SALVO — INCOMING!", Color(1.0, 0.3, 0.1))
 
-	# Brief launch delay
-	await get_tree().create_timer(0.4).timeout
+	# Highlight the blast zone tiles (radius 3 diamond)
+	# We reuse execute_range coloring briefly
+	tactical_map.set_execute_range(grid_pos, 3)
+	await get_tree().create_timer(0.5).timeout
+	tactical_map.clear_execute_range()
 
 	# Shake camera to simulate impact
 	if combat_camera.has_method("shake"):
-		combat_camera.shake(0.4, 8.0)
+		combat_camera.shake(0.6, 12.0)
 
-	# Deal 40 damage to all enemies in 3x3 area
+	# Explosion flash at target
+	var target_world_pos = Vector2(grid_pos.x * 32 + 16, grid_pos.y * 32 + 16)
+	var exp_rect = ColorRect.new()
+	exp_rect.color = Color(1.0, 0.5, 0.1, 0.6)
+	exp_rect.size = Vector2(192, 192)
+	exp_rect.position = target_world_pos - Vector2(96, 96)
+	get_node("MapContainer/EffectsLayer").add_child(exp_rect)
+	var exp_tween = create_tween()
+	exp_tween.tween_property(exp_rect, "color:a", 0.0, 0.5)
+	exp_tween.tween_callback(exp_rect.queue_free)
+
+	# Deal 40 damage to all enemies in radius-3 diamond (manhattan distance)
 	var hit_count := 0
 	for enemy in enemies.duplicate():
 		var ep = enemy.get_grid_position()
-		if abs(ep.x - grid_pos.x) <= 1 and abs(ep.y - grid_pos.y) <= 1:
+		var dist = abs(ep.x - grid_pos.x) + abs(ep.y - grid_pos.y)
+		if dist <= 3:
 			enemy.take_damage(40)
 			_spawn_damage_popup(40, true, enemy.position, false, true)
 			hit_count += 1
@@ -4476,6 +4855,25 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 			tactical_hud.show_combat_message("CHARGING!", Color(1, 0.5, 0.1))
 			heavy_unit.move_along_path(path)
 			await heavy_unit.movement_finished
+			# Bulldozer: destroy HALF_COVER adjacent to charge path
+			var _bld_od = GameState.get_officer(heavy_unit.officer_key)
+			if _bld_od and _bld_od.has_ability("bulldozer"):
+				var directions = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+				
+				for path_tile in path:
+					for dir in directions:
+						var check_pos = path_tile + dir
+						if tactical_map.tile_data.get(check_pos, 0) == tactical_map.TileType.HALF_COVER:
+							tactical_map.set_tile_type(check_pos, tactical_map.TileType.FLOOR)
+							# Visual: Debris effect (orange pulsing flash on destroyed tile)
+							var debris_rect = ColorRect.new()
+							debris_rect.color = Color(1.0, 0.5, 0.0, 0.6)
+							debris_rect.size = Vector2(32, 32)
+							debris_rect.position = Vector2(check_pos.x * 32, check_pos.y * 32)
+							get_node_or_null("MapContainer/EffectsLayer").add_child(debris_rect)
+							var dt = create_tween()
+							dt.tween_property(debris_rect, "modulate:a", 0.0, 0.5)
+							dt.tween_callback(debris_rect.queue_free)
 		else:
 			# Direct teleport if no path
 			heavy_unit.position = Vector2(charge_destination.x * 32 + 16, charge_destination.y * 32 + 16)
@@ -4796,10 +5194,12 @@ func _try_execute_enemy(grid_pos: Vector2i) -> void:
 			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
-	# Enemy must be below 50% HP
+	# Warlord ability check: if captain has Warlord, skip the HP restriction
+	var _warlord_od = GameState.get_officer(selected_unit.officer_key)
+	var has_warlord = _warlord_od and _warlord_od.has_ability("warlord")
 	var hp_percent = float(target_enemy.current_hp) / float(target_enemy.max_hp)
-	if hp_percent > 0.5:
-		tactical_hud.show_combat_message("ENEMY HP TOO HIGH (NEED <50%%)", Color(1, 0.3, 0.3))
+	if hp_percent > 0.5 and not has_warlord:
+		tactical_hud.show_combat_message("ENEMY HP TOO HIGH (NEED <50%% or WARLORD)", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_select_unit(selected_unit)

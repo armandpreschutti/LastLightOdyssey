@@ -35,7 +35,11 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 	for officer in officers:
 		if officer.current_hp <= 0:
 			continue
-		
+
+		# Skip phantom officers — they are invisible to enemies
+		if officer.has_method("has_status_effect") and officer.has_status_effect("phantom"):
+			continue
+
 		var officer_pos = officer.get_grid_position()
 		var distance = abs(officer_pos.x - enemy_pos.x) + abs(officer_pos.y - enemy_pos.y)
 		
@@ -169,6 +173,8 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 		var closest_dist = 999
 		for officer in officers:
 			if officer.current_hp <= 0:
+				continue
+			if officer.has_method("has_status_effect") and officer.has_status_effect("phantom"):
 				continue
 			var officer_pos = officer.get_grid_position()
 			var dist = abs(officer_pos.x - enemy_pos.x) + abs(officer_pos.y - enemy_pos.y)

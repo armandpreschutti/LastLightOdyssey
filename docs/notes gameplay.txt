@@ -1,21 +1,53 @@
-- inspire did not add +1 ap to ally unit
 
-- run and gun did not trigger, make this it's own button, the ability must be initiated
+captain:
 
-- invisiblilty doesn't work, enemy saw me right next to them one tile away
+- lead by example: gave allies +1 ap, but reset when enemy turn started for example
 
-- 'deep scanner broke the game
+  SCOUT: spent 2 AP, turn over
+  CAPTAIN: killed an enemy, all allies gained 1 AP (LEAD BY EXAMPLE triggered)
+  TECH: spent 3 AP, turn over 
+  ENEMY TURNS: normal
+  SCOUT: only has 2 AP to spend, should have 3 AP to spend since he get a turn since LEAD BY EXAMPLE triggered
 
-E 0:16:53:111   _activate_deep_scanner: Invalid call. Nonexistent function 'reveal_tile' in base 'Node2D (tactical_map.gd)'.
-  <GDScript Source>tactical_controller.gd:3993 @ _activate_deep_scanner()
-  <Stack Trace> tactical_controller.gd:3993 @ _activate_deep_scanner()
-                tactical_controller.gd:3314 @ _use_upgraded_ability()
-                tactical_controller.gd:3144 @ _on_ability_used()
-                tactical_hud.gd:360 @ <anonymous lambda>()
+- warlord: redesign so that EXECUTE can be used on enemies at full health (insta kill) vs only enemies with below half health when warlord is equipped. forget the consecutive executions.
+
+- coordinate fire: doesn't feel like it does anything, make it +100% accuracy (all shots on this target hit). 
 
 
-- stim injector did nothing
+scout:
 
-- bulldozer does not break cover in path or gain any armor?
+- hit and run: 3 move tile turn ended abruptly (likely because nothing is preventing the turns to pause so it just thinks the SCOUT turn is over).
 
--
+- deep scanner: should be redesigned to reveal all enemies on map and should be increased to 3 turns (right now it only detects up to 15 tiles).
+
+- explosive ambush: the mine should stay visible, disappears immediately, don't know if it working or not
+
+
+tech:
+
+- field repair: didn't do anything
+
+- system reboot: said it was already used when it wasn't
+
+- combat engineer: partially works (correctly gives 5 turns), remove HP buff
+
+- remote detonation: works, but increase explosion range to 3 and animate the explosion effect (see animation for ROCKET SALVO)
+
+
+medic:
+
+
+
+- stim injector: did not aware proper AP
+
+- adrenaline patch: add a marker to allies that have this buff
+
+- toxicology: add a marker to poisoned enemies
+
+heavy:
+
+- bulldozer: does not break cover in path, just moves around cover
+
+- suprresion fire: does literally nothing, used AP desprite no enemies being arround to be supressed.
+
+
