@@ -261,6 +261,7 @@ func _on_unlock_requested(ab_id: String, cost: int):
 		# For manual unlocks, we just deduct DL and add ability.
 			
 		GameState.save_game()
+		GameState.officer_progression_changed.emit()
 		_update_unlock_states()
 		_refresh_header_stats()
 		# Add a nice effect here if possible

@@ -6,6 +6,8 @@ extends Node
 signal ship_moved(new_position: Vector2, node_data: NodeData, speed_mult: float)
 signal map_updated
 signal message_log_added(message: String)
+signal story_node_spawned(node_data: NodeData)
+signal story_sequence_finished
 
 # Core State
 var current_node_id: String = ""
@@ -25,6 +27,8 @@ const STORY_INTEL_THRESHOLD: int = 3
 const STORY_INTEL_THRESHOLD_DEV: int = 1
 const STORY_CHAIN_LENGTH: int = 5
 const STORY_RANGE_UNITS: float = 1200.0 # Approx 3 jumps in world-space terms
+const STORY_SPAWN_DISTANCE_MIN: float = 1200.0 # Min distance to spawn new story nodes
+const STORY_SPAWN_DISTANCE_MAX: float = 1500.0 # Max distance to spawn new story nodes
 const PROXIMITY_CONNECT_DISTANCE: float = 450.0 # Auto-connect nodes within this distance
 
 # Campaign tree structure
@@ -47,6 +51,8 @@ func _ready() -> void:
 	GameState.game_won.connect(func(_type): is_voyage_complete = true)
 	GameState.intel_changed.connect(_on_intel_changed)
 	_try_spawn_story_node()
+	
+	# Debug trigger removed.
 
 ## Initialize a new voyage
 func _initialize_voyage() -> void:
@@ -134,10 +140,15 @@ func attempt_jump(target_node: NodeData) -> bool:
 		GameState.intel = mini(GameState.intel + 1, intel_cap)
 
 	# Phase 3: Injury recovery  reduce injury_jumps by 1 for each officer
-	for key in GameState.officers:
-		var od: OfficerData = GameState.get_officer(key)
-		if od and od.injury_jumps > 0:
-			od.injury_jumps -= 1
+	if is_new_exploration:
+		for key in GameState.officers:
+			var od: OfficerData = GameState.get_officer(key)
+			if od and od.injury_jumps > 0:
+				od.injury_jumps -= 1
+				# When injury_jumps reaches 0, heal officer fully
+				if od.injury_jumps == 0:
+					od.current_hp = od.max_hp
+					od.downed = false
 
 	return true
 
@@ -216,7 +227,7 @@ func attempt_direct_travel(target_node: NodeData, speed_mult: float = 1.25) -> b
 	# Verify path exists (connectivity check)
 	# We use find_path to ensure the node is actually reachable via the network
 	var path = find_path(current_node_id, target_node.id)
-	if path.size() <= 1 and target_node.state != NodeData.NodeState.STORY:
+	if path.size() <= 1:
 		message_log_added.emit("Target is not reachable or is current position.")
 		return false
 		
@@ -304,74 +315,62 @@ func _try_spawn_story_node() -> void:
 	if not current_node:
 		return
 
-	var candidate: NodeData = _find_reachable_story_candidate(current_node)
-	if candidate == null:
-		# Force-generate options from the current node so the story node is actionable immediately.
-		var generated = generator.generate_options(current_node, Vector2.RIGHT, 4, false, nodes)
-		for n in generated:
-			nodes[n.id] = n
-		candidate = _find_reachable_story_candidate(current_node)
-	if candidate == null:
-		candidate = _find_story_candidate(current_node.position)
+	# Calculate spawn position and create new node
+	var spawn_pos = _find_story_spawn_position(current_node.position)
+	var new_id = generator.generate_uuid()
+	
+	# Create node with random characteristics
+	var new_node = NodeData.new(new_id, spawn_pos)
+	new_node.node_type = generator._roll_node_type()
+	new_node.biome_type = generator._roll_biome_type()
+	
+	# Add to dictionary
+	nodes[new_id] = new_node
 
-	if candidate == null:
-		return
-
-	_mark_node_as_story(candidate)
-	candidate.campaign_mission_id = pending_branch_choice
-	print("DEBUG VoyageManager: Spawned story node %s with campaign_mission_id=%s" % [candidate.id, pending_branch_choice])
+	# Setup as story node
+	_mark_node_as_story(new_node)
+	new_node.campaign_mission_id = pending_branch_choice
+	print("DEBUG VoyageManager: Spawned story node %s at %s with campaign_mission_id=%s" % [new_node.id, spawn_pos, pending_branch_choice])
+	
 	pending_branch_choice = ""  # Clear after assigning
+	
+	# Check for proximity connections immediately
+	_apply_proximity_connections()
+	
 	message_log_added.emit("Signal detected: Story node locked to mission grid.")
 	map_updated.emit()
+	story_node_spawned.emit(new_node)
 
 
-func _find_story_candidate(from_position: Vector2) -> NodeData:
-	var best_node: NodeData = null
-	var best_dist := INF
-
-	for id in nodes:
-		var n: NodeData = nodes[id]
-		if n == null:
-			continue
-		if n.is_new_earth:
-			continue
-		if n.state != NodeData.NodeState.UNVISITED:
-			continue
-
-		var dist = n.position.distance_to(from_position)
-		if dist > STORY_RANGE_UNITS:
-			continue
-		if dist < best_dist:
-			best_dist = dist
-			best_node = n
-
-	return best_node
-
-
-func _find_reachable_story_candidate(current_node: NodeData) -> NodeData:
-	if current_node == null:
-		return null
-
-	var best_node: NodeData = null
-	var best_dist := INF
-
-	for neighbor_id in current_node.connections:
-		if not nodes.has(neighbor_id):
-			continue
-		var n: NodeData = nodes[neighbor_id]
-		if n == null:
-			continue
-		if n.is_new_earth:
-			continue
-		if n.state != NodeData.NodeState.UNVISITED:
-			continue
-
-		var dist = n.position.distance_to(current_node.position)
-		if dist < best_dist:
-			best_dist = dist
-			best_node = n
-
-	return best_node
+func _find_story_spawn_position(from_position: Vector2) -> Vector2:
+	# Sample 8-16 candidate angles around current node
+	var candidate_count = 16
+	var best_direction = Vector2.RIGHT
+	var max_min_distance = -1.0
+	
+	for i in range(candidate_count):
+		var angle = (TAU / candidate_count) * i
+		var direction = Vector2(cos(angle), sin(angle))
+		
+		# Check at max distance for the "direction" check
+		var check_pos = from_position + (direction * STORY_SPAWN_DISTANCE_MAX)
+		
+		# For each angle, check distance to all existing nodes
+		var min_dist_to_existing = INF
+		for id in nodes:
+			var node = nodes[id]
+			var dist = check_pos.distance_to(node.position)
+			if dist < min_dist_to_existing:
+				min_dist_to_existing = dist
+		
+		# We want to maximize the distance to the nearest existing node (avoid clustering)
+		if min_dist_to_existing > max_min_distance:
+			max_min_distance = min_dist_to_existing
+			best_direction = direction
+			
+	# Return position at random distance in best direction
+	var random_dist = randf_range(STORY_SPAWN_DISTANCE_MIN, STORY_SPAWN_DISTANCE_MAX)
+	return from_position + (best_direction * random_dist)
 
 
 func _mark_node_as_story(node: NodeData) -> void:

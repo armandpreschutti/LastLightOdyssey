@@ -26,6 +26,8 @@ func _ready() -> void:
 		close_button.pressed.connect(_on_close_pressed)
 	if tech_tree_popup:
 		tech_tree_popup.visibility_changed_to.connect(_on_tech_tree_visibility_changed)
+	
+	GameState.officer_progression_changed.connect(func(): if visible: _populate())
 
 
 func _on_tech_tree_visibility_changed(is_visible: bool) -> void:
@@ -119,20 +121,20 @@ func _build_officer_card(officer_key: String) -> Control:
 	name_row.add_child(name_label)
 
 	var status_label = Label.new()
-	if not od or not od.alive:
-		status_label.text = "K.I.A."
-		status_label.add_theme_color_override("font_color", Color(0.8, 0.2, 0.2))
+	if od == null or not od.alive:
+		status_label.text = "OFFLINE"
+		status_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+	elif od.is_downed():
+		status_label.text = "DOWNED (%d JUMPS)" % od.injury_jumps
+		status_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
 	elif od.is_injured():
-		status_label.text = "INJURED (%d JUMPS)" % od.injury_jumps
+		status_label.text = "WOUNDED (%d JUMPS)" % od.injury_jumps
 		status_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.2))
 	else:
 		status_label.text = "READY"
 		status_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.4))
 	status_label.add_theme_font_size_override("font_size", 14)
 	name_row.add_child(status_label)
-
-	if od == null or not od.alive:
-		return panel
 
 	# Level label
 	var level_label = Label.new()
@@ -178,7 +180,28 @@ func _build_officer_card(officer_key: String) -> Control:
 	ab_btn.pressed.connect(_on_ability_tree_requested.bind(officer_key))
 	right_vbox.add_child(ab_btn)
 
+	# Pulse animation if upgrades available
+	if GameState.has_available_upgrades(officer_key):
+		_start_pulse(ab_btn)
+
 	return panel
+
+
+func _start_pulse(target_btn: Button) -> void:
+	if not target_btn: return
+	
+	var glow_rect = target_btn.get_node_or_null("GlowRect")
+	if not glow_rect:
+		glow_rect = ColorRect.new()
+		glow_rect.name = "GlowRect"
+		glow_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		glow_rect.color = Color(1, 1, 1, 0) # Start transparent
+		glow_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		target_btn.add_child(glow_rect)
+		
+	var tween = create_tween().set_loops()
+	tween.tween_property(glow_rect, "color:a", 0.1, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(glow_rect, "color:a", 0.4, 0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
 func _on_ability_tree_requested(officer_key: String) -> void:

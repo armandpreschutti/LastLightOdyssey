@@ -119,44 +119,44 @@ class ObjectiveManager:
 			return {"fuel": 0, "cash": 0, "hull_repair": 0}
 		
 		# Define single deterministic reward for each objective type
-		# Rewards reduced by 40% (multiplied by 0.6)
+		# Rewards reduced by 80% (multiplied by 0.2)
 		match objective.id:
 			# Collection objectives
 			"retrieve_logs":
 				# Data logs: cash reward
-				return {"fuel": 0, "cash": 75, "hull_repair": 0}
+				return {"fuel": 0, "cash": 3, "hull_repair": 0}
 			"extract_minerals":
 				# Minerals: cash reward
-				return {"fuel": 0, "cash": 90, "hull_repair": 0}
+				return {"fuel": 0, "cash": 4, "hull_repair": 0}
 			"collect_samples":
 				# Alien samples: cash reward
-				return {"fuel": 0, "cash": 75, "hull_repair": 0}
+				return {"fuel": 0, "cash": 3, "hull_repair": 0}
 			
 			# Kill-based objectives
 			"clear_passages":
 				# Clearing passages: cash reward
-				return {"fuel": 0, "cash": 60, "hull_repair": 0}
+				return {"fuel": 0, "cash": 2, "hull_repair": 0}
 			"clear_nests":
 				# Clearing nests: cash reward
-				return {"fuel": 0, "cash": 90, "hull_repair": 0}
+				return {"fuel": 0, "cash": 4, "hull_repair": 0}
 			
 			# Binary objectives (hack, repair, activate, etc.)
 			"hack_security":
 				# Hacking security: fuel reward
-				return {"fuel": 7, "cash": 0, "hull_repair": 0}
+				return {"fuel": 1, "cash": 0, "hull_repair": 0}
 			"repair_core":
 				# Repairing core: hull repair reward
-				return {"fuel": 0, "cash": 0, "hull_repair": 15}
+				return {"fuel": 0, "cash": 0, "hull_repair": 3}
 			"activate_mining":
 				# Activating mining: cash reward
-				return {"fuel": 0, "cash": 65, "hull_repair": 0}
+				return {"fuel": 0, "cash": 3, "hull_repair": 0}
 			"activate_beacons":
 				# Activating beacons: fuel reward
-				return {"fuel": 6, "cash": 0, "hull_repair": 0}
+				return {"fuel": 1, "cash": 0, "hull_repair": 0}
 			
 			_:
 				# Default bonus for unknown objectives
-				return {"fuel": 5, "cash": 45, "hull_repair": 0}
+				return {"fuel": 1, "cash": 2, "hull_repair": 0}
 	
 	
 	static func get_potential_rewards(objective: MissionObjective) -> Dictionary:

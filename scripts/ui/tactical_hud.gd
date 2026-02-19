@@ -343,7 +343,7 @@ func update_ability_buttons(officer_type: String, current_ap: int, unit_ref: Obj
 			ability_tooltip = "Execute: Costs 1 AP. Instant kill on enemy within 4 tiles below 50% HP."
 			ap_cost = 1
 		"sniper":
-			ability_name = "precision"
+			ability_name = "precision_shot"
 			ability_text = "[ PRECISION SHOT ] - 1 AP"
 			ability_description = "Guaranteed hit on any visible enemy. Deals 2x damage (60)."
 			ability_tooltip = "Precision Shot: Costs 1 AP. Guaranteed hit on any visible enemy for 60 damage."

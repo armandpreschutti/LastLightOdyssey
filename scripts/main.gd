@@ -115,6 +115,9 @@ var _wormhole_offered_at: String = ""  # Track if wormhole dialog was presented 
 
 
 func _ready() -> void:
+	# Initialize random number generator seed
+	randomize()
+	
 	# Add to group for easy discovery by TutorialManager
 	add_to_group("main")
 
@@ -164,6 +167,7 @@ func _connect_signals() -> void:
 	management_hud.market_pressed.connect(_on_market_pressed)
 	management_hud.barracks_pressed.connect(_on_barracks_pressed)
 	management_hud.deploy_pressed.connect(_on_deploy_pressed)
+	management_hud.center_view_pressed.connect(_on_center_view_pressed)
 	if barracks_menu.has_signal("closed"):
 		barracks_menu.closed.connect(_on_barracks_menu_closed)
 	GameState.game_over.connect(_on_game_over)
@@ -326,6 +330,7 @@ func _execute_jump_with_animation(node_data: NodeData, _fuel_cost: int) -> void:
 		_process_node_after_jump(node_data, was_visited)
 	else:
 		_is_jump_animating = false
+		_update_deploy_button_visibility()
 
 
 func _execute_direct_travel(target_node: NodeData) -> void:
@@ -344,6 +349,7 @@ func _execute_direct_travel(target_node: NodeData) -> void:
 		_process_node_after_jump(target_node, true) # true = was_visited
 	else:
 		_is_jump_animating = false
+		_update_deploy_button_visibility()
 
 
 func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) -> void:
@@ -575,8 +581,18 @@ func _on_deploy_pressed() -> void:
 	# Disable button immediately to prevent double-click or stale state
 	management_hud.set_deploy_active(false)
 	
+	# Re-read biome from current node to prevent stale pending_biome_type after abandon
+	var current_node = VoyageManager.get_current_node()
+	if current_node:
+		pending_biome_type = current_node.biome_type
+	
 	# Transition to team select
 	_transition_to_team_select()
+
+
+func _on_center_view_pressed() -> void:
+	if current_phase == GamePhase.IDLE:
+		star_map.center_view_on_ship(true)
 
 
 ## Transition to team select screen (skipping scene)
@@ -776,6 +792,34 @@ func _on_voyage_intro_scene_dismissed() -> void:
 	# Trigger first tutorial step after voyage intro completes
 	if TutorialManager.is_active() and TutorialManager.is_at_step("star_map_intro"):
 		TutorialManager.trigger_first_step()
+	
+	# Restore deploy button state if we loaded into a mission node
+	_restore_deploy_button_state()
+
+
+func _restore_deploy_button_state() -> void:
+	var current_node = VoyageManager.get_current_node()
+	if not current_node:
+		return
+		
+	# Check if we are at a valid mission node
+	if current_node.node_type == EventManager.NodeType.SCAVENGE_SITE:
+		# If it's a story node, it's deployable unless cleared (or some other story logic blocks it)
+		if current_node.state == NodeData.NodeState.STORY:
+			pending_node_type = current_node.node_type
+			pending_biome_type = current_node.biome_type
+			management_hud.set_deploy_active(true)
+			return
+			
+		# If it's a regular scavenge site and NOT cleared, it's deployable
+		if current_node.state != NodeData.NodeState.CLEARED:
+			pending_node_type = current_node.node_type
+			pending_biome_type = current_node.biome_type
+			management_hud.set_deploy_active(true)
+			return
+	
+	# Default to hidden if not at a deployable node
+	management_hud.set_deploy_active(false)
 
 
 

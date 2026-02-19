@@ -249,6 +249,7 @@ func _create_officer_xp_row(data: Dictionary, mission_success: bool) -> VBoxCont
 	var alive = data.get("alive", false)
 	var hp = data.get("hp", 0)
 	var max_hp = data.get("max_hp", 100)
+	var status = data.get("status", "OK")
 	var xp_earned = data.get("xp_earned", 0)
 
 	var header = HBoxContainer.new()
@@ -258,19 +259,27 @@ func _create_officer_xp_row(data: Dictionary, mission_success: bool) -> VBoxCont
 	var name_label = Label.new()
 	name_label.text = " " + name
 	name_label.add_theme_font_size_override("font_size", 16)
-	if not alive:
-		name_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2))
+
+	var status_label = Label.new()
+	status_label.add_theme_font_size_override("font_size", 16)
+
+	if not alive and status == "DOWNED":
+		name_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+		status_label.text = " - DOWNED (4 JUMPS TO RECOVER)"
+		status_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+		header.add_child(name_label)
+		header.add_child(status_label)
+		return vbox
+	elif alive:
+		name_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))
+		if status == "WOUNDED":
+			status_label.text = " - WOUNDED (2 JUMPS TO RECOVER)"
+			status_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+			header.add_child(name_label)
+			header.add_child(status_label)
 	else:
 		name_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))
 	header.add_child(name_label)
-
-	if not alive:
-		var kia_label = Label.new()
-		kia_label.text = " - K.I.A."
-		kia_label.add_theme_font_size_override("font_size", 16)
-		kia_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2))
-		header.add_child(kia_label)
-		return vbox
 
 	# HP display
 	var hp_text = "HP: %d/%d" % [hp, max_hp]

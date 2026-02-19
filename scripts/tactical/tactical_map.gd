@@ -97,13 +97,56 @@ func set_map_dimensions(width: int, height: int) -> void:
 	_setup_astar()
 
 
+
 func initialize_map(layout: Dictionary, biome_type: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION) -> void:
+	# Clear previous map data first to prevent artifacts
+	clear_map()
+	
 	set_biome(biome_type)
 	tile_data = layout
 	mission_highlight_tiles.clear()
 	_update_astar_solids()
 	_initialize_fog()
 	queue_redraw()
+
+
+## Clear all map data and remove all units/interactables
+func clear_map() -> void:
+	# Clear data structures
+	tile_data.clear()
+	revealed_tiles.clear()
+	movement_range_tiles.clear()
+	execute_range_tiles.clear()
+	heal_range_tiles.clear()
+	enemy_target_tiles.clear()
+	mission_highlight_tiles.clear()
+	pathfinding_path.clear()
+	hovered_tile = Vector2i(-1, -1)
+	pathfinding_source = Vector2i(-1, -1)
+	
+	# Reset mission pulse state
+	mission_pulse_alpha = 0.5
+	mission_pulse_direction = 1.0
+	
+	# Clear A* (reset region is handled in setup/resize)
+	if astar:
+		astar.clear()
+		_setup_astar()
+	
+	# Immediately free all children to prevent stale nodes on re-deploy
+	if units_container:
+		for child in units_container.get_children():
+			units_container.remove_child(child)
+			child.queue_free()
+			
+	if interactables_container:
+		for child in interactables_container.get_children():
+			interactables_container.remove_child(child)
+			child.queue_free()
+			
+	# Force redraw so visual artifacts are cleared immediately
+	queue_redraw()
+
 
 
 func _update_astar_solids() -> void:

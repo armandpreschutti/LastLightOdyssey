@@ -22,6 +22,7 @@ var level: int = 1
 var xp: int = 0
 var data_logs: int = 0
 var unlocked_abilities: Array[String] = []
+var downed: bool = false
 var max_hp: int = 0
 var current_hp: int = 0
 var injury_jumps: int = 0
@@ -34,6 +35,7 @@ func initialize(officer_key: String) -> void:
 	xp = 0
 	data_logs = 0
 	unlocked_abilities.clear()
+	downed = false
 	max_hp = BASE_HP.get(officer_key, 80)
 	current_hp = max_hp
 	injury_jumps = 0
@@ -43,6 +45,10 @@ func initialize(officer_key: String) -> void:
 
 func is_injured() -> bool:
 	return injury_jumps > 0
+
+
+func is_downed() -> bool:
+	return downed and injury_jumps > 0
 
 
 func is_available() -> bool:
@@ -109,6 +115,7 @@ func to_dict() -> Dictionary:
 	return {
 		"id": id,
 		"alive": alive,
+		"downed": downed,
 		"level": level,
 		"xp": xp,
 		"data_logs": data_logs,
@@ -122,6 +129,7 @@ func to_dict() -> Dictionary:
 func from_dict(d: Dictionary) -> void:
 	id = d.get("id", id)
 	alive = d.get("alive", true)
+	downed = d.get("downed", false)
 	level = d.get("level", 1)
 	xp = d.get("xp", 0)
 	data_logs = d.get("data_logs", 0)
@@ -132,6 +140,12 @@ func from_dict(d: Dictionary) -> void:
 	max_hp = d.get("max_hp", BASE_HP.get(id, 80))
 	current_hp = d.get("current_hp", max_hp)
 	injury_jumps = d.get("injury_jumps", 0)
+	# Migrate old saves: dead officers become downed with 4 injury jumps
+	if not alive:
+		alive = true
+		downed = true
+		injury_jumps = 4
+		current_hp = 0
 	# Retroactively apply levels if XP is high (e.g. Sniper with 270 XP)
 	_check_level_up()
 

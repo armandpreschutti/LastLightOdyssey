@@ -42,7 +42,8 @@ func roll_attack(hit_chance: float, is_player: bool, unit_id: int) -> bool:
 	if should_protect:
 		var miss_streak = streak_dict.get(unit_id, 0)
 		var bonus = minf(miss_streak * MISS_STREAK_BONUS, MAX_MISS_STREAK_BONUS)
-		effective_chance = minf(base_chance + bonus, 0.95)  # Cap at 95% even with bonus
+		var cap = 0.99 if is_player else 0.95
+		effective_chance = minf(base_chance + bonus, cap)
 		
 
 	# Roll the dice
@@ -91,4 +92,5 @@ func get_effective_hit_chance(hit_chance: float, is_player: bool, unit_id: int) 
 	var miss_streak = streak_dict.get(unit_id, 0)
 	var bonus = minf(miss_streak * MISS_STREAK_BONUS, MAX_MISS_STREAK_BONUS)
 	
-	return minf(hit_chance + bonus * 100.0, 95.0)
+	var cap = 99.0 if is_player else 95.0
+	return minf(hit_chance + bonus * 100.0, cap)

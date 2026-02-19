@@ -40,6 +40,7 @@ func generate(biome_type: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION,
 	
 	# Get layout configuration
 	var layout_config = BiomeConfig.get_layout_config(biome_type)
+	print("DEBUG_MISSION: MapGenerator - Layout config type: %s" % layout_config.get("type", "unknown"))
 	
 	# Generate based on biome type
 	match layout_config["type"]:
@@ -60,6 +61,8 @@ func generate(biome_type: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION,
 	
 	# Fix diagonal wall gaps (corner-to-corner walls)
 	_fix_diagonal_gaps(layout)
+	
+	print("DEBUG_MISSION: MapGenerator - Generation complete. Tiles: %d, Rooms: %d" % [layout.size(), _rooms.size()])
 	
 	# Store layout for spawn position validation
 	_layout = layout
@@ -1135,22 +1138,22 @@ func get_loot_positions() -> Array[Dictionary]:
 	var loot_config = BiomeConfig.get_loot_config(_biome_type)
 	
 	# Biome-specific spawn rate multipliers
-	var fuel_multiplier: float = 0.5  # Default: 50% reduction
-	var cash_multiplier: float = 0.5  # Default: 50% reduction
+	var fuel_multiplier: float = 0.2  # 80% reduction
+	var cash_multiplier: float = 0.2  # 80% reduction
 	
 	match _biome_type:
 		BiomeConfig.BiomeType.STATION:
 			# Space Station: More fuel crates vs valuables piles
-			fuel_multiplier = 0.75  # Reduce fuel by 25% (keep 75%)
-			cash_multiplier = 0.25  # Reduce cash by 75% (keep 25%)
+			fuel_multiplier = 0.3   # Reduced from 0.75 by proportional scaling (0.75 * 0.2 / 0.5?) No, let's just use 0.2 as base.
+			cash_multiplier = 0.1   # Reduced from 0.25 (0.25 * 0.2 / 0.5)
 		BiomeConfig.BiomeType.ASTEROID:
 			# Asteroid: More valuables piles vs fuel crates
-			fuel_multiplier = 0.25  # Reduce fuel by 75% (keep 25%)
-			cash_multiplier = 0.75  # Reduce cash by 25% (keep 75%)
+			fuel_multiplier = 0.1   # Reduced from 0.25
+			cash_multiplier = 0.3   # Reduced from 0.75
 		BiomeConfig.BiomeType.PLANET:
-			# Planetary Surface: No change (50% reduction for both)
-			fuel_multiplier = 0.5
-			cash_multiplier = 0.5
+			# Planetary Surface: No change (80% reduction for both)
+			fuel_multiplier = 0.2
+			cash_multiplier = 0.2
 	
 	# Fuel crates
 	var num_fuel = randi_range(loot_config["min_fuel"], loot_config["max_fuel"])
@@ -1160,6 +1163,17 @@ func get_loot_positions() -> Array[Dictionary]:
 		if pos != Vector2i(-1, -1):
 			positions.append({
 				"type": "fuel",
+				"position": pos
+			})
+	
+	# Valuables piles (cash)
+	var num_cash = randi_range(loot_config["min_cash"], loot_config["max_cash"])
+	num_cash = (num_cash * cash_multiplier) as int # Apply biome-specific reduction
+	for _i in range(num_cash):
+		var pos = _find_valid_spawn_position(3, map_width - 4, 3, map_height - 4)
+		if pos != Vector2i(-1, -1):
+			positions.append({
+				"type": "cash",
 				"position": pos
 			})
 	

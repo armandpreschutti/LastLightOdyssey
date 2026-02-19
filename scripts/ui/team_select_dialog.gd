@@ -293,7 +293,10 @@ func _populate_officers() -> void:
 		# Injured status label
 		if is_injured:
 			var injury_label = Label.new()
-			injury_label.text = "INJURED (%d JUMPS)" % od.injury_jumps
+			if od.is_downed():
+				injury_label.text = "DOWNED (%d JUMPS)" % od.injury_jumps
+			else:
+				injury_label.text = "WOUNDED (%d JUMPS)" % od.injury_jumps
 			injury_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.2, 1.0))
 			injury_label.add_theme_font_size_override("font_size", 13)
 			header_hbox.add_child(injury_label)

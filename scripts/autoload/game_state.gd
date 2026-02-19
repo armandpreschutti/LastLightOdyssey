@@ -11,6 +11,7 @@ signal officer_injured(officer_key: String)
 signal game_over(reason: String)
 signal game_won(ending_type: String)
 signal developer_mode_changed(enabled: bool)
+signal officer_progression_changed # Emitted when any officer gains XP/DL or unlocks an ability
 
 const SETTINGS_CONFIG_PATH: String = "user://settings.cfg"
 const SETTINGS_DEVELOPER_SECTION: String = "developer"
@@ -124,7 +125,7 @@ var ship_integrity: int = 100:
 			_trigger_game_over("ship_destroyed")
 
 
-var cash: int = 100:
+var cash: int = 20:
 	set(value):
 		if developer_mode and value < cash:
 			value = cash
@@ -250,10 +251,66 @@ func is_officer_available(key: String) -> bool:
 	return od != null and od.is_available()
 
 
+## Check if any officer (or a specific one) has available ability upgrades
+## This means: has enough DL AND has an unlockable ability in the current or next tier
+func has_available_upgrades(officer_key: String = "") -> bool:
+	var keys_to_check = []
+	if officer_key != "":
+		keys_to_check.append(officer_key)
+	else:
+		keys_to_check = officers.keys()
+		
+	for key in keys_to_check:
+		var od: OfficerData = get_officer(key)
+		if not od or not od.alive:
+			continue
+			
+		# Must have at least 1 Data Log to buy anything
+		if od.data_logs <= 0:
+			continue
+
+		var all_abs = OFFICER_ABILITIES.get(key, [])
+		if all_abs.size() < 6: continue
+			
+		# Check unlockable abilities based on tier rules
+		# Tier costs: L2 = 1 DL, L3 = 1 DL
+		
+		# If level >= 2, can we unlock tier 2?
+		if od.level >= 2 and od.data_logs >= OfficerData.DATA_LOGS_LEVEL2_COST:
+			# Tier 2 slots: indices 1 and 2 (Mutually Exclusive)
+			# Do we already have a Tier 2 ability?
+			var has_tier2_selection = od.has_ability(all_abs[1]) or od.has_ability(all_abs[2])
+			
+			if not has_tier2_selection:
+				# Tier 2 requires Tier 1 ability (index 0)
+				if od.has_ability(all_abs[0]):
+					return true # Available to buy!
+		
+		# If level >= 3, can we unlock tier 3?
+		if od.level >= 3 and od.data_logs >= OfficerData.DATA_LOGS_LEVEL3_COST:
+			# Tier 3 slots: indices 3, 4, 5 (Mutually Exclusive)
+			# Do we already have a Tier 3 ability?
+			var has_tier3_selection = od.has_ability(all_abs[3]) or od.has_ability(all_abs[4]) or od.has_ability(all_abs[5])
+			
+			if not has_tier3_selection:
+				# Tier 3 specific prerequisites
+				# idx 3 requires idx 1
+				# idx 4 requires idx 1 OR idx 2
+				# idx 5 requires idx 2
+				
+				var has_ab1 = od.has_ability(all_abs[1])
+				var has_ab2 = od.has_ability(all_abs[2])
+				
+				if has_ab1 or has_ab2:
+					return true # Available to buy!
+					
+	return false
+
+
 func reset_game() -> void:
 	fuel = 3
 	ship_integrity = 100
-	cash = 100
+	cash = 20
 	intel = 0
 	story_chapters_completed = 0
 	story_victory_emitted = false
@@ -293,23 +350,17 @@ func exit_tactical_mode() -> void:
 	is_in_tactical_mode = false
 
 
-func kill_officer(officer_key: String) -> void:
+func down_officer(officer_key: String) -> void:
 	var od: OfficerData = get_officer(officer_key)
 	if od:
-		od.alive = false
+		od.downed = true
+		od.injury_jumps = 4
 		od.current_hp = 0
 		officer_died.emit(officer_key)
 
-	# Check for crew wipe game over
-	var any_alive = false
-	for key in officers:
-		var o: OfficerData = officers[key]
-		if o.alive:
-			any_alive = true
-			break
 
-	if not any_alive:
-		_trigger_game_over("crew_wipe")
+func kill_officer(officer_key: String) -> void:
+	down_officer(officer_key)
 
 
 func is_officer_alive(officer_key: String) -> bool:
@@ -456,7 +507,7 @@ func load_game() -> bool:
 	# Restore game state
 	fuel = int(save_data.get("fuel", 3))
 	ship_integrity = int(save_data.get("ship_integrity", 100))
-	cash = int(save_data.get("cash", 100))
+	cash = int(save_data.get("cash", 20))
 	intel = int(save_data.get("intel", 0))
 	story_chapters_completed = int(save_data.get("story_chapters_completed", 0))
 	story_victory_emitted = bool(save_data.get("story_victory_emitted", false))
@@ -472,12 +523,18 @@ func load_game() -> bool:
 		var od: OfficerData = get_officer(officer_key)
 		if loaded_officers.has(officer_key):
 			if version >= 6:
-				# Full v6 restore
+				# Full v6+ restore (from_dict handles migration of old alive=false)
 				od.from_dict(loaded_officers[officer_key])
 			else:
-				# v5 migration: only restore alive flag, reset HP to full
-				od.alive = loaded_officers[officer_key].get("alive", true)
+				# v5 migration: restore alive flag, reset HP to full
+				var old_alive = loaded_officers[officer_key].get("alive", true)
+				od.alive = old_alive
 				od.current_hp = od.max_hp
+				# Migrate dead officers to downed state
+				if not old_alive:
+					od.alive = true
+					od.downed = true
+					od.injury_jumps = 4
 	
 	# Restore cumulative mission stats
 	total_fuel_collected = int(save_data.get("total_fuel_collected", 0))

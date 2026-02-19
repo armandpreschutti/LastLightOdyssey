@@ -36,7 +36,7 @@ Implement the following persistent variables in GameState.gd to support the new 
 | **scrap** | int | 25 | Maintenance. Used only for: 1) Hull Repairs, 2) Event Mitigation. |
 | **hull_integrity** | float | 100.0 | Health. At 0.0, trigger Game Over (Ship Destruction). |
 | **cash** | int | 100 | Liquid Assets. New currency. Used in the MarketMenu to buy Fuel/Scrap. |
-| **intel** | int | 0 | Story Progress. Gained from tactical missions. Threshold 10 spawns a Story Node. |
+| **intel** | int | 0 | Story Progress. Gained from tactical missions. Threshold 3 spawns a Story Node (1 in dev mode). |
 | **data_logs** | int | 0 | [REFACTORED] Now tracked per-officer in OfficerData. Earned via Level Up. |
 
 ### 1.3 The Market System (MarketMenu.tscn)
@@ -49,36 +49,41 @@ Transactions: Implement functions that directly modify GameState.
 ## 2. The Infinite Map System (VoyageManager.gd) [COMPLETED]
 
 ### 2.1 Coordinate-Based Generation
-Replace the linear array-based StarMapGenerator with an InfiniteGridGenerator.
-* **Coordinate System:** Track player position using Vector2(x, y) (Virtual Grid).
-* **Data Structure:** `var visited_nodes: Dictionary = {}`
-    * **Key:** Vector2 (Grid Coordinate).
-    * **Value:** NodeData (Custom Resource).
+The map uses a free-floating world-space system with progressive generation, not a grid.
+* **Coordinate System:** Track player position using NodeData.position (Vector2 world space).
+* **Data Structure:** `var nodes: Dictionary = {}` (String UUID → NodeData).
+* **Generation:** ProgressiveMapGenerator spawns 2-3 new child nodes 300-500 world units away from arrival node, within 60° spread cone.
 
 **Algorithm:**
-When VoyageManager initializes or the player moves:
-1. Check the 6 adjacent hex coordinates (or 4 grid coordinates) around the player.
-2. If a coordinate is NOT in visited_nodes, instantiate a new NodeData object.
-3. Randomize Type: 40% Scavenge, 40% Empty/Event, 20% (Reserved).
-4. Store in visited_nodes and render the node on the UI.
+When the player jumps to a new node:
+1. ProgressiveMapGenerator creates 2-3 new NodeData objects at randomized angles/distances.
+2. New nodes are bidirectionally connected to the arrival node (explicit parent-child link).
+3. `_apply_proximity_connections()` auto-connects any two nodes within 450 world units (PROXIMITY_CONNECT_DISTANCE).
+4. New nodes are stored in the `nodes` dictionary and rendered on the star map.
 
 ### 2.2 Node States & Backtracking
-Update the NodeData class to include a state Enum:
+NodeData tracks the following states:
 * **UNVISITED (0):** Default. Clickable. Enters Tactical Mode or Event.
 * **CLEARED (1):** Set after mission success. Node is traversable but interacts as a "Dead Zone" (Costs fuel, no reward).
-* **STORY (2):** Special state. Overrides standard behavior.
+* **VISITED (2):** Traveled to previously. Backtracking along amber pathlines is free (no fuel cost).
+* **LOCKED (3):** Inaccessible (may be used for blocked content).
+* **STORY (4):** Special story mission node. Overrides standard behavior.
+* **TRADING (5):** Trading post node (reserved for future content).
 
 ### 2.3 Story Node Spawning Logic
-**Trigger:** Monitor GameState.intel in VoyageManager.
-**Logic:**
-1. When intel >= 10:
-2. Search visited_nodes for an UNVISITED node within Range 3 of the player.
-3. If none exist, generate a new one at Range 3.
-4. Force node.type = STORY_MISSION.
+**Trigger:** Monitor GameState.intel in VoyageManager._try_spawn_story_node().
+**Logic (Current Implementation):**
+1. When intel >= threshold (3 normally, 1 in dev mode):
+2. Search for reachable UNVISITED neighbors of the current node.
+3. If a suitable candidate exists within direct connections, convert it to STORY state.
+4. Otherwise, generate new candidate nodes and search again (up to 1200 world units away).
 5. Keep **one active story node** at a time.
 6. Spend intel on **story chapter completion** (not on spawn).
 
-**UI Feedback:** Spawn a "Signal Detected" arrow on the map UI pointing to the coordinate.
+**Planned Enhancement (Upcoming):**
+Story signals will spawn at a distance (~800 world units) away from the player, requiring multiple jumps to reach. The pathline will auto-form when the player explores within 450 units proximity.
+
+**UI Feedback:** Visual map display updates; "Signal detected" message emitted.
 
 ## 3. Roster & Progression (OfficerData.gd) [MOSTLY COMPLETE]
 
@@ -215,9 +220,9 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 **MarketMenu.tscn Implementation**
 * Create a new UI scene accessible from the Management HUD.
 * **Implement Static Transactions:**
-    * **Buy Fuel:** 10 Cash $\rightarrow$ +5 Fuel.
-    * **Buy Scrap:** 10 Cash $\rightarrow$ +10 Scrap.
-    * **Repair Hull:** 50 Cash $\rightarrow$ +10% Integrity.
+    * **Buy Fuel:** 10 Cash → +5 Fuel.
+    * **Buy Scrap:** 10 Cash → +10 Scrap.
+    * **Repair Hull:** 50 Cash → +10% Integrity.
 
 **HUD Update**
 * Replace the "Colonist Count" display with Cash, Intel, and Data Logs counters in the top bar.
@@ -225,19 +230,19 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 ### Phase 2: The Infinite Map System [COMPLETED]
 **Goal:** Replace the linear node graph with the procedural, infinite web.
 
-* [x] **InfiniteGridGenerator.gd**
-* [x] Create this new script to handle coordinate-based generation.
-* [x] Implement logic to generate NodeData for (x+1, y), (x-1, y), (x, y+1), (x, y-1) relative to the player.
-* [x] **Logic:** 40% Scavenge, 40% Empty/Event.
+* [x] **ProgressiveMapGenerator.gd**
+* [x] Implements lazy generation of 2-3 child nodes per arrival, 300-500 units away in a 60° spread.
+* [x] **Logic:** Random node types across biomes.
 
 * [x] **VoyageManager.gd Navigation Update**
-* [x] **Grid Tracking:** Add `current_grid_position` (Vector2) to track the ship.
-* [x] **Movement Logic:** Allow clicking any adjacent node (removing the "forward-only" restriction).
+* [x] **Position Tracking:** Uses NodeData.position (world-space Vector2) to track the ship.
+* [x] **Movement Logic:** Allow jumping to any connected node (parent-child or proximity within 450 units).
 * [x] **Fuel Consumption:** 1 Fuel per jump. If fuel == 0, apply -5% Hull Damage.
 
 * [x] **Node State System**
-* [x] Update NodeData to track states: UNVISITED, CLEARED, STORY.
-* [x] **Dead Zones:** If state is CLEARED, disable the "Scavenge" button (traversal only).
+* [x] Update NodeData to track states: UNVISITED, CLEARED, VISITED, STORY, TRADING, LOCKED.
+* [x] **Dead Zones:** If state is CLEARED, no reward on revisit.
+* [x] **Amber Pathlines:** Free fuel cost for backtracking along visited nodes.
 
 ### Phase 3: The RPG Layer (Officers) [MOSTLY COMPLETE]
 **Goal:** Convert static units into evolving characters with persistent data.
@@ -251,7 +256,7 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 * **Tech Tree UI:**
     * Display Level 2 (Binary Choice) and Level 3 (Trinary Choice) slots.
     * **Implement "Unlock" button:** Checks xp >= Threshold AND data_logs >= Cost.
-    * **Action:** Deduct Data Logs $\rightarrow$ Add Ability ID to `unlocked_abilities`.
+    * **Action:** Deduct Data Logs → Add Ability ID to `unlocked_abilities`.
 
 **Injury System Integration**
 * **Trigger:** In `TacticalManager`, if end_mission_hp < 50%, set `injury_jumps = 2`.
@@ -282,8 +287,9 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 
 **Story Node Spawning**
 * In `VoyageManager`, monitor `GameState.intel`.
-* **Trigger:** If `intel >= 10`, find a node at Range 3 and set type to STORY.
-* **Reset:** Set `intel = 0` immediately upon spawn.
+* **Trigger:** If `intel >= 3` (1 in dev), find a candidate node and set type to STORY.
+* **Reset:** Spend intel (deduct threshold amount) on story chapter completion.
+* **Upcoming Enhancement:** Story signals will spawn farther away (~800 units) to require exploration.
 
 **Win/Loss Logic**
 * **Loss:** Trigger Game Over if `hull <= 0` OR `all_officers_dead`.

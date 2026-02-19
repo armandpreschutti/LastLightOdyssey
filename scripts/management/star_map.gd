@@ -43,6 +43,74 @@ func _ready() -> void:
 	
 	# Center view
 	center_view_on_ship(false)
+	
+	VoyageManager.story_node_spawned.connect(_on_story_node_spawned)
+
+
+func _on_story_node_spawned(node_data: NodeData) -> void:
+	if not node_data: return
+	
+	# If ship is jumping, wait for it to finish before stealing camera
+	if _is_ship_animating:
+		await jump_animation_complete
+	
+	_input_locked = true
+	
+	# Calculate target position to center on the new node
+	# We use the same logic as center_view_on_ship but for the target node
+	var target_pos = (size / 2.0) - (node_data.position * _current_zoom)
+	
+	# Sequence:
+	# 1. Pan to node
+	# 2. Wait
+	# 3. Pan back
+	# 4. Unlock
+	
+	var tween = create_tween()
+	
+	# 1. Pan to node (1.5s)
+	tween.tween_property(map_content, "position", target_pos, 1.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	
+	# 2. Wait at node (2.0s)
+	tween.tween_interval(2.0)
+	
+	# 3. Pan back to ship (1.5s)
+	# We need to recalculate ship center position at that time in case of zoom/pan changes?
+	# Actually input is locked so zoom/pan shouldn't change.
+	# But let's calculate it dynamically in a callback or just use the known ship node.
+	tween.tween_callback(func():
+		center_view_on_ship(true) 
+		# center_view_on_ship uses a tween internally, which is fine, 
+		# but we want to wait for it.
+		# center_view_on_ship(true) creates its own tween.
+		# We should probably just tween manually here to keep it in one sequence 
+		# OR use the callback to trigger the return and handle unlock there.
+	)
+	
+	# Since center_view_on_ship(true) creates a tween and unlocks input, 
+	# we need to override the unlock or let it handle it.
+	# But we also need to emit `story_sequence_finished`.
+	# center_view_on_ship(true) takes 1.0s.
+	
+	# Let's adjust:
+	# We'll validly use a separate tween for the return trip to have full control.
+	
+	# Wait for the view manipulation to finish?
+	# Implementation detail: center_view_on_ship(true) will unlock input immediately after its tween.
+	# We want to unlock AND emit signal.
+	
+	# Let's write the return tween explicitly here.
+	var ship_node = VoyageManager.get_current_node()
+	if ship_node:
+		var ship_pos = (size / 2.0) - (ship_node.position * _current_zoom)
+		tween.tween_property(map_content, "position", ship_pos, 1.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	
+	# 4. Unlock and Emit
+	tween.tween_callback(func():
+		_input_locked = false
+		VoyageManager.story_sequence_finished.emit()
+	)
+
 
 func _create_ship_visual() -> void:
 	if ship_visual:

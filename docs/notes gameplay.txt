@@ -15,3 +15,7 @@ E 0:16:53:111   _activate_deep_scanner: Invalid call. Nonexistent function 'reve
 
 
 - stim injector did nothing
+
+- bulldozer does not break cover in path or gain any armor?
+
+-

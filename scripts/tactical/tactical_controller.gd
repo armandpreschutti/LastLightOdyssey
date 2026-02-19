@@ -70,7 +70,8 @@ const BASE_HIT_CHANCE: float = 70.0
 const RANGE_PENALTY_START: int = 5
 const RANGE_PENALTY_PER_TILE: float = 5.0
 const MIN_HIT_CHANCE: float = 20.0  # Increased from 10% to 20% for more forgiving minimum
-const MAX_HIT_CHANCE: float = 95.0
+const MAX_HIT_CHANCE: float = 95.0  # Base cap for enemies and default
+const MAX_PLAYER_HIT_CHANCE: float = 99.0  # Higher cap for players to reward accuracy bonuses
 const FLANK_DAMAGE_BONUS: float = 0.50  # 50% bonus damage when flanking
 
 # Cover attack bonuses (attacker in cover gets accuracy buff)
@@ -78,10 +79,10 @@ const FULL_COVER_ATTACK_BONUS: float = 10.0   # +10% hit chance when firing from
 const HALF_COVER_ATTACK_BONUS: float = 5.0   # +5% hit chance when firing from half cover
 
 # Reward constants
-const BASE_REWARD_CASH: int = 50
-const OBJECTIVE_REWARD_CASH: int = 25
-const FULL_CLEAR_REWARD_CASH: int = 40
-const NO_CASUALTIES_REWARD_CASH: int = 30
+const BASE_REWARD_CASH: int = 2
+const OBJECTIVE_REWARD_CASH: int = 1
+const FULL_CLEAR_REWARD_CASH: int = 2
+const NO_CASUALTIES_REWARD_CASH: int = 1
 
 
 
@@ -171,6 +172,7 @@ func _on_pause_abandon() -> void:
 
 
 func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.BiomeType.STATION, provided_objectives: Array[MissionObjective] = []) -> void:
+	print("DEBUG_MISSION: start_mission called with officers=%s, biome=%d" % [officer_keys, biome_type])
 	# Don't set mission_active yet - wait until after beam down animation
 	mission_active = false
 	_set_animating(false) # Clear any lingering input lock from prior mission extraction/animations
@@ -206,6 +208,9 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	is_story_dev_mode = is_story_mission and GameState.is_developer_mode_enabled()
 
 	GameState.enter_tactical_mode()
+	
+	# Reset combat streaks for the new mission
+	CombatRNG.reset_all_streaks()
 
 	# Generate map with biome type
 	current_biome = biome_type as BiomeConfig.BiomeType
@@ -231,14 +236,17 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	# Approximate deprecated nodes_to_new_earth with a fixed value for scaling reference, or update generator signature later.
 	# For now, let's pass cycle as current index and a fixed 'max' to simulate progression
 	var simulated_max_nodes = 50 
+	print("DEBUG_MISSION: Generating map with cycle=%d, max_nodes=%d" % [cycle, simulated_max_nodes])
 	var layout = generator.generate(current_biome, cycle, simulated_max_nodes)
 	
 	# Set tactical map dimensions and biome theme
 	var map_dims = generator.get_map_dimensions()
+	print("DEBUG_MISSION: Map generated. Dimensions: %s" % str(map_dims))
 	tactical_map.set_map_dimensions(map_dims.x, map_dims.y)
 	tactical_map.initialize_map(layout, current_biome)
 
 	extraction_positions = generator.get_extraction_positions()
+	print("DEBUG_MISSION: Extraction positions: %s" % str(extraction_positions))
 
 	# Spawn officers - start invisible and positioned above spawn points for beam down animation
 	var spawn_positions: Array[Vector2i] = []
@@ -259,6 +267,8 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		if fallback_spawn == Vector2i(-1, -1):
 			break
 		spawn_positions.append(fallback_spawn)
+
+	print("DEBUG_MISSION: Final spawn positions for officers: %s" % str(spawn_positions))
 
 	for i in range(mini(officer_keys.size(), spawn_positions.size())):
 		var officer = OfficerUnitScene.instantiate()
@@ -446,15 +456,17 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 			# Skip spawning regular loot if mission resource exists (mission resources take priority)
 			continue
 		
+
 		var loot: Node2D
 		var difficulty = GameState.get_mission_difficulty()
 		if loot_data["type"] == "fuel":
 			loot = FuelCrateScene.instantiate()
 			if loot.has_method("set_amount"): # Assuming loot has a way to scale? If not, I'll just scale the pickup logic or spawn more
-				loot.amount = maxi(1, int(1 * difficulty))
+				loot.amount = maxi(1, int(1 * difficulty * 0.04))
 		elif loot_data["type"] == "health_pack":
 			loot = HealthPackScene.instantiate()
-		_safe_add_interactable(loot, loot_pos)
+		if loot:
+			_safe_add_interactable(loot, loot_pos)
 	
 	# Spawn enemies with difficulty-based scaling
 	var difficulty = GameState.get_mission_difficulty()
@@ -502,6 +514,9 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 			# Ensure at least enough enemies spawn to complete the objective
 			min_enemies_required = objective.max_progress
 	
+			min_enemies_required = objective.max_progress
+	
+	print("DEBUG_MISSION: Requesting enemy spawn positions. Difficulty=%.2f, MinRequired=%d" % [difficulty, min_enemies_required])
 	var enemy_positions = generator.get_enemy_spawn_positions(difficulty, min_enemies_required)
 	if is_story_dev_mode:
 		# Story missions are intentionally minimal for testing: exactly one BASIC enemy.
@@ -533,8 +548,10 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		# Select enemy type based on voyage progression
 		var enemy_type = "basic" if is_story_dev_mode else _select_enemy_type(difficulty)
 		enemy.initialize(enemy_id, enemy_type, current_biome)
+		enemy.initialize(enemy_id, enemy_type, current_biome)
 		enemy.visible = false  # Start invisible until revealed
 		enemies.append(enemy)
+		print("DEBUG_MISSION: Spawned enemy %d (%s) at %s" % [enemy_id, enemy_type, final_enemy_pos])
 		enemy_id += 1
 	
 	# Update enemy visibility after spawning all units
@@ -1213,8 +1230,13 @@ func _pickup_item(interactable: Node2D, unit: Node2D) -> void:
 			# Play fuel pickup SFX
 			if SFXManager:
 				SFXManager.play_sfx_by_name("interactions", "fuel_pickup")
-			mission_fuel_collected += 1
-			amount = 1
+			
+			if "amount" in interactable:
+				amount = interactable.amount
+			else:
+				amount = 1
+			
+			mission_fuel_collected += amount
 		elif item_type == "cash":
 			# Play cash pickup SFX
 			if SFXManager:
@@ -1223,8 +1245,8 @@ func _pickup_item(interactable: Node2D, unit: Node2D) -> void:
 				amount = interactable.get_cash_amount()
 				mission_cash_collected += amount
 			else:
-				amount = 5
-				mission_cash_collected += 5
+				amount = 1
+				mission_cash_collected += 1
 		elif item_type == "health_pack":
 			# Check if unit is at full health - don't consume health pack if so
 			if unit.current_hp >= unit.max_hp:
@@ -1709,10 +1731,11 @@ func _on_officer_died(officer_key: String) -> void:
 		await dying_officer.play_death_animation()
 	
 	# Remove node after animation
+	CombatRNG.reset_unit_streak(true, dying_officer.get_instance_id())
 	dying_officer.queue_free()
 
 	# Update game state
-	GameState.kill_officer(officer_key)
+	GameState.down_officer(officer_key)
 
 	# Check if all officers are dead
 	if deployed_officers.is_empty():
@@ -1735,42 +1758,47 @@ func _end_mission(success: bool) -> void:
 	var total_xp_awarded_mission: int = 0
 	
 	for officer_key in mission_roster:
-		var od: OfficerData = GameState.get_officer(officer_key)
-		if od and od.alive:
+		# Only award XP to officers who were deployed in this mission
+		if individual_xp_map.has(officer_key) or _get_officer_node(officer_key) != null:
 			var officer_xp: int = int(60 * xp_mult) # survival
 			officer_xp += int(30 * officer_kills.get(officer_key, 0) * xp_mult) # kills
 			individual_xp_map[officer_key] = officer_xp
 			total_xp_awarded_mission += officer_xp
 
-	# Collect officer stats from FULL ROSTER (including dead ones)
+	# Collect officer stats from FULL ROSTER (including downed ones)
 	var officers_status: Array = []
-	
+
 	for officer_key in mission_roster:
 		var officer_node: Node2D = null
 		var officer_hp: int = 0
 		var officer_max_hp: int = 100  # Default fallback
-		
-		# Check if officer is still deployed (alive)
+		var status_str: String = "OK"
+
+		# Check if officer is still deployed (survived)
 		for deployed in deployed_officers:
 			if deployed.officer_key == officer_key:
 				officer_node = deployed
 				break
-		
+
 		if officer_node:
 			# Officer survived
 			officer_hp = officer_node.current_hp
 			officer_max_hp = officer_node.max_hp
+			status_str = "OK"
 		else:
-			# Officer died (K.I.A.) or was left behind
+			# Officer was downed (reached 0 HP)
 			officer_hp = 0
-			# We don't have the node reference anymore, but we can get max_hp from GameState if needed
-			# For now, 0 HP is enough to trigger K.I.A. status
-			
+			var od = GameState.get_officer(officer_key)
+			if od:
+				officer_max_hp = od.max_hp
+			status_str = "DOWNED"
+
 		officers_status.append({
 			"name": officer_key,
 			"alive": officer_hp > 0,
 			"hp": officer_hp,
 			"max_hp": officer_max_hp,
+			"status": status_str,
 			"xp_earned": individual_xp_map.get(officer_key, 0)
 		})
 	
@@ -1885,18 +1913,28 @@ func _end_mission(success: bool) -> void:
 			continue
 		var node: Node2D = _get_officer_node(officer_key)
 		if node and "current_hp" in node and node.current_hp > 0:
+			# Officer survived with HP
 			od.current_hp = node.current_hp
-			if node.current_hp < node.max_hp * 0.5:
+			if node.current_hp >= node.max_hp * 0.5:
+				# Healthy: instant reset to max_hp, no injury
+				od.current_hp = node.max_hp
+				od.injury_jumps = 0
+			else:
+				# Wounded: < 50% HP survived
 				od.injury_jumps = 2
 				GameState.officer_injured.emit(officer_key)
-		# Dead officers: kill_officer() already fired during combat → od.alive=false, current_hp=0
+		elif od.downed:
+			# Already handled by down_officer() during combat: downed=true, injury_jumps=4, current_hp=0
+			pass
 
 	# --- Phase 4: Apply XP + grant intel/data-log rewards ---
 	if success:
 		for officer_key in mission_roster:
-			var od: OfficerData = GameState.get_officer(officer_key)
-			if od and od.alive:
-				od.add_xp(individual_xp_map.get(officer_key, 0))
+			if individual_xp_map.has(officer_key):
+				var od: OfficerData = GameState.get_officer(officer_key)
+				if od:
+					od.add_xp(individual_xp_map.get(officer_key, 0))
+		GameState.officer_progression_changed.emit()
 
 	# Intel is earned from exploration (new jumps), not from missions
 
@@ -1905,21 +1943,12 @@ func _end_mission(success: bool) -> void:
 		await _play_beam_up_animation()
 
 	# Clear the map
-	for officer in deployed_officers:
-		officer.queue_free()
-	deployed_officers.clear()
-
-	for enemy in enemies:
-		enemy.queue_free()
-	enemies.clear()
+	# Clear the map completely
+	tactical_map.clear_map()
 	
-	# Clear turrets
-	for turret in active_turrets:
-		turret.queue_free()
+	deployed_officers.clear()
+	enemies.clear()
 	active_turrets.clear()
-
-	for interactable in tactical_map.interactables_container.get_children():
-		interactable.queue_free()
 
 	selected_unit = null
 	selected_target = Vector2i(-1, -1)
@@ -2107,8 +2136,8 @@ func _apply_forgiveness_curve(hit_chance: float) -> float:
 	# This increases forgiveness proportionally as hit chance increases above 65%
 	var effective_chance = hit_chance + (hit_chance - 65.0) * 0.4
 	
-	# Cap at maximum hit chance
-	return minf(effective_chance, MAX_HIT_CHANCE)
+	# Cap at player-specific maximum hit chance
+	return minf(effective_chance, MAX_PLAYER_HIT_CHANCE)
 
 
 ## Calculate hit chance for a shot from shooter_pos to target_pos
@@ -2132,8 +2161,8 @@ func calculate_hit_chance(shooter_pos: Vector2i, target_pos: Vector2i, shooter: 
 	# Apply forgiveness curve for player units if hit chance is above 65%
 	if shooter != null and shooter in deployed_officers:
 		hit_chance = _apply_forgiveness_curve(hit_chance)
-		# Re-clamp after applying curve (shouldn't exceed MAX_HIT_CHANCE, but safety check)
-		hit_chance = minf(hit_chance, MAX_HIT_CHANCE)
+		# Re-clamp after applying curve (shouldn't exceed MAX_PLAYER_HIT_CHANCE, but safety check)
+		hit_chance = minf(hit_chance, MAX_PLAYER_HIT_CHANCE)
 	
 	return hit_chance
 
@@ -2866,6 +2895,7 @@ func _safe_add_interactable(interactable: Node2D, grid_pos: Vector2i) -> bool:
 
 
 func _on_enemy_died(enemy: Node2D) -> void:
+	CombatRNG.reset_unit_streak(false, enemy.get_instance_id())
 	mission_enemies_killed += 1
 
 	# Attribute kill to the last attacking officer
@@ -3109,8 +3139,8 @@ func _on_ability_used(ability_id: String) -> void:
 	var ability_type = ability_id
 
 	# Check cooldown first
-	if selected_unit.is_ability_on_cooldown():
-		tactical_hud.show_combat_message("COOLDOWN: %d TURNS" % selected_unit.get_ability_cooldown(), Color(1, 0.5, 0))
+	if selected_unit.is_ability_on_cooldown(ability_type):
+		tactical_hud.show_combat_message("COOLDOWN: %d TURNS" % selected_unit.get_ability_cooldown(ability_type), Color(1, 0.5, 0))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		return
@@ -3204,7 +3234,7 @@ func _on_ability_used(ability_id: String) -> void:
 			tactical_hud.show_combat_message("SELECT ENEMY WITHIN 4 TILES (<50%% HP)", Color(1, 0.2, 0.2))
 			tactical_hud.show_cancel_button()
 		
-		"precision":
+		"precision_shot":
 			if selected_unit.officer_type != "sniper":
 				return
 			

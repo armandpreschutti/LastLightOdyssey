@@ -87,11 +87,17 @@ func show_recap(reason: String) -> void:
 	for officer_key in GameState.officers.keys():
 		var officer_label = Label.new()
 		officer_label.add_theme_font_size_override("font_size", 16)
-		
+
 		var officer_name = officer_key.to_upper()
-		var is_alive = GameState.officers[officer_key]["alive"]
-		
-		if is_alive:
+		var od = GameState.get_officer(officer_key)
+
+		if od and od.is_downed():
+			officer_label.text = "  %s - DOWNED (%d JUMPS)" % [officer_name, od.injury_jumps]
+			officer_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+		elif od and od.is_injured():
+			officer_label.text = "  %s - WOUNDED (%d JUMPS)" % [officer_name, od.injury_jumps]
+			officer_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.2))
+		elif od and od.alive:
 			# Show different messages based on failure reason
 			match _reason:
 				"ship_destroyed", "hull_depleted":
@@ -105,9 +111,9 @@ func show_recap(reason: String) -> void:
 					officer_label.text = "  %s - SURVIVED" % officer_name
 			officer_label.add_theme_color_override("font_color", Color(0.3, 0.9, 0.5))
 		else:
-			officer_label.text = "  %s - K.I.A." % officer_name
-			officer_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3))
-		
+			officer_label.text = "  %s - OFFLINE" % officer_name
+			officer_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+
 		officers_container.add_child(officer_label)
 	
 	# Set cumulative mission stats

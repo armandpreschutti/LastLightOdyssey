@@ -397,8 +397,9 @@ func shoot_at(target_pos: Vector2i, hit_chance: float, damage: int = -1) -> bool
 		return false
 
 	var actual_damage = damage if damage > 0 else (base_damage + war_machine_bonus_damage)
-	var roll = randf()
-	var hit = roll <= (hit_chance / 100.0)
+	
+	# Use forgiving RNG system
+	var hit = CombatRNG.roll_attack(hit_chance, true, get_instance_id())
 
 	attacked_this_turn = true
 	shots_fired_this_turn += 1
@@ -725,7 +726,7 @@ func can_use_ability(ability_type: String) -> bool:
 			return officer_type == "heavy" and has_ap(1)
 		"execute":
 			return officer_type == "captain" and has_ap(1)
-		"precision":
+		"precision_shot":
 			return officer_type == "sniper" and has_ap(1)
 		_:
 			return false

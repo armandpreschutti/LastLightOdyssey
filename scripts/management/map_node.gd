@@ -62,13 +62,18 @@ const COLOR_STORY = Color(0.95, 0.45, 1.0, 1.0)
 
 var is_hovered: bool = false
 var _pulse_tween: Tween = null
+var _story_pulse_tween: Tween = null
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	_setup_circular_highlights()
 	_update_visual()
-	_setup_pulse_animation()
+
+
+func _exit_tree() -> void:
+	if _pulse_tween: _pulse_tween.kill()
+	if _story_pulse_tween: _story_pulse_tween.kill()
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -100,6 +105,12 @@ func initialize(p_node_data: NodeData, is_current: bool, is_reachable: bool) -> 
 	
 	_update_visual_state(is_current, is_reachable)
 	_update_visual()
+
+	# Start story pulse if eligible (story node and not visited)
+	if node_data.is_story_node and node_data.state == NodeData.NodeState.STORY:
+		start_story_pulse()
+	else:
+		stop_story_pulse()
 
 func _update_visual_state(is_current: bool, is_reachable: bool) -> void:
 	if is_current:
@@ -528,6 +539,7 @@ func _start_pulse() -> void:
 		_pulse_tween.tween_property(glow_effect, "modulate:a", 1.0, 0.8).set_ease(Tween.EASE_IN_OUT)
 
 
+
 ## Stop the pulse effect
 func _stop_pulse() -> void:
 	if _pulse_tween:
@@ -536,6 +548,38 @@ func _stop_pulse() -> void:
 	
 	if glow_effect:
 		glow_effect.modulate.a = 1.0
+
+
+## Start the detailed pulse for story nodes
+func start_story_pulse() -> void:
+	if _story_pulse_tween:
+		_story_pulse_tween.kill()
+		
+	_story_pulse_tween = create_tween()
+	_story_pulse_tween.set_loops()
+	
+	# Pulse scale and glow opacity
+	_story_pulse_tween.tween_property(self, "scale", Vector2(1.1, 1.1), 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	_story_pulse_tween.parallel().tween_property(glow_effect, "modulate:a", 0.3, 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	
+	_story_pulse_tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	_story_pulse_tween.parallel().tween_property(glow_effect, "modulate:a", 0.8, 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+
+## Stop the story pulse
+func stop_story_pulse() -> void:
+	if _story_pulse_tween:
+		_story_pulse_tween.kill()
+		_story_pulse_tween = null
+	
+	# Reset properties
+	scale = Vector2.ONE
+	if glow_effect:
+		# Opacity might be handled by other states, so maybe check state?
+		# For Story nodes, default glow is usually visible. 
+		# We'll leave it at current value or reset to 1.0 if not handled elsewhere.
+		# _update_visual handles static state, so we're good.
+		pass
 
 
 ## Check if node is clickable

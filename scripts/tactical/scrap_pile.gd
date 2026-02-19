@@ -1,7 +1,7 @@
 extends TacticalInteractable
 ## Valuables Pile - Gives +Cash when looted
 
-@export var cash_amount: int = 50
+@export var cash_amount: int = 2
 @onready var icon_label: Label = $IconLabel
 
 

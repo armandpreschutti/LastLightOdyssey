@@ -20,7 +20,7 @@
 [ext_resource type="PackedScene" uid="uid://c8k4m7qv5pa0" path="res://scenes/ui/enemy_elimination_scene_dialog.tscn" id="15_enemy_elimination"]
 [ext_resource type="PackedScene" uid="uid://c5h7k8nan0p1q" path="res://scenes/ui/trading_dialog.tscn" id="17_trading"]
 [ext_resource type="PackedScene" path="res://scenes/ui/barracks_menu.tscn" id="18_barracks"]
-[ext_resource type="PackedScene" path="res://scenes/ui/story_choice_dialog.tscn" id="19_story_choice"]
+[ext_resource type="PackedScene" uid="uid://ce3c0d0o2grlq" path="res://scenes/ui/story_choice_dialog.tscn" id="19_story_choice"]
 
 [node name="Main" type="Node" unique_id=588289983]
 script = ExtResource("1_main")
@@ -213,8 +213,8 @@ visible = false
 
 [node name="FadeTransitionLayer" type="CanvasLayer" parent="." unique_id=1428451194]
 layer = 100
-visible = true
 
 [node name="FadeTransition" parent="FadeTransitionLayer" unique_id=1428451195 instance=ExtResource("14_fade")]
 
 [node name="TacticalMode" parent="." unique_id=45556294 instance=ExtResource("5_tactical")]
+position = Vector2(0, -2)

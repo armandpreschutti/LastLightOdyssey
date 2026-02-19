@@ -3,9 +3,7 @@
 [ext_resource type="Script" uid="uid://bhfsk44lrvrqc" path="res://scripts/ui/management_hud.gd" id="1_hud"]
 [ext_resource type="FontFile" uid="uid://xqiy7ijtjsrv" path="res://assets/fonts/VT323-Regular.ttf" id="2_font"]
 [ext_resource type="Texture2D" uid="uid://cpy36v51jmkqa" path="res://assets/sprites/ui/icons/icon_hull.png" id="4_hull"]
-[ext_resource type="Texture2D" uid="uid://dlq4cvxnvfbg3" path="res://assets/sprites/ui/icons/icon_scrap.png" id="5_scrap"]
 [ext_resource type="Texture2D" uid="uid://bogrtadpxsc8r" path="res://assets/sprites/ui/icons/icon_fuel.png" id="6_cash"]
-
 
 [node name="ManagementHUD" type="Control" unique_id=2015427981]
 layout_mode = 3
@@ -145,8 +143,6 @@ theme_override_colors/font_color = Color(0.4, 0.8, 0.4, 1)
 theme_override_font_sizes/font_size = 18
 text = "CASH: 100"
 
-
-
 [node name="FuelRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StatsContainer" unique_id=425559611]
 layout_mode = 2
 mouse_filter = 2
@@ -186,20 +182,6 @@ theme_override_font_sizes/font_size = 18
 text = "HULL INTEGRITY: 100%"
 
 [node name="HSeparator2" type="ColorRect" parent="MarginContainer/VBoxContainer" unique_id=1410202378]
-custom_minimum_size = Vector2(0, 1)
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.3)
-
-[node name="StatusLabel" type="Label" parent="MarginContainer/VBoxContainer" unique_id=2105480999]
-visible = false
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.3, 0.2, 1)
-theme_override_font_sizes/font_size = 16
-text = "[ DRIFT MODE - NO FUEL ]"
-horizontal_alignment = 1
-
-[node name="HSeparator3" type="ColorRect" parent="MarginContainer/VBoxContainer" unique_id=1060253692]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
@@ -252,6 +234,24 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(1, 0.698039, 0, 0)
 
+[node name="StatusPanel" type="PanelContainer" parent="." unique_id=987654324]
+layout_mode = 0
+offset_left = 819.99994
+offset_top = -585.99994
+offset_right = 1100.0
+offset_bottom = -535.99994
+scale = Vector2(1.05, 1.05)
+
+[node name="StatusLabel" type="Label" parent="StatusPanel" unique_id=2105480999]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 1
+theme_override_colors/font_color = Color(1, 0.3, 0.2, 1)
+theme_override_font_sizes/font_size = 20
+text = "[ DRIFT MODE - NO FUEL ]"
+horizontal_alignment = 1
+vertical_alignment = 1
+
 [node name="TopLeftPanel" type="PanelContainer" parent="." unique_id=1043406473]
 layout_mode = 0
 offset_left = -6.0
@@ -263,9 +263,31 @@ offset_bottom = -757.0
 layout_mode = 2
 theme_override_colors/font_color = Color(0.8, 0.9, 1, 1)
 theme_override_colors/font_hover_color = Color(1, 0.4, 0.4, 1)
+theme_override_constants/outline_size = 0
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 20
 text = "QUIT TO MENU"
+flat = true
+
+[node name="TopRightPanel" type="PanelContainer" parent="." unique_id=384719284]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -130.0
+offset_top = -797.0
+offset_right = -10.0
+offset_bottom = -757.0
+grow_horizontal = 0
+
+[node name="CenterButton" type="Button" parent="TopRightPanel" unique_id=384719285]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
+theme_override_colors/font_hover_color = Color(0.4, 0.9, 1, 1)
+theme_override_constants/outline_size = 0
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 20
+text = "CENTER SHIP"
 flat = true
 
 [node name="CornerTL" type="ColorRect" parent="." unique_id=107551062]
