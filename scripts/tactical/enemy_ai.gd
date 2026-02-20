@@ -11,6 +11,10 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 	if enemy.get("enemy_type") != null and enemy.enemy_type == "boss":
 		return decide_boss_action(enemy, officers, tactical_map)
 	
+	# Suppression Fire (Heavy L2B): Pinned enemies cannot take actions
+	if enemy.has_method("has_status_effect") and enemy.has_status_effect("pin_down"):
+		return {"action": "idle", "target": null, "path": null}
+	
 	var enemy_pos = enemy.get_grid_position()
 	var result = {"action": "idle", "target": null, "path": null}
 	
@@ -112,6 +116,17 @@ static func decide_action(enemy: Node2D, officers: Array[Node2D], tactical_map: 
 	var reachable: Array[Vector2i] = []
 	if enemy.has_ap(1):
 		reachable = _get_reachable_positions(enemy_pos, enemy.move_range, tactical_map)
+
+	# PRIORITY -1: If stationary for 2+ turns, force reposition before anything else
+	if enemy.get("turns_stationary") != null and enemy.turns_stationary >= 2 and enemy.has_ap(1):
+		var forced_dest = _find_forced_reposition(enemy_pos, visible_officers, enemy.move_range, tactical_map, reachable)
+		if forced_dest != enemy_pos:
+			var path = _filter_extraction_tiles_from_path(tactical_map.find_path(enemy_pos, forced_dest), tactical_map)
+			if path and path.size() > 1:
+				result["action"] = "move"
+				result["path"] = path
+				result["target_pos"] = forced_dest
+				return result
 
 	# PRIORITY 0: If attack success chance >90% against best target, prioritize shooting over ALL cover-seeking
 	if best_target and best_target_hit_chance > 90.0:
@@ -403,6 +418,36 @@ static func _get_line_tiles(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 
 
 ## Find a tactical position to move to (considers cover effectiveness, range, and threats)
+## Force a reposition when enemy has been stationary too long — pick the best new tile
+static func _find_forced_reposition(from: Vector2i, threats: Array[Node2D], max_range: int, tactical_map: Node2D, precomputed_reachable: Array[Vector2i] = []) -> Vector2i:
+	var positions = precomputed_reachable if precomputed_reachable.size() > 0 else _get_reachable_positions(from, max_range, tactical_map)
+	var best_pos = from
+	var best_score = -999.0
+
+	for pos in positions:
+		if pos == from:
+			continue
+		var dist_from_start = abs(pos.x - from.x) + abs(pos.y - from.y)
+		# Prefer tiles that are actually far from current position
+		var score: float = float(dist_from_start) * 2.0
+		# Bonus for cover
+		if tactical_map.has_adjacent_cover(pos):
+			score += 10.0
+			if _is_cover_effective_against_threats(pos, threats, tactical_map):
+				score += 15.0
+		# Bonus for being closer to nearest threat
+		for threat in threats:
+			var tp = threat.get_grid_position()
+			var d = abs(pos.x - tp.x) + abs(pos.y - tp.y)
+			if d >= 3 and d <= 7:
+				score += 5.0
+		if score > best_score:
+			best_score = score
+			best_pos = pos
+
+	return best_pos
+
+
 static func _find_tactical_position(from: Vector2i, target_pos: Vector2i, threats: Array[Node2D], max_range: int, current_distance: int, tactical_map: Node2D, precomputed_reachable: Array[Vector2i] = []) -> Vector2i:
 	var best_position = from
 	var best_score = -999.0

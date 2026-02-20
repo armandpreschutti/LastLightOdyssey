@@ -71,6 +71,7 @@ var status_effects: Dictionary = {}  # {effect_name: remaining_turns}
 var grid_position: Vector2i = Vector2i.ZERO
 var unit_size: Vector2i = Vector2i(1, 1)  # 1x1 for regular enemies, 2x2 for bosses
 
+var turns_stationary: int = 0  # Turns since last movement (forced reposition at 2)
 var is_alerted: bool = false
 var is_targetable: bool = false  # Whether this enemy can be attacked by current unit
 var is_in_precision_mode: bool = false  # Whether precision shot mode is active (can target any visible enemy)
@@ -488,6 +489,13 @@ func update_cover_indicator(cover_level: int) -> void:
 ## Add a status effect
 func add_status_effect(effect: String, duration: int) -> void:
 	status_effects[effect] = duration
+	
+	# Add visual marker for poison effect
+	if effect == "poison":
+		_add_poison_marker()
+	# Add visual marker for suppressed (pin_down) effect
+	if effect == "pin_down":
+		_add_suppressed_marker()
 
 
 ## Check if a status effect is active
@@ -495,9 +503,15 @@ func has_status_effect(effect: String) -> bool:
 	return status_effects.get(effect, 0) > 0
 
 
+## Check if this enemy has been revealed by Deep Scanner
+func is_deep_scanned() -> bool:
+	return status_effects.get("deep_scanned", 0) > 0
+
+
 ## Tick all status effects down by 1 turn. Apply poison damage first.
 func tick_status_effects() -> void:
-	if has_status_effect("poison"):
+	var had_poison = has_status_effect("poison")
+	if had_poison:
 		take_damage(5)
 	var to_remove: Array[String] = []
 	for key in status_effects.keys():
@@ -506,6 +520,77 @@ func tick_status_effects() -> void:
 			to_remove.append(key)
 	for key in to_remove:
 		status_effects.erase(key)
+	# Update or remove poison marker
+	if had_poison:
+		if has_status_effect("poison"):
+			update_poison_marker()
+		else:
+			_remove_poison_marker()
+	# Update or remove suppressed marker
+	var had_suppressed = has_status_effect("pin_down")
+	if had_suppressed:
+		if has_status_effect("pin_down"):
+			update_suppressed_marker()
+		else:
+			_remove_suppressed_marker()
+
+
+## Add a "POISONED" visual marker to this enemy
+func _add_poison_marker() -> void:
+	# Remove existing marker first to avoid duplicates
+	_remove_poison_marker()
+	
+	var marker_label = Label.new()
+	marker_label.name = "PoisonMarker"
+	marker_label.text = "POISONED [%d]" % status_effects.get("poison", 3)
+	marker_label.add_theme_color_override("font_color", Color(0.8, 0.2, 1.0))  # Purple
+	marker_label.add_theme_font_size_override("font_size", 11)
+	marker_label.position = Vector2(-25, -45)
+	marker_label.z_index = 10
+	add_child(marker_label)
+
+
+## Remove the poison marker from this enemy
+func _remove_poison_marker() -> void:
+	var existing = get_node_or_null("PoisonMarker")
+	if existing:
+		existing.queue_free()
+
+
+## Update poison marker text to show remaining turns (call at start of enemy turn)
+func update_poison_marker() -> void:
+	var marker = get_node_or_null("PoisonMarker")
+	if marker and has_status_effect("poison"):
+		marker.text = "POISONED [%d]" % status_effects.get("poison", 0)
+
+
+## Add a "SUPPRESSED" visual marker to this enemy
+func _add_suppressed_marker() -> void:
+	# Remove existing marker first to avoid duplicates
+	_remove_suppressed_marker()
+	
+	var marker_label = Label.new()
+	marker_label.name = "SuppressedMarker"
+	marker_label.text = "SUPPRESSED [%d]" % status_effects.get("pin_down", 1)
+	marker_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.1))  # Orange
+	marker_label.add_theme_font_size_override("font_size", 11)
+	marker_label.position = Vector2(-30, -60)  # Above poison marker
+	marker_label.z_index = 10
+	add_child(marker_label)
+
+
+## Remove the suppressed marker from this enemy
+func _remove_suppressed_marker() -> void:
+	var existing = get_node_or_null("SuppressedMarker")
+	if existing:
+		existing.queue_free()
+
+
+## Update suppressed marker text to show remaining turns
+func update_suppressed_marker() -> void:
+	var marker = get_node_or_null("SuppressedMarker")
+	if marker and has_status_effect("pin_down"):
+		marker.text = "SUPPRESSED [%d]" % status_effects.get("pin_down", 0)
 
 
 ## Start overwatch cooldown (called when sniper shoots)

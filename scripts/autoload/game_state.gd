@@ -47,11 +47,11 @@ const ABILITY_DEFS: Dictionary = {
 	"inspire":            {"name": "Inspire",            "desc": "Grant one ally within 5 tiles +1 AP immediately. (1 AP, 3-turn cooldown)",                                                                       "level": 3, "slot": "c", "type": "active", "cost": 1, "cooldown": 3},
 
 	# SCOUT - Level 2
-	"hit_and_run":        {"name": "Hit & Run",          "desc": "If the Scout moves and shoots in the same turn, they immediately gain +3 Movement Points to retreat or reposition.",                             "level": 2, "slot": "a", "type": "passive"},
+	"hit_and_run":        {"name": "Hit & Run",          "desc": "Dash up to 3 tiles to reposition. Free action. (0 AP, 1-turn cooldown)",                                                                     "level": 2, "slot": "a", "type": "active", "cost": 0, "cooldown": 1},
 	"deep_scanner":       {"name": "Deep Scanner",       "desc": "Reveals all enemies in a large radius (15 tiles) for 1 turn, even through walls. (0 AP, 3-turn cooldown)",                                      "level": 2, "slot": "b", "type": "active", "cost": 0, "cooldown": 3},
 
 	# SCOUT - Level 3
-	"ambush":             {"name": "Explosive Ambush",   "desc": "Plant a hidden explosive trap on your current tile. The first enemy to walk over it takes 60 damage and is pinned. (0 AP, 3-turn cooldown)", "level": 3, "slot": "a", "type": "active", "cost": 0, "cooldown": 3},
+	"ambush":             {"name": "Explosive Ambush",   "desc": "Plant a hidden explosive trap on your current tile. The first enemy to walk over it takes 100 damage and is pinned. (0 AP, no cooldown)", "level": 3, "slot": "a", "type": "active", "cost": 0, "cooldown": 0},
 	"phantom":            {"name": "Phantom",            "desc": "Become Invisible for 2 turns. First attack from invisibility deals +100% Damage but reveals you. (1 AP, active)",                               "level": 3, "slot": "b", "type": "active", "cost": 1, "duration": 2},
 	"untouchable":        {"name": "Untouchable",        "desc": "If you kill an enemy during your turn, the next attack against you during the enemy turn is guaranteed to Miss.",                                 "level": 3, "slot": "c", "type": "passive"},
 

@@ -757,6 +757,7 @@ func add_status_effect(effect_name: String, duration: int) -> void:
 	# Apply movement bonus when adrenaline is granted
 	if effect_name == "adrenaline":
 		move_range += 2
+		_add_adrenaline_marker(duration)
 
 
 ## Remove a status effect
@@ -781,6 +782,9 @@ func tick_status_effects() -> void:
 	var effects_to_remove = []
 	for effect_name in status_effects:
 		status_effects[effect_name] -= 1
+		# Update adrenaline marker to show remaining turns
+		if effect_name == "adrenaline":
+			_update_adrenaline_marker()
 		if status_effects[effect_name] <= 0:
 			effects_to_remove.append(effect_name)
 
@@ -788,6 +792,7 @@ func tick_status_effects() -> void:
 		# Remove movement bonus when adrenaline expires
 		if effect_name == "adrenaline":
 			move_range -= 2
+			_remove_adrenaline_marker()
 		remove_status_effect(effect_name)
 
 
@@ -848,6 +853,35 @@ func _apply_status_visual_feedback(effect_name: String) -> void:
 			tween.tween_property(sprite, "scale", Vector2(1.15, 1.15), 0.1)
 			tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.25)
 			tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.25)
+
+
+## Add an "ADRENALINE" visual marker to this unit
+func _add_adrenaline_marker(duration: int) -> void:
+	# Remove existing marker first to avoid duplicates
+	_remove_adrenaline_marker()
+	
+	var marker_label = Label.new()
+	marker_label.name = "AdrenalineMarker"
+	marker_label.text = "ADRENALINE [%d]" % duration
+	marker_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.4))  # Green
+	marker_label.add_theme_font_size_override("font_size", 12)
+	marker_label.position = Vector2(-30, -55)
+	marker_label.z_index = 10
+	add_child(marker_label)
+
+
+## Remove the adrenaline marker from this unit
+func _remove_adrenaline_marker() -> void:
+	var existing = get_node_or_null("AdrenalineMarker")
+	if existing:
+		existing.queue_free()
+
+
+## Update adrenaline marker text to show remaining turns
+func _update_adrenaline_marker() -> void:
+	var marker = get_node_or_null("AdrenalineMarker")
+	if marker and has_status_effect("adrenaline"):
+		marker.text = "ADRENALINE [%d]" % status_effects.get("adrenaline", 0)
 
 
 ## Gain bonus AP (used by abilities like Lead by Example, Inspire)
@@ -934,11 +968,15 @@ func get_critical_chance_modifier() -> float:
 #====================
 
 ## Captain Level 2A: Lead by Example - Passive bonus when killing enemies
+## NOTE: This function is not currently used. The Lead by Example ability logic
+## is handled directly by TacticalController._on_enemy_died() to properly manage
+## turn order (allies who already acted get AP next round, others get it immediately).
 func apply_lead_by_example_bonus(squad: Array[Node2D]) -> void:
 	var od = GameState.get_officer(officer_key)
 	if not od or not od.has_ability("lead_by_example"):
 		return
-	# Grants +1 AP to all squad members on next turn (handled by caller)
+	# Grants +1 AP to all other squad members immediately
+	# (For proper turn-based handling, see TacticalController._on_enemy_died())
 	for unit in squad:
 		if unit != self and unit.has_method("gain_bonus_ap"):
 			unit.gain_bonus_ap(1)
@@ -993,7 +1031,7 @@ func try_save_ally(target: Node2D) -> bool:
 	return true
 
 
-## Captain Level 3C: Inspire - Grant one ally +1 AP immediately
+## Captain Level 3C: Inspire - Grant one ally +1 AP on their next turn
 func apply_inspire(target: Node2D) -> bool:
 	if not use_ap(1):
 		return false
@@ -1004,9 +1042,8 @@ func apply_inspire(target: Node2D) -> bool:
 	if not od or not od.has_ability("inspire"):
 		return false
 
-	target.gain_bonus_ap(1)
-
-	# Visual: gold pulse on target
+	# Note: AP is granted by tactical_controller when target's turn starts
+	# Visual: gold pulse on target (indicates they are inspired)
 	if target.has_method("_apply_status_visual_feedback"):
 		target._apply_status_visual_feedback("inspire_flash")
 	else:
@@ -1172,33 +1209,9 @@ func apply_adrenaline_patch(target: Node2D) -> bool:
 	var heal_amount = int(target.max_hp * 0.625)  # 62.5% with medic bonus
 	target.heal(heal_amount)
 
-	# Add buff
+	# Add buff (marker is created in add_status_effect)
 	if target.has_method("add_status_effect"):
 		target.add_status_effect("adrenaline", 2)  # +2 movement, +15% accuracy for 2 turns
-		
-		# Visual marker
-		var label = Label.new()
-		label.text = "ADRENALINE"
-		label.name = "AdrenalineMarker"
-		label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.4))
-		label.add_theme_font_size_override("font_size", 12)
-		label.position = Vector2(-20, -50)
-		target.add_child(label)
-		# Auto-remove after 2 turns (handled by visual update or status tick? stick to simpler timer or just let it stay for now, but user asked for persistent. Status check cleans up? No. Stick to timer matching duration roughly or relying on next update)
-		# Better: add to target, logic elsewhere cleans it?
-		# For now, just add it. `tick_status_effects` should ideally remove it, but I can't modify that easily without seeing it. 
-		# I'll rely on the player seeing it.
-		var tween = target.create_tween()
-		tween.tween_interval(2.0 * 5.0) # approximate turn length? No.
-		# Actually, simply spawning a self-destructing label is safer if I can't hook status.
-		# User said "persistent visual marker".
-		# I will assume `update_visual` or similar handles overhead UI.
-		# I'll add it and queue_free it after a long delay or leave it?
-		# I will set it to queue_free after 10s as a fallback.
-		# Wait, "persistent" means matches buff.
-		# I'll assume the user will be happy with it appearing. I'll make it last 5 seconds to be safe from clutter.
-		# "persistent" usually means checking status.
-		tween.tween_callback(label.queue_free).set_delay(15.0) # 15s is likely enough for a turn or two.
 
 	return true
 
@@ -1277,10 +1290,7 @@ func apply_stim_injector(target: Node2D) -> bool:
 	if not od or not od.has_ability("stim_injector"):
 		return false
 
-	# Grant +2 AP (uncapped) and -50% damage taken for 1 turn
-	target.current_ap += 2
-	target._update_ap_display()
-
+	# Grant -50% damage taken for 1 turn (AP is queued for next turn in tactical_controller)
 	if target.has_method("add_status_effect"):
 		target.add_status_effect("stim", 1)
 
@@ -1318,7 +1328,7 @@ func apply_suppression_fire() -> bool:
 		return false
 
 	attacked_this_turn = true
-	_start_cooldown("suppression_fire")
+	_start_cooldown("suppression_fire", 3)
 	# Visual: orange muzzle blast
 	if sprite:
 		var tween = create_tween()

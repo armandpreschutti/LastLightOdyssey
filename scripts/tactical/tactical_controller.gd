@@ -38,9 +38,12 @@ var mission_active: bool = false
 var is_paused: bool = false  # Track pause state
 var extraction_in_progress: bool = false
 var is_animating: bool = false  # Track when animations are playing to prevent input
+var is_special_move: bool = false  # Synchronize flag for multi-stage abilities (Charge, Hit & Run)
 
 # Ability State Tracking
 var lead_by_example_pending: Dictionary = {}  # {officer_key: bonus_ap_amount} for allies who already acted
+var inspire_pending: Dictionary = {}  # {officer_key: bonus_ap_amount} for Inspire ability (granted on next turn)
+var stim_pending: Dictionary = {}  # {officer_key: bonus_ap_amount} for Stim Injector AP (granted on next turn)
 var system_reboot_used: bool = false  # Track active ability usage separate from passive trigger
 
 var extraction_positions: Array[Vector2i] = []
@@ -68,12 +71,16 @@ var NestScene: PackedScene
 var OfficerUnitScene: PackedScene
 var EnemyUnitScene: PackedScene
 var TurretUnitScene: PackedScene
+var AmbushTrapScene: PackedScene
 var PauseMenuScene: PackedScene
 var ConfirmDialogScene: PackedScene
 var current_pause_menu: Control = null
 
 # Active turrets placed by Tech officer
 var active_turrets: Array[Node2D] = []
+
+# Active ambush trap markers (position -> Node2D mapping)
+var ambush_trap_markers: Dictionary = {}
 
 # Combat constants
 const BASE_HIT_CHANCE: float = 70.0
@@ -108,6 +115,7 @@ func _ready() -> void:
 	OfficerUnitScene = load("res://scenes/tactical/officer_unit.tscn")
 	EnemyUnitScene = load("res://scenes/tactical/enemy_unit.tscn")
 	TurretUnitScene = load("res://scenes/tactical/turret_unit.tscn")
+	AmbushTrapScene = load("res://scenes/tactical/ambush_trap.tscn")
 	PauseMenuScene = load("res://scenes/ui/pause_menu.tscn")
 	ConfirmDialogScene = load("res://scenes/ui/confirm_dialog.tscn")
 
@@ -128,7 +136,8 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") and mission_active and not is_paused:
 		# Cancel any active ability mode
 		if turret_mode or charge_mode or execute_mode or precision_mode or patch_mode \
-				or coordinate_fire_mode or inspire_mode or stim_mode or rocket_salvo_mode or double_tap_mode:
+				or coordinate_fire_mode or inspire_mode or stim_mode or rocket_salvo_mode or double_tap_mode \
+				or hit_and_run_mode:
 			_cancel_ability_mode()
 			get_viewport().set_input_as_handled()
 			return
@@ -207,7 +216,13 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	selected_unit = null
 	deployed_officers.clear()
 	enemies.clear()
+	# Free all existing turrets before starting new mission
+	for turret in active_turrets:
+		if is_instance_valid(turret):
+			turret.queue_free()
 	active_turrets.clear()
+	ambush_trap_positions.clear()  # Clear explosive ambush trap positions
+	_clear_ambush_trap_visuals()  # Clear any remaining trap visuals
 	mission_roster = officer_keys.duplicate()  # Store initial roster
 	selected_target = Vector2i(-1, -1)
 
@@ -989,30 +1004,83 @@ func _select_unit(unit: Node2D) -> void:
 
 
 ## Hit & Run free 3-tile dash (Scout — after any shot, 0 AP)
+## Called automatically after a Scout with Hit & Run ability makes a shot
+func _trigger_hit_and_run() -> void:
+	if not selected_unit or selected_unit.officer_type != "scout":
+		return
+	
+	# Check if Scout has Hit & Run ability unlocked
+	var scout_od = GameState.get_officer(selected_unit.officer_key)
+	if not scout_od or not scout_od.has_ability("hit_and_run"):
+		return
+	
+	# Check cooldown
+	if selected_unit.is_ability_on_cooldown("hit_and_run"):
+		return
+	
+	# Enter Hit & Run mode - show 3-tile movement range
+	hit_and_run_mode = true
+	tactical_map.clear_movement_range()
+	tactical_map.set_movement_range(selected_unit.get_grid_position(), 3)
+	tactical_hud.show_combat_message("HIT & RUN — CLICK TILE TO DASH!", Color(0.2, 1.0, 0.4))
+	tactical_hud.show_cancel_button()
+
+
+## Execute Hit & Run dash to target tile
 func _try_hit_and_run_move(target_pos: Vector2i) -> void:
 	if not selected_unit or not hit_and_run_mode:
 		return
+	
 	hit_and_run_mode = false
 	tactical_map.clear_movement_range()
 	tactical_hud.hide_combat_message()
+	tactical_hud.hide_cancel_button()
 
 	var current_pos = selected_unit.get_grid_position()
 	var path = tactical_map.find_path(current_pos, target_pos)
+	
+	# Validate path: must be valid, within 3 tiles, no turret at destination
 	if path.is_empty() or (path.size() - 1) > 3 or tactical_map.has_turret_at(target_pos):
+		tactical_hud.show_combat_message("INVALID DASH TARGET", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(0.8).timeout
+		tactical_hud.hide_combat_message()
+		# Still end turn since the shot was already taken
+		_on_end_turn_pressed()
+		return
+	
+	# Check if tile is occupied by another unit
+	var unit_at = tactical_map.get_unit_at(target_pos)
+	if unit_at and unit_at != selected_unit:
+		tactical_hud.show_combat_message("TILE OCCUPIED", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(0.8).timeout
+		tactical_hud.hide_combat_message()
+		_on_end_turn_pressed()
 		return
 
 	_set_animating(true)
+	is_special_move = true
+	
+	# Execute the dash
 	selected_unit.set_grid_position(target_pos)
 	selected_unit.move_along_path(path)
 	selected_unit.moved_this_turn = true
+	
 	tactical_hud.show_combat_message("HIT & RUN DASH!", Color(0.2, 1.0, 0.4))
+	
 	await selected_unit.movement_finished
-	tactical_hud.hide_combat_message()
+	
+	# Update fog of war after movement
 	tactical_map.reveal_around(target_pos, selected_unit.sight_range)
 	_update_enemy_visibility()
-	_select_unit(selected_unit)
-	_set_animating(false)
-	_check_auto_end_turn()
+	_update_unit_cover_indicator(selected_unit)
+	
+	tactical_hud.hide_combat_message()
+	
+	is_special_move = false
+	selected_unit._start_cooldown("hit_and_run", 1)
+	
+	# End turn after dash completes
+	_on_end_turn_pressed()
 
 
 ## Untouchable free 3-tile dash (Scout — after kill)
@@ -1029,17 +1097,18 @@ func _try_untouchable_dash(target_pos: Vector2i) -> void:
 		return
 
 	_set_animating(true)
+	is_special_move = true
 	selected_unit.set_grid_position(target_pos)
 	selected_unit.move_along_path(path)
 	selected_unit.moved_this_turn = true
 	tactical_hud.show_combat_message("UNTOUCHABLE DASH!", Color(0.3, 1.0, 0.6))
+	
 	await selected_unit.movement_finished
+	
 	tactical_hud.hide_combat_message()
-	tactical_map.reveal_around(target_pos, selected_unit.sight_range)
-	_update_enemy_visibility()
-	_select_unit(selected_unit)
-	_set_animating(false)
-	_check_auto_end_turn()
+	
+	is_special_move = false
+	_finalize_movement_turn_logic(selected_unit, true)  # Skip auto-end-turn for free Untouchable dash
 
 
 func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
@@ -1104,10 +1173,10 @@ func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
 
 
 func _on_unit_movement_finished(unit: Node2D) -> void:
-	# CRITICAL: Skip all processing for CHARGE movements to prevent turn sequencing issues
-	# CHARGE handles all movement completion logic internally and this callback would interfere
-	if is_charging:
-		return
+	# CRITICAL: Do NOT return early for charging or special moves. 
+	# We want physical logic (fog, cover, objectives) to always run.
+	# We only suppress the "turn ending" logic using the is_special_move flag.
+
 
 	# Track movement for passive abilities (Hit & Run, Ambush, Damn Good Ground)
 	if unit in deployed_officers and "moved_this_turn" in unit:
@@ -1170,6 +1239,14 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 			unit.officer_type
 		)
 	
+	# Turn management logic (camera, buttons, auto-end)
+	# Only run this if we are NOT in a special move sequence
+	if not is_special_move:
+		_finalize_movement_turn_logic(unit)
+
+
+## Helper: Handle end-of-movement turn logic (camera, UI, auto-end turn)
+func _finalize_movement_turn_logic(unit: Node2D, skip_auto_end: bool = false) -> void:
 	# Update movement range display (only if has AP remaining)
 	if selected_unit == unit and unit == deployed_officers[current_unit_index]:
 		if unit.has_ap():
@@ -1189,8 +1266,8 @@ func _on_unit_movement_finished(unit: Node2D) -> void:
 		if selected_unit == unit:
 			tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 	
-	# Check if unit is out of AP and auto-end turn
-	if unit == deployed_officers[current_unit_index]:
+	# Check if unit is out of AP and auto-end turn (unless skipped for free moves like Hit & Run)
+	if not skip_auto_end and unit == deployed_officers[current_unit_index]:
 		_check_auto_end_turn()
 
 
@@ -1489,6 +1566,31 @@ func _on_end_turn_pressed() -> void:
 	if deployed_officers.size() > 0:
 		var next_unit = deployed_officers[current_unit_index]
 		
+		# Inspire: Apply pending AP when the target's turn starts
+		if inspire_pending.has(next_unit.officer_key):
+			next_unit.gain_bonus_ap(inspire_pending[next_unit.officer_key])
+			tactical_hud.show_combat_message(
+				"INSPIRED — +1 AP!", Color(1.0, 0.9, 0.3))
+			# Visual feedback
+			if next_unit.has_method("_apply_status_visual_feedback"):
+				next_unit._apply_status_visual_feedback("inspire_flash")
+			await get_tree().create_timer(0.8).timeout
+			tactical_hud.hide_combat_message()
+			inspire_pending.erase(next_unit.officer_key)
+		
+		# Stim Injector: Apply pending AP when the target's turn starts
+		if stim_pending.has(next_unit.officer_key):
+			next_unit.gain_bonus_ap(stim_pending[next_unit.officer_key])
+			tactical_hud.show_combat_message(
+				"STIM BOOST — +2 AP!", Color(1.0, 0.5, 0.8))
+			# Visual feedback
+			if next_unit.has_method("_apply_status_visual_feedback"):
+				next_unit._apply_status_visual_feedback("stim_flash")
+			await get_tree().create_timer(0.8).timeout
+			tactical_hud.hide_combat_message()
+			stim_pending.erase(next_unit.officer_key)
+
+	
 		# Add a small pause when the same unit gets consecutive turns
 		# (e.g., a lone officer with no enemies around)
 		if previous_unit != null and next_unit == previous_unit and mission_active:
@@ -2064,7 +2166,13 @@ func _end_mission(success: bool) -> void:
 	
 	deployed_officers.clear()
 	enemies.clear()
+	# Free all turrets before clearing the array
+	for turret in active_turrets:
+		if is_instance_valid(turret):
+			turret.queue_free()
 	active_turrets.clear()
+	ambush_trap_positions.clear()  # Clear explosive ambush trap positions
+	_clear_ambush_trap_visuals()  # Clear any remaining trap visuals
 
 	selected_unit = null
 	selected_target = Vector2i(-1, -1)
@@ -2086,6 +2194,16 @@ func _cleanup_tactical_ui() -> void:
 		current_pause_menu = null
 		is_paused = false
 		get_tree().paused = false
+
+
+## Clear ambush trap visual nodes from EffectsLayer
+func _clear_ambush_trap_visuals() -> void:
+	# Clean up all trap marker nodes from the dictionary
+	for pos in ambush_trap_markers.keys():
+		var marker = ambush_trap_markers[pos]
+		if is_instance_valid(marker):
+			marker.queue_free()
+	ambush_trap_markers.clear()
 
 
 ## Play beam-up extraction animation - units float up with a light beam effect
@@ -2276,6 +2394,7 @@ func calculate_hit_chance(shooter_pos: Vector2i, target_pos: Vector2i, shooter: 
 	hit_chance += attacker_cover_bonus
 
 	# Pin Down (Suppression Fire): enemy's hit chance reduced by 25% while pinned
+	# Check if SHOOTER has pin_down (the one being suppressed has reduced accuracy)
 	if shooter != null and shooter.has_method("has_status_effect") and shooter.has_status_effect("pin_down"):
 		hit_chance -= 25.0
 
@@ -2791,18 +2910,6 @@ func _phase_resolution(shooter: Node2D) -> void:
 	if not is_instance_valid(shooter) or shooter not in deployed_officers:
 		return
 
-	# Hit & Run (Scout L2A): after any shot, enable free 3-tile dash
-	if shooter.officer_type == "scout":
-		var _hnr_od = GameState.get_officer(shooter.officer_key)
-		if _hnr_od and _hnr_od.has_ability("hit_and_run") and not hit_and_run_mode:
-			hit_and_run_mode = true
-			# Show 3-tile movement range regardless of AP
-			if shooter == selected_unit:
-				tactical_map.set_movement_range(shooter.get_grid_position(), 3)
-			tactical_hud.show_combat_message("HIT & RUN — CLICK TILE TO DASH!", Color(0.2, 1.0, 0.4))
-			await get_tree().create_timer(0.8).timeout
-			tactical_hud.hide_combat_message()
-
 	# Toxicologist (Medic L3B): attacks apply poison to target
 	# This is resolved in _phase_impact; handled via last_target tracking below
 	
@@ -2835,6 +2942,17 @@ func _phase_resolution(shooter: Node2D) -> void:
 		# Update attackable enemy highlights (AP spent, enemy may have died)
 		_update_attackable_highlights()
 		
+		# Hit & Run (Scout L2A): After shooting, Scout gets a free 3-tile dash
+		if shooter.officer_type == "scout" and shooter.has_ap(0):
+			var _hr_od = GameState.get_officer(shooter.officer_key)
+			if _hr_od and _hr_od.has_ability("hit_and_run") and not shooter.is_ability_on_cooldown("hit_and_run"):
+				# Don't auto-end turn; enter Hit & Run mode instead
+				_set_animating(false)
+				if shooter == selected_unit:
+					tactical_hud.update_ability_buttons(shooter.officer_type, shooter.current_ap, shooter)
+				_trigger_hit_and_run()
+				return  # Exit here; _trigger_hit_and_run will handle end turn
+		
 		# Re-enable end turn button BEFORE checking auto-end turn
 		# so that _check_auto_end_turn can properly trigger _on_end_turn_pressed
 		_set_animating(false)
@@ -2845,9 +2963,7 @@ func _phase_resolution(shooter: Node2D) -> void:
 		
 		# Check if unit is out of AP and auto-end turn
 		if shooter == deployed_officers[current_unit_index]:
-			# Hit & Run: Don't auto-end turn if dash is available
-			if not hit_and_run_mode:
-				_check_auto_end_turn()
+			_check_auto_end_turn()
 	else:
 		# For non-player shooters (enemies), just re-enable the button
 		_set_animating(false)
@@ -2906,19 +3022,9 @@ func _execute_enemy_turn() -> void:
 		# Enemies always act (they can see and move even if players can't see them)
 		# The AI itself will handle whether they can detect players
 		
-		# Tick status effects at the start of this enemy's turn
-		if enemy.has_method("tick_status_effects"):
-			enemy.tick_status_effects()
-			# Update coordinate fire marker label
-			var _cf_marker = enemy.get_node_or_null("CoordFireMarker")
-			if _cf_marker:
-				if enemy.has_method("has_status_effect") and enemy.has_status_effect("marked"):
-					_cf_marker.text = "⚡ MARKED [%d]" % enemy.status_effects.get("marked", 0)
-				else:
-					_cf_marker.queue_free()
-			if not is_instance_valid(enemy) or enemy.current_hp <= 0:
-				continue
-		
+		# Track whether enemy moves this turn (for forced reposition after 2 idle turns)
+		var enemy_moved_this_turn := false
+
 		# Safety counter to prevent infinite loops
 		var max_actions = 10
 		var action_count = 0
@@ -2954,7 +3060,11 @@ func _execute_enemy_turn() -> void:
 					# check enemy validity before movement
 					if not is_instance_valid(enemy):
 						break
-					
+
+					# Suppressed enemies cannot move
+					if enemy.has_method("has_status_effect") and enemy.has_status_effect("pin_down"):
+						break
+
 					var new_pos = decision["target_pos"]
 					
 					# Clear old position
@@ -2975,15 +3085,72 @@ func _execute_enemy_turn() -> void:
 
 					# Update grid position after animation completes
 					enemy.set_grid_position(new_pos)
+					enemy_moved_this_turn = true
 
-					# Check for Explosive Ambush trap
-					if ambush_trap_positions.has(new_pos):
-						ambush_trap_positions.erase(new_pos)
+					# Check for Explosive Ambush trap — check all path tiles + final position
+					var triggered_trap_pos: Vector2i = Vector2i(-1, -1)
+					for path_tile_world in decision["path"]:
+						var tile_pos = Vector2i(int(path_tile_world.x / 32), int(path_tile_world.y / 32))
+						if ambush_trap_positions.has(tile_pos):
+							triggered_trap_pos = tile_pos
+							break
+					if triggered_trap_pos == Vector2i(-1, -1) and ambush_trap_positions.has(new_pos):
+						triggered_trap_pos = new_pos
+
+					if triggered_trap_pos != Vector2i(-1, -1):
+						ambush_trap_positions.erase(triggered_trap_pos)
+						if ambush_trap_markers.has(triggered_trap_pos):
+							var marker = ambush_trap_markers[triggered_trap_pos]
+							ambush_trap_markers.erase(triggered_trap_pos)
+							if is_instance_valid(marker):
+								marker.queue_free()
 						if is_instance_valid(enemy):
-							enemy.take_damage(60)
+							# Explosion VFX — Rocket Salvo style multi-stage explosion
+							var exp_world = enemy.position
+							var effects_layer = get_node("MapContainer/EffectsLayer")
+
+							# Stage 1: Bright core flash (white-yellow)
+							var core_rect = ColorRect.new()
+							core_rect.color = Color(1.0, 1.0, 0.8, 1.0)
+							core_rect.size = Vector2(64, 64)
+							core_rect.position = exp_world - Vector2(32, 32)
+							effects_layer.add_child(core_rect)
+							var core_tween = create_tween()
+							core_tween.tween_property(core_rect, "scale", Vector2(3.0, 3.0), 0.1)
+							core_tween.parallel().tween_property(core_rect, "color", Color(1.0, 0.6, 0.1, 0.0), 0.3)
+							core_tween.tween_callback(core_rect.queue_free)
+
+							# Stage 2: Expanding orange blast ring
+							var blast_rect = ColorRect.new()
+							blast_rect.color = Color(1.0, 0.4, 0.0, 0.7)
+							blast_rect.size = Vector2(192, 192)
+							blast_rect.position = exp_world - Vector2(96, 96)
+							effects_layer.add_child(blast_rect)
+							var blast_tween = create_tween()
+							blast_tween.tween_property(blast_rect, "scale", Vector2(2.0, 2.0), 0.25)
+							blast_tween.parallel().tween_property(blast_rect, "color:a", 0.0, 0.5)
+							blast_tween.tween_callback(blast_rect.queue_free)
+
+							# Stage 3: Smoke ring (dark, slower fade)
+							var smoke_rect = ColorRect.new()
+							smoke_rect.color = Color(0.3, 0.2, 0.1, 0.5)
+							smoke_rect.size = Vector2(128, 128)
+							smoke_rect.position = exp_world - Vector2(64, 64)
+							effects_layer.add_child(smoke_rect)
+							var smoke_tween = create_tween()
+							smoke_tween.set_ease(Tween.EASE_OUT)
+							smoke_tween.tween_property(smoke_rect, "scale", Vector2(3.5, 3.5), 0.6)
+							smoke_tween.parallel().tween_property(smoke_rect, "color:a", 0.0, 0.8)
+							smoke_tween.tween_callback(smoke_rect.queue_free)
+
+							# Heavy camera shake
+							if combat_camera.has_method("shake"):
+								combat_camera.shake(0.6, 12.0)
+							enemy.take_damage(100)
+							_spawn_damage_popup(100, true, enemy.position, false, true)
 							enemy.add_status_effect("pin_down", 1)
-							tactical_hud.show_combat_message("EXPLOSIVE AMBUSH — TRIGGERED!", Color(1.0, 0.6, 0.1))
-							await get_tree().create_timer(0.5).timeout
+							tactical_hud.show_combat_message("EXPLOSIVE AMBUSH — 100 DAMAGE!", Color(1.0, 0.6, 0.1))
+							await get_tree().create_timer(1.0).timeout
 							if not mission_active or extraction_in_progress:
 								return
 							if not is_instance_valid(enemy):
@@ -3012,8 +3179,23 @@ func _execute_enemy_turn() -> void:
 					# If AI decides to idle and enemy still has AP, break to prevent infinite loop
 					# This should only happen if enemy truly can't do anything useful
 					break
-	
 
+		# Track stationary turns for forced reposition
+		if is_instance_valid(enemy):
+			if enemy_moved_this_turn:
+				enemy.turns_stationary = 0
+			else:
+				enemy.turns_stationary += 1
+
+		# Tick status effects at the END of this enemy's turn (so effects like pin_down block the whole turn)
+		if is_instance_valid(enemy) and enemy.has_method("tick_status_effects"):
+			enemy.tick_status_effects()
+			var _cf_marker = enemy.get_node_or_null("CoordFireMarker")
+			if _cf_marker:
+				if enemy.has_method("has_status_effect") and enemy.has_status_effect("marked"):
+					_cf_marker.text = "⚡ MARKED [%d]" % enemy.status_effects.get("marked", 0)
+				else:
+					_cf_marker.queue_free()
 
 func _on_enemy_movement_finished(_enemy: Node2D) -> void:
 	# Enemy movement completed
@@ -3091,16 +3273,19 @@ func _on_enemy_died(enemy: Node2D) -> void:
 		if killer.officer_type == "captain":
 			var _lbe_od = GameState.get_officer(killer.officer_key)
 			if _lbe_od and _lbe_od.has_ability("lead_by_example"):
+				# Get Captain's position in turn order to determine who has already acted
+				var killer_idx = deployed_officers.find(killer)
 				for _ally in deployed_officers:
 					if _ally != killer and _ally.current_hp > 0:
-						# check if ally has already acted this round based on turn order
+						# Check if ally has already acted this round based on turn order
+						# Allies with lower index than Captain have already acted (unless Captain goes first)
 						var ally_idx = deployed_officers.find(_ally)
-						if ally_idx < current_unit_index:
-							# Turn already passed, queue AP for next round
+						if ally_idx < killer_idx:
+							# Ally's turn already passed before Captain's turn, queue AP for next round
 							var current_pending = lead_by_example_pending.get(_ally.officer_key, 0)
 							lead_by_example_pending[_ally.officer_key] = current_pending + 1
 						else:
-							# Turn pending or current, grant immediately
+							# Ally's turn is after Captain's (or is current), grant AP immediately
 							_ally.gain_bonus_ap(1)
 				tactical_hud.show_combat_message("LEAD BY EXAMPLE — SQUAD +1 AP", Color.YELLOW)
 				await get_tree().create_timer(1.0).timeout
@@ -3191,6 +3376,10 @@ func _is_enemy_visible(enemy: Node2D) -> bool:
 	# Check if enemy tile is revealed
 	if not tactical_map.is_tile_revealed(enemy_pos):
 		return false
+	
+	# Check if enemy was revealed by Deep Scanner (always visible even through walls)
+	if enemy.is_deep_scanned():
+		return true
 	
 	# Check if any officer can see the enemy (within sight range)
 	for officer in deployed_officers:
@@ -3492,6 +3681,13 @@ func _use_upgraded_ability(ability_id: String, ability_def: Dictionary) -> void:
 			tactical_hud.show_cancel_button()
 
 		# ── SCOUT ─────────────────────────────────────────────
+		"hit_and_run":
+			hit_and_run_mode = true
+			tactical_map.clear_movement_range()
+			tactical_map.set_movement_range(selected_unit.get_grid_position(), 3)
+			tactical_hud.show_combat_message("HIT & RUN — CLICK TILE TO DASH!", Color(0.2, 1.0, 0.4))
+			tactical_hud.show_cancel_button()
+
 		"deep_scanner":
 			_activate_deep_scanner()
 
@@ -4176,8 +4372,11 @@ func _try_inspire_target(grid_pos: Vector2i) -> void:
 
 	if selected_unit.apply_inspire(target_unit):
 		combat_camera.focus_on_action(selected_unit.position, target_unit.position)
+		# Queue +1 AP for target's next turn instead of granting immediately
+		var current_pending = inspire_pending.get(target_unit.officer_key, 0)
+		inspire_pending[target_unit.officer_key] = current_pending + 1
 		tactical_hud.show_combat_message(
-			"INSPIRED %s — +1 AP!" % target_unit.officer_key.to_upper(), Color(1.0, 0.9, 0.3))
+			"%s INSPIRED — +1 AP NEXT TURN!" % target_unit.officer_key.to_upper(), Color(1.0, 0.9, 0.3))
 		await get_tree().create_timer(1.2).timeout
 		tactical_hud.hide_combat_message()
 		combat_camera.return_to_tactical()
@@ -4213,6 +4412,8 @@ func _activate_deep_scanner() -> void:
 		# Deep Scanner now reveals ALL enemies regardless of distance
 		if dist >= 0:
 			tactical_map.reveal_around(enemy_pos, 0)
+			# Mark enemy as deep scanned so they remain visible even through walls
+			enemy.add_status_effect("deep_scanned", 1)
 			enemy.visible = true
 			# Brief highlight on each revealed enemy
 			var esp = enemy.get_node_or_null("Sprite")
@@ -4366,31 +4567,26 @@ func _activate_explosive_ambush() -> void:
 	var od = GameState.get_officer(selected_unit.officer_key)
 	if not od or not od.has_ability("ambush"):
 		return
-	if selected_unit.is_ability_on_cooldown("ambush"):
-		tactical_hud.show_combat_message("AMBUSH ON COOLDOWN", Color(1, 0.3, 0.3))
-		await get_tree().create_timer(1.0).timeout
-		tactical_hud.hide_combat_message()
-		return
-
 	var trap_pos = selected_unit.get_grid_position()
 	if not ambush_trap_positions.has(trap_pos):
 		ambush_trap_positions.append(trap_pos)
-
-	selected_unit._start_cooldown("ambush", 3)
 	tactical_hud.show_combat_message("EXPLOSIVE AMBUSH TRAP SET!", Color(0.6, 0.2, 1.0))
-	# Flash the trap tile
+	
+	# Create dedicated trap marker at the tile position
 	var trap_world = Vector2(trap_pos.x * 32 + 16, trap_pos.y * 32 + 16)
-	var trap_rect = ColorRect.new()
-	trap_rect.color = Color(0.5, 0.1, 0.8, 0.7)
-	trap_rect.size = Vector2(32, 32)
-	trap_rect.position = trap_world - Vector2(16, 16)
-	get_node("MapContainer/EffectsLayer").add_child(trap_rect)
-	var trap_tween = create_tween()
-	trap_tween.tween_property(trap_rect, "color:a", 0.3, 0.8)
-	return
-	# Persistent trap visual - cleared when triggered/mission ends
-	# trap_tween.tween_property(trap_rect, "color:a", 0.0, 0.4)
-	# trap_tween.tween_callback(trap_rect.queue_free)
+	var trap_marker = AmbushTrapScene.instantiate()
+	trap_marker.position = trap_world
+	get_node("MapContainer/EffectsLayer").add_child(trap_marker)
+	
+	# Store reference so we can remove it when triggered or mission ends
+	ambush_trap_markers[trap_pos] = trap_marker
+	
+	# Animate the trap marker appearing
+	var visual = trap_marker.get_node("Visual")
+	visual.scale = Vector2(0.1, 0.1)
+	var tween = create_tween()
+	tween.tween_property(visual, "scale", Vector2(1.0, 1.0), 0.3)
+	
 	await get_tree().create_timer(1.2).timeout
 	tactical_hud.hide_combat_message()
 	_select_unit(selected_unit)
@@ -4537,8 +4733,11 @@ func _try_stim_target(grid_pos: Vector2i) -> void:
 
 	if selected_unit.apply_stim_injector(target_unit):
 		combat_camera.focus_on_action(selected_unit.position, target_unit.position)
+		# Queue +2 AP for target's next turn instead of granting immediately
+		var current_pending = stim_pending.get(target_unit.officer_key, 0)
+		stim_pending[target_unit.officer_key] = current_pending + 2
 		tactical_hud.show_combat_message(
-			"STIM — %s GAINS +2 AP & -50%% DMG!" % target_unit.officer_key.to_upper(),
+			"STIM — %s GAINS -50%% DMG NOW, +2 AP NEXT TURN!" % target_unit.officer_key.to_upper(),
 			Color(1.0, 0.5, 0.8))
 		await get_tree().create_timer(1.2).timeout
 		tactical_hud.hide_combat_message()
@@ -4815,15 +5014,13 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		_set_animating(false)
-		# Update ability buttons (ability not used, button should be re-enabled)
 		if heavy_unit == selected_unit:
 			tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit)
-		# Restore movement range if unit still has AP
 		if heavy_unit == deployed_officers[current_unit_index] and heavy_unit.has_ap():
 			var unit_pos = heavy_unit.get_grid_position()
 			tactical_map.set_movement_range(unit_pos, heavy_unit.move_range)
 		return
-	
+
 	# Use the ability (spends AP and starts cooldown)
 	if not heavy_unit.use_charge():
 		_set_animating(false)
@@ -4836,51 +5033,64 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 			tactical_map.set_movement_range(unit_pos, heavy_unit.move_range)
 		return
 	
-	# Find adjacent position to the enemy to move to
-	var charge_destination = _find_charge_destination(heavy_pos, grid_pos)
+	var enemy_pos = grid_pos
+	var heavy_od = GameState.get_officer(heavy_unit.officer_key)
+	var has_bulldozer = heavy_od and heavy_od.has_ability("bulldozer")
+	
+	# Pathfind to find a valid destination near the enemy
+	# The Heavy will pathfind around walls to get as close as possible
+	var charge_destination = _find_charge_destination(heavy_pos, enemy_pos, has_bulldozer)
 	
 	if charge_destination == heavy_pos:
-		# Can't find path, but still deal damage at range
+		# Can't find any valid destination, deal damage from current position
 		pass
 	else:
-		# Move heavy to adjacent tile of enemy
+		# Get the path to the destination (pathfinds around walls automatically)
+		var world_path = tactical_map.find_path(heavy_pos, charge_destination)
+		
+		# Bulldozer: Destroy half cover along the path
+		var destroyed_any_cover = false
+		if has_bulldozer and world_path.size() > 0:
+			for i in range(world_path.size()):
+				var world_pos = world_path[i]
+				var tile = Vector2i(int(world_pos.x / 32), int(world_pos.y / 32))
+				if tactical_map.tile_data.get(tile, 0) == tactical_map.TileType.HALF_COVER:
+					tactical_map.set_tile_type(tile, tactical_map.TileType.FLOOR)
+					destroyed_any_cover = true
+					# Visual: Debris effect (orange pulsing flash on destroyed tile)
+					var debris_rect = ColorRect.new()
+					debris_rect.color = Color(1.0, 0.5, 0.0, 0.6)
+					debris_rect.size = Vector2(32, 32)
+					debris_rect.position = Vector2(tile.x * 32, tile.y * 32)
+					get_node_or_null("MapContainer/EffectsLayer").add_child(debris_rect)
+					var dt = create_tween()
+					dt.tween_property(debris_rect, "modulate:a", 0.0, 0.5)
+					dt.tween_callback(debris_rect.queue_free)
+		
+		# Move heavy to the destination
 		# Removed: tactical_map.set_unit_position_solid(heavy_pos, false)
 		heavy_unit.set_grid_position(charge_destination)
 		
 		# Animate rush movement (fast)
-		# CRITICAL: Set is_charging flag to prevent movement_finished callback from interfering with turn sequencing
+		# CRITICAL: Set is_special_move flag to prevent turn sequencing issues
+		is_special_move = true
 		is_charging = true
-		var path = tactical_map.find_path(heavy_pos, charge_destination)
-		if path and path.size() > 1:
-			tactical_hud.show_combat_message("CHARGING!", Color(1, 0.5, 0.1))
-			heavy_unit.move_along_path(path)
+		
+		if world_path and world_path.size() > 1:
+			if destroyed_any_cover:
+				tactical_hud.show_combat_message("BULLDOZER!", Color(1.0, 0.4, 0.0))
+			else:
+				tactical_hud.show_combat_message("CHARGING!", Color(1, 0.5, 0.1))
+			
+			heavy_unit.move_along_path(world_path)
 			await heavy_unit.movement_finished
-			# Bulldozer: destroy HALF_COVER adjacent to charge path
-			var _bld_od = GameState.get_officer(heavy_unit.officer_key)
-			if _bld_od and _bld_od.has_ability("bulldozer"):
-				var directions = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-				
-				for path_tile in path:
-					for dir in directions:
-						var check_pos = path_tile + dir
-						if tactical_map.tile_data.get(check_pos, 0) == tactical_map.TileType.HALF_COVER:
-							tactical_map.set_tile_type(check_pos, tactical_map.TileType.FLOOR)
-							# Visual: Debris effect (orange pulsing flash on destroyed tile)
-							var debris_rect = ColorRect.new()
-							debris_rect.color = Color(1.0, 0.5, 0.0, 0.6)
-							debris_rect.size = Vector2(32, 32)
-							debris_rect.position = Vector2(check_pos.x * 32, check_pos.y * 32)
-							get_node_or_null("MapContainer/EffectsLayer").add_child(debris_rect)
-							var dt = create_tween()
-							dt.tween_property(debris_rect, "modulate:a", 0.0, 0.5)
-							dt.tween_callback(debris_rect.queue_free)
 		else:
 			# Direct teleport if no path
 			heavy_unit.position = Vector2(charge_destination.x * 32 + 16, charge_destination.y * 32 + 16)
 		
-		# Removed: tactical_map.set_unit_position_solid(charge_destination, true)
-		# Clear the charging flag after movement completes
+		# Clear the charging flag after movement is done
 		is_charging = false
+		# Note: We keep is_special_move = true until the END of the attack animation
 	
 	# Calculate damage - instant kill basic enemies, heavy damage to heavy enemies
 	var charge_damage: int
@@ -4907,45 +5117,186 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 	tactical_hud.hide_combat_message()
 	
 	# Update fog/visibility/cover
-	tactical_map.reveal_around(heavy_unit.get_grid_position(), heavy_unit.sight_range)
-	_update_enemy_visibility()
-	_update_unit_cover_indicator(heavy_unit)
+	# NOTE: These are now handled by _on_unit_movement_finished which ran silently during the move
+	# But we call select_unit to ensure UI is fresh
 	_select_unit(heavy_unit)
 	
-	# Re-enable end turn button after charge animation completes
-	_set_animating(false)
-	
-	# Update ability buttons with new AP after charge (ability is now on cooldown)
-	if heavy_unit == selected_unit:
-		tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit)
-	
-	# Check if unit is out of AP and auto-end turn
-	# CRITICAL: Only check auto-end turn if heavy_unit is still the current unit
-	# This prevents turn skipping if the unit reference or index changed during async operations
-	if current_unit_index < deployed_officers.size() and heavy_unit == deployed_officers[current_unit_index]:
-		if not heavy_unit.has_ap():
-			_on_end_turn_pressed()
+	is_special_move = false
+	_finalize_movement_turn_logic(heavy_unit)
 
 
-## Find the best adjacent tile to move to when charging an enemy
-func _find_charge_destination(from: Vector2i, enemy_pos: Vector2i) -> Vector2i:
+## Find the best destination along the bulldozer path (direct line to enemy)
+## Prioritizes: 1) Adjacent to enemy, 2) Walkable tile on the line closest to enemy
+func _find_bulldozer_destination(from: Vector2i, enemy_pos: Vector2i, line_tiles: Array[Vector2i]) -> Vector2i:
+	# First, check if any adjacent tile to enemy is on our line and walkable
 	var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-	var best_pos = from
-	var best_distance = 999
 	
 	for dir in directions:
 		var adjacent = enemy_pos + dir
 		if adjacent == from:
 			return from  # Already adjacent
-		if tactical_map.is_tile_walkable(adjacent) and not tactical_map.get_unit_at(adjacent):
-			var path = tactical_map.find_path(from, adjacent)
-			if path and path.size() > 1:
-				var path_distance = path.size() - 1
-				if path_distance < best_distance:
-					best_distance = path_distance
-					best_pos = adjacent
+		# Check if this adjacent tile is on our line and is valid
+		if adjacent in line_tiles:
+			if tactical_map.is_tile_walkable(adjacent) and not tactical_map.get_unit_at(adjacent):
+				return adjacent
+	
+	# If no adjacent tile is available, find the closest walkable tile on the line
+	# Iterate through line tiles from closest to enemy (reverse order)
+	var best_pos = from
+	var best_distance = 999
+	
+	for tile in line_tiles:
+		if tile == from:
+			continue  # Skip starting position
+		if tile == enemy_pos:
+			continue  # Can't stand on enemy
+		if tactical_map.is_tile_walkable(tile) and not tactical_map.get_unit_at(tile):
+			var dist = abs(tile.x - enemy_pos.x) + abs(tile.y - enemy_pos.y)
+			if dist < best_distance:
+				best_distance = dist
+				best_pos = tile
 	
 	return best_pos
+
+
+## Create a path along the bulldozer line from start to destination
+## This creates a straight-line movement path following the Bresenham line
+func _create_bulldozer_path(from: Vector2i, to: Vector2i, line_tiles: Array[Vector2i]) -> Array[Vector2i]:
+	var path: Array[Vector2i] = []
+	
+	# Find indices in the line tiles
+	var from_idx = -1
+	var to_idx = -1
+	
+	for i in range(line_tiles.size()):
+		if line_tiles[i] == from:
+			from_idx = i
+		if line_tiles[i] == to:
+			to_idx = i
+	
+	if from_idx == -1 or to_idx == -1:
+		# Fall back to direct positions if not found in line
+		path.append(from)
+		path.append(to)
+		return path
+	
+	# Build path from from_idx to to_idx
+	if from_idx < to_idx:
+		# Moving towards enemy (normal case)
+		for i in range(from_idx, to_idx + 1):
+			path.append(line_tiles[i])
+	else:
+		# Moving away (shouldn't happen, but handle it)
+		for i in range(from_idx, to_idx - 1, -1):
+			path.append(line_tiles[i])
+	
+	return path
+
+
+## Find the best charge destination using pathfinding (works around walls)
+## Prioritizes: 1) Adjacent to enemy, 2) Reachable tile closest to enemy
+## has_bulldozer: if true, can destroy half-cover on the path
+func _find_charge_destination(from: Vector2i, enemy_pos: Vector2i, has_bulldozer: bool) -> Vector2i:
+	var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	
+	# First priority: find an adjacent tile to the enemy that we can pathfind to
+	var best_adjacent = Vector2i(-1, -1)
+	var best_path_length = 999
+	
+	for dir in directions:
+		var adjacent = enemy_pos + dir
+		if adjacent == from:
+			return from  # Already adjacent, no movement needed
+		
+		# Check if this tile is valid (walkable and not occupied)
+		if not tactical_map.is_tile_walkable(adjacent):
+			continue
+		if tactical_map.get_unit_at(adjacent):
+			continue
+		
+		# Try to pathfind to this tile
+		var path = tactical_map.find_path(from, adjacent)
+		if path.is_empty():
+			continue  # No path found
+		
+		var path_length = path.size() - 1  # Number of tiles to move
+		if path_length < best_path_length:
+			best_path_length = path_length
+			best_adjacent = adjacent
+	
+	# If we found an adjacent tile we can reach, use it
+	if best_adjacent != Vector2i(-1, -1):
+		return best_adjacent
+	
+	# Second priority: find the closest reachable tile to the enemy
+	# Use BFS to find all reachable tiles within 4-tile charge range
+	var reachable = _get_reachable_positions_for_charge(from, 4, has_bulldozer)
+	
+	var best_pos = from
+	var best_distance = 999
+	
+	for tile in reachable:
+		if tile == from:
+			continue
+		if tile == enemy_pos:
+			continue  # Can't stand on enemy
+		
+		var dist = abs(tile.x - enemy_pos.x) + abs(tile.y - enemy_pos.y)
+		if dist < best_distance:
+			best_distance = dist
+			best_pos = tile
+	
+	return best_pos
+
+
+## Get all reachable positions within range for charge ability
+## Uses BFS to find valid tiles, optionally treating half-cover as walkable (Bulldozer)
+func _get_reachable_positions_for_charge(from: Vector2i, max_range: int, has_bulldozer: bool) -> Array[Vector2i]:
+	var reachable: Array[Vector2i] = []
+	var queue: Array[Vector2i] = [from]
+	var visited: Dictionary = {from: true}
+	var distances: Dictionary = {from: 0}
+	
+	while queue.size() > 0:
+		var current = queue.pop_front()
+		var dist = distances[current]
+		
+		# Add current tile to reachable if not the starting position
+		if current != from:
+			# Check if tile is valid (not extraction, no turret, not occupied)
+			if not tactical_map.is_extraction_tile(current) and not tactical_map.has_turret_at(current):
+				var unit_at = tactical_map.get_unit_at(current)
+				if unit_at == null:
+					reachable.append(current)
+		
+		if dist < max_range:
+			var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+			for dir in directions:
+				var next_pos = current + dir
+				
+				if visited.has(next_pos):
+					continue
+				
+				# Check if we can move to this tile
+				var can_enter = false
+				
+				if tactical_map.is_tile_walkable(next_pos):
+					# Normal walkable tile
+					can_enter = true
+				elif has_bulldozer:
+					# With Bulldozer, half-cover is treated as walkable (will be destroyed)
+					var tile_type = tactical_map.tile_data.get(next_pos, 0)
+					if tile_type == tactical_map.TileType.HALF_COVER:
+						can_enter = true
+					elif tile_type == tactical_map.TileType.FLOOR:
+						can_enter = true
+				
+				if can_enter and not tactical_map.is_extraction_tile(next_pos) and not tactical_map.has_turret_at(next_pos):
+					visited[next_pos] = true
+					distances[next_pos] = dist + 1
+					queue.append(next_pos)
+	
+	return reachable
 
 
 ## Perform melee attack animation for charge ability

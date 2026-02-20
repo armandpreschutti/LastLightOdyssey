@@ -1,0 +1,42 @@
+[gd_scene format=3 uid="uid://bm8lan5qv3p7s"]
+
+[node name="AmbushTrap" type="Marker2D"]
+
+[node name="Visual" type="Node2D" parent="."]
+
+[node name="OuterRing" type="ColorRect" parent="Visual"]
+offset_left = -14.0
+offset_top = -14.0
+offset_right = 14.0
+offset_bottom = 14.0
+mouse_filter = 2
+color = Color(0.8, 0.1, 0.9, 0.6)
+
+[node name="InnerCore" type="ColorRect" parent="Visual"]
+offset_left = -8.0
+offset_top = -8.0
+offset_right = 8.0
+offset_bottom = 8.0
+mouse_filter = 2
+color = Color(1.0, 0.3, 0.2, 0.9)
+
+[node name="CenterDot" type="ColorRect" parent="Visual"]
+offset_left = -3.0
+offset_top = -3.0
+offset_right = 3.0
+offset_bottom = 3.0
+mouse_filter = 2
+color = Color(1.0, 0.9, 0.2, 1.0)
+
+[node name="Label" type="Label" parent="."]
+offset_left = -16.0
+offset_top = -32.0
+offset_right = 16.0
+offset_bottom = -18.0
+theme_override_colors/font_color = Color(0.9, 0.2, 0.9, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 2
+theme_override_font_sizes/font_size = 10
+text = "MINE"
+horizontal_alignment = 1
+vertical_alignment = 1
