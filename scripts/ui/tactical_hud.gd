@@ -111,7 +111,7 @@ const _TOOLTIP_HBOX = preload("res://scripts/ui/tooltip_hbox.gd")
 func _setup_tooltips() -> void:
 	# Apply tooltip scripts so _make_custom_tooltip fires on each node
 	pause_button.set_script(_TOOLTIP_BTN)
-	pause_button.tooltip_text = "Pause the mission.\nYou can abandon the mission at the cost of forfeiting all collected resources."
+	pause_button.tooltip_text = "Pause the mission.\nYou can abandon the mission at the cost of 25% hull damage and forfeiting all collected resources."
 
 	turn_label.set_script(_TOOLTIP_LBL)
 	turn_label.tooltip_text = "Current turn number. Each turn, the ship takes structural damage (−1% Integrity)."

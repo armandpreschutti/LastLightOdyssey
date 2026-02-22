@@ -298,7 +298,8 @@ static func get_biome_name(biome_type: BiomeType) -> String:
 
 
 static func get_random_biome() -> BiomeType:
-	var roll = randi() % 3
+	# Only return Asteroid (1) or Planet (2)
+	var roll = (randi() % 2) + 1
 	return roll as BiomeType
 
 #endregion

@@ -127,13 +127,13 @@ func _update_glass_style() -> void:
 	sb.set_corner_radius_all(4)
 	
 	if has_node("TopLeftPanel"):
-		$TopLeftPanel.add_theme_stylebox_override("panel", sb)
+		pass # Keep editor style
 		
 	if has_node("DeployPanel"):
-		$DeployPanel.add_theme_stylebox_override("panel", sb)
+		pass # Keep editor style
 
 	if has_node("StatusPanel"):
-		$StatusPanel.add_theme_stylebox_override("panel", sb)
+		pass # Keep editor style
 
 
 func _connect_signals() -> void:
@@ -407,7 +407,7 @@ func set_view_recap_mode(enabled: bool) -> void:
 			$DeployPanel.visible = false # Hide deploy panel in recap mode
 		if has_node("StatusPanel"):
 			$StatusPanel.visible = false
-		quit_button.text = "[ VIEW RECAP ]"
+		quit_button.text = "VIEW RECAP"
 		quit_button.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2)) # Gold
 		quit_button.pressed.connect(_on_view_recap_pressed)
 	else:
@@ -418,7 +418,7 @@ func set_view_recap_mode(enabled: bool) -> void:
 			$DeployPanel.visible = true
 		if has_node("StatusPanel") and GameState.fuel == 0:
 			$StatusPanel.visible = true
-		quit_button.text = "[ QUIT TO MENU ]"
+		quit_button.text = "QUIT TO MENU"
 		quit_button.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4)) # Reddish
 		quit_button.pressed.connect(_on_quit_pressed)
 

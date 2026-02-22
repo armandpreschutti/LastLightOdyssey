@@ -309,9 +309,9 @@ func _assign_node_types() -> void:
 func _roll_node_type() -> int:
 	# 50% chance for Empty Space (1-5), 50% chance for Scavenge Site (6-10)
 	var roll = randi_range(1, 10)
-	if roll <= 5:
+	if roll <= 8: # Increased from 5 to 8 (80% chance for EMPTY_SPACE)
 		return EventManager.NodeType.EMPTY_SPACE
-	else:
+	else: # 20% chance for SCAVENGE_SITE (reduced from 50% by 60%)
 		return EventManager.NodeType.SCAVENGE_SITE
 
 
@@ -319,7 +319,7 @@ func _roll_node_type() -> int:
 func _assign_biome_types() -> void:
 	# Track biome distribution to ensure variety
 	var biome_counts := {
-		BiomeConfig.BiomeType.STATION: 0,
+		# BiomeConfig.BiomeType.STATION: 0, # No longer spawning station node
 		BiomeConfig.BiomeType.ASTEROID: 0,
 		BiomeConfig.BiomeType.PLANET: 0,
 	}

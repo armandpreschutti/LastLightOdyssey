@@ -270,6 +270,9 @@ func remove_mission_highlight(pos: Vector2i) -> void:
 
 
 func _draw() -> void:
+	# Debug counter for half cover tiles
+	var half_cover_drawn = 0
+	
 	# Draw all tiles
 	for x in range(map_width):
 		for y in range(map_height):
@@ -282,6 +285,8 @@ func _draw() -> void:
 			else:
 				# Get tile type and draw with variation
 				var tile_type = tile_data.get(pos, TileType.FLOOR)
+				if tile_type == TileType.HALF_COVER:
+					half_cover_drawn += 1
 				_draw_tile(x, y, rect, tile_type)
 				
 
@@ -348,6 +353,10 @@ func _draw() -> void:
 			var arrow_points: PackedVector2Array = [arrow_tip, arrow_left, arrow_right]
 			draw_colored_polygon(arrow_points, COLOR_PATHFINDING_GLOW)
 			draw_colored_polygon(arrow_points, COLOR_PATHFINDING_LINE)
+	
+	# Debug output for half cover count (only print occasionally to avoid spam)
+	if half_cover_drawn > 0 and Engine.get_process_frames() % 60 == 0:
+		print("DEBUG_DRAW: Drew %d half cover tiles" % half_cover_drawn)
 
 
 ## Draw a single tile with visual variation based on biome theme
@@ -869,6 +878,11 @@ func _draw_planet_extraction(rect: Rect2, hash_val: int) -> void:
 
 ## Draw cover object with biome-specific appearance
 func _draw_cover_tile(rect: Rect2, hash_val: int) -> void:
+	# Validate theme
+	if current_theme.is_empty():
+		print("DEBUG_COVER: current_theme is empty!")
+		return
+	
 	# Floor underneath
 	draw_rect(rect, current_theme["floor_base"])
 	

@@ -4,6 +4,7 @@ extends Control
 
 signal node_clicked(node_data: NodeData)
 signal jump_animation_complete
+signal raider_animation_complete
 
 @onready var map_content: Control = $MapContent
 @onready var nodes_container: Control = $MapContent/NodesContainer
@@ -13,6 +14,7 @@ signal jump_animation_complete
 var MapNodeScene: PackedScene
 var node_visuals: Dictionary = {}  # String (ID) -> MapNode visual instance
 var ship_visual: TextureRect
+var raider_visual: Node2D
 var _is_ship_animating: bool = false # Flag to prevent refresh from stomping animation
 const BASE_SPEED_PPS = 300.0 # Pixels per second base speed for ship movement
 
@@ -31,6 +33,10 @@ func _ready() -> void:
 	# Create ship visual
 	_create_ship_visual()
 	
+	# If raider already exists (loaded save), create visual
+	if VoyageManager.is_raider_active and VoyageManager.nodes.has(VoyageManager.raider_node_id):
+		_create_raider_visual(VoyageManager.nodes[VoyageManager.raider_node_id])
+	
 	# Connect signals
 	VoyageManager.map_updated.connect(refresh)
 	VoyageManager.ship_moved.connect(_on_ship_moved)
@@ -45,9 +51,40 @@ func _ready() -> void:
 	center_view_on_ship(false)
 	
 	VoyageManager.story_node_spawned.connect(_on_story_node_spawned)
+	VoyageManager.raider_spawned.connect(_on_raider_spawned)
+	VoyageManager.raider_moved.connect(_on_raider_moved)
+	VoyageManager.raider_destroyed.connect(_on_raider_destroyed)
 
+
+func _on_raider_spawned(node_data: NodeData) -> void:
+	_create_raider_visual(node_data)
+	refresh()
+	
+	# Start camera sequence for raider spawn
+	_run_spawn_camera_sequence(node_data)
+
+func _on_raider_moved(new_pos: Vector2, node_id: String) -> void:
+	if raider_visual:
+		# Connect to the move_complete signal and relay it
+		if not raider_visual.move_complete.is_connected(_on_raider_move_complete):
+			raider_visual.move_complete.connect(_on_raider_move_complete)
+		raider_visual.move_to(new_pos, node_id)
+	refresh()
+
+func _on_raider_move_complete() -> void:
+	raider_animation_complete.emit()
+
+func _on_raider_destroyed() -> void:
+	if raider_visual:
+		raider_visual.queue_free()
+		raider_visual = null
+	refresh()
 
 func _on_story_node_spawned(node_data: NodeData) -> void:
+	if not node_data: return
+	_run_spawn_camera_sequence(node_data, true)
+
+func _run_spawn_camera_sequence(node_data: NodeData, is_story: bool = false) -> void:
 	if not node_data: return
 	
 	# If ship is jumping, wait for it to finish before stealing camera
@@ -57,14 +94,7 @@ func _on_story_node_spawned(node_data: NodeData) -> void:
 	_input_locked = true
 	
 	# Calculate target position to center on the new node
-	# We use the same logic as center_view_on_ship but for the target node
 	var target_pos = (size / 2.0) - (node_data.position * _current_zoom)
-	
-	# Sequence:
-	# 1. Pan to node
-	# 2. Wait
-	# 3. Pan back
-	# 4. Unlock
 	
 	var tween = create_tween()
 	
@@ -75,40 +105,16 @@ func _on_story_node_spawned(node_data: NodeData) -> void:
 	tween.tween_interval(2.0)
 	
 	# 3. Pan back to ship (1.5s)
-	# We need to recalculate ship center position at that time in case of zoom/pan changes?
-	# Actually input is locked so zoom/pan shouldn't change.
-	# But let's calculate it dynamically in a callback or just use the known ship node.
-	tween.tween_callback(func():
-		center_view_on_ship(true) 
-		# center_view_on_ship uses a tween internally, which is fine, 
-		# but we want to wait for it.
-		# center_view_on_ship(true) creates its own tween.
-		# We should probably just tween manually here to keep it in one sequence 
-		# OR use the callback to trigger the return and handle unlock there.
-	)
-	
-	# Since center_view_on_ship(true) creates a tween and unlocks input, 
-	# we need to override the unlock or let it handle it.
-	# But we also need to emit `story_sequence_finished`.
-	# center_view_on_ship(true) takes 1.0s.
-	
-	# Let's adjust:
-	# We'll validly use a separate tween for the return trip to have full control.
-	
-	# Wait for the view manipulation to finish?
-	# Implementation detail: center_view_on_ship(true) will unlock input immediately after its tween.
-	# We want to unlock AND emit signal.
-	
-	# Let's write the return tween explicitly here.
 	var ship_node = VoyageManager.get_current_node()
 	if ship_node:
 		var ship_pos = (size / 2.0) - (ship_node.position * _current_zoom)
 		tween.tween_property(map_content, "position", ship_pos, 1.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	
-	# 4. Unlock and Emit
+	# 4. Unlock and Emit if story
 	tween.tween_callback(func():
 		_input_locked = false
-		VoyageManager.story_sequence_finished.emit()
+		if is_story:
+			VoyageManager.story_sequence_finished.emit()
 	)
 
 
@@ -133,6 +139,17 @@ func _create_ship_visual() -> void:
 	ship_visual.pivot_offset = Vector2(24, 24) # Center pivot
 	ship_container.add_child(ship_visual)
 
+func _create_raider_visual(node_data: NodeData) -> void:
+	if raider_visual:
+		raider_visual.queue_free()
+		
+	var RaiderScene = load("res://scenes/map/raider_ship.tscn")
+	if RaiderScene:
+		raider_visual = RaiderScene.instantiate()
+		ship_container.add_child(raider_visual)
+		# Center the raider ship on the node (same offset as player ship)
+		raider_visual.position = node_data.position
+
 func refresh() -> void:
 	_clear_visuals()
 	_draw_nodes()
@@ -155,6 +172,10 @@ func _draw_nodes() -> void:
 	var nodes = VoyageManager.get_visible_nodes()
 	var current_node = VoyageManager.get_current_node()
 	
+	# Check if raider is ON the player's current node (ambush active)
+	var raider_on_player_node = VoyageManager.is_raider_active and \
+		VoyageManager.raider_node_id == VoyageManager.current_node_id
+	
 	for node_data in nodes:
 		var visual = MapNodeScene.instantiate()
 		nodes_container.add_child(visual)
@@ -169,7 +190,14 @@ func _draw_nodes() -> void:
 		if current_node and node_data.id in current_node.connections:
 			is_reachable = true
 		
-		visual.initialize(node_data, is_current, is_reachable)
+		# Only highlight red if raider is ON the player's node AND this is a travelable node
+		var is_raider_threatened = false
+		if raider_on_player_node:
+			# Highlight all nodes the player could normally jump to
+			if is_reachable:
+				is_raider_threatened = true
+		
+		visual.initialize(node_data, is_current, is_reachable, is_raider_threatened)
 		visual.clicked.connect(_on_node_clicked)
 		
 		node_visuals[node_data.id] = visual
@@ -365,7 +393,7 @@ func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO, s
 	else:
 		_is_ship_animating = false
 		ship_visual.position = visual_pos
-		ship_visual.rotation = 0 # Reset rotation on snap
+		# Maintain rotation - don't reset to 0
 
 func center_view_on_ship(animated: bool) -> void:
 	var current_node = VoyageManager.get_current_node()

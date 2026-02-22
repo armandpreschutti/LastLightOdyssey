@@ -175,7 +175,7 @@ func _assign_difficulty_grade(node: NodeData) -> void:
 ## Roll node type
 func _roll_node_type() -> int:
 	var roll = rng.randf()
-	if roll < 0.40:
+	if roll < 0.16: # Reduced from 0.40 by 60%
 		return EventManager.NodeType.SCAVENGE_SITE
 	elif roll < 0.80:
 		return EventManager.NodeType.EMPTY_SPACE
@@ -185,7 +185,7 @@ func _roll_node_type() -> int:
 ## Roll biome type
 func _roll_biome_type() -> int:
 	var biomes = [
-		BiomeConfig.BiomeType.STATION,
+		# BiomeConfig.BiomeType.STATION, # No longer spawning station node
 		BiomeConfig.BiomeType.ASTEROID,
 		BiomeConfig.BiomeType.PLANET
 	]

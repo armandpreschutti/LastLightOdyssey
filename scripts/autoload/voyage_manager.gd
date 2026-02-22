@@ -8,6 +8,9 @@ signal map_updated
 signal message_log_added(message: String)
 signal story_node_spawned(node_data: NodeData)
 signal story_sequence_finished
+signal raider_moved(new_position: Vector2, node_id: String)
+signal raider_spawned(node_data: NodeData)
+signal raider_destroyed
 
 # Core State
 var current_node_id: String = ""
@@ -19,6 +22,15 @@ var active_story_node_id: String = ""
 # Campaign Branching State
 var current_story_mission_id: String = ""    # ID of mission just completed
 var pending_branch_choice: String = ""       # Player's chosen next mission
+
+# Raider State
+var is_raider_active: bool = false
+var raider_node_id: String = ""
+var jumps_since_raider_cleared: int = 0
+const RAIDER_RESPAWN_JUMPS: int = 10
+const RAIDER_RESPAWN_JUMPS_DEV: int = 2
+const RAIDER_SPAWN_DISTANCE_MIN: float = 1200.0
+const RAIDER_SPAWN_DISTANCE_MAX: float = 1800.0
 
 # Constants
 const FUEL_COST_PER_JUMP: int = 1
@@ -68,6 +80,7 @@ func _ready() -> void:
 	GameState.game_won.connect(func(_type): is_voyage_complete = true)
 	GameState.intel_changed.connect(_on_intel_changed)
 	_try_spawn_story_node()
+	_try_spawn_raider()
 	
 	# Debug trigger removed.
 
@@ -86,9 +99,15 @@ func _initialize_voyage() -> void:
 	
 	for node in initial_nodes:
 		nodes[node.id] = node
+	
+	# Reset Raider state on new voyage
+	is_raider_active = false
+	raider_node_id = ""
+	jumps_since_raider_cleared = 0
 		
 	_apply_proximity_connections()
 	_try_spawn_story_node()
+	_try_spawn_raider()
 	map_updated.emit()
 
 ## Move the ship to a target node
@@ -168,6 +187,16 @@ func attempt_jump(target_node: NodeData) -> bool:
 					od.downed = false
 
 	return true
+
+## Process raider turn after player jump animation completes
+## Returns true if raider moved, false if no raider or couldn't move
+func process_raider_turn() -> bool:
+	if not is_raider_active:
+		jumps_since_raider_cleared += 1
+		_try_spawn_raider()
+		return false
+	
+	return _process_raider_turn()
 
 
 func get_story_progress() -> int:
@@ -463,6 +492,45 @@ func find_path(start_id: String, target_id: String) -> Array[NodeData]:
 				
 	return [] # No path found
 
+
+## Find a path for the raider (can traverse ANY connected nodes, including unvisited)
+## Returns an array of NodeData representing the path (including start and end)
+func find_path_for_raider(start_id: String, target_id: String) -> Array[NodeData]:
+	if not nodes.has(start_id) or not nodes.has(target_id):
+		return []
+		
+	if start_id == target_id:
+		return [nodes[start_id]]
+		
+	var queue = [[start_id]]
+	var visited = {start_id: true}
+	
+	while queue.size() > 0:
+		var path = queue.pop_front()
+		var current_id = path[-1]
+		
+		if current_id == target_id:
+			# Convert IDs back to NodeData
+			var node_path: Array[NodeData] = []
+			for id in path:
+				node_path.append(nodes[id])
+			return node_path
+			
+		var current_node = nodes[current_id]
+		for neighbor_id in current_node.connections:
+			if not nodes.has(neighbor_id):
+				continue
+				
+			# Raider can traverse any connected node, no state check
+			if not visited.has(neighbor_id):
+				visited[neighbor_id] = true
+				var new_path = path.duplicate()
+				new_path.append(neighbor_id)
+				queue.push_back(new_path)
+				
+	return [] # No path found
+
+
 ## Set the player's branch choice and attempt to spawn the next story node
 func set_branch_choice(mission_id: String) -> void:
 	pending_branch_choice = mission_id
@@ -500,7 +568,10 @@ func get_save_data() -> Dictionary:
 		"nodes": nodes_data,
 		"active_story_node_id": active_story_node_id,
 		"current_story_mission_id": current_story_mission_id,
-		"pending_branch_choice": pending_branch_choice
+		"pending_branch_choice": pending_branch_choice,
+		"is_raider_active": is_raider_active,
+		"raider_node_id": raider_node_id,
+		"jumps_since_raider_cleared": jumps_since_raider_cleared
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -511,6 +582,9 @@ func load_save_data(data: Dictionary) -> void:
 	active_story_node_id = data.get("active_story_node_id", "")
 	current_story_mission_id = data.get("current_story_mission_id", "")
 	pending_branch_choice = data.get("pending_branch_choice", "")
+	is_raider_active = data.get("is_raider_active", false)
+	raider_node_id = data.get("raider_node_id", "")
+	jumps_since_raider_cleared = data.get("jumps_since_raider_cleared", 0)
 
 	if data.has("nodes"):
 		var nodes_data = data["nodes"]
@@ -554,3 +628,168 @@ func _apply_proximity_connections() -> void:
 					node_a.connections.append(node_b.id)
 				if not node_a.id in node_b.connections:
 					node_b.connections.append(node_a.id)
+
+
+#region Raider Mechanics
+
+func _try_spawn_raider() -> void:
+	if is_voyage_complete or is_raider_active:
+		return
+		
+	var required_jumps = RAIDER_RESPAWN_JUMPS_DEV if GameState.is_developer_mode_enabled() else RAIDER_RESPAWN_JUMPS
+	if jumps_since_raider_cleared < required_jumps:
+		return
+		
+	var current_node = get_current_node()
+	if not current_node:
+		return
+		
+	# Find spawn position (reusing logic from story nodes)
+	var spawn_pos = _find_story_spawn_position(current_node.position)
+	
+	# Calculate direction vector to make it look like it's coming from outside
+	var incoming_vector = (current_node.position - spawn_pos).normalized()
+	
+	# Create the actual Raider node
+	var new_id = generator.generate_uuid()
+	var new_node = NodeData.new(new_id, spawn_pos)
+	new_node.node_type = EventManager.NodeType.EMPTY_SPACE
+	new_node.biome_type = BiomeConfig.BiomeType.ASTEROID
+	new_node.difficulty_grade = NodeData.DifficultyGrade.EASY
+	nodes[new_id] = new_node
+	
+	# Set state
+	is_raider_active = true
+	raider_node_id = new_id
+	jumps_since_raider_cleared = 0
+	
+	print("DEBUG VoyageManager: Spawned Raider ship at %s" % new_node.id)
+	
+	# Generate a bridge of nodes leading towards the player's graph
+	_generate_raider_bridge(new_node, incoming_vector)
+
+	message_log_added.emit("WARNING: Hostile Raider signature detected on long-range scanners!")
+	map_updated.emit()
+	raider_spawned.emit(new_node)
+
+func _generate_raider_bridge(raider_start_node: NodeData, direction_to_player: Vector2) -> void:
+	# Generate 2 nodes bridging the gap to the main graph
+	var current_bridge_node = raider_start_node
+	var bridge_length = 2
+	
+	for i in range(bridge_length):
+		# Override parameters to force 1 node in the specific direction
+		var new_bridge_nodes = generator.generate_options(current_bridge_node, direction_to_player, 1, false, nodes)
+		if new_bridge_nodes.size() > 0:
+			var bridge = new_bridge_nodes[0]
+			nodes[bridge.id] = bridge
+			current_bridge_node = bridge
+			
+	# Then apply proximity links to lock this new disconnected string into the main graph
+	_apply_proximity_connections()
+
+
+func _process_raider_turn() -> bool:
+	if not is_raider_active or not nodes.has(raider_node_id):
+		return false
+	
+	# Check if player landed on raider's node (player jumped onto raider)
+	if raider_node_id == current_node_id:
+		print("DEBUG VoyageManager: Player jumped onto raider at %s" % current_node_id)
+		_trigger_raider_ambush()
+		return false
+		
+	var raider_node = nodes[raider_node_id]
+	# Use raider-specific pathfinding that can traverse unvisited nodes
+	var path_to_player = find_path_for_raider(raider_node_id, current_node_id)
+	
+	if path_to_player.size() > 1:
+		# Index 0 is the raider's current node, Index 1 is the next step
+		var next_step = path_to_player[1]
+		raider_node_id = next_step.id
+		raider_moved.emit(next_step.position, next_step.id)
+		print("DEBUG VoyageManager: Raider moved to %s" % next_step.id)
+		
+		# Did the raider catch the player?
+		if raider_node_id == current_node_id:
+			print("DEBUG VoyageManager: Raider caught player at %s" % current_node_id)
+			_trigger_raider_ambush()
+		return true
+	else:
+		# No path found - create a new node toward the player
+		print("DEBUG VoyageManager: No path found, creating emergency path toward player")
+		_create_emergency_path_toward_player()
+		return true
+
+func _trigger_raider_ambush() -> void:
+	print("DEBUG VoyageManager: RAIDER AMBUSH TRIGGERED ON NODE %s" % current_node_id)
+	message_log_added.emit("CRITICAL: Intercepted by Raiders! Prepare to deploy!")
+
+func clear_raider(success: bool) -> void:
+	is_raider_active = false
+	raider_node_id = ""
+	jumps_since_raider_cleared = 0
+	raider_destroyed.emit()
+	if success:
+		message_log_added.emit("Raider vessel destroyed. Threat eliminated.")
+	else:
+		message_log_added.emit("Retreated from raiders. Squad sustained massive injuries!")
+		
+		# Apply mechanical penalty: Down 1-2 random officers if they aren't already injured
+		var available_officers = []
+		for key in GameState.officers.keys():
+			if GameState.is_officer_available(key):
+				available_officers.append(key)
+		
+		available_officers.shuffle()
+		var num_to_down = min(available_officers.size(), 2)
+		for i in range(num_to_down):
+			GameState.down_officer(available_officers[i])
+			print("DEBUG Raider: Downing %s as penalty" % available_officers[i])
+
+## Create an emergency path toward player when normal pathfinding fails
+func _create_emergency_path_toward_player() -> void:
+	if not nodes.has(raider_node_id) or not nodes.has(current_node_id):
+		return
+		
+	var raider_node = nodes[raider_node_id]
+	var player_node = nodes[current_node_id]
+	
+	# Calculate direction from raider to player
+	var direction = (player_node.position - raider_node.position).normalized()
+	
+	# Create a new node in that direction (standard jump distance ~400-500 units)
+	var new_pos = raider_node.position + direction * 400.0
+	
+	# Create the node
+	var new_id = generator.generate_uuid()
+	var new_node = NodeData.new(new_id, new_pos)
+	new_node.node_type = EventManager.NodeType.EMPTY_SPACE
+	new_node.biome_type = BiomeConfig.BiomeType.ASTEROID
+	new_node.difficulty_grade = NodeData.DifficultyGrade.EASY
+	
+	# Register node
+	nodes[new_id] = new_node
+	
+	# Connect raider's current node to new node
+	if not new_id in raider_node.connections:
+		raider_node.connections.append(new_id)
+	if not raider_node_id in new_node.connections:
+		new_node.connections.append(raider_node_id)
+	
+	print("DEBUG VoyageManager: Created emergency path node %s at %s" % [new_id, new_pos])
+	
+	# Try to connect to nearby nodes via proximity
+	_apply_proximity_connections()
+	
+	# Move raider to the new node
+	raider_node_id = new_id
+	raider_moved.emit(new_pos, new_id)
+	print("DEBUG VoyageManager: Raider emergency moved to %s" % new_id)
+	
+	# Check if we caught the player (rare but possible)
+	if raider_node_id == current_node_id:
+		print("DEBUG VoyageManager: Raider caught player at %s" % current_node_id)
+		_trigger_raider_ambush()
+
+#endregion

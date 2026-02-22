@@ -78,7 +78,9 @@ func set_mission_haul(fuel: int, cash: int) -> void:
 
 
 func _update_cost_label() -> void:
-	var cost_text = "Abandoning mission forfeits rewards"
+	var cost_text = "Abandoning mission will:"
+	cost_text += "\n• Forfeit all rewards"
+	cost_text += "\n• Deal 25% hull damage to ship"
 	
 	# Add resource forfeiture warning if applicable
 	var forfeit_parts: Array[String] = []
@@ -88,7 +90,7 @@ func _update_cost_label() -> void:
 		forfeit_parts.append("%d cash" % mission_cash_collected)
 	
 	if forfeit_parts.size() > 0:
-		cost_text += "\nYou will lose: " + ", ".join(forfeit_parts)
+		cost_text += "\n• Lose collected: " + ", ".join(forfeit_parts)
 	
 	cost_label.text = cost_text
 

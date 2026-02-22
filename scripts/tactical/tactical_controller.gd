@@ -176,6 +176,9 @@ func _on_pause_abandon() -> void:
 	get_tree().paused = false
 	current_pause_menu = null
 	
+	# Apply 25% hull damage for abandoning mission
+	GameState.damage_ship(25)
+	
 	# Play beam-up animation on all surviving units before ending mission
 	if deployed_officers.size() > 0:
 		# Check if there are any surviving units
@@ -194,6 +197,11 @@ func _on_pause_abandon() -> void:
 
 func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.BiomeType.STATION, provided_objectives: Array[MissionObjective] = []) -> void:
 	print("DEBUG_MISSION: start_mission called with officers=%s, biome=%d" % [officer_keys, biome_type])
+	
+	# Validate biome type
+	if biome_type < 0 or biome_type > 2:
+		print("DEBUG_MISSION: WARNING - Invalid biome_type %d, defaulting to STATION" % biome_type)
+		biome_type = BiomeConfig.BiomeType.STATION
 	# Don't set mission_active yet - wait until after beam down animation
 	mission_active = false
 	_set_animating(false) # Clear any lingering input lock from prior mission extraction/animations
@@ -231,8 +239,15 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	# Check if this is a scavenger mission
 	var current_node = VoyageManager.get_current_node()
 	is_scavenger_mission = (current_node.node_type == EventManager.NodeType.SCAVENGE_SITE) if current_node else false
+	
+	# Explicitly check for raider ambush to enable "beam down" and other scavenger mechanics
+	if not is_scavenger_mission and VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id:
+		is_scavenger_mission = true
+		print("DEBUG_MISSION: Raider ambush detected, enabling is_scavenger_mission features")
+	
 	is_story_mission = (current_node.state == NodeData.NodeState.STORY) if current_node else false
 	is_story_dev_mode = is_story_mission and GameState.is_developer_mode_enabled()
+
 
 	GameState.enter_tactical_mode()
 	
@@ -3389,10 +3404,14 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	
 	# Check if all enemies defeated
 	if enemies.is_empty():
+		# Update objective if it exists
+		_complete_objective("eliminate_hostiles")
+		
 		# Check if extraction should become available (for scavenger missions)
 		_check_extraction_available()
 		# Show enemy elimination scene
 		_show_enemy_elimination_scene()
+
 
 
 ## Check if an enemy is visible to any player unit

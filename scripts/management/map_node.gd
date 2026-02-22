@@ -6,7 +6,7 @@ extends Control
 
 signal clicked(node_data: NodeData)
 
-enum NodeState { LOCKED, AVAILABLE, CURRENT, VISITED }
+enum NodeState { LOCKED, AVAILABLE, CURRENT, VISITED, RAIDER_THREAT }
 
 # Node references
 @onready var sprite: TextureRect = $Sprite
@@ -41,6 +41,7 @@ const COLOR_LOCKED = Color(0.4, 0.4, 0.4, 1.0)
 const COLOR_AVAILABLE = Color(1.0, 0.69, 0.0, 1.0)  # Amber
 const COLOR_CURRENT = Color(0.2, 1.0, 0.2, 1.0)  # Green
 const COLOR_VISITED = Color(0.6, 0.6, 0.6, 1.0)  # Gray
+const COLOR_RAIDER_THREAT = Color(1.0, 0.2, 0.2, 1.0)  # Red
 const COLOR_WAYPOINT_IN_RANGE = Color(1.0, 1.0, 1.0, 0.25) # Subtle white glow for waypoints
 const COLOR_HOVER = Color(1.0, 0.85, 0.3, 1.0)  # Brighter amber
 
@@ -92,7 +93,7 @@ func _notification(what: int) -> void:
 
 
 ## Initialize the node with data
-func initialize(p_node_data: NodeData, is_current: bool, is_reachable: bool) -> void:
+func initialize(p_node_data: NodeData, is_current: bool, is_reachable: bool, is_raider_threatened: bool = false) -> void:
 	node_data = p_node_data
 	
 	# Map internal NodeData state to visual state
@@ -103,7 +104,7 @@ func initialize(p_node_data: NodeData, is_current: bool, is_reachable: bool) -> 
 		# But we use visual state enums locally
 		# Let's map it
 	
-	_update_visual_state(is_current, is_reachable)
+	_update_visual_state(is_current, is_reachable, is_raider_threatened)
 	_update_visual()
 
 	# Start story pulse if eligible (story node and not visited)
@@ -112,8 +113,11 @@ func initialize(p_node_data: NodeData, is_current: bool, is_reachable: bool) -> 
 	else:
 		stop_story_pulse()
 
-func _update_visual_state(is_current: bool, is_reachable: bool) -> void:
-	if is_current:
+func _update_visual_state(is_current: bool, is_reachable: bool, is_raider_threatened: bool = false) -> void:
+	# Raider threat overrides everything
+	if is_raider_threatened:
+		set_state(StarMapNode.NodeState.RAIDER_THREAT)
+	elif is_current:
 		set_state(StarMapNode.NodeState.CURRENT)
 	elif is_reachable:
 		# Missions stay AVAILABLE (highlighted) until CLEARED.
@@ -228,6 +232,16 @@ func _update_visual() -> void:
 					glow_effect.visible = false
 			
 			sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)
+			if current_indicator:
+				current_indicator.visible = false
+				
+		NodeState.RAIDER_THREAT:
+			# Red threat highlighting for raider proximity
+			label.add_theme_color_override("font_color", COLOR_RAIDER_THREAT)
+			sprite.modulate = Color(1.0, 0.5, 0.5, 1.0)  # Red tint
+			if glow_effect:
+				glow_effect.visible = true
+				_apply_panel_color(glow_effect, COLOR_RAIDER_THREAT, 0.55)
 			if current_indicator:
 				current_indicator.visible = false
 	

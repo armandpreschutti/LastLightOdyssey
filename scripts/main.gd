@@ -216,6 +216,13 @@ func _on_node_clicked(node_data: NodeData) -> void:
 	
 	var current_node_id = VoyageManager.current_node_id
 	
+	# BLOCK: If raider is on same node, player cannot jump away until dealing with it
+	if VoyageManager.is_raider_active and VoyageManager.raider_node_id == current_node_id:
+		# Only allow clicking current node (to deploy), block jumping to other nodes
+		if node_data.id != current_node_id:
+			VoyageManager.message_log_added.emit("Cannot retreat! Raiders blocking all escape routes! DEPLOY to fight!")
+			return
+	
 	# If clicking the current node (e.g., re-clicking an SCAVENGER or WORMHOLE), skip jump and process directly
 	if node_data.id == current_node_id:
 		# Allow re-entry logic
@@ -320,6 +327,13 @@ func _execute_jump_with_animation(node_data: NodeData, _fuel_cost: int) -> void:
 		# Wait for animation to complete (StarMap should emit this when it sees ship_moved)
 		await star_map.jump_animation_complete
 		
+		# Process raider turn (after player animation)
+		var raider_moved = VoyageManager.process_raider_turn()
+		
+		# If raider moved, wait for its animation
+		if raider_moved:
+			await star_map.raider_animation_complete
+		
 		# Clear flag after animation completes
 		_is_jump_animating = false
 		
@@ -341,6 +355,14 @@ func _execute_direct_travel(target_node: NodeData) -> void:
 	
 	if success:
 		await star_map.jump_animation_complete
+		
+		# Process raider turn (after player animation)
+		var raider_moved = VoyageManager.process_raider_turn()
+		
+		# If raider moved, wait for its animation
+		if raider_moved:
+			await star_map.raider_animation_complete
+		
 		_is_jump_animating = false
 		
 		if current_phase == GamePhase.GAME_WON or current_phase == GamePhase.GAME_OVER:
@@ -353,6 +375,11 @@ func _execute_direct_travel(target_node: NodeData) -> void:
 
 
 func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) -> void:
+	# Check for raider ambush first
+	if VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id:
+		_show_raider_ambush_scene()
+		return
+	
 	# Determine node type from data
 	pending_node_type = node_data.node_type
 	pending_biome_type = node_data.biome_type
@@ -581,10 +608,18 @@ func _on_deploy_pressed() -> void:
 	# Disable button immediately to prevent double-click or stale state
 	management_hud.set_deploy_active(false)
 	
-	# Re-read biome from current node to prevent stale pending_biome_type after abandon
-	var current_node = VoyageManager.get_current_node()
-	if current_node:
-		pending_biome_type = current_node.biome_type
+	# Only re-read biome from current node if we don't have a valid pending biome
+	# This preserves raider ambush biomes while still fixing the abandon/retry case
+	if pending_biome_type < 0 or pending_biome_type > 2:
+		var current_node = VoyageManager.get_current_node()
+		if current_node:
+			pending_biome_type = current_node.biome_type
+			print("DEBUG_DEPLOY: Using current_node.biome_type = %d" % pending_biome_type)
+		else:
+			print("DEBUG_DEPLOY: current_node is null, using pending_biome_type = %d" % pending_biome_type)
+			pending_biome_type = BiomeConfig.BiomeType.ASTEROID
+	else:
+		print("DEBUG_DEPLOY: Using existing pending_biome_type = %d" % pending_biome_type)
 	
 	# Transition to team select
 	_transition_to_team_select()
@@ -598,10 +633,14 @@ func _on_center_view_pressed() -> void:
 ## Transition to team select screen (skipping scene)
 func _transition_to_team_select() -> void:
 	current_phase = GamePhase.TEAM_SELECT
-	team_select_dialog.show_dialog(pending_biome_type)
+	
+	# Check if this is a raider ambush
+	var is_raider_ambush = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
+	team_select_dialog.show_dialog(pending_biome_type, is_raider_ambush)
 	
 	# Reset wormhole offered state when entering a mission (edge case cleanup)
 	_wormhole_offered_at = ""
+
 	
 	# Tutorial: Trigger scavenge_intro after team select dialog is visible
 	if TutorialManager.is_active() and TutorialManager.is_at_step("scavenge_intro"):
@@ -657,6 +696,20 @@ func _on_mission_complete(success: bool, stats: Dictionary) -> void:
 					_pending_story_victory = true
 			current_node.state = NodeData.NodeState.CLEARED
 			VoyageManager.map_updated.emit()
+	
+	# Check if this was a Raider ambush
+	var is_raider_ambush = false
+	var current_node_check = VoyageManager.get_current_node()
+	if VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id:
+		is_raider_ambush = true
+	
+	if is_raider_ambush:
+		# Success means we destroyed the raider team, failure implies retreat/loss
+		if success:
+			# Award 50 credits for successful raider mission
+			GameState.cash += 50
+			VoyageManager.message_log_added.emit("Raider bounty claimed: 50 CR")
+		VoyageManager.clear_raider(success)
 
 	# Show mission recap directly (post-scene will be shown after recap is dismissed)
 	mission_recap.show_recap(stats)
@@ -798,28 +851,7 @@ func _on_voyage_intro_scene_dismissed() -> void:
 
 
 func _restore_deploy_button_state() -> void:
-	var current_node = VoyageManager.get_current_node()
-	if not current_node:
-		return
-		
-	# Check if we are at a valid mission node
-	if current_node.node_type == EventManager.NodeType.SCAVENGE_SITE:
-		# If it's a story node, it's deployable unless cleared (or some other story logic blocks it)
-		if current_node.state == NodeData.NodeState.STORY:
-			pending_node_type = current_node.node_type
-			pending_biome_type = current_node.biome_type
-			management_hud.set_deploy_active(true)
-			return
-			
-		# If it's a regular scavenge site and NOT cleared, it's deployable
-		if current_node.state != NodeData.NodeState.CLEARED:
-			pending_node_type = current_node.node_type
-			pending_biome_type = current_node.biome_type
-			management_hud.set_deploy_active(true)
-			return
-	
-	# Default to hidden if not at a deployable node
-	management_hud.set_deploy_active(false)
+	_update_deploy_button_visibility()
 
 
 
@@ -1054,6 +1086,42 @@ func _show_story_beat_scene() -> void:
 	mission_scene_dialog.show_scene(pending_biome_type, "generic", title, beat_text, location)
 
 
+## Show raider ambush using the same scene as story node 1A
+func _show_raider_ambush_scene() -> void:
+	current_phase = GamePhase.EVENT_DISPLAY
+	pending_node_type = EventManager.NodeType.SCAVENGE_SITE
+	
+	# Use the current node's actual biome (planet, asteroid, station, etc.)
+	var current_node = VoyageManager.get_current_node()
+	if current_node:
+		pending_biome_type = current_node.biome_type
+		print("DEBUG_RAIDER: Setting pending_biome_type from current_node = %d" % pending_biome_type)
+	else:
+		pending_biome_type = BiomeConfig.BiomeType.ASTEROID
+		print("DEBUG_RAIDER: current_node is null, defaulting to ASTEROID")
+	
+	# Use the exact same scene as story mission 1A
+	_suppress_mission_scene_dismiss_handler = true
+	mission_scene_dialog.show_scene(pending_biome_type, "generic", 
+		"RAIDER AMBUSH", 
+		"Hostile raiders have intercepted your ship! You must deploy and eliminate them to continue.", 
+		"EMERGENCY DEPLOYMENT")
+	
+	# Connect one-time handler for scene dismissal
+	if not mission_scene_dialog.scene_dismissed.is_connected(_on_raider_scene_dismissed):
+		mission_scene_dialog.scene_dismissed.connect(_on_raider_scene_dismissed)
+
+## Called when raider scene is dismissed - activate deploy button like normal
+func _on_raider_scene_dismissed() -> void:
+	# Disconnect to avoid interfering with normal mission flow
+	if mission_scene_dialog.scene_dismissed.is_connected(_on_raider_scene_dismissed):
+		mission_scene_dialog.scene_dismissed.disconnect(_on_raider_scene_dismissed)
+	
+	# Like a scavenge site, just activate the deploy button
+	current_phase = GamePhase.IDLE
+	management_hud.set_deploy_active(true)
+
+
 func _show_story_choice_dialog(choices: Array[String]) -> void:
 	print("DEBUG: _show_story_choice_dialog | choices=%s" % str(choices))
 	story_choice_dialog.setup(choices, CAMPAIGN_CHOICE_OPTIONS)
@@ -1085,10 +1153,26 @@ func _fade_out(duration: float = 0.6) -> void:
 		fade_transition.set_black()
 
 
-## Helper to refresh DEPLOY button state based on current node
+## Helper to refresh DEPLOY button state and mission data based on current node
 func _update_deploy_button_visibility() -> void:
 	var current_node = VoyageManager.get_current_node()
-	if current_node and current_node.node_type == EventManager.NodeType.SCAVENGE_SITE and current_node.state != NodeData.NodeState.CLEARED:
+	if not current_node:
+		management_hud.set_deploy_active(false)
+		return
+	
+	# Check if raider is on current node (must deploy to clear it)
+	var raider_present = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
+	
+	if raider_present:
+		# Force deploy button active when raider is present
+		# Ensure pending state is set so [DEPLOY] button works correctly after load/refresh
+		pending_node_type = EventManager.NodeType.SCAVENGE_SITE
+		pending_biome_type = current_node.biome_type
+		management_hud.set_deploy_active(true)
+	elif current_node.node_type == EventManager.NodeType.SCAVENGE_SITE and current_node.state != NodeData.NodeState.CLEARED:
+		# Ensure pending state is set for normal scavenge sites too
+		pending_node_type = current_node.node_type
+		pending_biome_type = current_node.biome_type
 		management_hud.set_deploy_active(true)
 	else:
 		management_hud.set_deploy_active(false)

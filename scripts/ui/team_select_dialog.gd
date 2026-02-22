@@ -21,6 +21,7 @@ const MAX_TEAM_SIZE: int = 3
 var officer_buttons: Dictionary = {}  # officer_key -> CheckButton
 var selected_officers: Array[String] = []
 var current_biome_type: int = -1  # BiomeConfig.BiomeType
+var _is_raider_ambush: bool = false
 var expanded_officers: Dictionary = {}  # officer_key -> bool (track expanded state)
 var officer_detail_containers: Dictionary = {}  # officer_key -> VBoxContainer (detail sections)
 const ABILITY_ICON_PATH = "res://assets/sprites/ui/icons/abilities/"
@@ -46,8 +47,9 @@ func _ready() -> void:
 		scroll_container.mouse_filter = Control.MOUSE_FILTER_PASS
 
 
-func show_dialog(biome_type: int = -1) -> void:
+func show_dialog(biome_type: int = -1, is_raider_ambush: bool = false) -> void:
 	current_biome_type = biome_type
+	_is_raider_ambush = is_raider_ambush
 	_update_title()
 	_update_description()
 	_update_objective()
@@ -58,7 +60,9 @@ func show_dialog(biome_type: int = -1) -> void:
 
 
 func _update_title() -> void:
-	if current_biome_type >= 0:
+	if _is_raider_ambush:
+		title_label.text = "[ RAIDER AMBUSH ]"
+	elif current_biome_type >= 0:
 		var biome_name = BiomeConfig.get_biome_name(current_biome_type)
 		title_label.text = "[ SCAVENGE: %s ]" % biome_name.to_upper()
 	else:
@@ -68,7 +72,9 @@ func _update_title() -> void:
 func _update_description() -> void:
 	# Update description to reflect new selection system
 	if desc_label:
-		if MIN_TEAM_SIZE == MAX_TEAM_SIZE:
+		if _is_raider_ambush:
+			desc_label.text = "Hostile raiders have intercepted your ship! Deploy your team to eliminate the threat."
+		elif MIN_TEAM_SIZE == MAX_TEAM_SIZE:
 			desc_label.text = "Select %d officers for deployment. All officers are available, including the Captain." % MAX_TEAM_SIZE
 		else:
 			desc_label.text = "Select %d-%d officers for deployment. All officers are available, including the Captain." % [MIN_TEAM_SIZE, MAX_TEAM_SIZE]
@@ -82,7 +88,12 @@ func _update_objective() -> void:
 	# Update mission objective display based on biome type
 	current_objectives.clear()  # Clear previous objectives
 	if objective_label:
-		if current_biome_type >= 0:
+		if _is_raider_ambush:
+			var objective = MissionObjective.ObjectiveManager.create_eliminate_hostiles()
+			current_objectives = [objective]
+			objective_label.text = "MISSION: Eliminate all raider units to continue your voyage."
+			objective_label.visible = true
+		elif current_biome_type >= 0:
 			# Get mission objective for this biome
 			var biome = current_biome_type as BiomeConfig.BiomeType
 			var objectives = MissionObjective.ObjectiveManager.get_objectives_for_biome(biome)
@@ -99,6 +110,7 @@ func _update_objective() -> void:
 				objective_label.visible = false
 		else:
 			objective_label.visible = false
+
 
 
 func _build_objective_description(biome: BiomeConfig.BiomeType, objective: MissionObjective) -> String:

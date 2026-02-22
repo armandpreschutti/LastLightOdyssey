@@ -62,7 +62,13 @@ func generate(biome_type: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION,
 	# Fix diagonal wall gaps (corner-to-corner walls)
 	_fix_diagonal_gaps(layout)
 	
-	print("DEBUG_MISSION: MapGenerator - Generation complete. Tiles: %d, Rooms: %d" % [layout.size(), _rooms.size()])
+	# Count half cover tiles
+	var half_cover_count = 0
+	for pos in layout:
+		if layout[pos] == TileType.HALF_COVER:
+			half_cover_count += 1
+	
+	print("DEBUG_MISSION: MapGenerator - Generation complete. Tiles: %d, Rooms: %d, HalfCover: %d" % [layout.size(), _rooms.size(), half_cover_count])
 	
 	# Store layout for spawn position validation
 	_layout = layout

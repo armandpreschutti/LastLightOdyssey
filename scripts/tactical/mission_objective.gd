@@ -103,6 +103,17 @@ class ObjectiveManager:
 		return [objective]
 	
 	
+	static func create_eliminate_hostiles() -> MissionObjective:
+		## Create a default "Eliminate all hostiles" objective (used for raider ambushes)
+		return MissionObjective.new(
+			"eliminate_hostiles",
+			"Eliminate all hostiles",
+			MissionObjective.ObjectiveType.BINARY,
+			1
+		)
+
+	
+	
 	static func get_objective_by_id(objectives: Array[MissionObjective], id: String) -> MissionObjective:
 		## Find an objective by its ID
 		for obj in objectives:
@@ -139,6 +150,10 @@ class ObjectiveManager:
 			"clear_nests":
 				# Clearing nests: cash reward
 				return {"fuel": 0, "cash": 16, "hull_repair": 0}
+			"eliminate_hostiles":
+				# Raider elimination: decent fuel and cash
+				return {"fuel": 4, "cash": 20, "hull_repair": 0}
+
 			
 			# Binary objectives (hack, repair, activate, etc.)
 			"hack_security":
