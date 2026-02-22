@@ -1366,6 +1366,61 @@ func clear_pathfinding_path() -> void:
 	pathfinding_source = Vector2i(-1, -1)
 
 
+## Update pathfinding path for Bulldozer Charge - shows straight line path through half-cover
+func update_charge_pathfinding_path(source_pos: Vector2i, target_pos: Vector2i) -> void:
+	pathfinding_source = source_pos
+	
+	if source_pos == target_pos:
+		pathfinding_path.clear()
+		queue_redraw()
+		return
+	
+	# Use Bresenham line algorithm for straight-line path (bulldozer goes through half-cover)
+	var line_tiles = _get_line_tiles(source_pos, target_pos)
+	
+	# Convert to world positions for pathfinding display
+	var path = PackedVector2Array()
+	for tile in line_tiles:
+		path.append(Vector2(tile.x * TILE_SIZE, tile.y * TILE_SIZE))
+	
+	if path.is_empty():
+		pathfinding_path.clear()
+	else:
+		pathfinding_path = path
+	queue_redraw()
+
+
+## Get tiles along a line using Bresenham's algorithm (internal use)
+func _get_line_tiles(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
+	var tiles: Array[Vector2i] = []
+	var x0 = from.x
+	var y0 = from.y
+	var x1 = to.x
+	var y1 = to.y
+	
+	var dx = abs(x1 - x0)
+	var dy = abs(y1 - y0)
+	var sx = 1 if x0 < x1 else -1
+	var sy = 1 if y0 < y1 else -1
+	var err = dx - dy
+	
+	while true:
+		tiles.append(Vector2i(x0, y0))
+		
+		if x0 == x1 and y0 == y1:
+			break
+		
+		var e2 = 2 * err
+		if e2 > -dy:
+			err -= dy
+			x0 += sx
+		if e2 < dx:
+			err += dx
+			y0 += sy
+	
+	return tiles
+
+
 ## Get cover value at a position (0 = no cover, 25 = half, 50 = full)
 func get_cover_value(pos: Vector2i) -> float:
 	var tile_type = tile_data.get(pos, TileType.FLOOR)

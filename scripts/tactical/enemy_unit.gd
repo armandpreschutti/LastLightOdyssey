@@ -511,6 +511,7 @@ func is_deep_scanned() -> bool:
 ## Tick all status effects down by 1 turn. Apply poison damage first.
 func tick_status_effects() -> void:
 	var had_poison = has_status_effect("poison")
+	var had_suppressed = has_status_effect("pin_down")
 	if had_poison:
 		take_damage(5)
 	var to_remove: Array[String] = []
@@ -527,7 +528,6 @@ func tick_status_effects() -> void:
 		else:
 			_remove_poison_marker()
 	# Update or remove suppressed marker
-	var had_suppressed = has_status_effect("pin_down")
 	if had_suppressed:
 		if has_status_effect("pin_down"):
 			update_suppressed_marker()

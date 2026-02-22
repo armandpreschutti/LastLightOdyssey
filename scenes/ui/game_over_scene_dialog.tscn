@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://game_over_scene_dialog"]
 
 [ext_resource type="Script" path="res://scripts/ui/game_over_scene_dialog.gd" id="1_scene"]
-[ext_resource type="FontFile" uid="uid://xqiy7ijtjsrv" path="res://assets/fonts/VT323-Regular.ttf" id="2_font"]
 
 [node name="GameOverSceneDialog" type="Control"]
 layout_mode = 3
@@ -55,7 +54,6 @@ theme_override_constants/separation = 20
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(1.0, 0.3, 0.2, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 28
 text = "GAME OVER"
 vertical_alignment = 1
@@ -63,7 +61,6 @@ vertical_alignment = 1
 [node name="LocationLabel" type="Label" parent="VBoxContainer/TitleBar"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.4, 0.4, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 18
 text = "SECTOR 4-127  |  CYCLE 3"
 horizontal_alignment = 2
@@ -110,7 +107,6 @@ custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.8, 0.5, 0.5, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 22
 text = ""
 horizontal_alignment = 1
@@ -122,7 +118,6 @@ custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(1.0, 0.5, 0.2, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 18
 text = "Press any key to continue..."
 horizontal_alignment = 1

@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://c4meqewcdr3ey"]
 
 [ext_resource type="Script" path="res://scripts/ui/voyage_recap.gd" id="1_recap"]
-[ext_resource type="FontFile" uid="uid://xqiy7ijtjsrv" path="res://assets/fonts/VT323-Regular.ttf" id="2_font"]
 
 [node name="VoyageRecap" type="Control"]
 layout_mode = 3
@@ -54,7 +53,6 @@ theme_override_constants/separation = 8
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.4, 0.9, 1.0, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 28
 text = "[ VOYAGE COMPLETE ]"
 horizontal_alignment = 1
@@ -63,7 +61,6 @@ horizontal_alignment = 1
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(1.0, 0.85, 0.2, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 24
 text = "THE GOLDEN AGE"
 horizontal_alignment = 1
@@ -72,7 +69,6 @@ horizontal_alignment = 1
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.6, 0.8, 0.7, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 14
 text = "Humanity has reached New Earth. A new chapter begins."
 horizontal_alignment = 1
@@ -88,7 +84,6 @@ color = Color(0.4, 0.9, 1.0, 0.4)
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.3, 0.6, 0.7, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 14
 text = "FINAL STATE"
 
@@ -101,7 +96,6 @@ theme_override_constants/separation = 4
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.4, 0.8, 1.0, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 18
 text = "FUEL RESERVES: 0"
 
@@ -109,7 +103,6 @@ text = "FUEL RESERVES: 0"
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 18
 text = "SHIP INTEGRITY: 100%"
 
@@ -117,7 +110,6 @@ text = "SHIP INTEGRITY: 100%"
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.3, 0.6, 0.7, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 14
 text = "CREW STATUS"
 
@@ -136,7 +128,6 @@ color = Color(0.4, 0.9, 1.0, 0.3)
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.3, 0.6, 0.7, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 14
 text = "VOYAGE STATISTICS"
 
@@ -149,7 +140,6 @@ theme_override_constants/separation = 4
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.4, 0.8, 1.0, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 16
 text = "TOTAL FUEL COLLECTED: 0"
 
@@ -157,7 +147,6 @@ text = "TOTAL FUEL COLLECTED: 0"
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(1.0, 0.4, 0.3, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 16
 text = "TOTAL HOSTILES ELIMINATED: 0"
 
@@ -165,7 +154,6 @@ text = "TOTAL HOSTILES ELIMINATED: 0"
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.5, 0.9, 0.7, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 16
 text = "MISSIONS COMPLETED: 0"
 
@@ -173,7 +161,6 @@ text = "MISSIONS COMPLETED: 0"
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 16
 text = "TACTICAL TURNS SURVIVED: 0"
 
@@ -181,7 +168,6 @@ text = "TACTICAL TURNS SURVIVED: 0"
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.6, 0.7, 0.8, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 16
 text = "SECTORS TRAVERSED: 0"
 
@@ -203,7 +189,6 @@ size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.4, 0.9, 1.0, 1)
 theme_override_colors/font_hover_color = Color(0.7, 1.0, 1.0, 1)
 theme_override_colors/font_pressed_color = Color(0.2, 0.6, 0.8, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 20
 text = "[ MAIN MENU ]"
 
@@ -214,6 +199,5 @@ size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.4, 0.9, 1.0, 1)
 theme_override_colors/font_hover_color = Color(0.7, 1.0, 1.0, 1)
 theme_override_colors/font_pressed_color = Color(0.2, 0.6, 0.8, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 20
 text = "[ RESTART ]"

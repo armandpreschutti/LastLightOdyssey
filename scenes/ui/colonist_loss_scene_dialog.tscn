@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://ddfeihxoqdxyd"]
 
 [ext_resource type="Script" path="res://scripts/ui/colonist_loss_scene_dialog.gd" id="1_scene"]
-[ext_resource type="FontFile" uid="uid://xqiy7ijtjsrv" path="res://assets/fonts/VT323-Regular.ttf" id="2_font"]
 
 [node name="ColonistLossSceneDialog" type="Control" unique_id=2078800572]
 layout_mode = 3
@@ -55,7 +54,6 @@ theme_override_constants/separation = 20
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 28
 text = "MILESTONE TITLE"
 vertical_alignment = 1
@@ -63,7 +61,6 @@ vertical_alignment = 1
 [node name="LocationLabel" type="Label" parent="VBoxContainer/TitleBar" unique_id=905758431]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 18
 text = "SECTOR 4-127  |  CYCLE 3"
 horizontal_alignment = 2
@@ -109,7 +106,6 @@ color = Color(0.4, 0.9, 1, 0.4)
 custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 22
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -119,7 +115,6 @@ autowrap_mode = 2
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 18
 text = "Press any key to continue..."
 horizontal_alignment = 1

@@ -10,10 +10,8 @@ signal ability_cancelled
 
 const ABILITY_ICON_PATH = "res://assets/sprites/ui/icons/abilities/"
 
-# Pause button panel (top left) - includes panel, glow, and border
+# Pause button panel (top left)
 @onready var pause_panel: PanelContainer = $TopLeftPanel
-@onready var pause_glow: ColorRect = $TopLeftGlow
-@onready var pause_border: ColorRect = $TopLeftBorder
 @onready var pause_button: Button = $TopLeftPanel/PauseButton
 
 # Top bar elements - updated paths for icon-based layout
@@ -42,13 +40,13 @@ const ABILITY_ICON_PATH = "res://assets/sprites/ui/icons/abilities/"
 # Actions panel (bottom-right, shown only when a unit is selected)
 @onready var actions_panel: PanelContainer = $ActionsPanel
 @onready var ability_preview_row: HBoxContainer = $ActionsPanel/VBox/AbilityPreviewRow
-@onready var passives_label: Label = $ActionsPanel/VBox/PassivesLabel
 
 # Ability section (inside ActionsPanel)
 @onready var ability_container: VBoxContainer = $ActionsPanel/VBox/AbilityContainer
-@onready var ability_header: Label = $ActionsPanel/VBox/AbilityContainer/AbilityHeader
-@onready var ability_button: Button = $ActionsPanel/VBox/AbilityContainer/AbilityButton
-@onready var ability_desc: Label = $ActionsPanel/VBox/AbilityContainer/AbilityDesc
+@onready var ability_btn_1: Button = $ActionsPanel/VBox/AbilityContainer/AbilityButton1
+@onready var ability_btn_2: Button = $ActionsPanel/VBox/AbilityContainer/AbilityButton2
+@onready var ability_btn_3: Button = $ActionsPanel/VBox/AbilityContainer/AbilityButton3
+@onready var ability_buttons: Array[Button] = [ability_btn_1, ability_btn_2, ability_btn_3]
 @onready var cancel_button: Button = $ActionsPanel/VBox/AbilityContainer/CancelButton
 
 # Action buttons (inside ActionsPanel)
@@ -65,17 +63,14 @@ const ABILITY_ICON_PATH = "res://assets/sprites/ui/icons/abilities/"
 var ability_panel: Control = null
 
 # Current ability info
-var _current_ability_type: String = ""
 var _is_animating: bool = false  # Track animation state to disable ability button
 var _current_officer_key: String = ""  # Track current officer for ability panel
-var _dynamic_ability_buttons: Array = []  # Dynamically added tier 2/3 ability buttons
 
 
 func _ready() -> void:
 	pause_button.pressed.connect(_on_pause_pressed)
 	end_turn_button.pressed.connect(_on_end_turn_pressed)
 	extract_button.pressed.connect(_on_extract_pressed)
-	ability_button.pressed.connect(_on_ability_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
 	actions_panel.visible = false
 
@@ -87,10 +82,8 @@ func _ready() -> void:
 		ability_panel.ability_selected.connect(_on_ability_panel_ability_selected)
 		ability_panel.panel_closed.connect(_on_ability_panel_closed)
 	
-	# Hide pause panel and all its decorative elements by default - only show during active tactical missions
+	# Hide pause panel by default - only show during active tactical missions
 	pause_panel.visible = false
-	pause_glow.visible = false
-	pause_border.visible = false
 	
 	# Set up tooltips
 	_setup_tooltips()
@@ -134,14 +127,12 @@ func _setup_tooltips() -> void:
 	extract_button.set_script(_TOOLTIP_BTN)
 	extract_button.tooltip_text = "Extract units from the mission.\nAt least 1 unit must be on extraction tiles (green areas).\nUnits not in the extraction zone will be left behind (KIA)."
 
-	# Apply to static ability button and labels that get tooltip_text set later
-	ability_button.set_script(_TOOLTIP_BTN)
+	# Apply to static labels that get tooltip_text set later
 	status_label.set_script(_TOOLTIP_LBL)
 	move_label.set_script(_TOOLTIP_LBL)
 	attack_label.set_script(_TOOLTIP_LBL)
 	cover_bonus_label.set_script(_TOOLTIP_LBL)
 	fuel_label.set_script(_TOOLTIP_LBL)
-	passives_label.set_script(_TOOLTIP_LBL)
 
 func update_turn(turn_number: int) -> void:
 	turn_label.text = "TURN: %d" % turn_number
@@ -262,13 +253,10 @@ func set_extract_visible(is_visible: bool) -> void:
 
 func set_end_turn_enabled(enabled: bool) -> void:
 	end_turn_button.disabled = not enabled
-	# Track animation state and disable ability button during animations (same as END TURN button)
-	_is_animating = not enabled
 	# Immediately disable ability buttons if animating (update_ability_buttons() will handle proper state when called)
 	if ability_container.visible and _is_animating:
-		ability_button.disabled = true
-		for btn in _dynamic_ability_buttons:
-			if is_instance_valid(btn):
+		for btn in ability_buttons:
+			if btn.visible:
 				btn.disabled = true
 
 
@@ -294,20 +282,17 @@ func update_ability_buttons(officer_type: String, current_ap: int, unit_ref: Obj
 	actions_panel.visible = true
 	_current_officer_key = officer_type
 
-	# Clear dynamic buttons from previous call
-	for btn in _dynamic_ability_buttons:
-		if is_instance_valid(btn):
-			btn.queue_free()
-	_dynamic_ability_buttons.clear()
-
-	# Hide by default
 	ability_container.visible = false
-	_current_ability_type = ""
+	for btn in ability_buttons:
+		btn.visible = false
+		for conn in btn.pressed.get_connections():
+			btn.pressed.disconnect(conn["callable"])
+			
+	var active_ab_count := 0
 	
-	# Determine ability info based on officer type
+	# Determine base ability info
 	var ability_name := ""
 	var ability_text := ""
-	var ability_description := ""
 	var ability_tooltip := ""
 	var ap_cost := 1
 	
@@ -315,99 +300,123 @@ func update_ability_buttons(officer_type: String, current_ap: int, unit_ref: Obj
 		"scout":
 			ability_name = "overwatch"
 			ability_text = "[ OVERWATCH ] - 1 AP"
-			ability_description = "Enter overwatch stance. Guaranteed hit on the first enemy that moves within line of sight."
 			ability_tooltip = "Overwatch: Costs 1 AP. Guaranteed hit on enemies that move in your sight."
-			ap_cost = 1
 		"tech":
 			ability_name = "turret"
 			ability_text = "[ TURRET ] - 1 AP"
-			ability_description = "Deploy a sentry turret within 2 tiles. Auto-shoots the nearest enemy each turn for 3 turns."
 			ability_tooltip = "Turret: Costs 1 AP. Place auto-firing sentry (3 turns, 15 DMG/turn)."
-			ap_cost = 1
 		"medic":
 			ability_name = "patch"
 			ability_text = "[ PATCH ] - 1 AP"
-			ability_description = "Heal yourself or a friendly unit within 3 tiles for 62.5% of their maximum health (50% base + 25% from Medic's enhanced healing)."
 			ability_tooltip = "Patch: Costs 1 AP. Heals yourself or ally within 3 tiles for 62.5% max HP."
-			ap_cost = 1
 		"heavy":
 			ability_name = "charge"
 			ability_text = "[ CHARGE ] - 1 AP"
-			ability_description = "Rush an enemy within 4 tiles. Instant-kills basic enemies; deals heavy damage to elites."
 			ability_tooltip = "Charge: Costs 1 AP. Rush and devastate an enemy within 4 tiles."
-			ap_cost = 1
 		"captain":
 			ability_name = "execute"
 			ability_text = "[ EXECUTE ] - 1 AP"
-			ability_description = "Guaranteed kill on an enemy within 4 tiles below 50% HP. Never misses."
 			ability_tooltip = "Execute: Costs 1 AP. Instant kill on enemy within 4 tiles below 50% HP."
-			ap_cost = 1
 		"sniper":
 			ability_name = "precision_shot"
 			ability_text = "[ PRECISION SHOT ] - 1 AP"
-			ability_description = "Guaranteed hit on any visible enemy. Deals 2x damage (60)."
 			ability_tooltip = "Precision Shot: Costs 1 AP. Guaranteed hit on any visible enemy for 60 damage."
-			ap_cost = 1
-	
-	# Show ability if officer has one
-	if ability_name != "":
-		ability_container.visible = true
-		_current_ability_type = ability_name
 
+	# Configure base ability if exists
+	if ability_name != "" and active_ab_count < ability_buttons.size():
 		var base_cd: int = unit_ref.get_ability_cooldown(ability_name) if unit_ref else 0
 		var is_on_cooldown := base_cd > 0
 		var has_enough_ap := current_ap >= ap_cost
-
+		
+		var btn = ability_buttons[active_ab_count]
+		btn.set_script(_TOOLTIP_BTN)
 		if is_on_cooldown:
-			ability_header.text = "ABILITY: [CD %d]" % base_cd
-			ability_button.text = "%s (CD: %d)" % [ability_text, base_cd]
-			ability_button.disabled = true
-			ability_desc.text = ability_description + "\n>> On cooldown for %d more turn(s)." % base_cd
-			ability_button.tooltip_text = ability_tooltip + "\nCooldown: %d turn(s) remaining." % base_cd
+			btn.text = "%s (CD: %d)" % [ability_text, base_cd]
+			btn.disabled = true
+			btn.tooltip_text = ability_tooltip + "\nCooldown: %d turn(s) remaining." % base_cd
 		else:
-			ability_header.text = "SPECIALIST ABILITY:"
-			ability_button.text = ability_text
-			ability_button.disabled = not has_enough_ap or _is_animating
-			ability_desc.text = ability_description
-			ability_button.tooltip_text = ability_tooltip
+			btn.text = ability_text
+			btn.disabled = not has_enough_ap or _is_animating
+			btn.tooltip_text = ability_tooltip
+			
+		var captured_id = ability_name
+		btn.pressed.connect(func(): ability_used.emit(captured_id))
+		btn.visible = true
+		ability_container.visible = true
+		active_ab_count += 1
 
-	# Add buttons for unlocked tier 2/3 active abilities
+	# Add tier 2/3 abilities (unlocked or locked, active or passive)
 	var od = GameState.get_officer(officer_type)
 	if od:
-		for ab_id in GameState.OFFICER_ABILITIES.get(officer_type, []):
-			if not od.has_ability(ab_id):
-				continue
-			var def = GameState.get_ability_def(ab_id)
-			if def.is_empty() or def.get("type", "passive") != "active" or def.get("level", 1) == 1:
-				continue
-			var ab_cost: int = def.get("cost", 1)
-			var cd_remaining: int = unit_ref.get_ability_cooldown(ab_id) if unit_ref else 0
-			var on_cd := cd_remaining > 0
-			var btn := Button.new()
-			btn.set_script(_TOOLTIP_BTN)
-			if on_cd:
-				btn.text = "[ %s ] - %d AP (CD: %d)" % [def.get("name", ab_id).to_upper(), ab_cost, cd_remaining]
-			else:
-				btn.text = "[ %s ] - %d AP" % [def.get("name", ab_id).to_upper(), ab_cost]
-			btn.disabled = on_cd or current_ap < ab_cost or _is_animating
-			btn.tooltip_text = def.get("desc", "")
-			var captured_id: String = ab_id
-			btn.pressed.connect(func(): ability_used.emit(captured_id))
-			ability_container.add_child(btn)
-			ability_container.visible = true
-			_dynamic_ability_buttons.append(btn)
+		var all_abs = GameState.OFFICER_ABILITIES.get(officer_type, [])
+		if all_abs.size() >= 6:
+			# Tier 2 (Indices 1, 2)
+			var tier2_id = ""
+			for i in range(1, 3):
+				if od.has_ability(all_abs[i]):
+					tier2_id = all_abs[i]
+					break
+			
+			# Tier 3 (Indices 3, 4, 5)
+			var tier3_id = ""
+			for i in range(3, 6):
+				if od.has_ability(all_abs[i]):
+					tier3_id = all_abs[i]
+					break
+			
+			# Map to buttons synchronously
+			var active_tiers = [tier2_id, tier3_id]
+			for tier_ab_id in active_tiers:
+				if active_ab_count >= ability_buttons.size():
+					continue
+					
+				var btn = ability_buttons[active_ab_count]
+				btn.set_script(_TOOLTIP_BTN)
+				btn.remove_theme_color_override("font_disabled_color")
+				
+				if tier_ab_id == "":
+					btn.text = "[ LOCKED ]"
+					btn.disabled = true
+					btn.tooltip_text = "Unlock this ability between missions."
+				else:
+					var def = GameState.get_ability_def(tier_ab_id)
+					if def.get("type", "") == "passive":
+						btn.text = "[ %s - PASSIVE ]" % def.get("name", tier_ab_id).to_upper()
+						btn.disabled = true
+						btn.add_theme_color_override("font_disabled_color", Color(0.3, 0.7, 0.45, 1))
+						btn.tooltip_text = def.get("desc", "")
+					else:
+						var ab_cost: int = def.get("cost", 1)
+						var cd_remaining: int = unit_ref.get_ability_cooldown(tier_ab_id) if unit_ref else 0
+						var on_cd := cd_remaining > 0
+						
+						if on_cd:
+							btn.text = "[ %s ] - %d AP (CD: %d)" % [def.get("name", tier_ab_id).to_upper(), ab_cost, cd_remaining]
+						else:
+							btn.text = "[ %s ] - %d AP" % [def.get("name", tier_ab_id).to_upper(), ab_cost]
+							
+						btn.disabled = on_cd or current_ap < ab_cost or _is_animating
+						btn.tooltip_text = def.get("desc", "")
+						
+						var captured_lambda := func(cid: String): ability_used.emit(cid)
+						btn.pressed.connect(captured_lambda.bind(tier_ab_id))
+						
+				btn.visible = true
+				ability_container.visible = true
+				active_ab_count += 1
+
+	# Ensure all 3 tier buttons are shown (fill empty with [LOCKED])
+	while active_ab_count < ability_buttons.size():
+		var btn = ability_buttons[active_ab_count]
+		btn.text = "[ LOCKED ]"
+		btn.disabled = true
+		btn.tooltip_text = "Unlock more abilities between missions."
+		btn.remove_theme_color_override("font_disabled_color")
+		btn.visible = true
+		ability_container.visible = true
+		active_ab_count += 1
 
 	_update_ability_preview(officer_type)
-	_update_passives_label(officer_type)
-
-
-func _on_ability_pressed() -> void:
-	# Safety check: don't proceed if button is disabled
-	if ability_button.disabled:
-		return
-	
-	if _current_ability_type != "":
-		ability_used.emit(_current_ability_type)
 
 
 func _on_cancel_pressed() -> void:
@@ -418,10 +427,14 @@ func _on_cancel_pressed() -> void:
 
 func show_cancel_button() -> void:
 	cancel_button.visible = true
+	end_turn_button.disabled = true
 
 
 func hide_cancel_button() -> void:
 	cancel_button.visible = false
+	# Re-enable end turn button as long as we're not currently animating
+	if not _is_animating:
+		end_turn_button.disabled = false
 
 
 ## Show a combat message (for attack phases)
@@ -477,15 +490,11 @@ func update_objective(objective_id: String) -> void:
 ## Show the pause button panel (only during active tactical missions)
 func show_pause_button() -> void:
 	pause_panel.visible = true
-	pause_glow.visible = true
-	pause_border.visible = true
 
 
 ## Hide the pause button panel (when not in tactical missions)
 func hide_pause_button() -> void:
 	pause_panel.visible = false
-	pause_glow.visible = false
-	pause_border.visible = false
 
 
 func _update_ability_preview(officer_type: String) -> void:
@@ -543,36 +552,6 @@ func _update_ability_preview(officer_type: String) -> void:
 			icon_rect.modulate = Color(0.25, 0.25, 0.3, 0.5)
 		slot.add_child(icon_rect)
 		ability_preview_row.add_child(slot)
-
-
-func _update_passives_label(officer_type: String) -> void:
-	if officer_type == "":
-		passives_label.visible = false
-		return
-	var od = GameState.get_officer(officer_type)
-	if not od:
-		passives_label.visible = false
-		return
-	var passive_names: Array[String] = []
-	var passive_tooltips: Array[String] = []
-	for ab_id in GameState.OFFICER_ABILITIES.get(officer_type, []):
-		if not od.has_ability(ab_id): continue
-		var def = GameState.ABILITY_DEFS.get(ab_id, {})
-		if def.get("type", "") == "passive":
-			var p_name = def.get("name", ab_id)
-			var p_desc = def.get("desc", "")
-			passive_names.append(p_name)
-			if p_desc != "":
-				passive_tooltips.append("%s: %s" % [p_name, p_desc])
-			else:
-				passive_tooltips.append(p_name)
-	
-	if passive_names.is_empty():
-		passives_label.visible = false
-	else:
-		passives_label.text = "◈ " + "  ◈ ".join(passive_names)
-		passives_label.tooltip_text = "\n\n".join(passive_tooltips)
-		passives_label.visible = true
 
 
 ## Show upgraded abilities panel for current officer

@@ -1,6 +1,14 @@
 [gd_scene format=3 uid="uid://bpausemenu001"]
 
 [ext_resource type="Script" uid="uid://cao7qq2o8vyvx" path="res://scripts/ui/pause_menu.gd" id="1_pause"]
+[ext_resource type="Theme" path="res://assets/themes/base_ui_theme.tres" id="2_theme"]
+[ext_resource type="StyleBox" path="res://assets/themes/style_panel_yellow.tres" id="3_panel_yellow"]
+[ext_resource type="StyleBox" path="res://assets/themes/style_btn_yellow.tres" id="4_btn_yellow"]
+[ext_resource type="StyleBox" path="res://assets/themes/style_btn_yellow_hover.tres" id="5_btn_yellow_hover"]
+[ext_resource type="StyleBox" path="res://assets/themes/style_btn_yellow_pressed.tres" id="6_btn_yellow_pressed"]
+[ext_resource type="StyleBox" path="res://assets/themes/style_btn_red.tres" id="7_btn_red"]
+[ext_resource type="StyleBox" path="res://assets/themes/style_btn_red_hover.tres" id="8_btn_red_hover"]
+[ext_resource type="StyleBox" path="res://assets/themes/style_btn_red_pressed.tres" id="9_btn_red_pressed"]
 
 [node name="PauseMenu" type="Control" unique_id=1420741629]
 layout_mode = 3
@@ -10,6 +18,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 1
+theme = ExtResource("2_theme")
 script = ExtResource("1_pause")
 
 [node name="Background" type="ColorRect" parent="." unique_id=405586837]
@@ -21,38 +30,6 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 1
 color = Color(0, 0, 0.05, 0.75)
-
-[node name="GlowEffect" type="ColorRect" parent="." unique_id=1021896356]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -208.0
-offset_top = -208.0
-offset_right = 208.0
-offset_bottom = 208.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(1, 0.69, 0, 0.15)
-
-[node name="BorderOuter" type="ColorRect" parent="." unique_id=1899356064]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -204.0
-offset_top = -263.0
-offset_right = 204.0
-offset_bottom = 266.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(1, 0.69, 0, 0.6)
 
 [node name="PanelContainer" type="PanelContainer" parent="." unique_id=1527626838]
 layout_mode = 1
@@ -67,11 +44,7 @@ offset_right = 200.0
 offset_bottom = 200.0
 grow_horizontal = 2
 grow_vertical = 2
-
-[node name="BackgroundGradient" type="ColorRect" parent="PanelContainer" unique_id=202529033]
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.02, 0.04, 0.08, 0.98)
+theme_override_styles/panel = ExtResource("3_panel_yellow")
 
 [node name="MarginContainer" type="MarginContainer" parent="PanelContainer" unique_id=1594959733]
 layout_mode = 2
@@ -89,32 +62,12 @@ layout_mode = 2
 mouse_filter = 2
 alignment = 1
 
-[node name="LeftDecor" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=307327314]
-custom_minimum_size = Vector2(20, 2)
-layout_mode = 2
-size_flags_vertical = 4
-mouse_filter = 2
-color = Color(1, 0.69, 0, 0.5)
-
 [node name="TitleLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=1792600233]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.69, 0, 1)
 theme_override_font_sizes/font_size = 28
 text = "[ MISSION PAUSED ]"
 horizontal_alignment = 1
-
-[node name="RightDecor" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=1558525504]
-custom_minimum_size = Vector2(20, 2)
-layout_mode = 2
-size_flags_vertical = 4
-mouse_filter = 2
-color = Color(1, 0.69, 0, 0.5)
-
-[node name="HSeparator" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=434625645]
-custom_minimum_size = Vector2(0, 1)
-layout_mode = 2
-mouse_filter = 2
-color = Color(1, 0.69, 0, 0.3)
 
 [node name="WarningLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1093497007]
 layout_mode = 2
@@ -131,11 +84,6 @@ theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
 theme_override_font_sizes/font_size = 16
 text = "Abandoning mission forfeits rewards"
 horizontal_alignment = 1
-
-custom_minimum_size = Vector2(0, 1)
-layout_mode = 2
-mouse_filter = 2
-color = Color(1, 0.69, 0, 0.3)
 
 [node name="ShipStatusContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=987654321]
 layout_mode = 2
@@ -180,12 +128,6 @@ theme_override_font_sizes/font_size = 12
 text = "100%"
 horizontal_alignment = 2
 
-[node name="HSeparator3" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=141414141]
-custom_minimum_size = Vector2(0, 1)
-layout_mode = 2
-mouse_filter = 2
-color = Color(1, 0.69, 0, 0.3)
-
 [node name="ButtonContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=653487567]
 layout_mode = 2
 theme_override_constants/separation = 12
@@ -197,6 +139,9 @@ theme_override_colors/font_color = Color(0.2, 1, 0.5, 1)
 theme_override_colors/font_pressed_color = Color(0.1, 0.8, 0.3, 1)
 theme_override_colors/font_hover_color = Color(0.4, 1, 0.7, 1)
 theme_override_font_sizes/font_size = 18
+theme_override_styles/normal = ExtResource("4_btn_yellow")
+theme_override_styles/hover = ExtResource("5_btn_yellow_hover")
+theme_override_styles/pressed = ExtResource("6_btn_yellow_pressed")
 text = "[ RESUME MISSION ]"
 
 [node name="AbandonButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer" unique_id=1073317876]
@@ -206,68 +151,7 @@ theme_override_colors/font_color = Color(1, 0.3, 0.2, 1)
 theme_override_colors/font_pressed_color = Color(0.8, 0.2, 0.1, 1)
 theme_override_colors/font_hover_color = Color(1, 0.5, 0.4, 1)
 theme_override_font_sizes/font_size = 18
+theme_override_styles/normal = ExtResource("7_btn_red")
+theme_override_styles/hover = ExtResource("8_btn_red_hover")
+theme_override_styles/pressed = ExtResource("9_btn_red_pressed")
 text = "[ ABANDON MISSION ]"
-
-[node name="CornerTL" type="ColorRect" parent="." unique_id=856527143]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -200.0
-offset_top = -260.0
-offset_right = -192.0
-offset_bottom = -252.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(1, 0.69, 0, 0.8)
-
-[node name="CornerTR" type="ColorRect" parent="." unique_id=1566598832]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = 192.0
-offset_top = -260.0
-offset_right = 200.0
-offset_bottom = -252.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(1, 0.69, 0, 0.8)
-
-[node name="CornerBL" type="ColorRect" parent="." unique_id=1716809364]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -200.0
-offset_top = 253.0
-offset_right = -192.0
-offset_bottom = 261.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(1, 0.69, 0, 0.8)
-
-[node name="CornerBR" type="ColorRect" parent="." unique_id=1342162887]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = 192.0
-offset_top = 253.0
-offset_right = 200.0
-offset_bottom = 261.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(1, 0.69, 0, 0.8)

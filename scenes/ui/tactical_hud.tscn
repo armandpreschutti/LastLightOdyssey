@@ -4,7 +4,6 @@
 [ext_resource type="Texture2D" uid="uid://vo2viufuvim8" path="res://assets/sprites/ui/icons/icon_turn.png" id="2_turn"]
 [ext_resource type="Texture2D" uid="uid://cpy36v51jmkqa" path="res://assets/sprites/ui/icons/icon_hull.png" id="3_cryo"]
 [ext_resource type="Texture2D" uid="uid://bogrtadpxsc8r" path="res://assets/sprites/ui/icons/icon_fuel.png" id="4_fuel"]
-[ext_resource type="Texture2D" uid="uid://dlq4cvxnvfbg3" path="res://assets/sprites/ui/icons/icon_scrap.png" id="5_scrap"]
 [ext_resource type="Texture2D" uid="uid://cuktrpqwoxamb" path="res://assets/sprites/ui/icons/icon_health.png" id="6_health"]
 [ext_resource type="Texture2D" uid="uid://dr5jrb0ya1m3i" path="res://assets/sprites/ui/icons/icon_ap.png" id="7_ap"]
 [ext_resource type="Texture2D" uid="uid://dcyfquoyeofqk" path="res://assets/sprites/ui/icons/icon_movement.png" id="8_move"]
@@ -25,24 +24,6 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_hud")
 
-[node name="TopLeftGlow" type="ColorRect" parent="." unique_id=1123447043]
-layout_mode = 1
-offset_left = 3.0
-offset_top = 13.0
-offset_right = 171.0
-offset_bottom = 71.0
-mouse_filter = 2
-color = Color(1, 0.69, 0, 0.15)
-
-[node name="TopLeftBorder" type="ColorRect" parent="." unique_id=1360476450]
-layout_mode = 1
-offset_left = 5.0
-offset_top = 15.0
-offset_right = 169.0
-offset_bottom = 69.0
-mouse_filter = 2
-color = Color(1, 0.69, 0, 0.6)
-
 [node name="TopLeftPanel" type="PanelContainer" parent="." unique_id=1171109752]
 layout_mode = 1
 offset_left = 7.0
@@ -61,32 +42,8 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
 theme_override_colors/font_pressed_color = Color(0.8, 0.5, 0.1, 1)
 theme_override_colors/font_hover_color = Color(1, 0.85, 0.4, 1)
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 25
 text = "|| PAUSE"
-
-[node name="TopBarGlow" type="ColorRect" parent="." unique_id=2119943299]
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_left = 1385.0
-offset_top = 25.0
-offset_right = -26.0
-offset_bottom = 103.0
-grow_horizontal = 2
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.1)
-
-[node name="TopBarBorder" type="ColorRect" parent="." unique_id=803373041]
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_left = 1387.0
-offset_top = 27.0
-offset_right = -26.0
-offset_bottom = 101.0
-grow_horizontal = 2
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.5)
 
 [node name="TopBar" type="PanelContainer" parent="." unique_id=1967064932]
 layout_mode = 1
@@ -114,7 +71,7 @@ layout_mode = 2
 [node name="TurnHeader" type="Label" parent="TopBar/HBox/TurnContainer" unique_id=189740145]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 15
 text = "MISSION PROGRESS"
 
 [node name="TurnRow" type="HBoxContainer" parent="TopBar/HBox/TurnContainer" unique_id=811300766]
@@ -131,7 +88,7 @@ stretch_mode = 5
 [node name="TurnLabel" type="Label" parent="TopBar/HBox/TurnContainer/TurnRow" unique_id=750411914]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 25
 text = "TURN: 1"
 
 [node name="IntegrityContainer" type="VBoxContainer" parent="TopBar/HBox" unique_id=1199695057]
@@ -140,7 +97,7 @@ layout_mode = 2
 [node name="IntegrityHeader" type="Label" parent="TopBar/HBox/IntegrityContainer" unique_id=1465797441]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 15
 text = "SHIP INTEGRITY"
 
 [node name="IntegrityRow" type="HBoxContainer" parent="TopBar/HBox/IntegrityContainer" unique_id=1199695058]
@@ -157,7 +114,7 @@ stretch_mode = 5
 [node name="IntegrityLabel" type="Label" parent="TopBar/HBox/IntegrityContainer/IntegrityRow" unique_id=1731214028]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 25
 text = "HULL: 100%"
 
 [node name="IntegrityBar" type="ProgressBar" parent="TopBar/HBox/IntegrityContainer" unique_id=1199695059]
@@ -173,7 +130,7 @@ layout_mode = 2
 [node name="HaulHeader" type="Label" parent="TopBar/HBox/HaulContainer" unique_id=1822262075]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 15
 text = "MISSION HAUL"
 
 [node name="FuelRow" type="HBoxContainer" parent="TopBar/HBox/HaulContainer" unique_id=582695351]
@@ -190,34 +147,8 @@ stretch_mode = 5
 [node name="FuelLabel" type="Label" parent="TopBar/HBox/HaulContainer/FuelRow" unique_id=1367891182]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.4, 0.8, 1, 1)
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 18
 text = "FUEL: +0"
-
-[node name="SidePanelGlow" type="ColorRect" parent="." unique_id=1812237233]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -298.0
-offset_top = 107.0
-offset_right = -26.0
-offset_bottom = 383.0
-grow_horizontal = 0
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.1)
-
-[node name="SidePanelBorder" type="ColorRect" parent="." unique_id=123355792]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -294.0
-offset_top = 109.0
-offset_right = -26.0
-offset_bottom = 385.0
-grow_horizontal = 0
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.5)
 
 [node name="SidePanel" type="PanelContainer" parent="." unique_id=1616637872]
 layout_mode = 1
@@ -243,14 +174,14 @@ theme_override_constants/separation = 4
 [node name="SelectedHeader" type="Label" parent="SidePanel/VBox" unique_id=821972186]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 15
 text = "SELECTED UNIT"
 horizontal_alignment = 1
 
 [node name="SelectedName" type="Label" parent="SidePanel/VBox" unique_id=144999834]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 28
 text = "CAPTAIN"
 horizontal_alignment = 1
 
@@ -275,7 +206,7 @@ stretch_mode = 5
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.2, 1, 0.5, 1)
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 18
 text = "HP: 100 / 100"
 
 [node name="HPBar" type="ProgressBar" parent="SidePanel/VBox/HPContainer" unique_id=1840723550]
@@ -300,7 +231,7 @@ stretch_mode = 5
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.69, 0, 1)
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 18
 text = "AP: 2 / 2"
 
 [node name="APBar" type="ProgressBar" parent="SidePanel/VBox/APContainer" unique_id=110159418]
@@ -332,14 +263,14 @@ stretch_mode = 5
 layout_mode = 2
 mouse_filter = 1
 theme_override_colors/font_color = Color(0.4, 0.8, 1, 1)
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 18
 text = "MOVE RANGE: 5 tiles"
 
 [node name="AttackLabel" type="Label" parent="SidePanel/VBox" unique_id=1487146111]
 layout_mode = 2
 mouse_filter = 1
 theme_override_colors/font_color = Color(1, 0.5, 0.3, 1)
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 18
 text = "ATTACK RANGE: 10 tiles"
 
 [node name="CoverBonusLabel" type="Label" parent="SidePanel/VBox" unique_id=204597237]
@@ -347,96 +278,17 @@ visible = false
 layout_mode = 2
 mouse_filter = 1
 theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 18
 text = "COVER BONUS: +15% ACC"
 
 [node name="StatusLabel" type="Label" parent="SidePanel/VBox" unique_id=861025183]
 layout_mode = 2
 mouse_filter = 1
 theme_override_colors/font_color = Color(0.2, 1, 0.5, 1)
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 18
 text = "STATUS: >> READY TO ACT"
 
-
-[node name="CornerTL" type="ColorRect" parent="." unique_id=1284922390]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -290.0
-offset_top = 111.0
-offset_right = -282.0
-offset_bottom = 119.0
-grow_horizontal = 0
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.8)
-
-[node name="CornerTR" type="ColorRect" parent="." unique_id=625267942]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -38.0
-offset_top = 111.0
-offset_right = -30.0
-offset_bottom = 119.0
-grow_horizontal = 0
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.8)
-
-[node name="CornerBL" type="ColorRect" parent="." unique_id=1697022628]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -290.0
-offset_top = 373.0
-offset_right = -282.0
-offset_bottom = 381.0
-grow_horizontal = 0
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.8)
-
-[node name="CornerBR" type="ColorRect" parent="." unique_id=371090944]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -38.0
-offset_top = 373.0
-offset_right = -30.0
-offset_bottom = 381.0
-grow_horizontal = 0
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.8)
-
-[node name="ActionsPanelGlow" type="ColorRect" parent="." unique_id=4100000001]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -298.0
-offset_top = 389.0
-offset_right = -26.0
-offset_bottom = 671.0
-grow_horizontal = 0
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.1)
-
-[node name="ActionsPanelBorder" type="ColorRect" parent="." unique_id=4100000002]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -294.0
-offset_top = 391.0
-offset_right = -26.0
-offset_bottom = 669.0
-grow_horizontal = 0
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.5)
-
-[node name="ActionsPanel" type="PanelContainer" parent="." unique_id=4100000003]
+[node name="ActionsPanel" type="PanelContainer" parent="." unique_id=-194967293]
 visible = false
 layout_mode = 1
 anchors_preset = 1
@@ -449,35 +301,28 @@ offset_bottom = 667.0
 grow_horizontal = 0
 mouse_filter = 1
 
-[node name="Background" type="ColorRect" parent="ActionsPanel" unique_id=4100000004]
+[node name="Background" type="ColorRect" parent="ActionsPanel" unique_id=-194967292]
 layout_mode = 2
 mouse_filter = 2
 color = Color(0.02, 0.04, 0.08, 0.95)
 
-[node name="VBox" type="VBoxContainer" parent="ActionsPanel" unique_id=4100000005]
+[node name="VBox" type="VBoxContainer" parent="ActionsPanel" unique_id=-194967291]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="ActionsHeader" type="Label" parent="ActionsPanel/VBox" unique_id=4100000006]
+[node name="ActionsHeader" type="Label" parent="ActionsPanel/VBox" unique_id=-194967290]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 14
 text = "ACTIONS"
 horizontal_alignment = 1
 
-[node name="AbilityPreviewRow" type="HBoxContainer" parent="ActionsPanel/VBox" unique_id=4100000007]
+[node name="AbilityPreviewRow" type="HBoxContainer" parent="ActionsPanel/VBox" unique_id=-194967289]
 layout_mode = 2
 theme_override_constants/separation = 6
 alignment = 1
 
-[node name="PassivesLabel" type="Label" parent="ActionsPanel/VBox" unique_id=4100000008]
-visible = false
-layout_mode = 2
-theme_override_colors/font_color = Color(0.3, 0.7, 0.45, 1)
-theme_override_font_sizes/font_size = 11
-autowrap_mode = 2
-
-[node name="HSepActions" type="ColorRect" parent="ActionsPanel/VBox" unique_id=4100000009]
+[node name="HSepActions" type="ColorRect" parent="ActionsPanel/VBox" unique_id=-194967287]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
@@ -488,35 +333,42 @@ visible = false
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="AbilityHeader" type="Label" parent="ActionsPanel/VBox/AbilityContainer" unique_id=75367921]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.4, 0.9, 0.7, 1)
-theme_override_font_sizes/font_size = 12
-text = "SPECIALIST ABILITY:"
-
-[node name="AbilityButton" type="Button" parent="ActionsPanel/VBox/AbilityContainer" unique_id=1914461745]
+[node name="AbilityButton1" type="Button" parent="ActionsPanel/VBox/AbilityContainer" unique_id=1914461745]
+visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
 theme_override_colors/font_hover_color = Color(0.7, 1, 1, 1)
-theme_override_font_sizes/font_size = 14
-text = "[ OVERWATCH ] - 1 AP"
+theme_override_colors/font_disabled_color = Color(0.5, 0.5, 0.5, 1)
+theme_override_font_sizes/font_size = 18
+text = "[ ABILITY 1 ] - 1 AP"
 
-[node name="AbilityDesc" type="Label" parent="ActionsPanel/VBox/AbilityContainer" unique_id=1232992288]
+[node name="AbilityButton2" type="Button" parent="ActionsPanel/VBox/AbilityContainer" unique_id=277871914]
+visible = false
 layout_mode = 2
-theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
-theme_override_font_sizes/font_size = 11
-text = "Enter overwatch stance. Automatically shoot the first enemy that moves within line of sight."
-autowrap_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
+theme_override_colors/font_hover_color = Color(0.7, 1, 1, 1)
+theme_override_colors/font_disabled_color = Color(0.5, 0.5, 0.5, 1)
+theme_override_font_sizes/font_size = 18
+text = "[ ABILITY 2 ] - 1 AP"
+
+[node name="AbilityButton3" type="Button" parent="ActionsPanel/VBox/AbilityContainer" unique_id=981247120]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
+theme_override_colors/font_hover_color = Color(0.7, 1, 1, 1)
+theme_override_colors/font_disabled_color = Color(0.5, 0.5, 0.5, 1)
+theme_override_font_sizes/font_size = 18
+text = "[ ABILITY 3 ] - 1 AP"
 
 [node name="CancelButton" type="Button" parent="ActionsPanel/VBox/AbilityContainer" unique_id=987654321]
 visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.5, 0.3, 1)
 theme_override_colors/font_hover_color = Color(1, 0.7, 0.5, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 15
 text = "[ CANCEL ]"
 
-[node name="HSepButtons" type="ColorRect" parent="ActionsPanel/VBox" unique_id=4100000010]
+[node name="HSepButtons" type="ColorRect" parent="ActionsPanel/VBox" unique_id=-194967286]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
@@ -531,7 +383,7 @@ layout_mode = 2
 mouse_filter = 1
 theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
 theme_override_colors/font_hover_color = Color(1, 0.85, 0.4, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 20
 text = "[ END TURN ]"
 
 [node name="ExtractButton" type="Button" parent="ActionsPanel/VBox/ButtonContainer" unique_id=887023]
@@ -540,60 +392,8 @@ layout_mode = 2
 mouse_filter = 1
 theme_override_colors/font_color = Color(0.2, 1, 0.5, 1)
 theme_override_colors/font_hover_color = Color(0.4, 1, 0.7, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 20
 text = "[ EXTRACT TEAM ]"
-
-[node name="ActCornerTL" type="ColorRect" parent="." unique_id=4100000011]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -290.0
-offset_top = 393.0
-offset_right = -282.0
-offset_bottom = 401.0
-grow_horizontal = 0
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.8)
-
-[node name="ActCornerTR" type="ColorRect" parent="." unique_id=4100000012]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -38.0
-offset_top = 393.0
-offset_right = -30.0
-offset_bottom = 401.0
-grow_horizontal = 0
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.8)
-
-[node name="ActCornerBL" type="ColorRect" parent="." unique_id=4100000013]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -290.0
-offset_top = 659.0
-offset_right = -282.0
-offset_bottom = 667.0
-grow_horizontal = 0
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.8)
-
-[node name="ActCornerBR" type="ColorRect" parent="." unique_id=4100000014]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -38.0
-offset_top = 659.0
-offset_right = -30.0
-offset_bottom = 667.0
-grow_horizontal = 0
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.8)
 
 [node name="ObjectivesPanel" parent="." unique_id=999888777 instance=ExtResource("9_objectives")]
 anchors_preset = 2
@@ -605,13 +405,11 @@ grow_horizontal = 1
 
 [node name="UnitStatsTooltip" parent="." unique_id=888777666 instance=ExtResource("10_tooltip")]
 layout_mode = 1
+anchors_preset = 2
 anchor_left = 0.0
-anchor_top = 1.0
 anchor_right = 0.0
-anchor_bottom = 1.0
 offset_left = 10.0
 offset_top = -355.0
 offset_right = 300.0
 offset_bottom = -145.0
 grow_horizontal = 1
-grow_vertical = 0

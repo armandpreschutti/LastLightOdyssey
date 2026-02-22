@@ -74,6 +74,7 @@ var TurretUnitScene: PackedScene
 var AmbushTrapScene: PackedScene
 var PauseMenuScene: PackedScene
 var ConfirmDialogScene: PackedScene
+var SuppressionEffectScript: Script
 var current_pause_menu: Control = null
 
 # Active turrets placed by Tech officer
@@ -118,6 +119,7 @@ func _ready() -> void:
 	AmbushTrapScene = load("res://scenes/tactical/ambush_trap.tscn")
 	PauseMenuScene = load("res://scenes/ui/pause_menu.tscn")
 	ConfirmDialogScene = load("res://scenes/ui/confirm_dialog.tscn")
+	SuppressionEffectScript = load("res://scripts/tactical/suppression_effect.gd")
 
 	tactical_map.tile_clicked.connect(_on_tile_clicked)
 	tactical_map.tile_hovered.connect(_on_tile_hovered)
@@ -821,8 +823,21 @@ func _on_tile_hovered(grid_pos: Vector2i) -> void:
 	
 	# Update pathfinding path if there's a selected unit and it's their turn
 	if selected_unit and selected_unit == deployed_officers[current_unit_index]:
-		# Check if hovered tile is within movement range
-		if tactical_map.movement_range_tiles.get(grid_pos, false):
+		# For Charge mode (Bulldozer), show straight line path that goes through half-cover
+		if charge_mode and selected_unit.officer_type == "heavy":
+			# Find enemy at hovered position
+			var enemy_at_pos: Node2D = null
+			for enemy in enemies:
+				if enemy.get_grid_position() == grid_pos and enemy.current_hp > 0:
+					enemy_at_pos = enemy
+					break
+			# Show straight line path to enemy (bulldozer ignores half-cover)
+			if enemy_at_pos and _is_enemy_visible(enemy_at_pos):
+				tactical_map.update_charge_pathfinding_path(selected_unit.get_grid_position(), grid_pos)
+			else:
+				tactical_map.clear_pathfinding_path()
+		# Normal pathfinding for regular movement
+		elif tactical_map.movement_range_tiles.get(grid_pos, false):
 			tactical_map.update_pathfinding_path(selected_unit.get_grid_position(), grid_pos)
 		else:
 			tactical_map.clear_pathfinding_path()
@@ -1044,8 +1059,12 @@ func _try_hit_and_run_move(target_pos: Vector2i) -> void:
 		tactical_hud.show_combat_message("INVALID DASH TARGET", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(0.8).timeout
 		tactical_hud.hide_combat_message()
-		# Still end turn since the shot was already taken
-		_on_end_turn_pressed()
+		
+		# Restore mode to let player try again or cancel
+		hit_and_run_mode = true
+		tactical_map.set_movement_range(selected_unit.get_grid_position(), 3)
+		tactical_hud.show_combat_message("HIT & RUN — CLICK TILE TO DASH!", Color(0.2, 1.0, 0.4))
+		tactical_hud.show_cancel_button()
 		return
 	
 	# Check if tile is occupied by another unit
@@ -1054,7 +1073,12 @@ func _try_hit_and_run_move(target_pos: Vector2i) -> void:
 		tactical_hud.show_combat_message("TILE OCCUPIED", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(0.8).timeout
 		tactical_hud.hide_combat_message()
-		_on_end_turn_pressed()
+		
+		# Restore mode to let player try again or cancel
+		hit_and_run_mode = true
+		tactical_map.set_movement_range(selected_unit.get_grid_position(), 3)
+		tactical_hud.show_combat_message("HIT & RUN — CLICK TILE TO DASH!", Color(0.2, 1.0, 0.4))
+		tactical_hud.show_cancel_button()
 		return
 
 	_set_animating(true)
@@ -1079,8 +1103,10 @@ func _try_hit_and_run_move(target_pos: Vector2i) -> void:
 	is_special_move = false
 	selected_unit._start_cooldown("hit_and_run", 1)
 	
-	# End turn after dash completes
-	_on_end_turn_pressed()
+	# Small delay to let UI update before ending turn
+	await get_tree().create_timer(0.1).timeout
+	
+	_finalize_movement_turn_logic(selected_unit, false)
 
 
 ## Untouchable free 3-tile dash (Scout — after kill)
@@ -3864,6 +3890,11 @@ func _cancel_ability_mode() -> void:
 		tactical_map.clear_movement_range()
 		tactical_hud.hide_combat_message()
 		tactical_hud.hide_cancel_button()
+		if selected_unit and selected_unit == deployed_officers[current_unit_index]:
+			if selected_unit.has_ap():
+				tactical_map.set_movement_range(selected_unit.get_grid_position(), selected_unit.move_range)
+			else:
+				_check_auto_end_turn()
 		return
 
 	if untouchable_dash_mode:
@@ -4790,16 +4821,21 @@ func _activate_suppression_fire() -> void:
 		
 	tactical_hud.show_combat_message("SUPPRESSION FIRE — ENEMIES PINNED!", Color(1.0, 0.5, 0.1))
 
-	# Apply pin_down to all visible enemies
+	# Apply pin_down to all visible enemies (FIX: duration 3 turns instead of 1)
 	for enemy in visible_enemies:
 		if enemy.has_method("add_status_effect"):
-			enemy.add_status_effect("pin_down", 1)
+			enemy.add_status_effect("pin_down", 3)
 		# Visual: brief orange flash on each enemy
 		var esp = enemy.get_node_or_null("Sprite")
 		if esp:
 			var et = create_tween()
 			et.tween_property(esp, "modulate", Color(1.8, 0.5, 0.1, 1.0), 0.08)
 			et.tween_property(esp, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+			
+		# Spawn continuous tracer effect node
+		var supp_effect = SuppressionEffectScript.new()
+		get_node("MapContainer/EffectsLayer").add_child(supp_effect)
+		supp_effect.initialize(selected_unit, enemy)
 			
 	await get_tree().create_timer(1.2).timeout
 	tactical_hud.hide_combat_message()
@@ -5037,23 +5073,59 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 	var heavy_od = GameState.get_officer(heavy_unit.officer_key)
 	var has_bulldozer = heavy_od and heavy_od.has_ability("bulldozer")
 	
-	# Pathfind to find a valid destination near the enemy
-	# The Heavy will pathfind around walls to get as close as possible
-	var charge_destination = _find_charge_destination(heavy_pos, enemy_pos, has_bulldozer)
+	# Get the straight line (Bresenham) from Heavy to enemy
+	var line_tiles = _get_line_tiles(heavy_pos, enemy_pos)
+	
+	# Check for blocking obstacles along the straight line
+	var blocked_tiles = []
+	var has_half_cover = false
+	for tile in line_tiles:
+		if tile == heavy_pos or tile == enemy_pos:
+			continue
+		
+		var tile_type = tactical_map.tile_data.get(tile, 0)
+		
+		# Walls always block
+		if tile_type == tactical_map.TileType.WALL or tactical_map.blocks_line_of_sight(tile):
+			blocked_tiles.append(tile)
+		# Half cover blocks without Bulldozer
+		elif tile_type == tactical_map.TileType.HALF_COVER:
+			has_half_cover = true
+			blocked_tiles.append(tile)
+	
+	# Without Bulldozer: if any obstacle blocks the path, charge fails
+	if not has_bulldozer and blocked_tiles.size() > 0:
+		if has_half_cover:
+			tactical_hud.show_combat_message("HALF COVER BLOCKS CHARGE — NEED BULLDOZER", Color(1, 0.3, 0.3))
+		else:
+			tactical_hud.show_combat_message("WALL BLOCKS CHARGE", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		# Refund the AP since charge failed
+		heavy_unit.current_ap += 1
+		heavy_unit._update_ap_display()
+		heavy_unit.ability_cooldowns.erase("charge")
+		_set_animating(false)
+		if heavy_unit == selected_unit:
+			tactical_hud.update_ability_buttons(heavy_unit.officer_type, heavy_unit.current_ap, heavy_unit)
+		if heavy_unit == deployed_officers[current_unit_index] and heavy_unit.has_ap():
+			var unit_pos = heavy_unit.get_grid_position()
+			tactical_map.set_movement_range(unit_pos, heavy_unit.move_range)
+		return
+	
+	# Find destination along the straight line (adjacent to enemy or closest valid tile)
+	var charge_destination = _find_charge_line_destination(heavy_pos, enemy_pos, line_tiles, has_bulldozer)
 	
 	if charge_destination == heavy_pos:
 		# Can't find any valid destination, deal damage from current position
 		pass
 	else:
-		# Get the path to the destination (pathfinds around walls automatically)
-		var world_path = tactical_map.find_path(heavy_pos, charge_destination)
-		
-		# Bulldozer: Destroy half cover along the path
+		# Bulldozer: Destroy half cover along the straight line BEFORE moving
 		var destroyed_any_cover = false
-		if has_bulldozer and world_path.size() > 0:
-			for i in range(world_path.size()):
-				var world_pos = world_path[i]
-				var tile = Vector2i(int(world_pos.x / 32), int(world_pos.y / 32))
+		if has_bulldozer:
+			for tile in line_tiles:
+				if tile == heavy_pos or tile == enemy_pos:
+					continue
 				if tactical_map.tile_data.get(tile, 0) == tactical_map.TileType.HALF_COVER:
 					tactical_map.set_tile_type(tile, tactical_map.TileType.FLOOR)
 					destroyed_any_cover = true
@@ -5067,22 +5139,28 @@ func _try_charge_enemy(grid_pos: Vector2i) -> void:
 					dt.tween_property(debris_rect, "modulate:a", 0.0, 0.5)
 					dt.tween_callback(debris_rect.queue_free)
 		
+		# Create the movement path along the straight line
+		var tile_path = _create_charge_line_path(heavy_pos, charge_destination, line_tiles)
+		
 		# Move heavy to the destination
-		# Removed: tactical_map.set_unit_position_solid(heavy_pos, false)
 		heavy_unit.set_grid_position(charge_destination)
 		
-		# Animate rush movement (fast)
-		# CRITICAL: Set is_special_move flag to prevent turn sequencing issues
+		# Animate rush movement (fast) along the straight line
 		is_special_move = true
 		is_charging = true
 		
-		if world_path and world_path.size() > 1:
+		if tile_path and tile_path.size() > 1:
 			if destroyed_any_cover:
 				tactical_hud.show_combat_message("BULLDOZER!", Color(1.0, 0.4, 0.0))
 			else:
 				tactical_hud.show_combat_message("CHARGING!", Color(1, 0.5, 0.1))
 			
-			heavy_unit.move_along_path(world_path)
+			# Convert tile coords to world coords for movement
+			var path = PackedVector2Array()
+			for tile in tile_path:
+				path.append(Vector2(tile.x * 32, tile.y * 32))
+			
+			heavy_unit.move_along_path(path)
 			await heavy_unit.movement_finished
 		else:
 			# Direct teleport if no path
@@ -5193,110 +5271,91 @@ func _create_bulldozer_path(from: Vector2i, to: Vector2i, line_tiles: Array[Vect
 	return path
 
 
-## Find the best charge destination using pathfinding (works around walls)
-## Prioritizes: 1) Adjacent to enemy, 2) Reachable tile closest to enemy
-## has_bulldozer: if true, can destroy half-cover on the path
-func _find_charge_destination(from: Vector2i, enemy_pos: Vector2i, has_bulldozer: bool) -> Vector2i:
+## Find the best destination along the straight charge line (Bresenham)
+## Prioritizes: 1) Adjacent to enemy, 2) Closest valid tile on the line
+## has_bulldozer: if true, half-cover is treated as valid (will be destroyed)
+func _find_charge_line_destination(from: Vector2i, enemy_pos: Vector2i, line_tiles: Array[Vector2i], has_bulldozer: bool) -> Vector2i:
 	var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 	
-	# First priority: find an adjacent tile to the enemy that we can pathfind to
-	var best_adjacent = Vector2i(-1, -1)
-	var best_path_length = 999
-	
+	# First priority: find an adjacent tile to the enemy that is on our line
 	for dir in directions:
 		var adjacent = enemy_pos + dir
 		if adjacent == from:
 			return from  # Already adjacent, no movement needed
 		
-		# Check if this tile is valid (walkable and not occupied)
-		if not tactical_map.is_tile_walkable(adjacent):
-			continue
-		if tactical_map.get_unit_at(adjacent):
-			continue
-		
-		# Try to pathfind to this tile
-		var path = tactical_map.find_path(from, adjacent)
-		if path.is_empty():
-			continue  # No path found
-		
-		var path_length = path.size() - 1  # Number of tiles to move
-		if path_length < best_path_length:
-			best_path_length = path_length
-			best_adjacent = adjacent
+		# Check if this adjacent tile is on our line
+		if adjacent in line_tiles:
+			# Check if valid (walkable or half-cover if bulldozer, and not occupied)
+			var tile_type = tactical_map.tile_data.get(adjacent, 0)
+			var is_valid = false
+			
+			if tactical_map.is_tile_walkable(adjacent):
+				is_valid = true
+			elif has_bulldozer and tile_type == tactical_map.TileType.HALF_COVER:
+				is_valid = true
+			
+			if is_valid and not tactical_map.get_unit_at(adjacent):
+				return adjacent
 	
-	# If we found an adjacent tile we can reach, use it
-	if best_adjacent != Vector2i(-1, -1):
-		return best_adjacent
-	
-	# Second priority: find the closest reachable tile to the enemy
-	# Use BFS to find all reachable tiles within 4-tile charge range
-	var reachable = _get_reachable_positions_for_charge(from, 4, has_bulldozer)
-	
+	# Second priority: find the closest valid tile on the line
 	var best_pos = from
 	var best_distance = 999
 	
-	for tile in reachable:
+	for tile in line_tiles:
 		if tile == from:
-			continue
+			continue  # Skip starting position
 		if tile == enemy_pos:
 			continue  # Can't stand on enemy
 		
-		var dist = abs(tile.x - enemy_pos.x) + abs(tile.y - enemy_pos.y)
-		if dist < best_distance:
-			best_distance = dist
-			best_pos = tile
+		# Check if valid
+		var tile_type = tactical_map.tile_data.get(tile, 0)
+		var is_valid = false
+		
+		if tactical_map.is_tile_walkable(tile):
+			is_valid = true
+		elif has_bulldozer and tile_type == tactical_map.TileType.HALF_COVER:
+			is_valid = true
+		
+		if is_valid and not tactical_map.get_unit_at(tile):
+			var dist = abs(tile.x - enemy_pos.x) + abs(tile.y - enemy_pos.y)
+			if dist < best_distance:
+				best_distance = dist
+				best_pos = tile
 	
 	return best_pos
 
 
-## Get all reachable positions within range for charge ability
-## Uses BFS to find valid tiles, optionally treating half-cover as walkable (Bulldozer)
-func _get_reachable_positions_for_charge(from: Vector2i, max_range: int, has_bulldozer: bool) -> Array[Vector2i]:
-	var reachable: Array[Vector2i] = []
-	var queue: Array[Vector2i] = [from]
-	var visited: Dictionary = {from: true}
-	var distances: Dictionary = {from: 0}
+## Create a path along the straight charge line from start to destination
+func _create_charge_line_path(from: Vector2i, to: Vector2i, line_tiles: Array[Vector2i]) -> Array[Vector2i]:
+	var path: Array[Vector2i] = []
 	
-	while queue.size() > 0:
-		var current = queue.pop_front()
-		var dist = distances[current]
-		
-		# Add current tile to reachable if not the starting position
-		if current != from:
-			# Check if tile is valid (not extraction, no turret, not occupied)
-			if not tactical_map.is_extraction_tile(current) and not tactical_map.has_turret_at(current):
-				var unit_at = tactical_map.get_unit_at(current)
-				if unit_at == null:
-					reachable.append(current)
-		
-		if dist < max_range:
-			var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-			for dir in directions:
-				var next_pos = current + dir
-				
-				if visited.has(next_pos):
-					continue
-				
-				# Check if we can move to this tile
-				var can_enter = false
-				
-				if tactical_map.is_tile_walkable(next_pos):
-					# Normal walkable tile
-					can_enter = true
-				elif has_bulldozer:
-					# With Bulldozer, half-cover is treated as walkable (will be destroyed)
-					var tile_type = tactical_map.tile_data.get(next_pos, 0)
-					if tile_type == tactical_map.TileType.HALF_COVER:
-						can_enter = true
-					elif tile_type == tactical_map.TileType.FLOOR:
-						can_enter = true
-				
-				if can_enter and not tactical_map.is_extraction_tile(next_pos) and not tactical_map.has_turret_at(next_pos):
-					visited[next_pos] = true
-					distances[next_pos] = dist + 1
-					queue.append(next_pos)
+	# Find indices in the line tiles
+	var from_idx = -1
+	var to_idx = -1
 	
-	return reachable
+	for i in range(line_tiles.size()):
+		if line_tiles[i] == from:
+			from_idx = i
+		if line_tiles[i] == to:
+			to_idx = i
+	
+	if from_idx == -1 or to_idx == -1:
+		# Fall back to direct positions if not found in line
+		path.append(from)
+		path.append(to)
+		return path
+	
+	# Build path from from_idx to to_idx
+	if from_idx < to_idx:
+		# Moving towards enemy (normal case)
+		for i in range(from_idx, to_idx + 1):
+			path.append(line_tiles[i])
+	else:
+		# Moving away (shouldn't happen, but handle it)
+		for i in range(from_idx, to_idx - 1, -1):
+			path.append(line_tiles[i])
+	
+	return path
 
 
 ## Perform melee attack animation for charge ability

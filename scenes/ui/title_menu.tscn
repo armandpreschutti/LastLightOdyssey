@@ -1,9 +1,9 @@
 [gd_scene format=3 uid="uid://c3k8m2v5q7n1x"]
 
 [ext_resource type="Script" uid="uid://day2d8iwj6tdp" path="res://scripts/ui/title_menu.gd" id="1_menu"]
-[ext_resource type="FontFile" uid="uid://xqiy7ijtjsrv" path="res://assets/fonts/VT323-Regular.ttf" id="2_font"]
 [ext_resource type="PackedScene" path="res://scenes/ui/fade_transition.tscn" id="3_fade"]
 [ext_resource type="FontFile" uid="uid://cgdjky251gw3f" path="res://assets/fonts/BungeeShade-Regular.ttf" id="4_bungee"]
+[ext_resource type="Theme" uid="uid://c6rjhh6buixy4" path="res://assets/themes/base_ui_theme.tres" id="5_theme"]
 
 [node name="TitleMenu" type="Control" unique_id=2119721125]
 layout_mode = 3
@@ -13,6 +13,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+theme = ExtResource("5_theme")
 script = ExtResource("1_menu")
 
 [node name="Background" type="ColorRect" parent="." unique_id=1528992151]
@@ -89,7 +90,6 @@ vertical_alignment = 1
 [node name="SubtitleLabel" type="Label" parent="CenterContainer/VBoxContainer/TitleContainer" unique_id=1343138273]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 0.7)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 24
 horizontal_alignment = 1
 
@@ -107,11 +107,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-
-[node name="BackgroundGradient" type="ColorRect" parent="CenterContainer/VBoxContainer/ButtonPanelWrapper/ButtonPanel" unique_id=448011392]
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.019607844, 0.039215688, 0.078431375, 0)
 
 [node name="MarginContainer" type="MarginContainer" parent="CenterContainer/VBoxContainer/ButtonPanelWrapper/ButtonPanel" unique_id=376019531]
 layout_mode = 2
@@ -134,7 +129,6 @@ size_flags_horizontal = 4
 theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
 theme_override_colors/font_pressed_color = Color(0.2, 0.6, 0.8, 1)
 theme_override_colors/font_hover_color = Color(0.7, 1, 1, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 26
 text = "[ NEW VOYAGE ]"
 
@@ -145,7 +139,6 @@ size_flags_horizontal = 4
 theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
 theme_override_colors/font_pressed_color = Color(0.2, 0.4, 0.5, 1)
 theme_override_colors/font_hover_color = Color(0.5, 0.8, 0.9, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 26
 disabled = true
 text = "[ CONTINUE ]"
@@ -157,7 +150,6 @@ size_flags_horizontal = 4
 theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
 theme_override_colors/font_pressed_color = Color(0.8, 0.5, 0.1, 1)
 theme_override_colors/font_hover_color = Color(1, 0.85, 0.4, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 22
 text = "[ SETTINGS ]"
 
@@ -168,7 +160,6 @@ size_flags_horizontal = 4
 theme_override_colors/font_color = Color(0.6, 0.3, 0.3, 1)
 theme_override_colors/font_pressed_color = Color(0.4, 0.2, 0.2, 1)
 theme_override_colors/font_hover_color = Color(1, 0.4, 0.3, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 22
 text = "[ ABANDON SHIP ]"
 
@@ -186,7 +177,6 @@ offset_bottom = -10.0
 grow_horizontal = 0
 grow_vertical = 0
 theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 0.5)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 18
 text = "v0.1.0 Alpha"
 horizontal_alignment = 2
@@ -207,7 +197,6 @@ offset_bottom = 140.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_colors/font_color = Color(1, 0.3, 0.2, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 20
 text = "[ NO SAVED VOYAGE FOUND ]"
 horizontal_alignment = 1

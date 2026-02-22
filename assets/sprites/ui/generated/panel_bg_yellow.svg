@@ -1,0 +1,11 @@
+<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow-yellow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  <path d="M 10 0 L 90 0 L 100 10 L 100 90 L 90 100 L 10 100 L 0 90 L 0 10 Z" 
+        fill="rgba(10, 20, 30, 0.8)" 
+        stroke="#ffcc00" stroke-width="2" filter="url(#glow-yellow)" />
+</svg>

@@ -1,6 +1,10 @@
 [gd_scene format=3 uid="uid://blam7n4qp2x5v"]
 
 [ext_resource type="Script" uid="uid://ckilyimgod8qk" path="res://scripts/ui/team_select_dialog.gd" id="1_dialog"]
+[ext_resource type="Theme" path="res://assets/themes/base_ui_theme.tres" id="2_theme"]
+[ext_resource type="StyleBox" path="res://assets/themes/style_btn_red.tres" id="3_btn_red"]
+[ext_resource type="StyleBox" path="res://assets/themes/style_btn_red_hover.tres" id="4_btn_red_hover"]
+[ext_resource type="StyleBox" path="res://assets/themes/style_btn_red_pressed.tres" id="5_btn_red_pressed"]
 
 [node name="TeamSelectDialog" type="Control" unique_id=1137062011]
 layout_mode = 3
@@ -10,6 +14,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+theme = ExtResource("2_theme")
 script = ExtResource("1_dialog")
 
 [node name="ColorRect" type="ColorRect" parent="." unique_id=1842270009]
@@ -20,38 +25,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 color = Color(0, 0, 0.05, 0.75)
-
-[node name="GlowEffect" type="ColorRect" parent="." unique_id=2047189722]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -408.0
-offset_top = -358.0
-offset_right = 408.0
-offset_bottom = 358.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.12)
-
-[node name="BorderOuter" type="ColorRect" parent="." unique_id=1634907669]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -404.0
-offset_top = -354.0
-offset_right = 404.0
-offset_bottom = 354.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.5)
 
 [node name="PanelContainer" type="PanelContainer" parent="." unique_id=303257792]
 layout_mode = 1
@@ -66,11 +39,6 @@ offset_right = 400.0
 offset_bottom = 350.0
 grow_horizontal = 2
 grow_vertical = 2
-
-[node name="BackgroundGradient" type="ColorRect" parent="PanelContainer" unique_id=877181330]
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.02, 0.04, 0.08, 0.98)
 
 [node name="MarginContainer" type="MarginContainer" parent="PanelContainer" unique_id=217420984]
 layout_mode = 2
@@ -179,6 +147,9 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.3, 0.3, 1)
 theme_override_colors/font_hover_color = Color(1, 0.4, 0.3, 1)
 theme_override_font_sizes/font_size = 18
+theme_override_styles/normal = ExtResource("3_btn_red")
+theme_override_styles/hover = ExtResource("4_btn_red_hover")
+theme_override_styles/pressed = ExtResource("5_btn_red_pressed")
 text = "[ CANCEL ]"
 
 [node name="DeployButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer" unique_id=1883616886]
@@ -189,66 +160,4 @@ theme_override_colors/font_hover_color = Color(0.4, 1, 0.7, 1)
 theme_override_font_sizes/font_size = 18
 text = "[ DEPLOY ]"
 
-[node name="CornerTL" type="ColorRect" parent="." unique_id=766320743]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -400.0
-offset_top = -350.0
-offset_right = -392.0
-offset_bottom = -342.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.8)
 
-[node name="CornerTR" type="ColorRect" parent="." unique_id=157104663]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = 392.0
-offset_top = -350.0
-offset_right = 400.0
-offset_bottom = -342.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.8)
-
-[node name="CornerBL" type="ColorRect" parent="." unique_id=2064860018]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -400.0
-offset_top = 342.0
-offset_right = -392.0
-offset_bottom = 350.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.8)
-
-[node name="CornerBR" type="ColorRect" parent="." unique_id=1033935084]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = 392.0
-offset_top = 342.0
-offset_right = 400.0
-offset_bottom = 350.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.8)

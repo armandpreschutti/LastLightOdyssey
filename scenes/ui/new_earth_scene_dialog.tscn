@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://c7iq6k36m7l3s"]
 
 [ext_resource type="Script" path="res://scripts/ui/new_earth_scene_dialog.gd" id="1_scene"]
-[ext_resource type="FontFile" uid="uid://xqiy7ijtjsrv" path="res://assets/fonts/VT323-Regular.ttf" id="2_font"]
 
 [node name="NewEarthSceneDialog" type="Control"]
 layout_mode = 3
@@ -54,7 +53,6 @@ mouse_filter = 2
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.3, 0.9, 0.5, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 28
 text = "NEW EARTH"
 vertical_alignment = 1
@@ -62,7 +60,6 @@ vertical_alignment = 1
 [node name="LocationLabel" type="Label" parent="VBoxContainer/TitleBar"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.4, 0.7, 0.5, 0.7)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 16
 text = "DESTINATION REACHED  |  CYCLE 20"
 vertical_alignment = 1
@@ -118,7 +115,6 @@ custom_minimum_size = Vector2(0, 80)
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.5, 0.9, 0.7, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 18
 text = "After a long journey through the void, you have reached your destination. A new home awaits the survivors."
 horizontal_alignment = 1
@@ -130,7 +126,6 @@ custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.3, 0.9, 0.5, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 16
 text = "[ PRESS ANY KEY TO CONTINUE ]"
 horizontal_alignment = 1

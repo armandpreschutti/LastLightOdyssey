@@ -1,17 +1,9 @@
-scout:
+GENERAL NOTES
 
-- hit and run: don't see a button to activate.
+- instead of no fuel cost between traveled pathlines, bring back to wormhole.
 
-- explosive ambush: nothing happens when enemy units move over MINE should deal a ton of damage, also make it no cooldown and make the animation look like explosion (see ROCKET SALVO for example).
+- enemy units who haven't moved in 2 turns should automcatically move to a new  position.
 
-medic:
+- instead of clicking a toggle to select unit in team select, I want to select it when I click on the unit's panel
 
-- adrenaline patch: remove the +1 AP bonus
-
-
-heavy:
-
-- charge: when BULLDOZER is NOT unlocked, do not allow charge if no clear line of sight
-
-- supression fire: enemies should not be able to move while suppressed, otherwise good
-
+- if a unit ends turn while in 'ability' mode (selecting charge target, selecting patch target, selecting turret placement, etc), then automatically cancel the ability.

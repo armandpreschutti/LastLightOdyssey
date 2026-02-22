@@ -1316,7 +1316,7 @@ func apply_bulldozer_armor() -> void:
 		tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.2)
 
 
-## Heavy Level 2B: Suppression Fire - all visible enemies -25% accuracy for 1 turn
+## Heavy Level 2B: Suppression Fire - all visible enemies -25% accuracy for 3 turns
 func apply_suppression_fire() -> bool:
 	if not use_ap(2):
 		return false

@@ -47,7 +47,7 @@ const ABILITY_DEFS: Dictionary = {
 	"inspire":            {"name": "Inspire",            "desc": "Grant one ally within 5 tiles +1 AP immediately. (1 AP, 3-turn cooldown)",                                                                       "level": 3, "slot": "c", "type": "active", "cost": 1, "cooldown": 3},
 
 	# SCOUT - Level 2
-	"hit_and_run":        {"name": "Hit & Run",          "desc": "Dash up to 3 tiles to reposition. Free action. (0 AP, 1-turn cooldown)",                                                                     "level": 2, "slot": "a", "type": "active", "cost": 0, "cooldown": 1},
+	"hit_and_run":        {"name": "Hit & Run",          "desc": "Dash up to 3 tiles to reposition. Free action. (0 AP, 1-turn cooldown)",                                                                     "level": 2, "slot": "a", "type": "passive", "cost": 0, "cooldown": 1},
 	"deep_scanner":       {"name": "Deep Scanner",       "desc": "Reveals all enemies in a large radius (15 tiles) for 1 turn, even through walls. (0 AP, 3-turn cooldown)",                                      "level": 2, "slot": "b", "type": "active", "cost": 0, "cooldown": 3},
 
 	# SCOUT - Level 3

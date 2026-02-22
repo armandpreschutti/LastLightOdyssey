@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://dse8n8vbhfch8"]
 
 [ext_resource type="Script" uid="uid://ct0265qwp8xoe" path="res://scripts/ui/tutorial_overlay.gd" id="1_tutorial"]
-[ext_resource type="FontFile" uid="uid://xqiy7ijtjsrv" path="res://assets/fonts/VT323-Regular.ttf" id="2_font"]
 
 [node name="TutorialOverlay" type="CanvasLayer" unique_id=1470784220]
 layer = 100
@@ -51,7 +50,6 @@ mouse_filter = 2
 [node name="TutorialIcon" type="Label" parent="PromptContainer/PromptPanel/MarginContainer/VBoxContainer/HeaderContainer" unique_id=116739225]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.4, 0.9, 1.0, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 24
 text = ">>"
 
@@ -59,14 +57,12 @@ text = ">>"
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.4, 0.9, 1.0, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 24
 text = " COMMANDER'S BRIEFING"
 
 [node name="StepCounter" type="Label" parent="PromptContainer/PromptPanel/MarginContainer/VBoxContainer/HeaderContainer" unique_id=1728293870]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 18
 text = "[1/9]"
 
@@ -78,7 +74,6 @@ mouse_filter = 2
 custom_minimum_size = Vector2(480, 80)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 20
 text = "Tutorial content goes here. This is a test message that explains what the player should do next."
 autowrap_mode = 2
@@ -98,7 +93,6 @@ custom_minimum_size = Vector2(140, 45)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.2, 1.0, 0.5, 1)
 theme_override_colors/font_hover_color = Color(0.4, 1.0, 0.7, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 20
 text = "[ GOT IT ]"
 
@@ -107,7 +101,6 @@ custom_minimum_size = Vector2(180, 45)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.4, 0.3, 0.3, 1)
 theme_override_colors/font_hover_color = Color(0.6, 0.4, 0.4, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 20
 text = "[ SKIP TUTORIAL ]"
 
@@ -126,7 +119,6 @@ offset_bottom = 180.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_colors/font_color = Color(0.4, 0.9, 1.0, 1)
-theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 48
 text = "V"
 horizontal_alignment = 1

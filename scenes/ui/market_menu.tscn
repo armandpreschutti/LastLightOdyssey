@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://c8q4568aa0abc"]
 
 [ext_resource type="Script" path="res://scripts/ui/market_menu.gd" id="1_market"]
+[ext_resource type="Theme" path="res://assets/themes/base_ui_theme.tres" id="2_theme"]
 
 [node name="MarketMenu" type="Control"]
 layout_mode = 3
@@ -9,6 +10,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme = ExtResource("2_theme")
 script = ExtResource("1_market")
 
 [node name="Background" type="ColorRect" parent="."]
