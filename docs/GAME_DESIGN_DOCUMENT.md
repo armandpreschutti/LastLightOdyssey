@@ -158,6 +158,7 @@ Purchased with **Data Logs** earned via Leveling.
 **Progression UI:**
 - **Team Select**: Unit levels and XP progress bars are visible in the collapsed view.
 - **Mission Recap**: Features animated XP slider bars showing unit progression toward the next level.
+- **Tactical HUD Abilities**: The 3-slot ability panel strictly categorizes abilities. Active abilities display AP costs and reflect dynamic cooldowns. Passive abilities display as `[ NAME - PASSIVE ]` with a green tint and disabled state. Unlocked slots prominently display `[ LOCKED ]`. All ability texts are left-justified to align cleanly with their buttons.
 
 ### 3.4 The Injury System
 
@@ -584,6 +585,7 @@ As the mission progresses throughout the voyage, the game displays **emotional s
 - **Pathfinding Visualization**: Neon blue glowing path line with arrowhead showing unit's movement path when hovering over destination tiles
 - **Unit Stats Tooltip**: Hover tooltip displaying unit statistics (HP, AP, movement range, sight range, shoot range, damage, unit type) with color-coded HP and AP indicators
 - **Comprehensive Tooltips**: Extensive tooltip system for all UI elements (pause button, turn label, stability, haul, HP, AP, end turn, extract, abilities, movement, attack range, status, cover bonus)
+- **Extract Button Pulse**: The `[EXTRACT TEAM]` button features a continuous sine-wave opacity pulse (1.0 to 0.15 over 0.4s) managed by a GDScript Tween when extraction is available, visually prompting the player to complete the mission.
 
 **Camera System:**
 - **Tactical View**: Default zoom (1.0x) with smooth camera centering on unit selection
@@ -816,6 +818,7 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] **Mission Rewards Pipeline**: Tactical results award XP, cash, intel, and data logs.
 - [x] **Enemy Progression Scaling**: Enemy composition scales by voyage progression/difficulty.
 - [x] **Loss Conditions**: Ship destruction and crew wipe game-over paths implemented.
+- [x] **Tactical UI Refinements**: Extract button pulsing animation and dynamically formatted, left-justified ability buttons (Active/Passive/Locked states).
 
 ### In Progress / Partial
 

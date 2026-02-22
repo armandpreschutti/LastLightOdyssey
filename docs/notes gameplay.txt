@@ -6,4 +6,4 @@ GENERAL NOTES
 
 - instead of clicking a toggle to select unit in team select, I want to select it when I click on the unit's panel
 
-- if a unit ends turn while in 'ability' mode (selecting charge target, selecting patch target, selecting turret placement, etc), then automatically cancel the ability.
+- SUPPRESSION should be target an enemy, not effect all enemies

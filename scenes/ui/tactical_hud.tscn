@@ -9,6 +9,7 @@
 [ext_resource type="Texture2D" uid="uid://dcyfquoyeofqk" path="res://assets/sprites/ui/icons/icon_movement.png" id="8_move"]
 [ext_resource type="PackedScene" uid="uid://b8k3m2n4p5q6r" path="res://scenes/ui/objectives_panel.tscn" id="9_objectives"]
 [ext_resource type="PackedScene" uid="uid://b8k2m5qsavnx" path="res://scenes/ui/unit_stats_tooltip.tscn" id="10_tooltip"]
+[ext_resource type="Theme" uid="uid://c6rjhh6buixy4" path="res://assets/themes/base_ui_theme.tres" id="11_theme"]
 
 [node name="TacticalHUD" type="Control" unique_id=933333705]
 layout_mode = 3
@@ -22,6 +23,7 @@ offset_bottom = -8.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+theme = ExtResource("11_theme")
 script = ExtResource("1_hud")
 
 [node name="TopLeftPanel" type="PanelContainer" parent="." unique_id=1171109752]
@@ -31,11 +33,6 @@ offset_top = 17.0
 offset_right = 167.0
 offset_bottom = 67.0
 mouse_filter = 1
-
-[node name="Background" type="ColorRect" parent="TopLeftPanel" unique_id=1420841227]
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.02, 0.04, 0.08, 0.95)
 
 [node name="PauseButton" type="Button" parent="TopLeftPanel" unique_id=225298005]
 layout_mode = 2
@@ -55,11 +52,6 @@ offset_right = -30.0
 offset_bottom = 99.0
 grow_horizontal = 2
 mouse_filter = 1
-
-[node name="Background" type="ColorRect" parent="TopBar" unique_id=1960716984]
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.02, 0.04, 0.08, 0.95)
 
 [node name="HBox" type="HBoxContainer" parent="TopBar" unique_id=2019524215]
 layout_mode = 2
@@ -156,16 +148,11 @@ anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
 offset_left = -290.0
-offset_top = 111.0
+offset_top = 134.0
 offset_right = -30.0
-offset_bottom = 381.0
+offset_bottom = 404.0
 grow_horizontal = 0
 mouse_filter = 1
-
-[node name="Background" type="ColorRect" parent="SidePanel" unique_id=1067588929]
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.02, 0.04, 0.08, 0.95)
 
 [node name="VBox" type="VBoxContainer" parent="SidePanel" unique_id=1919118714]
 layout_mode = 2
@@ -288,79 +275,96 @@ theme_override_colors/font_color = Color(0.2, 1, 0.5, 1)
 theme_override_font_sizes/font_size = 18
 text = "STATUS: >> READY TO ACT"
 
-[node name="ActionsPanel" type="PanelContainer" parent="." unique_id=-194967293]
+[node name="AbilitiesPanel" type="PanelContainer" parent="." unique_id=-194967293]
 visible = false
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
 offset_left = -290.0
-offset_top = 393.0
+offset_top = 413.0
 offset_right = -30.0
-offset_bottom = 667.0
+offset_bottom = 565.0
 grow_horizontal = 0
 mouse_filter = 1
 
-[node name="Background" type="ColorRect" parent="ActionsPanel" unique_id=-194967292]
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.02, 0.04, 0.08, 0.95)
-
-[node name="VBox" type="VBoxContainer" parent="ActionsPanel" unique_id=-194967291]
+[node name="VBox" type="VBoxContainer" parent="AbilitiesPanel" unique_id=-194967291]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="ActionsHeader" type="Label" parent="ActionsPanel/VBox" unique_id=-194967290]
+[node name="AbilitiesHeader" type="Label" parent="AbilitiesPanel/VBox" unique_id=-194967290]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
 theme_override_font_sizes/font_size = 14
-text = "ACTIONS"
+text = "ABILITIES"
 horizontal_alignment = 1
 
-[node name="AbilityPreviewRow" type="HBoxContainer" parent="ActionsPanel/VBox" unique_id=-194967289]
-layout_mode = 2
-theme_override_constants/separation = 6
-alignment = 1
-
-[node name="HSepActions" type="ColorRect" parent="ActionsPanel/VBox" unique_id=-194967287]
+[node name="HSepActions" type="ColorRect" parent="AbilitiesPanel/VBox" unique_id=-194967287]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
 color = Color(0.4, 0.9, 1, 0.3)
 
-[node name="AbilityContainer" type="VBoxContainer" parent="ActionsPanel/VBox" unique_id=719903340]
+[node name="AbilityContainer" type="VBoxContainer" parent="AbilitiesPanel/VBox" unique_id=719903340]
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="AbilityButton1" type="Button" parent="ActionsPanel/VBox/AbilityContainer" unique_id=1914461745]
+[node name="AbilityRow1" type="HBoxContainer" parent="AbilitiesPanel/VBox/AbilityContainer" unique_id=1052508332]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="AbilityPreview1" type="CenterContainer" parent="AbilitiesPanel/VBox/AbilityContainer/AbilityRow1" unique_id=1049685715]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+
+[node name="AbilityButton1" type="Button" parent="AbilitiesPanel/VBox/AbilityContainer/AbilityRow1" unique_id=1914461745]
 visible = false
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
 theme_override_colors/font_hover_color = Color(0.7, 1, 1, 1)
 theme_override_colors/font_disabled_color = Color(0.5, 0.5, 0.5, 1)
 theme_override_font_sizes/font_size = 18
 text = "[ ABILITY 1 ] - 1 AP"
 
-[node name="AbilityButton2" type="Button" parent="ActionsPanel/VBox/AbilityContainer" unique_id=277871914]
+[node name="AbilityRow2" type="HBoxContainer" parent="AbilitiesPanel/VBox/AbilityContainer" unique_id=609246834]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="AbilityPreview2" type="CenterContainer" parent="AbilitiesPanel/VBox/AbilityContainer/AbilityRow2" unique_id=830582697]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+
+[node name="AbilityButton2" type="Button" parent="AbilitiesPanel/VBox/AbilityContainer/AbilityRow2" unique_id=277871914]
 visible = false
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
 theme_override_colors/font_hover_color = Color(0.7, 1, 1, 1)
 theme_override_colors/font_disabled_color = Color(0.5, 0.5, 0.5, 1)
 theme_override_font_sizes/font_size = 18
 text = "[ ABILITY 2 ] - 1 AP"
 
-[node name="AbilityButton3" type="Button" parent="ActionsPanel/VBox/AbilityContainer" unique_id=981247120]
+[node name="AbilityRow3" type="HBoxContainer" parent="AbilitiesPanel/VBox/AbilityContainer" unique_id=1071084203]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="AbilityPreview3" type="CenterContainer" parent="AbilitiesPanel/VBox/AbilityContainer/AbilityRow3" unique_id=679819637]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+
+[node name="AbilityButton3" type="Button" parent="AbilitiesPanel/VBox/AbilityContainer/AbilityRow3" unique_id=981247120]
 visible = false
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
 theme_override_colors/font_hover_color = Color(0.7, 1, 1, 1)
 theme_override_colors/font_disabled_color = Color(0.5, 0.5, 0.5, 1)
 theme_override_font_sizes/font_size = 18
 text = "[ ABILITY 3 ] - 1 AP"
 
-[node name="CancelButton" type="Button" parent="ActionsPanel/VBox/AbilityContainer" unique_id=987654321]
+[node name="CancelButton" type="Button" parent="AbilitiesPanel/VBox/AbilityContainer" unique_id=987654321]
 visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.5, 0.3, 1)
@@ -368,17 +372,41 @@ theme_override_colors/font_hover_color = Color(1, 0.7, 0.5, 1)
 theme_override_font_sizes/font_size = 15
 text = "[ CANCEL ]"
 
-[node name="HSepButtons" type="ColorRect" parent="ActionsPanel/VBox" unique_id=-194967286]
+[node name="SystemPanel" type="PanelContainer" parent="." unique_id=987654322]
+visible = false
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -290.0
+offset_top = 936.0
+offset_right = -30.0
+offset_bottom = 1048.0
+grow_horizontal = 0
+mouse_filter = 1
+
+[node name="VBox" type="VBoxContainer" parent="SystemPanel" unique_id=987654324]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="SystemHeader" type="Label" parent="SystemPanel/VBox" unique_id=987654325]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 0.5, 0.6, 1)
+theme_override_font_sizes/font_size = 14
+text = "COMMANDS"
+horizontal_alignment = 1
+
+[node name="HSepButtons" type="ColorRect" parent="SystemPanel/VBox" unique_id=-194967286]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
 color = Color(0.4, 0.9, 1, 0.3)
 
-[node name="ButtonContainer" type="VBoxContainer" parent="ActionsPanel/VBox" unique_id=127745626]
+[node name="ButtonContainer" type="VBoxContainer" parent="SystemPanel/VBox" unique_id=127745626]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="EndTurnButton" type="Button" parent="ActionsPanel/VBox/ButtonContainer" unique_id=258473847]
+[node name="EndTurnButton" type="Button" parent="SystemPanel/VBox/ButtonContainer" unique_id=258473847]
 layout_mode = 2
 mouse_filter = 1
 theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
@@ -386,7 +414,7 @@ theme_override_colors/font_hover_color = Color(1, 0.85, 0.4, 1)
 theme_override_font_sizes/font_size = 20
 text = "[ END TURN ]"
 
-[node name="ExtractButton" type="Button" parent="ActionsPanel/VBox/ButtonContainer" unique_id=887023]
+[node name="ExtractButton" type="Button" parent="SystemPanel/VBox/ButtonContainer" unique_id=887023]
 visible = false
 layout_mode = 2
 mouse_filter = 1
@@ -396,20 +424,24 @@ theme_override_font_sizes/font_size = 20
 text = "[ EXTRACT TEAM ]"
 
 [node name="ObjectivesPanel" parent="." unique_id=999888777 instance=ExtResource("9_objectives")]
-anchors_preset = 2
-offset_left = 0.0
-offset_top = -135.0
-offset_right = 290.0
-offset_bottom = 0.0
+layout_mode = 0
+anchors_preset = 0
+anchor_top = 0.0
+anchor_bottom = 0.0
+offset_left = 8.0
+offset_top = 926.0
+offset_right = 298.0
+offset_bottom = 1071.0
 grow_horizontal = 1
+grow_vertical = 1
 
 [node name="UnitStatsTooltip" parent="." unique_id=888777666 instance=ExtResource("10_tooltip")]
 layout_mode = 1
 anchors_preset = 2
 anchor_left = 0.0
 anchor_right = 0.0
-offset_left = 10.0
-offset_top = -355.0
-offset_right = 300.0
-offset_bottom = -145.0
+offset_left = 8.0
+offset_top = -385.0
+offset_right = 298.0
+offset_bottom = -175.0
 grow_horizontal = 1

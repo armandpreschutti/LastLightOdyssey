@@ -37,22 +37,33 @@ const ABILITY_ICON_PATH = "res://assets/sprites/ui/icons/abilities/"
 @onready var cover_bonus_label: Label = $SidePanel/VBox/CoverBonusLabel
 @onready var status_label: Label = $SidePanel/VBox/StatusLabel
 
-# Actions panel (bottom-right, shown only when a unit is selected)
-@onready var actions_panel: PanelContainer = $ActionsPanel
-@onready var ability_preview_row: HBoxContainer = $ActionsPanel/VBox/AbilityPreviewRow
+# Abilities panel (bottom-right, shown only when a unit is selected)
+@onready var abilities_panel: PanelContainer = $AbilitiesPanel
+@onready var system_panel: PanelContainer = $SystemPanel
 
-# Ability section (inside ActionsPanel)
-@onready var ability_container: VBoxContainer = $ActionsPanel/VBox/AbilityContainer
-@onready var ability_btn_1: Button = $ActionsPanel/VBox/AbilityContainer/AbilityButton1
-@onready var ability_btn_2: Button = $ActionsPanel/VBox/AbilityContainer/AbilityButton2
-@onready var ability_btn_3: Button = $ActionsPanel/VBox/AbilityContainer/AbilityButton3
+@onready var ability_previews: Array[CenterContainer] = [
+	$AbilitiesPanel/VBox/AbilityContainer/AbilityRow1/AbilityPreview1,
+	$AbilitiesPanel/VBox/AbilityContainer/AbilityRow2/AbilityPreview2,
+	$AbilitiesPanel/VBox/AbilityContainer/AbilityRow3/AbilityPreview3
+]
+
+# Ability section (inside AbilitiesPanel)
+@onready var ability_container: VBoxContainer = $AbilitiesPanel/VBox/AbilityContainer
+@onready var ability_btn_1: Button = $AbilitiesPanel/VBox/AbilityContainer/AbilityRow1/AbilityButton1
+@onready var ability_btn_2: Button = $AbilitiesPanel/VBox/AbilityContainer/AbilityRow2/AbilityButton2
+@onready var ability_btn_3: Button = $AbilitiesPanel/VBox/AbilityContainer/AbilityRow3/AbilityButton3
 @onready var ability_buttons: Array[Button] = [ability_btn_1, ability_btn_2, ability_btn_3]
-@onready var cancel_button: Button = $ActionsPanel/VBox/AbilityContainer/CancelButton
 
-# Action buttons (inside ActionsPanel)
-@onready var end_turn_button: Button = $ActionsPanel/VBox/ButtonContainer/EndTurnButton
-@onready var extract_button: Button = $ActionsPanel/VBox/ButtonContainer/ExtractButton
+@onready var ability_rows: Array[HBoxContainer] = [
+	$AbilitiesPanel/VBox/AbilityContainer/AbilityRow1,
+	$AbilitiesPanel/VBox/AbilityContainer/AbilityRow2,
+	$AbilitiesPanel/VBox/AbilityContainer/AbilityRow3
+]
+@onready var cancel_button: Button = $AbilitiesPanel/VBox/AbilityContainer/CancelButton
 
+# System buttons (inside SystemPanel)
+@onready var end_turn_button: Button = $SystemPanel/VBox/ButtonContainer/EndTurnButton
+@onready var extract_button: Button = $SystemPanel/VBox/ButtonContainer/ExtractButton
 # Objectives panel
 @onready var objectives_panel: PanelContainer = $ObjectivesPanel
 
@@ -65,6 +76,7 @@ var ability_panel: Control = null
 # Current ability info
 var _is_animating: bool = false  # Track animation state to disable ability button
 var _current_officer_key: String = ""  # Track current officer for ability panel
+var _extract_tween: Tween = null  # Track extract pulse animation
 
 
 func _ready() -> void:
@@ -72,7 +84,8 @@ func _ready() -> void:
 	end_turn_button.pressed.connect(_on_end_turn_pressed)
 	extract_button.pressed.connect(_on_extract_pressed)
 	cancel_button.pressed.connect(_on_cancel_pressed)
-	actions_panel.visible = false
+	abilities_panel.visible = false
+	system_panel.visible = false
 
 	# Load and setup ability panel
 	var ability_panel_scene = preload("res://scenes/ui/ability_panel.tscn")
@@ -249,6 +262,18 @@ func update_haul(fuel: int, cash: int) -> void:
 @warning_ignore("shadowed_variable_base_class")
 func set_extract_visible(is_visible: bool) -> void:
 	extract_button.visible = is_visible
+	
+	if _extract_tween:
+		_extract_tween.kill()
+		_extract_tween = null
+		
+	if is_visible:
+		extract_button.modulate = Color(1, 1, 1, 1)
+		_extract_tween = create_tween().set_loops()
+		_extract_tween.tween_property(extract_button, "modulate", Color(1, 1, 1, 0.15), 0.4).set_trans(Tween.TRANS_SINE)
+		_extract_tween.tween_property(extract_button, "modulate", Color(1, 1, 1, 1), 0.4).set_trans(Tween.TRANS_SINE)
+	else:
+		extract_button.modulate = Color(1, 1, 1, 1)
 
 
 func set_end_turn_enabled(enabled: bool) -> void:
@@ -275,11 +300,16 @@ func _on_end_turn_pressed() -> void:
 func _on_extract_pressed() -> void:
 	if SFXManager:
 		SFXManager.play_sfx_by_name("ui", "click")
+	if _extract_tween:
+		_extract_tween.kill()
+		_extract_tween = null
+	extract_button.modulate = Color(1, 1, 1, 1)
 	extract_pressed.emit()
 
 
 func update_ability_buttons(officer_type: String, current_ap: int, unit_ref: Object = null) -> void:
-	actions_panel.visible = true
+	abilities_panel.visible = true
+	system_panel.visible = true
 	_current_officer_key = officer_type
 
 	ability_container.visible = false
@@ -498,8 +528,9 @@ func hide_pause_button() -> void:
 
 
 func _update_ability_preview(officer_type: String) -> void:
-	for child in ability_preview_row.get_children():
-		child.free()
+	for preview in ability_previews:
+		for child in preview.get_children():
+			child.free()
 	if officer_type == "":
 		return
 	var od = GameState.get_officer(officer_type)
@@ -551,7 +582,7 @@ func _update_ability_preview(officer_type: String) -> void:
 		else:
 			icon_rect.modulate = Color(0.25, 0.25, 0.3, 0.5)
 		slot.add_child(icon_rect)
-		ability_preview_row.add_child(slot)
+		ability_previews[i].add_child(slot)
 
 
 ## Show upgraded abilities panel for current officer
