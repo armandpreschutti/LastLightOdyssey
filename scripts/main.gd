@@ -37,6 +37,7 @@ var _suppress_mission_scene_dismiss_handler: bool = false
 var _pending_next_choices: Array[String] = []
 var _pending_is_terminal_mission: bool = false
 var _pending_completed_mission_id: String = ""
+var _pending_story_after_raider: bool = false
 
 const CAMPAIGN_PRE_SCENES: Dictionary = {
 	"1A": {"title": "CHAPTER 1 — MISSION 1A", "text": "Long-range telemetry locks onto a fragmented pre-colony beacon. You are not the first to cross this void.", "location": "SIGNAL 1A"},
@@ -672,44 +673,34 @@ func _on_mission_complete(success: bool, stats: Dictionary) -> void:
 	_pending_is_terminal_mission = false
 	_pending_completed_mission_id = ""
 
-	# If mission was successful, mark node as completed (only for scavenge sites)
-	if success and pending_node_type == EventManager.NodeType.SCAVENGE_SITE:
+	# Check if this was a Raider ambush BEFORE touching node state
+	var is_raider_ambush = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
+
+	if is_raider_ambush:
+		# Raider mission only: clear the raider, do NOT affect the underlying node state
+		if success:
+			GameState.cash += 50
+			VoyageManager.message_log_added.emit("Raider bounty claimed: 50 CR")
+		VoyageManager.clear_raider(success)
+	elif success and pending_node_type == EventManager.NodeType.SCAVENGE_SITE:
+		# Normal mission: handle story completion and mark node CLEARED
 		var current_node = VoyageManager.get_current_node()
 		if current_node:
-			print("DEBUG: current_node.id=%s, state=%d, is_story=%s" % [current_node.id, current_node.state, current_node.state == NodeData.NodeState.STORY])
 			if current_node.state == NodeData.NodeState.STORY:
 				var story_result = VoyageManager.complete_story_node(current_node.id, true)
-				print("DEBUG: story_result = %s" % str(story_result))
 				if story_result.get("completed", false):
 					var chapter_num = int(story_result.get("chapters_completed", 0))
-					var chapter_total = VoyageManager.get_story_chain_length()
 					VoyageManager.message_log_added.emit("Story chapter %d/%d completed." % [chapter_num, VoyageManager.get_story_chain_length()])
 
-					# Store campaign branching info for post-recap flow
 					var choices = story_result.get("next_choices", [])
 					_pending_next_choices.assign(choices)
 					_pending_is_terminal_mission = story_result.get("is_terminal", false)
 					_pending_completed_mission_id = VoyageManager.current_story_mission_id
-					print("DEBUG: After assignment | mission_id=%s choices=%s terminal=%s" % [_pending_completed_mission_id, str(_pending_next_choices), _pending_is_terminal_mission])
 
 				if story_result.get("story_chain_complete", false):
 					_pending_story_victory = true
 			current_node.state = NodeData.NodeState.CLEARED
 			VoyageManager.map_updated.emit()
-	
-	# Check if this was a Raider ambush
-	var is_raider_ambush = false
-	var current_node_check = VoyageManager.get_current_node()
-	if VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id:
-		is_raider_ambush = true
-	
-	if is_raider_ambush:
-		# Success means we destroyed the raider team, failure implies retreat/loss
-		if success:
-			# Award 50 credits for successful raider mission
-			GameState.cash += 50
-			VoyageManager.message_log_added.emit("Raider bounty claimed: 50 CR")
-		VoyageManager.clear_raider(success)
 
 	# Show mission recap directly (post-scene will be shown after recap is dismissed)
 	mission_recap.show_recap(stats)
@@ -725,6 +716,12 @@ func _on_recap_dismissed() -> void:
 	# Check if we need to show post-story scene
 	if _pending_completed_mission_id != "" and ENABLE_STORY_POST_SCENE:
 		await _show_post_story_scene()
+
+	# If we just finished a raider mission on a story node, auto-trigger the story flow
+	if _pending_story_after_raider:
+		_pending_story_after_raider = false
+		_trigger_story_after_raider()
+		return
 
 	# Always continue to post-story flow (choice dialog or win)
 	_on_post_story_flow_complete()
@@ -777,6 +774,23 @@ func _on_post_story_flow_complete() -> void:
 	# Re-show deploy button if we are still at a scavenger site and it's not cleared
 	_update_deploy_button_visibility()
 
+
+## After a raider mission on a story node, re-initialize mission context and trigger the story flow
+func _trigger_story_after_raider() -> void:
+	var current_node = VoyageManager.get_current_node()
+	if not current_node or current_node.state != NodeData.NodeState.STORY:
+		_on_post_story_flow_complete()
+		return
+
+	# Re-initialize mission context from the story node (not the raider's STATION biome)
+	current_phase = GamePhase.EVENT_DISPLAY
+	pending_node_type = EventManager.NodeType.SCAVENGE_SITE
+	pending_biome_type = current_node.biome_type
+
+	if ENABLE_STORY_PRE_SCENE:
+		_show_story_beat_scene()
+	else:
+		_on_mission_scene_dismissed()
 
 
 # func _on_trading_complete() -> void: - Removed in V2
@@ -896,6 +910,7 @@ func _on_restart_pressed() -> void:
 	current_event = {}
 	pending_biome_type = -1
 	_pending_game_over_reason = ""
+	_pending_story_after_raider = false
 	_first_node_clicked = false
 	_first_event_seen = false
 	_is_jump_animating = false
@@ -1086,26 +1101,25 @@ func _show_story_beat_scene() -> void:
 	mission_scene_dialog.show_scene(pending_biome_type, "generic", title, beat_text, location)
 
 
-## Show raider ambush using the same scene as story node 1A
+## Show raider ambush scene - always uses STATION biome
 func _show_raider_ambush_scene() -> void:
 	current_phase = GamePhase.EVENT_DISPLAY
 	pending_node_type = EventManager.NodeType.SCAVENGE_SITE
 	
-	# Use the current node's actual biome (planet, asteroid, station, etc.)
-	var current_node = VoyageManager.get_current_node()
-	if current_node:
-		pending_biome_type = current_node.biome_type
-		print("DEBUG_RAIDER: Setting pending_biome_type from current_node = %d" % pending_biome_type)
-	else:
-		pending_biome_type = BiomeConfig.BiomeType.ASTEROID
-		print("DEBUG_RAIDER: current_node is null, defaulting to ASTEROID")
+	# Raider missions always use STATION biome regardless of the node's actual biome
+	pending_biome_type = BiomeConfig.BiomeType.STATION
 	
-	# Use the exact same scene as story mission 1A
+	# If this node is a story signal, queue the story flow for after the raider mission
+	var current_node = VoyageManager.get_current_node()
+	if current_node and current_node.state == NodeData.NodeState.STORY:
+		_pending_story_after_raider = true
+	
 	_suppress_mission_scene_dismiss_handler = true
 	mission_scene_dialog.show_scene(pending_biome_type, "generic", 
 		"RAIDER AMBUSH", 
 		"Hostile raiders have intercepted your ship! You must deploy and eliminate them to continue.", 
-		"EMERGENCY DEPLOYMENT")
+		"EMERGENCY DEPLOYMENT",
+		"res://assets/audio/sfx/scenes/event_scene/pirate_ambush.mp3")
 	
 	# Connect one-time handler for scene dismissal
 	if not mission_scene_dialog.scene_dismissed.is_connected(_on_raider_scene_dismissed):

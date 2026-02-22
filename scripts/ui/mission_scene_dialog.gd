@@ -48,7 +48,8 @@ func show_scene(
 	objective_type: String = "",
 	title_override: String = "",
 	description_override: String = "",
-	location_override: String = ""
+	location_override: String = "",
+	sfx_path_override: String = ""
 ) -> void:
 	_current_biome = biome_type as BiomeConfig.BiomeType
 	var biome_name = BiomeConfig.get_biome_name(_current_biome)
@@ -106,8 +107,11 @@ func show_scene(
 	prompt_label.modulate.a = 0.0
 	_input_ready = false
 	
-	# Play biome-specific SFX
-	_play_mission_sfx(_current_biome)
+	# Play scene SFX (use override if provided, otherwise biome-specific)
+	if sfx_path_override != "":
+		SFXManager.play_scene_sfx(sfx_path_override)
+	else:
+		_play_mission_sfx(_current_biome)
 	
 	# Fade in
 	modulate.a = 0.0

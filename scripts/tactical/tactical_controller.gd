@@ -246,6 +246,9 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		print("DEBUG_MISSION: Raider ambush detected, enabling is_scavenger_mission features")
 	
 	is_story_mission = (current_node.state == NodeData.NodeState.STORY) if current_node else false
+	# Raider ambush on a story node must NOT use story mechanics
+	if is_story_mission and VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id:
+		is_story_mission = false
 	is_story_dev_mode = is_story_mission and GameState.is_developer_mode_enabled()
 
 
