@@ -62,8 +62,8 @@ const ABILITY_ICON_PATH = "res://assets/sprites/ui/icons/abilities/"
 @onready var cancel_button: Button = $AbilitiesPanel/VBox/AbilityContainer/CancelButton
 
 # System buttons (inside SystemPanel)
-@onready var end_turn_button: Button = $SystemPanel/VBox/ButtonContainer/EndTurnButton
-@onready var extract_button: Button = $SystemPanel/VBox/ButtonContainer/ExtractButton
+@onready var end_turn_button: Button = $SystemPanel/VBox/SystemHeader/ButtonContainer/EndTurnButton
+@onready var extract_button: Button = $SystemPanel/VBox/SystemHeader/ButtonContainer/ExtractButton
 # Objectives panel
 @onready var objectives_panel: PanelContainer = $ObjectivesPanel
 
@@ -525,6 +525,15 @@ func show_pause_button() -> void:
 ## Hide the pause button panel (when not in tactical missions)
 func hide_pause_button() -> void:
 	pause_panel.visible = false
+
+
+## Deactivate and reset ABILITIES and COMMANDS panels (e.g. during extraction)
+func hide_abilities_and_commands_panels() -> void:
+	abilities_panel.visible = false
+	system_panel.visible = false
+	cancel_button.visible = false
+	if ability_panel:
+		ability_panel.hide_panel()
 
 
 func _update_ability_preview(officer_type: String) -> void:

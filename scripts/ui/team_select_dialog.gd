@@ -672,7 +672,7 @@ func _create_upgrade_slots(officer_key: String, icon_size: int) -> HBoxContainer
 
 func _on_deploy_pressed() -> void:
 	if selected_officers.size() >= MIN_TEAM_SIZE and selected_officers.size() <= MAX_TEAM_SIZE:
-
+		deploy_button.disabled = true  # Prevent double-click / double-firing
 		team_selected.emit(selected_officers.duplicate(), current_objectives.duplicate())
 
 

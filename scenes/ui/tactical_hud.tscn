@@ -276,14 +276,15 @@ theme_override_font_sizes/font_size = 18
 text = "STATUS: >> READY TO ACT"
 
 [node name="AbilitiesPanel" type="PanelContainer" parent="." unique_id=-194967293]
+visible = false
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
 offset_left = -290.0
-offset_top = 413.0
+offset_top = 732.0
 offset_right = -30.0
-offset_bottom = 565.0
+offset_bottom = 928.0
 grow_horizontal = 0
 mouse_filter = 1
 
@@ -305,7 +306,6 @@ mouse_filter = 2
 color = Color(0.4, 0.9, 1, 0.3)
 
 [node name="AbilityContainer" type="VBoxContainer" parent="AbilitiesPanel/VBox" unique_id=719903340]
-visible = false
 layout_mode = 2
 theme_override_constants/separation = 4
 
@@ -372,6 +372,7 @@ theme_override_font_sizes/font_size = 15
 text = "[ CANCEL ]"
 
 [node name="SystemPanel" type="PanelContainer" parent="." unique_id=987654322]
+visible = false
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
@@ -379,7 +380,7 @@ anchor_right = 1.0
 offset_left = -290.0
 offset_top = 936.0
 offset_right = -30.0
-offset_bottom = 1048.0
+offset_bottom = 1075.0
 grow_horizontal = 0
 mouse_filter = 1
 
@@ -394,17 +395,14 @@ theme_override_font_sizes/font_size = 14
 text = "COMMANDS"
 horizontal_alignment = 1
 
-[node name="HSepButtons" type="ColorRect" parent="SystemPanel/VBox" unique_id=-194967286]
-custom_minimum_size = Vector2(0, 1)
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.3)
-
-[node name="ButtonContainer" type="VBoxContainer" parent="SystemPanel/VBox" unique_id=127745626]
-layout_mode = 2
+[node name="ButtonContainer" type="VBoxContainer" parent="SystemPanel/VBox/SystemHeader" unique_id=127745626]
+layout_mode = 0
+offset_top = 28.0
+offset_right = 236.0
+offset_bottom = 64.0
 theme_override_constants/separation = 8
 
-[node name="EndTurnButton" type="Button" parent="SystemPanel/VBox/ButtonContainer" unique_id=258473847]
+[node name="EndTurnButton" type="Button" parent="SystemPanel/VBox/SystemHeader/ButtonContainer" unique_id=258473847]
 layout_mode = 2
 mouse_filter = 1
 theme_override_colors/font_color = Color(1, 0.7, 0.2, 1)
@@ -412,7 +410,7 @@ theme_override_colors/font_hover_color = Color(1, 0.85, 0.4, 1)
 theme_override_font_sizes/font_size = 20
 text = "[ END TURN ]"
 
-[node name="ExtractButton" type="Button" parent="SystemPanel/VBox/ButtonContainer" unique_id=887023]
+[node name="ExtractButton" type="Button" parent="SystemPanel/VBox/SystemHeader/ButtonContainer" unique_id=887023]
 visible = false
 layout_mode = 2
 mouse_filter = 1
@@ -420,6 +418,12 @@ theme_override_colors/font_color = Color(0.2, 1, 0.5, 1)
 theme_override_colors/font_hover_color = Color(0.4, 1, 0.7, 1)
 theme_override_font_sizes/font_size = 20
 text = "[ EXTRACT TEAM ]"
+
+[node name="HSepButtons" type="ColorRect" parent="SystemPanel/VBox" unique_id=-194967286]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.3)
 
 [node name="ObjectivesPanel" parent="." unique_id=999888777 instance=ExtResource("9_objectives")]
 layout_mode = 0
@@ -438,8 +442,8 @@ layout_mode = 1
 anchors_preset = 2
 anchor_left = 0.0
 anchor_right = 0.0
-offset_left = 1600.0
-offset_top = -373.0
-offset_right = 1890.0
-offset_bottom = -163.0
+offset_left = 1603.0
+offset_top = -658.0
+offset_right = 1893.0
+offset_bottom = -448.0
 grow_horizontal = 1

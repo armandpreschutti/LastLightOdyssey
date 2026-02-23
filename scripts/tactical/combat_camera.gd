@@ -4,9 +4,10 @@ extends Camera2D
 ## Supports mouse scroll wheel zoom in tactical mode
 
 signal camera_transition_complete
+signal camera_transition_started
 
 @export var zoom_tactical: Vector2 = Vector2(1.0, 1.0)  # Default tactical view
-@export var transition_speed: float = 2.0  # Camera movement speed (slower for smoother movement)
+@export var transition_speed: float = 3.333  # Camera movement speed (40% faster than original 2.0)
 
 ## Scroll wheel zoom settings
 @export var zoom_min: Vector2 = Vector2(0.4, 0.4)  # Maximum zoom out (wider view)
@@ -125,6 +126,7 @@ func focus_on_position(world_pos: Vector2) -> void:
 	_target_position = world_pos
 	_target_zoom = zoom_max  # Zoom to maximum for cinematic combat
 	_transitioning = true
+	camera_transition_started.emit()
 	_combat_transition = true  # Lock user zoom during combat
 	_manual_zoom = false
 	_panning = false
@@ -145,6 +147,7 @@ func focus_on_action(shooter_pos: Vector2, target_pos: Vector2) -> void:
 	_target_position = midpoint + map_offset
 	_target_zoom = zoom_max  # Zoom to maximum for cinematic combat
 	_transitioning = true
+	camera_transition_started.emit()
 	_combat_transition = true  # Lock user zoom during combat
 	_manual_zoom = false
 	_panning = false
@@ -155,6 +158,7 @@ func return_to_tactical() -> void:
 	_target_position = _pre_combat_position
 	_target_zoom = _pre_combat_zoom
 	_transitioning = true
+	camera_transition_started.emit()
 	_combat_transition = true  # Lock user zoom during combat return
 	_manual_zoom = false
 	_panning = false
@@ -167,6 +171,11 @@ func set_tactical_position(pos: Vector2) -> void:
 		position = pos
 		_pre_combat_position = pos
 		_pre_combat_zoom = zoom
+
+
+## Returns true while the camera is animating to a target position/zoom
+func is_transitioning() -> bool:
+	return _transitioning
 
 
 ## Immediately snap to a position without transition
@@ -208,6 +217,7 @@ func center_on_unit(world_pos: Vector2, map_offset: Vector2 = Vector2(300, 200))
 	_target_position = new_target
 	_pre_combat_position = _target_position
 	_transitioning = true
+	camera_transition_started.emit()
 	_combat_transition = false  # Not a combat transition, so allow user zoom/pan
 	_manual_zoom = false
 	_panning = false
@@ -225,6 +235,7 @@ func center_on_position_with_zoom(world_pos: Vector2, target_zoom: Vector2, map_
 	_pre_combat_position = _target_position
 	_pre_combat_zoom = _target_zoom
 	_transitioning = true
+	camera_transition_started.emit()
 	_combat_transition = false  # Not a combat transition, so allow user zoom/pan
 	_manual_zoom = false
 	_panning = false

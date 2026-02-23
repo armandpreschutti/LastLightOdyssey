@@ -129,6 +129,8 @@ func _ready() -> void:
 	tactical_hud.ability_used.connect(_on_ability_used)
 	tactical_hud.ability_cancelled.connect(_cancel_ability_mode)
 	tactical_hud.pause_pressed.connect(_show_pause_menu)
+	combat_camera.camera_transition_started.connect(_update_end_turn_button)
+	combat_camera.camera_transition_complete.connect(_update_end_turn_button)
 	
 	# Hide the UILayer CanvasLayer on startup - CanvasLayer children render
 	# independently of parent Node2D visibility, so we must hide it explicitly
@@ -179,6 +181,9 @@ func _on_pause_abandon() -> void:
 	
 	# Apply 25% hull damage for abandoning mission
 	GameState.damage_ship(25)
+	
+	# Disable panels and stop turns during abandon extraction
+	_begin_extraction_lock()
 	
 	# Play beam-up animation on all surviving units before ending mission
 	if deployed_officers.size() > 0:
@@ -1558,8 +1563,9 @@ func _on_end_turn_pressed() -> void:
 		# Store current zoom level before enemy turn (so we can restore it later)
 		stored_player_zoom = combat_camera.zoom
 		
-		# Disable end turn button during enemy turn and animations
+		# Disable end turn button and hide ABILITIES/COMMANDS panels during enemy turn
 		_set_animating(true)
+		tactical_hud.hide_abilities_and_commands_panels()
 		
 		# Execute enemy turn before starting new player round
 		await _execute_enemy_turn()
@@ -1669,7 +1675,13 @@ func _is_current_unit_turn() -> bool:
 ## Set animation state and update UI accordingly
 func _set_animating(animating: bool) -> void:
 	is_animating = animating
-	tactical_hud.set_end_turn_enabled(not animating)
+	_update_end_turn_button()
+
+
+## Update END TURN button state: disabled when any animation or camera transition is playing
+func _update_end_turn_button() -> void:
+	var camera_busy = combat_camera.has_method("is_transitioning") and combat_camera.is_transitioning()
+	tactical_hud.set_end_turn_enabled(not is_animating and not camera_busy)
 
 
 ## Center camera on a unit's position (used when turn starts)
@@ -1783,6 +1795,11 @@ func _begin_extraction_lock() -> void:
 	extraction_in_progress = true
 	_set_animating(true)
 	_end_all_unit_turns()
+	_cancel_ability_mode()
+	tactical_map.clear_movement_range()
+	tactical_map.clear_execute_range()
+	tactical_map.clear_heal_range()
+	tactical_hud.hide_abilities_and_commands_panels()
 	tactical_hud.set_extract_visible(false)
 	tactical_hud.hide_pause_button()
 
@@ -2254,7 +2271,8 @@ func _clear_ambush_trap_visuals() -> void:
 
 ## Play beam-up extraction animation - units float up with a light beam effect
 func _play_beam_up_animation() -> void:
-	# Hide HUD during animation
+	# Disable ABILITIES/COMMANDS panels and show message during animation
+	tactical_hud.hide_abilities_and_commands_panels()
 	tactical_hud.show_combat_message("EXTRACTION IN PROGRESS...", Color(0.4, 0.9, 1.0))
 	
 	# Play beam SFX
