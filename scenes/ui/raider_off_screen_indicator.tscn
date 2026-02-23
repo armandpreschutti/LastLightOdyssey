@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://c8raider_off_screen_ind"]
+
+[ext_resource type="Script" path="res://scripts/ui/raider_off_screen_indicator.gd" id="1_script"]
+
+[node name="RaiderOffScreenIndicator" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 32.0
+offset_bottom = 32.0
+mouse_filter = 2
+script = ExtResource("1_script")

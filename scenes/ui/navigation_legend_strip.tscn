@@ -1,0 +1,142 @@
+[gd_scene load_steps=11 format=3 uid="uid://blehn07ohr1uq"]
+
+[ext_resource type="Script" path="res://scripts/ui/navigation_legend_strip.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ui/tooltip_area.gd" id="2_tooltip"]
+[ext_resource type="Theme" uid="uid://c6rjhh6buixy4" path="res://assets/themes/base_ui_theme.tres" id="3_theme"]
+[ext_resource type="Texture2D" uid="uid://hrtdqnfbrk20" path="res://assets/sprites/navigation/story_signal.png" id="4_story"]
+[ext_resource type="Texture2D" uid="uid://bqi1jm2b2f1" path="res://assets/sprites/navigation/ship_icon.png" id="5_ship"]
+[ext_resource type="Texture2D" uid="uid://d2gx2j4l6lhjr" path="res://assets/sprites/navigation/asteroid.png" id="6_asteroid"]
+[ext_resource type="Texture2D" uid="uid://hmgh553sxea0" path="res://assets/sprites/navigation/planet_gas.png" id="7_planet"]
+[ext_resource type="Texture2D" uid="uid://dmwormholeid" path="res://assets/sprites/navigation/wormhole.png" id="8_wormhole"]
+
+[node name="NavigationLegendStrip" type="MarginContainer"]
+anchors_preset = 2
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = -260.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = 56.0
+grow_horizontal = 0
+theme = ExtResource("3_theme")
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 6
+script = ExtResource("1_script")
+
+[node name="PanelContainer" type="PanelContainer" parent="."]
+layout_mode = 2
+
+[node name="HBoxContainer" type="HBoxContainer" parent="PanelContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StoryEntry" type="HBoxContainer" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="StoryIcon" type="TextureRect" parent="PanelContainer/HBoxContainer/StoryEntry"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+tooltip_text = "Story Signals – main narrative objective."
+texture = ExtResource("4_story")
+expand_mode = 1
+stretch_mode = 5
+script = ExtResource("2_tooltip")
+
+[node name="StoryCountLabel" type="Label" parent="PanelContainer/HBoxContainer/StoryEntry"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 11
+text = "1"
+vertical_alignment = 1
+
+[node name="RaiderEntry" type="HBoxContainer" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="RaiderIcon" type="TextureRect" parent="PanelContainer/HBoxContainer/RaiderEntry"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+tooltip_text = "Raider Ambush – hostile ship present."
+texture = ExtResource("5_ship")
+modulate = Color(1, 0.3, 0.3, 1)
+expand_mode = 1
+stretch_mode = 5
+script = ExtResource("2_tooltip")
+
+[node name="RaiderCountLabel" type="Label" parent="PanelContainer/HBoxContainer/RaiderEntry"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 11
+text = "1"
+vertical_alignment = 1
+
+[node name="Sep1" type="ColorRect" parent="PanelContainer/HBoxContainer"]
+custom_minimum_size = Vector2(2, 20)
+layout_mode = 2
+size_flags_vertical = 4
+color = Color(0.4, 0.9, 1, 0.3)
+
+[node name="AsteroidEntry" type="HBoxContainer" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="AsteroidIcon" type="TextureRect" parent="PanelContainer/HBoxContainer/AsteroidEntry"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+tooltip_text = "Asteroid – scavenge site mission."
+texture = ExtResource("6_asteroid")
+expand_mode = 1
+stretch_mode = 5
+script = ExtResource("2_tooltip")
+
+[node name="AsteroidCountLabel" type="Label" parent="PanelContainer/HBoxContainer/AsteroidEntry"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 11
+text = "1"
+vertical_alignment = 1
+
+[node name="PlanetEntry" type="HBoxContainer" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="PlanetIcon" type="TextureRect" parent="PanelContainer/HBoxContainer/PlanetEntry"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+tooltip_text = "Planet – planetary encounter."
+texture = ExtResource("7_planet")
+expand_mode = 1
+stretch_mode = 5
+script = ExtResource("2_tooltip")
+
+[node name="PlanetCountLabel" type="Label" parent="PanelContainer/HBoxContainer/PlanetEntry"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 11
+text = "1"
+vertical_alignment = 1
+
+[node name="WormholeEntry" type="HBoxContainer" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="WormholeIcon" type="TextureRect" parent="PanelContainer/HBoxContainer/WormholeEntry"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+tooltip_text = "Wormhole – jump to distant system."
+texture = ExtResource("8_wormhole")
+expand_mode = 1
+stretch_mode = 5
+script = ExtResource("2_tooltip")
+
+[node name="WormholeCountLabel" type="Label" parent="PanelContainer/HBoxContainer/WormholeEntry"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 11
+text = "1"
+vertical_alignment = 1

@@ -173,6 +173,26 @@ theme_override_colors/font_hover_color = Color(0.6, 1, 1, 1)
 theme_override_font_sizes/font_size = 16
 text = "[ BARRACKS ]"
 
+[node name="SurrenderPanel" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 0
+offset_left = 4.000001
+offset_top = -211.0
+offset_right = 283.99997
+offset_bottom = -161.0
+scale = Vector2(0.9537752, 0.9537752)
+
+[node name="SurrenderButton" type="Button" parent="SurrenderPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.35, 0.25, 1)
+theme_override_colors/font_pressed_color = Color(0.8, 0.2, 0.15, 1)
+theme_override_colors/font_hover_color = Color(1, 0.5, 0.4, 1)
+theme_override_colors/font_hover_pressed_color = Color(1, 0.5, 0.4, 1)
+theme_override_colors/font_disabled_color = Color(0.4, 0.4, 0.4, 1)
+theme_override_font_sizes/font_size = 20
+text = "[ SURRENDER ]"
+flat = true
+
 [node name="DeployPanel" type="PanelContainer" parent="." unique_id=987654322]
 layout_mode = 0
 offset_left = 4.000001

@@ -2,13 +2,9 @@
 
 [ext_resource type="Script" uid="uid://cclud0gv1sd3x" path="res://scripts/management/star_map.gd" id="1_starmap"]
 [ext_resource type="Script" uid="uid://4sfd3x5a0yko" path="res://scripts/management/nebula_background.gd" id="2_nebula"]
-[ext_resource type="Texture2D" uid="uid://ccxb2onsmg4at" path="res://assets/sprites/navigation/waypoint.png" id="3_waypoint"]
-[ext_resource type="Texture2D" uid="uid://d2gx2j4l6lhjr" path="res://assets/sprites/navigation/asteroid.png" id="4_asteroid"]
-[ext_resource type="Texture2D" uid="uid://g27gvr7yp5kn" path="res://assets/sprites/navigation/station_trading.png" id="5_station"]
-[ext_resource type="Texture2D" uid="uid://hmgh553sxea0" path="res://assets/sprites/navigation/planet_gas.png" id="6_planet"]
-
-[ext_resource type="Texture2D" uid="uid://b224xf2ekytgn" path="res://assets/sprites/navigation/question_mark.png" id="8_unknown"]
-[ext_resource type="Texture2D" uid="uid://dmwormholeid" path="res://assets/sprites/navigation/wormhole.png" id="9_wormhole"]
+[ext_resource type="PackedScene" uid="uid://c8raider_off_screen_ind" path="res://scenes/ui/raider_off_screen_indicator.tscn" id="3_raider_indicator"]
+[ext_resource type="PackedScene" uid="uid://c8raider_off_screen_ind" path="res://scenes/ui/raider_off_screen_indicator.tscn" id="4_story_indicator"]
+[ext_resource type="PackedScene" uid="uid://bxn4legendstrip01" path="res://scenes/ui/navigation_legend_strip.tscn" id="5_legend"]
 
 [node name="StarMap" type="Control" unique_id=380385132]
 layout_mode = 3
@@ -67,133 +63,8 @@ offset_right = 40.0
 offset_bottom = 40.0
 mouse_filter = 2
 
-[node name="LegendContainer" type="MarginContainer" parent="." unique_id=1008941342]
-anchors_preset = 2
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 1686.0
-offset_top = -243.0
-offset_right = 1886.0
-offset_bottom = -9.0
-grow_vertical = 0
-theme_override_constants/margin_left = 20
-theme_override_constants/margin_bottom = 20
+[node name="RaiderIndicator" parent="." instance=ExtResource("3_raider_indicator")]
 
-[node name="PanelContainer" type="PanelContainer" parent="LegendContainer" unique_id=1398226061]
-layout_mode = 2
+[node name="StoryIndicator" parent="." instance=ExtResource("4_story_indicator")]
 
-[node name="VBoxContainer" type="VBoxContainer" parent="LegendContainer/PanelContainer" unique_id=577536991]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="Title" type="Label" parent="LegendContainer/PanelContainer/VBoxContainer" unique_id=2082252863]
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.69, 0, 1)
-theme_override_font_sizes/font_size = 14
-text = "NAVIGATION LEGEND"
-horizontal_alignment = 1
-
-[node name="HSeparator" type="HSeparator" parent="LegendContainer/PanelContainer/VBoxContainer" unique_id=2122848035]
-layout_mode = 2
-
-[node name="GridContainer" type="GridContainer" parent="LegendContainer/PanelContainer/VBoxContainer" unique_id=218547002]
-layout_mode = 2
-theme_override_constants/h_separation = 12
-theme_override_constants/v_separation = 6
-columns = 2
-
-[node name="WaypointIcon" type="TextureRect" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1786114588]
-custom_minimum_size = Vector2(24, 24)
-layout_mode = 2
-texture = ExtResource("3_waypoint")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="WaypointLabel" type="Label" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=802385113]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "Random Encounter"
-
-[node name="AsteroidIcon" type="TextureRect" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1073508841]
-custom_minimum_size = Vector2(24, 24)
-layout_mode = 2
-texture = ExtResource("4_asteroid")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="AsteroidLabel" type="Label" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1740650396]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "Asteroid Mission"
-
-[node name="StationIcon" type="TextureRect" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1905135081]
-custom_minimum_size = Vector2(24, 24)
-layout_mode = 2
-texture = ExtResource("5_station")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="StationLabel" type="Label" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=759474226]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "Space Station Mission"
-
-[node name="PlanetIcon" type="TextureRect" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1435844420]
-custom_minimum_size = Vector2(24, 24)
-layout_mode = 2
-texture = ExtResource("6_planet")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="PlanetLabel" type="Label" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1938877551]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "Planetary Mission"
-
-
-
-[node name="WormholeIcon" type="TextureRect" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=281929293]
-custom_minimum_size = Vector2(24, 24)
-layout_mode = 2
-texture = ExtResource("9_wormhole")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="WormholeLabel" type="Label" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1664489924]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "Ancient Wormhole"
-
-[node name="PathTraveledIcon" type="ColorRect" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=2000000001]
-custom_minimum_size = Vector2(24, 4)
-layout_mode = 2
-size_flags_vertical = 4
-color = Color(0.3, 0.7, 1.0, 0.8)
-
-[node name="PathTraveledLabel" type="Label" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=2000000002]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "Traveled Path"
-
-[node name="PathWormholeIcon" type="ColorRect" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=2000000003]
-custom_minimum_size = Vector2(24, 4)
-layout_mode = 2
-size_flags_vertical = 4
-color = Color(1, 1, 1, 0.9)
-
-[node name="PathWormholeLabel" type="Label" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=2000000004]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "Wormhole Path"
-
-[node name="UnknownIcon" type="TextureRect" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1000000001]
-custom_minimum_size = Vector2(24, 24)
-layout_mode = 2
-texture = ExtResource("8_unknown")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="UnknownLabel" type="Label" parent="LegendContainer/PanelContainer/VBoxContainer/GridContainer" unique_id=1000000002]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "Uncharted Node"
+[node name="NavigationLegendStrip" parent="." instance=ExtResource("5_legend")]

@@ -7,6 +7,8 @@ signal jump_animation_complete
 signal raider_animation_complete
 
 @onready var map_content: Control = $MapContent
+@onready var raider_indicator: Control = $RaiderIndicator
+@onready var story_indicator: Control = $StoryIndicator
 @onready var nodes_container: Control = $MapContent/NodesContainer
 @onready var lines_container: Control = $MapContent/LinesContainer
 @onready var ship_container: Control = $MapContent/ShipContainer
@@ -23,13 +25,62 @@ var _current_zoom: float = 1.0
 var _input_locked: bool = false
 
 
+func _process(_delta: float) -> void:
+	_update_raider_indicator()
+	_update_story_indicator()
+
+
+func _update_raider_indicator() -> void:
+	if not raider_indicator:
+		return
+	if not VoyageManager or not VoyageManager.is_raider_active:
+		raider_indicator.visible = false
+		return
+	if not VoyageManager.nodes.has(VoyageManager.raider_node_id):
+		raider_indicator.visible = false
+		return
+
+	var raider_world_pos: Vector2
+	if raider_visual:
+		raider_world_pos = raider_visual.position
+	else:
+		var raider_node = VoyageManager.nodes[VoyageManager.raider_node_id]
+		raider_world_pos = raider_node.position
+
+	var raider_screen_pos := map_content.position + raider_world_pos * _current_zoom
+	raider_indicator.update_indicator(raider_screen_pos, size)
+
+
+func _update_story_indicator() -> void:
+	if not story_indicator:
+		return
+	if not VoyageManager or VoyageManager.active_story_node_id.is_empty():
+		story_indicator.visible = false
+		return
+	if not VoyageManager.nodes.has(VoyageManager.active_story_node_id):
+		story_indicator.visible = false
+		return
+
+	var story_node = VoyageManager.nodes[VoyageManager.active_story_node_id]
+	if story_node.state != NodeData.NodeState.STORY:
+		story_indicator.visible = false
+		return
+
+	var story_world_pos: Vector2 = story_node.position
+	var story_screen_pos: Vector2 = map_content.position + story_world_pos * _current_zoom
+	story_indicator.update_indicator(story_screen_pos, size)
+
+
 func _ready() -> void:
 	if not VoyageManager:
 		push_error("VoyageManager not found!")
 		return
 		
 	MapNodeScene = load("res://scenes/management/map_node.tscn")
-	
+
+	if story_indicator:
+		story_indicator.set_indicator_color(StarMapNode.COLOR_STORY)
+
 	# Create ship visual
 	_create_ship_visual()
 	

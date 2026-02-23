@@ -5,8 +5,11 @@ signal mission_complete(success: bool, stats: Dictionary)
 signal turn_ended(turn_number: int)
 
 @onready var tactical_map: Node2D = $MapContainer/TacticalMap
+@onready var map_container: Node2D = $MapContainer
 @onready var tactical_hud: Control = $UILayer/TacticalHUD
 @onready var combat_camera: Camera2D = $CombatCamera
+@onready var extraction_indicator: Control = $UILayer/ExtractionIndicator
+@onready var objective_waypoint_indicator: Control = $UILayer/ObjectiveWaypointIndicator
 @onready var projectile: Line2D = $MapContainer/EffectsLayer/Projectile
 @onready var damage_popup_container: Node2D = $MapContainer/EffectsLayer/DamagePopupContainer
 @onready var ui_layer: CanvasLayer = $UILayer
@@ -26,6 +29,7 @@ var coordinate_fire_mode: bool = false  # Captain: mark enemy
 var inspire_mode: bool = false         # Captain: grant ally +1 AP
 var stim_mode: bool = false            # Medic: stim injector ally target
 var rocket_salvo_mode: bool = false    # Heavy: area attack tile selection
+var suppression_fire_mode: bool = false # Heavy: target one enemy for suppression (pin down + light damage)
 var double_tap_mode: bool = false      # Sniper: fire twice at one target
 var hit_and_run_mode: bool = false     # Scout: free 3-tile dash after any shot
 var untouchable_dash_mode: bool = false  # Scout: free 3-tile dash after kill
@@ -65,6 +69,7 @@ var HealthPackScene: PackedScene
 var MiningEquipmentScene: PackedScene
 var SecurityTerminalScene: PackedScene
 var PowerCoreScene: PackedScene
+var DataLogScene: PackedScene
 var SampleCollectorScene: PackedScene
 var BeaconScene: PackedScene
 var NestScene: PackedScene
@@ -86,7 +91,7 @@ var ambush_trap_markers: Dictionary = {}
 # Combat constants
 const BASE_HIT_CHANCE: float = 70.0
 const RANGE_PENALTY_START: int = 5
-const SUPPRESSION_RANGE: int = 5
+const SUPPRESSION_DAMAGE: int = 12
 const RANGE_PENALTY_PER_TILE: float = 5.0
 const MIN_HIT_CHANCE: float = 20.0  # Increased from 10% to 20% for more forgiving minimum
 const MAX_HIT_CHANCE: float = 95.0  # Base cap for enemies and default
@@ -111,6 +116,7 @@ func _ready() -> void:
 	MiningEquipmentScene = load("res://scenes/tactical/mining_equipment.tscn")
 	SecurityTerminalScene = load("res://scenes/tactical/security_terminal.tscn")
 	PowerCoreScene = load("res://scenes/tactical/power_core.tscn")
+	DataLogScene = load("res://scenes/tactical/data_log.tscn")
 	SampleCollectorScene = load("res://scenes/tactical/sample_collector.tscn")
 	BeaconScene = load("res://scenes/tactical/beacon.tscn")
 	NestScene = load("res://scenes/tactical/nest.tscn")
@@ -131,17 +137,98 @@ func _ready() -> void:
 	tactical_hud.pause_pressed.connect(_show_pause_menu)
 	combat_camera.camera_transition_started.connect(_update_end_turn_button)
 	combat_camera.camera_transition_complete.connect(_update_end_turn_button)
-	
+
+	if extraction_indicator:
+		extraction_indicator.set_indicator_color(Color(0.3, 0.95, 0.5))
+	if objective_waypoint_indicator:
+		objective_waypoint_indicator.set_indicator_color(Color(0.4, 0.9, 1.0))  # Cyan for mission objectives
+
 	# Hide the UILayer CanvasLayer on startup - CanvasLayer children render
 	# independently of parent Node2D visibility, so we must hide it explicitly
 	ui_layer.visible = false
+
+
+func _process(_delta: float) -> void:
+	_update_extraction_indicator()
+	_update_objective_waypoint_indicator()
+
+
+func _update_extraction_indicator() -> void:
+	if not extraction_indicator:
+		return
+	# Never show in voyage menu - only when actually in tactical combat
+	if not GameState.is_in_tactical_mode:
+		extraction_indicator.visible = false
+		return
+	if extraction_positions.is_empty():
+		extraction_indicator.visible = false
+		return
+	if is_story_mission and not _are_all_objectives_completed():
+		extraction_indicator.visible = false
+		return
+	if extraction_in_progress:
+		extraction_indicator.visible = false
+		return
+
+	var center_sum: Vector2i = Vector2i.ZERO
+	for pos in extraction_positions:
+		center_sum += pos
+	var center_grid: Vector2i = Vector2i(center_sum.x / extraction_positions.size(), center_sum.y / extraction_positions.size())
+	var world_pos: Vector2 = map_container.position + Vector2(
+		center_grid.x * float(tactical_map.TILE_SIZE) + tactical_map.TILE_SIZE / 2.0,
+		center_grid.y * float(tactical_map.TILE_SIZE) + tactical_map.TILE_SIZE / 2.0
+	)
+	var screen_pos: Vector2 = get_viewport().get_canvas_transform() * world_pos
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	extraction_indicator.update_indicator(screen_pos, viewport_size, true)
+
+
+func _update_objective_waypoint_indicator() -> void:
+	## Waypoint markers for mission objective tiles - STORY missions only.
+	## Points to nearest incomplete objective tile. Hidden when all objectives done.
+	## Never show in voyage menu - only when actually in tactical combat.
+	if not objective_waypoint_indicator:
+		return
+	if not GameState.is_in_tactical_mode:
+		objective_waypoint_indicator.visible = false
+		return
+	if not mission_active or not is_story_mission:
+		objective_waypoint_indicator.visible = false
+		return
+	# mission_highlight_tiles = incomplete objectives (removed when objective completed)
+	var incomplete_positions: Array = tactical_map.mission_highlight_tiles.keys()
+	if incomplete_positions.is_empty():
+		objective_waypoint_indicator.visible = false
+		return
+	if extraction_in_progress:
+		objective_waypoint_indicator.visible = false
+		return
+	# Find nearest incomplete objective to camera center
+	var cam_center: Vector2 = combat_camera.global_position
+	var nearest_pos: Vector2i = incomplete_positions[0]
+	var nearest_dist_sq: float = _dist_sq_to_tile(cam_center, nearest_pos)
+	for pos in incomplete_positions:
+		var d: float = _dist_sq_to_tile(cam_center, pos)
+		if d < nearest_dist_sq:
+			nearest_dist_sq = d
+			nearest_pos = pos
+	var world_pos: Vector2 = map_container.position + tactical_map.grid_to_world(nearest_pos)
+	var screen_pos: Vector2 = get_viewport().get_canvas_transform() * world_pos
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	objective_waypoint_indicator.update_indicator(screen_pos, viewport_size, true)
+	objective_waypoint_indicator.visible = true
+
+
+func _dist_sq_to_tile(world_center: Vector2, grid_pos: Vector2i) -> float:
+	var tile_world: Vector2 = map_container.position + tactical_map.grid_to_world(grid_pos)
+	return world_center.distance_squared_to(tile_world)
 
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") and mission_active and not is_paused:
 		# Cancel any active ability mode
 		if turret_mode or charge_mode or execute_mode or precision_mode or patch_mode \
-				or coordinate_fire_mode or inspire_mode or stim_mode or rocket_salvo_mode or double_tap_mode \
+				or coordinate_fire_mode or inspire_mode or stim_mode or rocket_salvo_mode or suppression_fire_mode or double_tap_mode \
 				or hit_and_run_mode:
 			_cancel_ability_mode()
 			get_viewport().set_input_as_handled()
@@ -221,6 +308,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	inspire_mode = false
 	stim_mode = false
 	rocket_salvo_mode = false
+	suppression_fire_mode = false
 	double_tap_mode = false
 	current_turn = 1
 	current_unit_index = 0
@@ -432,6 +520,18 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 					var power_core = PowerCoreScene.instantiate()
 					power_core.set_grid_position(core_pos)
 					tactical_map.add_interactable(power_core, core_pos)
+			
+			# Spawn data logs (progress objective - multiple units)
+			if has_retrieve_logs:
+				for i in range(retrieve_logs_max):
+					var log_pos = _find_valid_mining_equipment_position(map_dims, used_positions)
+					if log_pos != Vector2i(-1, -1):
+						used_positions.append(log_pos)
+						mission_tile_positions.append(log_pos)  # Track mission tile position
+						tactical_map.add_mission_highlight(log_pos) # Add highlight
+						var data_log = DataLogScene.instantiate()
+						data_log.set_grid_position(log_pos)
+						tactical_map.add_interactable(data_log, log_pos)
 	
 	# Spawn objective interactables for PLANET biome missions
 	if current_biome == BiomeConfig.BiomeType.PLANET and is_story_mission:
@@ -645,12 +745,6 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	
 	# Update haul display
 	tactical_hud.update_haul(mission_fuel_collected, mission_cash_collected)
-	
-	# Tutorial: Trigger tactical_movement after first turn begins
-	if TutorialManager.is_active() and TutorialManager.is_at_step("tactical_movement"):
-		# Wait a frame for UI to be fully set up, then queue the step
-		await get_tree().process_frame
-		TutorialManager.queue_step(TutorialManager.current_step_index)
 
 
 ## Calculate boss spawn chance based on difficulty
@@ -902,6 +996,10 @@ func _on_tile_clicked(grid_pos: Vector2i) -> void:
 		_try_coordinate_fire(grid_pos)
 		return
 
+	if suppression_fire_mode and selected_unit:
+		_try_suppression_fire(grid_pos)
+		return
+
 	if inspire_mode and selected_unit:
 		_try_inspire_target(grid_pos)
 		return
@@ -1005,6 +1103,11 @@ func _select_unit(unit: Node2D) -> void:
 		patch_mode = false
 		tactical_map.clear_heal_range()
 		tactical_hud.hide_combat_message()
+	# Cancel suppression fire mode when selecting a unit
+	if suppression_fire_mode:
+		suppression_fire_mode = false
+		tactical_hud.hide_combat_message()
+		_update_suppression_highlights()
 	if selected_unit:
 		selected_unit.set_selected(false)
 		tactical_map.clear_movement_range()
@@ -1195,10 +1298,6 @@ func _try_move_unit(unit: Node2D, target_pos: Vector2i) -> void:
 	# Move unit
 	unit.set_grid_position(target_pos)
 	unit.move_along_path(path)
-	
-	# Tutorial: Notify that a unit moved (only if scavenge_intro has been shown)
-	if TutorialManager.is_active() and "scavenge_intro" in TutorialManager._shown_step_ids:
-		TutorialManager.notify_trigger("unit_moved")
 
 	# Update HUD (cover level will be updated after movement finishes)
 	tactical_hud.update_selected_unit_full(
@@ -2749,11 +2848,7 @@ func execute_shot(shooter: Node2D, target_pos: Vector2i, target: Node2D) -> void
 	var damage = base_damage
 	if is_flanking:
 		damage = int(base_damage * (1.0 + FLANK_DAMAGE_BONUS))
-	
-		# Tutorial: Notify that a unit attacked (only if scavenge_intro has been shown)
-		if TutorialManager.is_active() and "scavenge_intro" in TutorialManager._shown_step_ids:
-			TutorialManager.notify_trigger("unit_attacked")
-	
+
 	# PHASE 1: AIMING (1.0s - balanced timing)
 	await _phase_aiming(shooter, shooter_pos, target_pos, hit_chance, is_flanking, damage)
 	
@@ -3461,6 +3556,8 @@ func _is_enemy_visible(enemy: Node2D) -> bool:
 func _update_enemy_visibility() -> void:
 	if precision_mode:
 		_update_precision_mode_highlights()
+	if suppression_fire_mode:
+		_update_suppression_highlights()
 	for enemy in enemies:
 		if enemy.current_hp <= 0:
 			continue
@@ -3479,8 +3576,12 @@ func _update_attackable_highlights() -> void:
 		if enemy.current_hp > 0:
 			enemy.set_targetable(false)
 	
-	# If precision mode is active, don't set targetable here (precision mode handles it)
-	if precision_mode:
+	# If precision mode or suppression mode is active, re-apply those highlights and skip attackable logic
+	if precision_mode or suppression_fire_mode:
+		if precision_mode:
+			_update_precision_mode_highlights()
+		if suppression_fire_mode:
+			_update_suppression_highlights()
 		return
 	
 	# If no unit selected or selected unit can't attack, don't highlight anything
@@ -3553,6 +3654,30 @@ func _update_precision_mode_highlights() -> void:
 				if enemy.get("unit_size") != null:
 					enemy_size = enemy.unit_size
 				tactical_map.set_enemy_target_tile(enemy_pos, enemy_size)
+
+
+## Update enemy highlights for suppression fire mode (visible enemies within shoot range)
+func _update_suppression_highlights() -> void:
+	tactical_map.clear_all_enemy_target_tiles()
+	for enemy in enemies:
+		if enemy.current_hp > 0:
+			enemy.set_precision_mode(false)
+	if suppression_fire_mode and selected_unit:
+		var shooter_pos = selected_unit.get_grid_position()
+		for enemy in enemies:
+			if enemy.current_hp <= 0:
+				continue
+			if not _is_enemy_visible(enemy):
+				continue
+			var dist = abs(enemy.get_grid_position().x - shooter_pos.x) + abs(enemy.get_grid_position().y - shooter_pos.y)
+			if dist > selected_unit.shoot_range:
+				continue
+			enemy.set_precision_mode(true)
+			var enemy_pos = enemy.get_grid_position()
+			var enemy_size = Vector2i(1, 1)
+			if enemy.get("unit_size") != null:
+				enemy_size = enemy.unit_size
+			tactical_map.set_enemy_target_tile(enemy_pos, enemy_size)
 
 
 func _on_ability_used(ability_id: String) -> void:
@@ -3787,7 +3912,11 @@ func _use_upgraded_ability(ability_id: String, ability_def: Dictionary) -> void:
 
 		# ── HEAVY ─────────────────────────────────────────────
 		"suppression_fire":
-			_activate_suppression_fire()
+			suppression_fire_mode = true
+			tactical_map.clear_movement_range()
+			tactical_hud.show_combat_message("SELECT ENEMY — SUPPRESSION (PIN DOWN + LIGHT DMG)", Color(1.0, 0.5, 0.1))
+			_update_suppression_highlights()
+			tactical_hud.show_cancel_button()
 
 		"rocket_salvo":
 			rocket_salvo_mode = true
@@ -3905,6 +4034,16 @@ func _cancel_ability_mode() -> void:
 		rocket_salvo_mode = false
 		tactical_map.clear_execute_range()
 		tactical_hud.hide_combat_message()
+		tactical_hud.hide_cancel_button()
+		if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
+			tactical_map.set_movement_range(selected_unit.get_grid_position(), selected_unit.move_range)
+		return
+
+	if suppression_fire_mode:
+		suppression_fire_mode = false
+		tactical_map.clear_execute_range()
+		tactical_hud.hide_combat_message()
+		_update_suppression_highlights()
 		tactical_hud.hide_cancel_button()
 		if selected_unit and selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
 			tactical_map.set_movement_range(selected_unit.get_grid_position(), selected_unit.move_range)
@@ -4801,36 +4940,66 @@ func _try_stim_target(grid_pos: Vector2i) -> void:
 		_restore_movement_range()
 
 
-## Suppression Fire (Heavy L2B): visible enemies within 5 tiles -25% accuracy for 1 turn
-func _activate_suppression_fire() -> void:
-	# First check for visible enemies within range
-	var shooter_pos = selected_unit.get_grid_position()
-	var visible_enemies = []
+## Suppression Fire (Heavy L2B): target one visible enemy within shoot range — Pin Down + light damage
+func _try_suppression_fire(grid_pos: Vector2i) -> void:
+	suppression_fire_mode = false
+	tactical_map.clear_all_enemy_target_tiles()
+	tactical_hud.hide_combat_message()
+	tactical_hud.hide_cancel_button()
+	_update_suppression_highlights()
+
+	var target_enemy: Node2D = null
 	for enemy in enemies:
-		if _is_enemy_visible(enemy):
-			var dist = abs(enemy.get_grid_position().x - shooter_pos.x) + abs(enemy.get_grid_position().y - shooter_pos.y)
-			if dist <= SUPPRESSION_RANGE:
-				visible_enemies.append(enemy)
-			
-	if visible_enemies.is_empty():
-		tactical_hud.show_combat_message("NO ENEMIES IN RANGE (5 TILES)", Color(1, 0.5, 0))
+		if enemy.get_grid_position() == grid_pos and enemy.current_hp > 0:
+			target_enemy = enemy
+			break
+
+	if not target_enemy or not _is_enemy_visible(target_enemy):
+		tactical_hud.show_combat_message("NO VISIBLE ENEMY THERE", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
+		_restore_movement_range()
+		return
+
+	var shooter_pos = selected_unit.get_grid_position()
+	var dist = abs(target_enemy.get_grid_position().x - shooter_pos.x) + abs(target_enemy.get_grid_position().y - shooter_pos.y)
+	if dist > selected_unit.shoot_range:
+		tactical_hud.show_combat_message("OUT OF RANGE", Color(1, 0.3, 0.3))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_restore_movement_range()
 		return
 
 	if not selected_unit.apply_suppression_fire():
 		tactical_hud.show_combat_message("NOT ENOUGH AP OR COOLDOWN", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
+		_restore_movement_range()
 		return
 
 	_set_animating(true)
-	
-	# Play attack animation and visuals
-	combat_camera.focus_on_action(selected_unit.position, selected_unit.position) # Focus on shooter
+
+	# Apply Pin Down and damage to single target
+	if target_enemy.has_method("add_status_effect"):
+		target_enemy.add_status_effect("pin_down", 3)
+	target_enemy.take_damage(SUPPRESSION_DAMAGE)
+	_spawn_damage_popup(SUPPRESSION_DAMAGE, true, target_enemy.position)
+
+	# Visual: brief orange flash on target
+	var esp = target_enemy.get_node_or_null("Sprite")
+	if esp:
+		var et = create_tween()
+		et.tween_property(esp, "modulate", Color(1.8, 0.5, 0.1, 1.0), 0.08)
+		et.tween_property(esp, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+
+	# Spawn tracer effect for this target
+	var supp_effect = SuppressionEffectScript.new()
+	get_node("MapContainer/EffectsLayer").add_child(supp_effect)
+	supp_effect.initialize(selected_unit, target_enemy)
+
+	combat_camera.focus_on_action(selected_unit.position, target_enemy.position)
 	selected_unit.play_attack_animation()
-	
-	# Muzzle flash effect
+
 	var muzzle_rect = ColorRect.new()
 	muzzle_rect.color = Color(1.0, 0.7, 0.2, 0.8)
 	muzzle_rect.size = Vector2(40, 40)
@@ -4840,28 +5009,12 @@ func _activate_suppression_fire() -> void:
 	flash_tween.tween_property(muzzle_rect, "scale", Vector2(2.0, 2.0), 0.1)
 	flash_tween.parallel().tween_property(muzzle_rect, "modulate:a", 0.0, 0.15)
 	flash_tween.tween_callback(muzzle_rect.queue_free)
-	
+
 	if combat_camera.has_method("shake"):
 		combat_camera.shake(0.3, 6.0)
-		
-	tactical_hud.show_combat_message("SUPPRESSION FIRE — ENEMIES PINNED!", Color(1.0, 0.5, 0.1))
 
-	# Apply pin_down to all visible enemies (FIX: duration 3 turns instead of 1)
-	for enemy in visible_enemies:
-		if enemy.has_method("add_status_effect"):
-			enemy.add_status_effect("pin_down", 3)
-		# Visual: brief orange flash on each enemy
-		var esp = enemy.get_node_or_null("Sprite")
-		if esp:
-			var et = create_tween()
-			et.tween_property(esp, "modulate", Color(1.8, 0.5, 0.1, 1.0), 0.08)
-			et.tween_property(esp, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
-			
-		# Spawn continuous tracer effect node
-		var supp_effect = SuppressionEffectScript.new()
-		get_node("MapContainer/EffectsLayer").add_child(supp_effect)
-		supp_effect.initialize(selected_unit, enemy)
-			
+	tactical_hud.show_combat_message("SUPPRESSION — TARGET PINNED!", Color(1.0, 0.5, 0.1))
+
 	await get_tree().create_timer(1.2).timeout
 	tactical_hud.hide_combat_message()
 	combat_camera.return_to_tactical()

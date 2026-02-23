@@ -45,6 +45,8 @@ const STORY_CHAIN_LENGTH: int = 5
 const STORY_RANGE_UNITS: float = 1200.0 # Approx 3 jumps in world-space terms
 const STORY_SPAWN_DISTANCE_MIN: float = 1200.0 # Min distance to spawn new story nodes
 const STORY_SPAWN_DISTANCE_MAX: float = 1500.0 # Max distance to spawn new story nodes
+const WORMHOLE_SPAWN_DISTANCE_MIN: float = 3600.0 # Min distance (3x story) - player only
+const WORMHOLE_SPAWN_DISTANCE_MAX: float = 4500.0 # Max distance (3x story) - player only
 
 # Story node biomes and difficulty by tier (1-indexed)
 const STORY_BIOMES := {
@@ -309,9 +311,8 @@ func attempt_wormhole_teleport(exit_node: NodeData) -> NodeData:
 	if paired_id != "" and nodes.has(paired_id):
 		return nodes[paired_id]
 
-	# First time through: spawn new wormhole (same logic as story signals and raiders)
-	# distance from all existing nodes, place at STORY_SPAWN distance range
-	var spawn_pos = _find_story_spawn_position(exit_node.position)
+	# First time through: spawn new wormhole (3x further than story spawn - player only)
+	var spawn_pos = _find_story_spawn_position(exit_node.position, WORMHOLE_SPAWN_DISTANCE_MIN, WORMHOLE_SPAWN_DISTANCE_MAX)
 
 	# Create new WORMHOLE node at destination
 	var new_id = generator.generate_uuid()
@@ -465,7 +466,7 @@ func _try_spawn_story_node() -> void:
 	story_node_spawned.emit(new_node)
 
 
-func _find_story_spawn_position(from_position: Vector2) -> Vector2:
+func _find_story_spawn_position(from_position: Vector2, dist_min: float = STORY_SPAWN_DISTANCE_MIN, dist_max: float = STORY_SPAWN_DISTANCE_MAX) -> Vector2:
 	# Sample 8-16 candidate angles around current node
 	var candidate_count = 16
 	var best_direction = Vector2.RIGHT
@@ -476,7 +477,7 @@ func _find_story_spawn_position(from_position: Vector2) -> Vector2:
 		var direction = Vector2(cos(angle), sin(angle))
 		
 		# Check at max distance for the "direction" check
-		var check_pos = from_position + (direction * STORY_SPAWN_DISTANCE_MAX)
+		var check_pos = from_position + (direction * dist_max)
 		
 		# For each angle, check distance to all existing nodes
 		var min_dist_to_existing = INF
@@ -492,7 +493,7 @@ func _find_story_spawn_position(from_position: Vector2) -> Vector2:
 			best_direction = direction
 			
 	# Return position at random distance in best direction
-	var random_dist = randf_range(STORY_SPAWN_DISTANCE_MIN, STORY_SPAWN_DISTANCE_MAX)
+	var random_dist = randf_range(dist_min, dist_max)
 	return from_position + (best_direction * random_dist)
 
 
@@ -577,7 +578,7 @@ func find_path(start_id: String, target_id: String) -> Array[NodeData]:
 
 
 ## Find a path for the raider (can traverse ANY connected nodes, including unvisited)
-## Raiders can use wormholes - wormhole pairs count as traversable edges
+## Raiders cannot use wormholes - only normal node connections
 ## Returns an array of NodeData representing the path (including start and end)
 func find_path_for_raider(start_id: String, target_id: String) -> Array[NodeData]:
 	if not nodes.has(start_id) or not nodes.has(target_id):
@@ -603,10 +604,7 @@ func find_path_for_raider(start_id: String, target_id: String) -> Array[NodeData
 		var current_node = nodes[current_id]
 		var neighbors_to_check: Array[String] = []
 		neighbors_to_check.assign(current_node.connections)
-		# Raiders can enter wormholes - include paired wormhole as traversable
-		var paired_id = _get_paired_wormhole_id(current_id)
-		if paired_id != "" and nodes.has(paired_id):
-			neighbors_to_check.append(paired_id)
+		# Raiders cannot use wormholes - only use normal connections
 		for neighbor_id in neighbors_to_check:
 			if not nodes.has(neighbor_id):
 				continue
@@ -878,6 +876,13 @@ func clear_raider(success: bool) -> void:
 		for i in range(num_to_down):
 			GameState.down_officer(available_officers[i])
 			print("DEBUG Raider: Downing %s as penalty" % available_officers[i])
+
+func clear_raider_surrender() -> void:
+	is_raider_active = false
+	raider_node_id = ""
+	jumps_since_raider_cleared = 0
+	raider_destroyed.emit()
+	message_log_added.emit("Surrendered to raiders. Hull compromised.")
 
 ## Create an emergency path toward player when normal pathfinding fails.
 ## Prefers using an existing node within PROXIMITY_CONNECT_DISTANCE of the proposed spawn

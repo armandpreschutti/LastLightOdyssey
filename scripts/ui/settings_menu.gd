@@ -296,11 +296,7 @@ func _on_reset_tutorial_pressed() -> void:
 	config.load(CONFIG_PATH)
 	config.set_value("tutorial", "completed", false)
 	config.save(CONFIG_PATH)
-	
-	# Notify TutorialManager (it's an autoload, not a singleton)
-	if TutorialManager:
-		TutorialManager.reset_tutorial()
-	
+
 	# Visual feedback
 	reset_tutorial_button.text = "[ TUTORIAL RESET! ]"
 	reset_tutorial_button.disabled = true

@@ -1,9 +1,13 @@
 GENERAL NOTES
 
-- instead of no fuel cost between traveled pathlines, bring back to wormhole.
-
 - enemy units who haven't moved in 2 turns should automcatically move to a new  position.
 
-- instead of clicking a toggle to select unit in team select, I want to select it when I click on the unit's panel
+- add hot keys to actions
 
-- SUPPRESSION should be target an enemy, not effect all enemies
+- create icons (display to right of cover icons) for ability effects, along with a special animation for each type (poison, marked, suppressed, etc).
+
+- update drift mode menu
+
+- consolidate 'barracks' menu and 'team select' menu into one resuable menu for both scenerios
+
+- remove tutorial and rebuild from scratch per mechanic

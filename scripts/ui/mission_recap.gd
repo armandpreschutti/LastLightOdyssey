@@ -88,7 +88,8 @@ func _ready() -> void:
 		xp_row = stats_container.get_node("XPRow")
 		xp_label = xp_row.get_node("XPLabel")
 
-	# Cash and XP rows are handled programmatically above
+	# HOSTILES ELIMINATED goes after TOTAL XP AWARDED (before TURNS SURVIVED)
+	stats_container.move_child(enemies_row, turns_row.get_index() - 1)
 
 
 
@@ -382,14 +383,14 @@ func _animate_recap_in(stats: Dictionary) -> void:
 	_stat_tween.tween_property(self, "modulate:a", 1.0, 0.5)
 	_stat_tween.tween_interval(0.3)
 	
-	# Reveal stats one by one with typewriter feel (animate rows with icons)
+	# Reveal stats one by one with typewriter feel (Fuel → Cash → XP → Enemies → Turns)
 	_stat_tween.tween_property(fuel_row, "modulate:a", 1.0, 0.3)
 	_stat_tween.tween_interval(0.15)
 	_stat_tween.tween_property(cash_row, "modulate:a", 1.0, 0.3)
 	_stat_tween.tween_interval(0.15)
 	_stat_tween.tween_property(xp_row, "modulate:a", 1.0, 0.3)
 	_stat_tween.tween_interval(0.15)
-	_stat_tween.tween_property(enemies_row, "modulate:a", 1.0, 0.3)
+	_stat_tween.tween_property(enemies_row, "modulate:a", 1.0, 0.3)  # HOSTILES ELIMINATED after XP
 	_stat_tween.tween_interval(0.15)
 	_stat_tween.tween_property(turns_row, "modulate:a", 1.0, 0.3)
 	_stat_tween.tween_interval(0.3)

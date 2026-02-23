@@ -7,6 +7,7 @@ signal view_recap_pressed
 signal market_pressed
 signal barracks_pressed
 signal deploy_pressed
+signal surrender_pressed
 
 # Updated paths for new icon-based layout
 @onready var cash_label: Label = $MarginContainer/VBoxContainer/StatsContainer/CashRow/CashLabel
@@ -16,6 +17,8 @@ signal deploy_pressed
 @onready var barracks_button: Button = $MarginContainer/VBoxContainer/BarracksButton
 @onready var deploy_panel: PanelContainer = $DeployPanel
 @onready var deploy_button: Button = $DeployPanel/DeployButton
+@onready var surrender_panel: PanelContainer = $SurrenderPanel
+@onready var surrender_button: Button = $SurrenderPanel/SurrenderButton
 @onready var quit_button: Button = $TopLeftPanel/QuitButton
 @onready var center_button: Button = $TopRightPanel/CenterButton
 @onready var status_panel: PanelContainer = $StatusPanel
@@ -63,6 +66,7 @@ func _on_story_node_spawned(_node_data: NodeData) -> void:
 	market_button.disabled = true
 	if barracks_button: barracks_button.disabled = true
 	deploy_button.disabled = true
+	surrender_button.disabled = true
 	quit_button.disabled = true
 
 
@@ -101,20 +105,7 @@ func _on_story_sequence_finished() -> void:
 	# No, UI state is retained.
 	# Let's just un-disable.
 	deploy_button.disabled = false 
-	# Note: This might enable it when it shouldn't be. 
-	# Ideally we'd store previous state.
-	
-	# BETTER APPROACH: Add a `_hud_locked` flag and check it in inputs? 
-	# But buttons handle their own input.
-	# Disabling is best visual feedback.
-	# Let's stick to enabling, but maybe re-run set_deploy_active(false) if no pending action?
-	# VoyageManager has pending_branch_choice etc but that's for campaign.
-	# Map selection drives deploy.
-	# Valid selection = deploy enabled. 
-	# If we preserved selection, we can just check `VoyageManager.current_node_id`? 
-	# No, `StarMap` handles selection. 
-	# Let's just enable it. Usage will fail if logic checks? No.
-	# Okay, risk accepted for now to keep it simple as requested.
+	surrender_button.disabled = false
 
 
 func _update_glass_style() -> void:
@@ -149,6 +140,7 @@ func _connect_signals() -> void:
 	deploy_button.pressed.connect(_on_deploy_pressed)
 	deploy_button.mouse_entered.connect(_on_deploy_hover)
 	deploy_button.mouse_exited.connect(_on_deploy_unhover)
+	surrender_button.pressed.connect(_on_surrender_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
 	if center_button:
 		center_button.pressed.connect(func(): center_view_pressed.emit())
@@ -172,6 +164,15 @@ func _on_barracks_pressed() -> void:
 
 func _on_deploy_pressed() -> void:
 	deploy_pressed.emit()
+
+
+func _on_surrender_pressed() -> void:
+	surrender_pressed.emit()
+
+
+func set_surrender_visible(is_visible: bool) -> void:
+	if surrender_panel:
+		surrender_panel.visible = is_visible
 
 
 func _on_deploy_hover() -> void:
@@ -446,7 +447,9 @@ func set_view_recap_mode(enabled: bool) -> void:
 		if barracks_button:
 			barracks_button.visible = false
 		if has_node("DeployPanel"):
-			$DeployPanel.visible = false # Hide deploy panel in recap mode
+			$DeployPanel.visible = false
+		if surrender_panel:
+			surrender_panel.visible = false
 		if has_node("StatusPanel"):
 			$StatusPanel.visible = false
 		quit_button.text = "VIEW RECAP"

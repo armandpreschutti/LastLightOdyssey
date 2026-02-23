@@ -107,9 +107,6 @@ var current_event: Dictionary = {}
 var pending_node_type: int = -1  # EventManager.NodeType
 var pending_biome_type: int = -1  # BiomeConfig.BiomeType for scavenge missions
 var star_map_generator: StarMapGenerator = null
-var tutorial_overlay: CanvasLayer = null
-var _first_node_clicked: bool = false
-var _first_event_seen: bool = false
 var _is_jump_animating: bool = false  # Track if jump animation is in progress
 var _suppress_fuel_warning: bool = false  # Track if player dismissed fuel warning
 var _waiting_wormhole_enter: bool = false  # True when at wormhole entrance, waiting for ENTER WORMHOLE or jump
@@ -120,7 +117,6 @@ func _ready() -> void:
 	# Initialize random number generator seed
 	randomize()
 	
-	# Add to group for easy discovery by TutorialManager
 	add_to_group("main")
 
 	# Fade layer must stay visible/on-top or transitions render invisibly.
@@ -132,7 +128,6 @@ func _ready() -> void:
 	
 	_connect_signals()
 	_initialize_star_map()
-	_initialize_tutorial()
 	tactical_mode.visible = false
 	
 	# Wait a frame to ensure everything is initialized, then fade in from black
@@ -169,6 +164,7 @@ func _connect_signals() -> void:
 	management_hud.market_pressed.connect(_on_market_pressed)
 	management_hud.barracks_pressed.connect(_on_barracks_pressed)
 	management_hud.deploy_pressed.connect(_on_deploy_pressed)
+	management_hud.surrender_pressed.connect(_on_surrender_pressed)
 	management_hud.center_view_pressed.connect(_on_center_view_pressed)
 	if barracks_menu.has_signal("closed"):
 		barracks_menu.closed.connect(_on_barracks_menu_closed)
@@ -194,22 +190,7 @@ func _initialize_star_map() -> void:
 		push_error("VoyageManager autoload not found!")
 
 
-func _initialize_tutorial() -> void:
-	# Load and add the tutorial overlay
-	var tutorial_scene = load("res://scenes/ui/tutorial_overlay.tscn")
-	tutorial_overlay = tutorial_scene.instantiate()
-	add_child(tutorial_overlay)
-	
-	# Start the tutorial (TutorialManager will check if already completed)
-	TutorialManager.start_tutorial()
-
-
 func _on_node_clicked(node_data: NodeData) -> void:
-	
-	# Block interactions when tutorial is active
-	if tutorial_overlay and tutorial_overlay.is_showing():
-		return
-	
 	if current_phase != GamePhase.IDLE:
 		return
 	
@@ -234,14 +215,7 @@ func _on_node_clicked(node_data: NodeData) -> void:
 			if not VoyageManager.is_wormhole_destination(current_node_id):
 				_show_wormhole_scene()
 			return
-	
 
-	
-	# Tutorial: Notify that a node was clicked (first time only for intro step)
-	if not _first_node_clicked:
-		_first_node_clicked = true
-		TutorialManager.notify_trigger("node_clicked")
-	
 	# Get fuel cost for this jump
 	var fuel_cost = VoyageManager.get_fuel_cost(node_data)
 	
@@ -379,6 +353,7 @@ func _execute_direct_travel(target_node: NodeData) -> void:
 func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) -> void:
 	# Check for raider ambush first
 	if VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id:
+		_waiting_wormhole_enter = false
 		_show_raider_ambush_scene()
 		return
 	
@@ -394,12 +369,6 @@ func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) ->
 				else:
 					management_hud.set_deploy_active(false)
 				return
-			
-			# Tutorial: Trigger scavenge_intro if not shown yet
-			if TutorialManager.is_active() and not "scavenge_intro" in TutorialManager._shown_step_ids:
-				# Wait a moment for jump animation, then trigger
-				await get_tree().create_timer(0.5).timeout
-				TutorialManager.trigger_step_by_id("scavenge_intro")
 			
 			# Show mission scene first, then team selection
 			current_phase = GamePhase.EVENT_DISPLAY
@@ -488,18 +457,9 @@ func _trigger_random_event() -> void:
 		# Refresh map to show results
 		star_map.refresh()
 
-	# Tutorial: Show event intro if this is the first event
-	if not _first_event_seen and TutorialManager.is_active():
-		_first_event_seen = true
-		if TutorialManager.is_at_step("resources_intro"):
-			TutorialManager.acknowledge_step()
-	
 	# Phase is back to IDLE since no dialog is shown
 	current_phase = GamePhase.IDLE
 	current_event = {}
-	
-	# Tutorial: Notify that an event was closed (since it's automatic now)
-	TutorialManager.notify_trigger("event_closed")
 
 
 func _on_event_scene_dismissed() -> void:
@@ -514,9 +474,6 @@ func _on_event_choice_made(use_specialist: bool) -> void:
 		return
 
 	EventManager.resolve_event(current_event, use_specialist)
-	
-	# Tutorial: Notify that an event was closed
-	TutorialManager.notify_trigger("event_closed")
 
 	current_phase = GamePhase.IDLE
 	current_event = {}
@@ -543,10 +500,7 @@ func _on_team_selected(officer_keys: Array[String], objectives: Array[MissionObj
 	management_layer.visible = false
 	management_background.visible = false
 	tactical_mode.visible = true
-	
-	# Tutorial: Notify that team was selected
-	TutorialManager.notify_trigger("team_selected")
-	
+
 	# Start the mission with biome type, stored officer keys, and stored objectives
 	tactical_mode.start_mission(_pending_officer_keys, pending_biome_type, _pending_objectives)
 	_pending_officer_keys.clear()
@@ -590,10 +544,7 @@ func _on_mission_scene_dismissed() -> void:
 		management_layer.visible = false
 		management_background.visible = false
 		tactical_mode.visible = true
-		
-		# Tutorial: Notify that team was selected
-		TutorialManager.notify_trigger("team_selected")
-		
+
 		# Start the mission with biome type and stored officer keys
 		# Old flow - no objectives stored, pass empty array (will generate random in tactical controller)
 		tactical_mode.start_mission(_pending_officer_keys, pending_biome_type, [])
@@ -611,6 +562,11 @@ func _on_mission_scene_dismissed() -> void:
 
 ## Handle [DEPLOY] / [ENTER WORMHOLE] button press
 func _on_deploy_pressed() -> void:
+	# Raider takes priority: if ambushed, always deploy (never wormhole)
+	var raider_on_node = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
+	if raider_on_node:
+		_waiting_wormhole_enter = false  # Clear stale state
+
 	if _waiting_wormhole_enter:
 		_execute_wormhole_teleport()
 		# We land on destination wormhole - hide button (entrance-only)
@@ -651,16 +607,8 @@ func _transition_to_team_select() -> void:
 	current_phase = GamePhase.TEAM_SELECT
 	
 	# Check if this is a raider ambush
-	var is_raider_ambush = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
+	var 	is_raider_ambush = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
 	team_select_dialog.show_dialog(pending_biome_type, is_raider_ambush)
-	
-
-	
-	# Tutorial: Trigger scavenge_intro after team select dialog is visible
-	if TutorialManager.is_active() and TutorialManager.is_at_step("scavenge_intro"):
-		# Wait a frame for dialog to become visible, then queue the step
-		await get_tree().process_frame
-		TutorialManager.queue_step(TutorialManager.current_step_index)
 
 
 func _on_mission_complete(success: bool, stats: Dictionary) -> void:
@@ -722,9 +670,6 @@ func _on_mission_complete(success: bool, stats: Dictionary) -> void:
 func _on_recap_dismissed() -> void:
 	# Resume navigation music after returning from tactical mission
 	MusicManager.play_navigation_music()
-
-	# Tutorial: Notify mission complete
-	TutorialManager.notify_trigger("mission_complete")
 
 	# Check if we need to show post-story scene
 	if _pending_completed_mission_id != "" and ENABLE_STORY_POST_SCENE:
@@ -871,11 +816,7 @@ func _show_voyage_intro() -> void:
 func _on_voyage_intro_scene_dismissed() -> void:
 	# After voyage intro is dismissed, allow normal gameplay
 	current_phase = GamePhase.IDLE
-	
-	# Trigger first tutorial step after voyage intro completes
-	if TutorialManager.is_active() and TutorialManager.is_at_step("star_map_intro"):
-		TutorialManager.trigger_first_step()
-	
+
 	# Restore deploy button state if we loaded into a mission node
 	_restore_deploy_button_state()
 
@@ -929,8 +870,6 @@ func _on_restart_pressed() -> void:
 	pending_biome_type = -1
 	_pending_game_over_reason = ""
 	_pending_story_after_raider = false
-	_first_node_clicked = false
-	_first_event_seen = false
 	_is_jump_animating = false
 	_suppress_fuel_warning = false
 	_waiting_wormhole_enter = false
@@ -951,10 +890,7 @@ func _on_restart_pressed() -> void:
 	# Regenerate the star map
 	_initialize_star_map()
 	star_map.center_view_on_ship(false)
-	
-	# Restart tutorial if not completed
-	TutorialManager.start_tutorial()
-	
+
 	# Show voyage intro scene again
 	_show_voyage_intro()
 
@@ -1113,6 +1049,7 @@ func _show_raider_ambush_scene() -> void:
 
 ## Called when raider scene is dismissed - activate deploy button like normal
 func _on_raider_scene_dismissed() -> void:
+	_waiting_wormhole_enter = false  # Ensure raider deploy never conflicts with wormhole
 	# Disconnect to avoid interfering with normal mission flow
 	if mission_scene_dialog.scene_dismissed.is_connected(_on_raider_scene_dismissed):
 		mission_scene_dialog.scene_dismissed.disconnect(_on_raider_scene_dismissed)
@@ -1120,6 +1057,35 @@ func _on_raider_scene_dismissed() -> void:
 	# Like a scavenge site, just activate the deploy button
 	current_phase = GamePhase.IDLE
 	management_hud.set_deploy_active(true)
+	management_hud.set_surrender_visible(true)
+
+
+func _on_surrender_pressed() -> void:
+	if current_phase != GamePhase.IDLE and current_phase != GamePhase.EVENT_DISPLAY:
+		return
+	var dialog_scene = load("res://scenes/ui/confirm_dialog.tscn")
+	var dialog = dialog_scene.instantiate()
+	$DialogLayer.add_child(dialog)
+	dialog.setup(
+		"[ SURRENDER TO RAIDERS ]",
+		"Surrendering will inflict 15% hull damage.\nThe raiders will leave without a fight.\n\nContinue?",
+		"SURRENDER",
+		"CANCEL")
+	dialog.show_dialog()
+	dialog.confirmed.connect(_on_surrender_confirmed)
+
+
+func _on_surrender_confirmed() -> void:
+	GameState.damage_ship(15)
+	VoyageManager.clear_raider_surrender()
+	management_hud.set_surrender_visible(false)
+	management_hud.set_deploy_active(false)
+
+	if _pending_story_after_raider:
+		_pending_story_after_raider = false
+		_trigger_story_after_raider()
+	else:
+		_update_deploy_button_visibility()
 
 
 func _show_story_choice_dialog(choices: Array[String]) -> void:
@@ -1167,9 +1133,11 @@ func _update_deploy_button_visibility() -> void:
 		management_hud.set_enter_wormhole_button_active(false)
 	# Don't overwrite ENTER WORMHOLE button when at wormhole (no raider) and waiting for choice
 	if _waiting_wormhole_enter:
+		management_hud.set_surrender_visible(false)
 		return
 	if not current_node:
 		management_hud.set_deploy_active(false)
+		management_hud.set_surrender_visible(false)
 		return
 	
 	# Check if raider is on current node (must deploy to clear it)
@@ -1181,14 +1149,18 @@ func _update_deploy_button_visibility() -> void:
 		pending_node_type = EventManager.NodeType.SCAVENGE_SITE
 		pending_biome_type = current_node.biome_type
 		management_hud.set_deploy_active(true)
+		management_hud.set_surrender_visible(true)
 	elif current_node.node_type == EventManager.NodeType.WORMHOLE and not VoyageManager.is_wormhole_destination(current_node.id):
 		# Show ENTER WORMHOLE at entrances and unpaired wormholes; NOT at destinations (arrow tip)
 		_waiting_wormhole_enter = true
 		management_hud.set_enter_wormhole_button_active(true)
+		management_hud.set_surrender_visible(false)
 	elif current_node.node_type == EventManager.NodeType.SCAVENGE_SITE and current_node.state != NodeData.NodeState.CLEARED:
 		# Ensure pending state is set for normal scavenge sites too
 		pending_node_type = current_node.node_type
 		pending_biome_type = current_node.biome_type
 		management_hud.set_deploy_active(true)
+		management_hud.set_surrender_visible(false)
 	else:
 		management_hud.set_deploy_active(false)
+		management_hud.set_surrender_visible(false)

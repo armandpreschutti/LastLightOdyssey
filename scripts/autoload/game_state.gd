@@ -75,7 +75,7 @@ const ABILITY_DEFS: Dictionary = {
 
 	# HEAVY - Level 2
 	"bulldozer":          {"name": "Bulldozer",          "desc": "Charge destroys all cover in its path. Gain +20 Armor after charging.",                                                                          "level": 2, "slot": "a", "type": "passive", "modifies": "charge", "armor_bonus": 20},
-	"suppression_fire":   {"name": "Suppression Fire",   "desc": "Deal light damage to all enemies in a cone within 5 tiles and remove their ability to move next turn (Pin Down). (1 AP, active)",                               "level": 2, "slot": "b", "type": "active", "cost": 1},
+	"suppression_fire":   {"name": "Suppression Fire",   "desc": "Target a visible enemy within range: deal 12 light damage and Pin Down (no movement for 3 turns). (1 AP, 3-turn cooldown)",                               "level": 2, "slot": "b", "type": "active", "cost": 1, "cooldown": 3},
 
 	# HEAVY - Level 3
 	"juggernaut":         {"name": "Juggernaut",         "desc": "Immune to Critical Hits. If you end your turn without attacking, regenerate 15% Max HP.",                                                        "level": 3, "slot": "a", "type": "passive"},
