@@ -14,6 +14,7 @@ signal deploy_pressed
 @onready var integrity_label: Label = $MarginContainer/VBoxContainer/StatsContainer/IntegrityRow/IntegrityLabel
 @onready var market_button: Button = $MarginContainer/VBoxContainer/MarketButton
 @onready var barracks_button: Button = $MarginContainer/VBoxContainer/BarracksButton
+@onready var deploy_panel: PanelContainer = $DeployPanel
 @onready var deploy_button: Button = $DeployPanel/DeployButton
 @onready var quit_button: Button = $TopLeftPanel/QuitButton
 @onready var center_button: Button = $TopRightPanel/CenterButton
@@ -184,9 +185,9 @@ func _on_deploy_hover() -> void:
 		# But refactor requested "accept target".
 		# Let's pivot: Keep simple pulse for deploy, add separate one?
 		# No, clean refactor:
-		_stop_pulse(deploy_button)
+		_stop_pulse(deploy_panel)
 		
-	var glow_rect = deploy_button.get_node_or_null("GlowRect")
+	var glow_rect = deploy_panel.get_node_or_null("GlowRect")
 	if glow_rect:
 		glow_rect.color.a = 0.8
 
@@ -194,55 +195,96 @@ func _on_deploy_hover() -> void:
 func _on_deploy_unhover() -> void:
 	# Resume pulse if button is active
 	if not deploy_button.disabled:
-		_start_pulse(deploy_button)
+		_start_pulse(deploy_panel)
 
 
 func set_deploy_active(active: bool) -> void:
 	deploy_button.disabled = not active
+	deploy_button.text = "[ DEPLOY TEAM ]"
 	
 	if has_node("DeployPanel"):
 		$DeployPanel.visible = active
 		
 	if active:
-		_start_pulse(deploy_button)
+		_start_pulse(deploy_panel)
 	else:
-		_stop_pulse(deploy_button)
+		_stop_pulse(deploy_panel)
 
 
-var _pulse_tweens: Dictionary = {} # Button -> Tween
+## Show ENTER WORMHOLE button (same placement/style as DEPLOY TEAM)
+func set_enter_wormhole_button_active(active: bool) -> void:
+	if active:
+		deploy_button.text = "[ ENTER WORMHOLE ]"
+		deploy_button.disabled = false
+		if has_node("DeployPanel"):
+			$DeployPanel.visible = true
+		_start_pulse(deploy_panel)
+	else:
+		deploy_button.text = "[ DEPLOY TEAM ]"
+		deploy_button.disabled = true
+		if has_node("DeployPanel"):
+			$DeployPanel.visible = false
+		_stop_pulse(deploy_panel)
 
-func _start_pulse(target_btn: Button) -> void:
-	if not target_btn: return
+
+var _pulse_tweens: Dictionary = {} # Control -> Tween
+
+## Start pulse animation. For deploy, pass deploy_panel so glow fills the bordered panel.
+## For barracks/market, pass the button; glow is inset to match visible border (theme style content margin).
+func _start_pulse(target: Control) -> void:
+	if not target: return
 	
-	_stop_pulse(target_btn) # Clear existing
-		
-	var glow_rect = target_btn.get_node_or_null("GlowRect")
+	_stop_pulse(target) # Clear existing
+	
+	var glow_rect = target.get_node_or_null("GlowRect")
 	if not glow_rect:
 		glow_rect = ColorRect.new()
 		glow_rect.name = "GlowRect"
-		glow_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		glow_rect.color = Color(1, 1, 1, 0) # Start transparent
 		glow_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		target_btn.add_child(glow_rect)
-		# Ensure it's behind text if not drawn on top, though children draw on top.
-		# For highlight, top is fine (additive/transparent).
 		
+		if target is PanelContainer:
+			# Deploy: glow fills the full bordered panel, drawn behind the button
+			glow_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			target.add_child(glow_rect)
+			target.move_child(glow_rect, 0)
+		else:
+			# Barracks/Market: inset glow to match visible button border (theme draws border inside control rect)
+			glow_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			var style = target.get_theme_stylebox("normal")
+			if style:
+				# Content margin may be -1 when unset; use texture margin as fallback for StyleBoxTexture
+				var ml = maxf(0.0, style.get_content_margin(Side.SIDE_LEFT))
+				var mt = maxf(0.0, style.get_content_margin(Side.SIDE_TOP))
+				var mr = maxf(0.0, style.get_content_margin(Side.SIDE_RIGHT))
+				var mb = maxf(0.0, style.get_content_margin(Side.SIDE_BOTTOM))
+				if ml == 0.0 and mt == 0.0 and mr == 0.0 and mb == 0.0 and style is StyleBoxTexture:
+					ml = style.texture_margin_left
+					mt = style.texture_margin_top
+					mr = style.texture_margin_right
+					mb = style.texture_margin_bottom
+				glow_rect.offset_left = ml
+				glow_rect.offset_top = mt
+				glow_rect.offset_right = -mr
+				glow_rect.offset_bottom = -mb
+			target.add_child(glow_rect)
+	
 	var tween = create_tween().set_loops()
 	tween.tween_property(glow_rect, "color:a", 0.05, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tween.tween_property(glow_rect, "color:a", 0.2, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_pulse_tweens[target_btn] = tween
+	_pulse_tweens[target] = tween
 
 
-func _stop_pulse(target_btn: Button) -> void:
-	if not target_btn: return
+func _stop_pulse(target: Control) -> void:
+	if not target: return
 	
-	if _pulse_tweens.has(target_btn):
-		var tween = _pulse_tweens[target_btn]
+	if _pulse_tweens.has(target):
+		var tween = _pulse_tweens[target]
 		if tween and tween.is_valid():
 			tween.kill()
-		_pulse_tweens.erase(target_btn)
+		_pulse_tweens.erase(target)
 	
-	var glow_rect = target_btn.get_node_or_null("GlowRect")
+	var glow_rect = target.get_node_or_null("GlowRect")
 	if glow_rect:
 		glow_rect.color.a = 0.0
 

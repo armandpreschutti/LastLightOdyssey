@@ -86,6 +86,7 @@ var ambush_trap_markers: Dictionary = {}
 # Combat constants
 const BASE_HIT_CHANCE: float = 70.0
 const RANGE_PENALTY_START: int = 5
+const SUPPRESSION_RANGE: int = 5
 const RANGE_PENALTY_PER_TILE: float = 5.0
 const MIN_HIT_CHANCE: float = 20.0  # Increased from 10% to 20% for more forgiving minimum
 const MAX_HIT_CHANCE: float = 95.0  # Base cap for enemies and default
@@ -1612,6 +1613,7 @@ func _on_end_turn_pressed() -> void:
 		
 		# Inspire: Apply pending AP when the target's turn starts
 		if inspire_pending.has(next_unit.officer_key):
+			next_unit.remove_status_effect("inspired")
 			next_unit.gain_bonus_ap(inspire_pending[next_unit.officer_key])
 			tactical_hud.show_combat_message(
 				"INSPIRED — +1 AP!", Color(1.0, 0.9, 0.3))
@@ -3234,12 +3236,6 @@ func _execute_enemy_turn() -> void:
 		# Tick status effects at the END of this enemy's turn (so effects like pin_down block the whole turn)
 		if is_instance_valid(enemy) and enemy.has_method("tick_status_effects"):
 			enemy.tick_status_effects()
-			var _cf_marker = enemy.get_node_or_null("CoordFireMarker")
-			if _cf_marker:
-				if enemy.has_method("has_status_effect") and enemy.has_status_effect("marked"):
-					_cf_marker.text = "⚡ MARKED [%d]" % enemy.status_effects.get("marked", 0)
-				else:
-					_cf_marker.queue_free()
 
 func _on_enemy_movement_finished(_enemy: Node2D) -> void:
 	# Enemy movement completed
@@ -3445,16 +3441,15 @@ func _is_enemy_visible(enemy: Node2D) -> bool:
 
 ## Update enemy visibility based on revealed tiles
 func _update_enemy_visibility() -> void:
-	# Update precision mode highlights if active (enemies may have become visible)
 	if precision_mode:
 		_update_precision_mode_highlights()
 	for enemy in enemies:
 		if enemy.current_hp <= 0:
 			continue
-		
 		enemy.visible = _is_enemy_visible(enemy)
-	
-	# Also update attackable highlights (visibility affects targeting)
+		# Refresh cover indicator when an enemy becomes visible (or on every visibility pass)
+		if enemy.visible:
+			_update_unit_cover_indicator(enemy)
 	_update_attackable_highlights()
 
 
@@ -4128,21 +4123,9 @@ func _try_patch_target(grid_pos: Vector2i) -> void:
 			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
 		return
 	
-	# Check if target is injured
-	if target_unit.current_hp >= target_unit.max_hp:
-		tactical_hud.show_combat_message("TARGET AT FULL HEALTH", Color(1, 0.5, 0))
-		await get_tree().create_timer(1.0).timeout
-		tactical_hud.hide_combat_message()
-		_set_animating(false)
-		# Update ability buttons (ability not used, button should be re-enabled)
-		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
-		# Restore movement range if unit still has AP
-		if selected_unit == deployed_officers[current_unit_index] and selected_unit.has_ap():
-			var unit_pos = selected_unit.get_grid_position()
-			tactical_map.set_movement_range(unit_pos, selected_unit.move_range)
-		return
-	
 	# Use the ability (spends AP and starts cooldown)
+	# PATCH can target full health units - healing will cap at max_hp (no effect), but Adrenaline Patch buff still applies
+	var was_full_health = target_unit.current_hp >= target_unit.max_hp
 	if selected_unit.use_patch(target_unit):
 		# Play patch SFX
 		if SFXManager:
@@ -4161,11 +4144,14 @@ func _try_patch_target(grid_pos: Vector2i) -> void:
 		if _adrpatch_od and _adrpatch_od.has_ability("adrenaline_patch"):
 			target_unit.add_status_effect("adrenaline", 2)
 			tactical_hud.show_combat_message("ADRENALINE PATCH — +2 MOV, +15% ACC!", Color(1.0, 0.5, 0.9))
+		elif was_full_health:
+			tactical_hud.show_combat_message("PATCHED — ALREADY FULL HEALTH", Color(0.7, 0.7, 0.7))
 		else:
 			tactical_hud.show_combat_message("HEALED %s (+%d HP)" % [target_unit.officer_key.to_upper(), heal_amount], Color(0.2, 1, 0.2))
-		
-		# Show heal popup
-		_spawn_damage_popup(heal_amount, true, target_unit.position, true)
+
+		# Show heal popup only when healing had effect
+		if not was_full_health:
+			_spawn_damage_popup(heal_amount, true, target_unit.position, true)
 		
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
@@ -4371,7 +4357,7 @@ func _try_coordinate_fire(grid_pos: Vector2i) -> void:
 
 	selected_unit.apply_coordinate_fire(target_enemy)
 
-	# Visual: rapid yellow flash on marked enemy
+	# Visual: rapid yellow flash on marked enemy (icon + pulse handled by enemy add_status_effect)
 	var enemy_sprite = target_enemy.get_node_or_null("Sprite")
 	if enemy_sprite:
 		var tween = create_tween()
@@ -4379,19 +4365,6 @@ func _try_coordinate_fire(grid_pos: Vector2i) -> void:
 		tween.tween_property(enemy_sprite, "modulate", Color(1.5, 0.5, 0.2, 1.0), 0.08)
 		tween.tween_property(enemy_sprite, "modulate", Color(2.0, 1.5, 0.2, 1.0), 0.08)
 		tween.tween_property(enemy_sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.15)
-
-	# Add floating timer label above enemy
-	var old_marker = target_enemy.get_node_or_null("CoordFireMarker")
-	if old_marker:
-		old_marker.queue_free()
-	var marker_label = Label.new()
-	marker_label.name = "CoordFireMarker"
-	marker_label.text = "⚡ MARKED [2]"
-	marker_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
-	marker_label.add_theme_font_size_override("font_size", 11)
-	marker_label.position = Vector2(-20, -40)
-	marker_label.z_index = 10
-	target_enemy.add_child(marker_label)
 
 	tactical_hud.show_combat_message("COORDINATE FIRE — TARGET MARKED!", Color(1.0, 0.8, 0.2))
 	await get_tree().create_timer(1.2).timeout
@@ -4428,6 +4401,7 @@ func _try_inspire_target(grid_pos: Vector2i) -> void:
 		# Queue +1 AP for target's next turn instead of granting immediately
 		var current_pending = inspire_pending.get(target_unit.officer_key, 0)
 		inspire_pending[target_unit.officer_key] = current_pending + 1
+		target_unit.add_status_effect("inspired", 1)
 		tactical_hud.show_combat_message(
 			"%s INSPIRED — +1 AP NEXT TURN!" % target_unit.officer_key.to_upper(), Color(1.0, 0.9, 0.3))
 		await get_tree().create_timer(1.2).timeout
@@ -4723,10 +4697,18 @@ func _activate_emergency_protocol() -> void:
 
 ## Damn Good Ground Last Stand (Sniper L2A): next shot guaranteed hit, ignore cover
 func _activate_damn_good_ground() -> void:
-	if not selected_unit.apply_damn_good_ground():
-		tactical_hud.show_combat_message("NOT ENOUGH AP OR COOLDOWN", Color(1, 0.3, 0.3))
+	if not selected_unit.use_ap(1):
+		tactical_hud.show_combat_message("NOT ENOUGH AP", Color(1, 0.3, 0.3))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
+		return
+	if not selected_unit.apply_damn_good_ground():
+		# Refund AP on failure (e.g. cooldown)
+		selected_unit.gain_bonus_ap(1)
+		tactical_hud.show_combat_message("COOLDOWN — CANNOT ACTIVATE YET", Color(1, 0.5, 0))
+		await get_tree().create_timer(1.0).timeout
+		tactical_hud.hide_combat_message()
+		_select_unit(selected_unit)
 		return
 
 	tactical_hud.show_combat_message("LAST STAND — NEXT SHOT GUARANTEED HIT!", Color(0.8, 0.6, 1.0))
@@ -4801,16 +4783,19 @@ func _try_stim_target(grid_pos: Vector2i) -> void:
 		_restore_movement_range()
 
 
-## Suppression Fire (Heavy L2B): all visible enemies -25% accuracy for 1 turn
+## Suppression Fire (Heavy L2B): visible enemies within 5 tiles -25% accuracy for 1 turn
 func _activate_suppression_fire() -> void:
-	# First check for visible enemies
+	# First check for visible enemies within range
+	var shooter_pos = selected_unit.get_grid_position()
 	var visible_enemies = []
 	for enemy in enemies:
 		if _is_enemy_visible(enemy):
-			visible_enemies.append(enemy)
+			var dist = abs(enemy.get_grid_position().x - shooter_pos.x) + abs(enemy.get_grid_position().y - shooter_pos.y)
+			if dist <= SUPPRESSION_RANGE:
+				visible_enemies.append(enemy)
 			
 	if visible_enemies.is_empty():
-		tactical_hud.show_combat_message("NO VISIBLE ENEMIES TO SUPPRESS", Color(1, 0.5, 0))
+		tactical_hud.show_combat_message("NO ENEMIES IN RANGE (5 TILES)", Color(1, 0.5, 0))
 		await get_tree().create_timer(1.0).timeout
 		tactical_hud.hide_combat_message()
 		return

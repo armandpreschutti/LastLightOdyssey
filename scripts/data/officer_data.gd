@@ -111,6 +111,19 @@ func can_unlock_level3(_logs_count: int) -> bool:
 	return level >= 3 and data_logs >= DATA_LOGS_LEVEL3_COST
 
 
+## Removes all L2 and L3 abilities, keeping only the L1 (base) ability.
+func reset_abilities_above_level1() -> void:
+	var all_abs = GameState.OFFICER_ABILITIES.get(id, [])
+	if all_abs.size() < 2:
+		return
+	var l2_l3: Array[String] = []
+	for i in range(1, all_abs.size()):
+		l2_l3.append(all_abs[i])
+	for i in range(unlocked_abilities.size() - 1, -1, -1):
+		if unlocked_abilities[i] in l2_l3:
+			unlocked_abilities.remove_at(i)
+
+
 func to_dict() -> Dictionary:
 	return {
 		"id": id,

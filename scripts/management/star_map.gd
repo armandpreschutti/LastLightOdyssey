@@ -40,6 +40,7 @@ func _ready() -> void:
 	# Connect signals
 	VoyageManager.map_updated.connect(refresh)
 	VoyageManager.ship_moved.connect(_on_ship_moved)
+	VoyageManager.ship_teleported.connect(_on_ship_teleported)
 	
 	# Initial draw
 	refresh()
@@ -242,8 +243,30 @@ func _draw_connections() -> void:
 					   (target_id == current_id and source_node.state == NodeData.NodeState.UNVISITED):
 						is_potential = true
 				
-				_draw_line(start_point, end_point, is_traveled, is_potential)
+				# Skip drawing normal line if this is a wormhole pair (draw separately as white)
+				var is_wormhole_pair = _is_wormhole_pair(source_id, target_id)
+				if not is_wormhole_pair:
+					_draw_line(start_point, end_point, is_traveled, is_potential)
 				processed_connections[key] = true
+
+	# Draw wormhole pair pathlines (white) with directional arrows
+	for pair in VoyageManager.wormhole_pairs:
+		var from_id = str(pair[0])
+		var to_id = str(pair[1])
+		if node_visuals.has(from_id) and node_visuals.has(to_id):
+			var v_from = node_visuals[from_id]
+			var v_to = node_visuals[to_id]
+			var from_point = v_from.position + Vector2(40, 40)
+			var to_point = v_to.position + Vector2(40, 40)
+			_draw_wormhole_line(from_point, to_point)
+
+func _is_wormhole_pair(id1: String, id2: String) -> bool:
+	var key = _get_connection_key(id1, id2)
+	for pair in VoyageManager.wormhole_pairs:
+		var pk = _get_connection_key(str(pair[0]), str(pair[1]))
+		if pk == key:
+			return true
+	return false
 
 func _get_connection_key(id1: String, id2: String) -> String:
 	if id1 < id2:
@@ -274,6 +297,43 @@ func _draw_line(from: Vector2, to: Vector2, is_traveled: bool = false, is_potent
 		line.default_color = Color(0.4, 0.6, 0.8, 0.5) # Default blueish
 	
 	lines_container.add_child(line)
+
+const WORMHOLE_ARROW_SPACING: float = 100.0
+const WORMHOLE_ARROW_SIZE: float = 10.0
+
+func _draw_wormhole_line(from: Vector2, to: Vector2) -> void:
+	var line = Line2D.new()
+	line.add_point(from)
+	line.add_point(to)
+	line.joint_mode = Line2D.LINE_JOINT_ROUND
+	line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	line.width = 4.0
+	line.default_color = Color(1.0, 1.0, 1.0, 0.9)  # White for wormhole path (matches legend)
+	lines_container.add_child(line)
+
+	# Add directional triangles along the line (pointing towards destination)
+	var direction = (to - from).normalized()
+	var line_length = from.distance_to(to)
+	var num_arrows = max(1, int(line_length / WORMHOLE_ARROW_SPACING))
+	for i in range(num_arrows):
+		var t = (float(i) + 1.0) / (num_arrows + 1.0)  # Distribute evenly, away from endpoints
+		var pos = from.lerp(to, t)
+		_draw_wormhole_arrow(pos, direction)
+
+
+func _draw_wormhole_arrow(pos: Vector2, direction: Vector2) -> void:
+	# Triangle pointing right (0 rad), then rotate to match direction
+	var s = WORMHOLE_ARROW_SIZE
+	var triangle = Polygon2D.new()
+	triangle.polygon = PackedVector2Array([
+		Vector2(s, 0),           # Tip
+		Vector2(-s * 0.6, s * 0.8),   # Base left
+		Vector2(-s * 0.6, -s * 0.8)   # Base right
+	])
+	triangle.color = Color(1.0, 1.0, 1.0, 0.9)  # Match wormhole line
+	triangle.position = pos
+	triangle.rotation = direction.angle()
+	lines_container.add_child(triangle)
 
 func _gui_input(event: InputEvent) -> void:
 	if not visible or _input_locked:
@@ -335,6 +395,13 @@ func _on_ship_moved(new_pos: Vector2, node_data: NodeData, speed_mult: float = 1
 	# Animate camera centering
 	center_view_on_ship(true)
 
+
+func _on_ship_teleported(new_pos: Vector2, _node_data: NodeData) -> void:
+	_input_locked = true
+	_is_ship_animating = true
+	# Teleport: dematerialize -> snap to destination -> materialize (camera animates same as jump)
+	_play_teleport_animation(new_pos)
+
 func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO, speed_mult: float = 1.0) -> void:
 	if not ship_visual:
 		_create_ship_visual()
@@ -394,6 +461,37 @@ func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO, s
 		_is_ship_animating = false
 		ship_visual.position = visual_pos
 		# Maintain rotation - don't reset to 0
+
+func _play_teleport_animation(target_pos: Vector2) -> void:
+	if not ship_visual:
+		_create_ship_visual()
+	var visual_pos = target_pos - Vector2(24, 24)
+
+	# Dematerialize: fade out + shrink (0.2s)
+	var demat_tween = create_tween()
+	demat_tween.set_parallel(true)
+	demat_tween.tween_property(ship_visual, "modulate:a", 0.0, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	demat_tween.tween_property(ship_visual, "scale", Vector2(0.3, 0.3), 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	demat_tween.tween_property(ship_visual, "rotation", 0.0, 0.2)  # Reset rotation for clean reappearance
+
+	# Snap to destination then materialize (fade in + scale up in parallel)
+	demat_tween.tween_callback(func():
+		ship_visual.position = visual_pos
+		ship_visual.modulate.a = 0.0
+		ship_visual.scale = Vector2(0.3, 0.3)
+	)
+	demat_tween.set_parallel(true)
+	demat_tween.tween_property(ship_visual, "modulate:a", 1.0, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	demat_tween.tween_property(ship_visual, "scale", Vector2(1.0, 1.0), 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	demat_tween.set_parallel(false)
+	demat_tween.tween_callback(func():
+		_is_ship_animating = false
+		jump_animation_complete.emit()
+	)
+
+	# Camera animates same as jump
+	center_view_on_ship(true)
+
 
 func center_view_on_ship(animated: bool) -> void:
 	var current_node = VoyageManager.get_current_node()

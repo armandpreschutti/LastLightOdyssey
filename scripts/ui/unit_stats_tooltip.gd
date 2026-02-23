@@ -10,6 +10,17 @@ extends Control
 @onready var sight_range_label: Label = $PanelContainer/MarginContainer/VBox/SightRangeLabel
 @onready var shoot_range_label: Label = $PanelContainer/MarginContainer/VBox/ShootRangeLabel
 @onready var damage_label: Label = $PanelContainer/MarginContainer/VBox/DamageLabel
+@onready var active_effects_label: Label = $PanelContainer/MarginContainer/VBox/ActiveEffectsLabel
+
+## Fallback labels for effects not in EffectIconConfig (no icon, but appear in status_effects)
+const _EFFECT_LABELS: Dictionary = {
+	"immune": "Immune",
+	"stim": "Stim",
+	"phantom": "Phantom",
+	"untouchable": "Untouchable",
+	"bulldozer_armor": "Bulldozer Armor",
+	"deep_scanned": "Deep Scanned",
+}
 
 
 func _ready() -> void:
@@ -81,7 +92,12 @@ func update_unit_stats(unit: Node2D) -> void:
 		ap_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
 	else:
 		ap_label.add_theme_color_override("font_color", Color(1.0, 0.69, 0.0))
-	
+
+	# Active effects (status_effects dict: effect_key -> remaining_turns)
+	var effects_text := _get_active_effects_text(unit)
+	active_effects_label.text = effects_text
+	active_effects_label.visible = not effects_text.is_empty()
+
 	show_tooltip()
 
 
@@ -93,3 +109,25 @@ func show_tooltip() -> void:
 ## Hide the tooltip
 func hide_tooltip() -> void:
 	visible = false
+
+
+func _get_active_effects_text(unit: Node2D) -> String:
+	if not unit.get("status_effects"):
+		return ""
+	var status_effects: Dictionary = unit.status_effects
+	if status_effects.is_empty():
+		return ""
+	var lines: PackedStringArray = []
+	for effect_key in status_effects:
+		var turns: int = status_effects[effect_key]
+		if turns <= 0:
+			continue
+		var label: String = _EFFECT_LABELS.get(effect_key, "")
+		if label.is_empty():
+			var data: Dictionary = EffectIconConfig.get_data(effect_key)
+			label = data.get("label", effect_key.replace("_", " ").capitalize())
+		var turn_str: String = "1 turn" if turns == 1 else "%d turns" % turns
+		lines.append("• %s (%s)" % [label, turn_str])
+	if lines.is_empty():
+		return ""
+	return "ACTIVE EFFECTS:\n" + "\n".join(lines)

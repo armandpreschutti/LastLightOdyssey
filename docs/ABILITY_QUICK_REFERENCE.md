@@ -62,7 +62,7 @@
 |---------|------|------|----|--------|
 | **Charge** | Active | 1 AP | 2 | Rush enemy — instant kill basic, 2x damage heavy |
 | **Bulldozer** | Passive | — | — | Charge grants +20 armor for 2 turns |
-| **Suppression Fire** | Active | 2 AP | 2 | All visible enemies get -25% accuracy for 1 turn |
+| **Suppression Fire** | Active | 1 AP | 2 | Enemies within 5 tiles get -25% accuracy for 1 turn |
 | **Juggernaut** | Passive | — | — | Crit immune; regen 15% HP if Heavy didn't attack this turn |
 | **Rocket Salvo** | Active | 2 AP | 3 | 40 damage to all enemies in a 3×3 area |
 | **War Machine** | Passive | — | — | Each kill this mission: permanently +5 base damage |

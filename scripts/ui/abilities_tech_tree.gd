@@ -13,9 +13,12 @@ signal visibility_changed_to(is_visible: bool)
 @onready var main_panel = $Panel
 @onready var description_label = $Panel/VBox/DescriptionBox/Margin/DescriptionLabel
 
+const RESET_COST_DL: int = 1
+
 var current_officer_key: String = ""
 var node_map: Dictionary = {} # id -> node instance
 var footer_slots_container: HBoxContainer = null
+var reset_button: Button = null
 
 func _ready():
 	visible = false
@@ -147,11 +150,11 @@ func _build_tree():
 	var l2 = [abilities[1], abilities[2]]
 	var l3 = [abilities[3], abilities[4], abilities[5]]
 
-	# Positioning constants (Bottom-Up)
-	var center_x = 450 
-	var vertical_spacing = 140
-	var horizontal_spacing = 200
-	var start_y = 440 # Root at bottom
+	# Positioning constants (Bottom-Up) — sized to fill TreeContent (900x500) with minimal padding
+	var center_x = 450
+	var vertical_spacing = 195
+	var horizontal_spacing = 360
+	var start_y = 458 # Root near bottom
 
 	# Instantiate nodes
 	_create_node(l1[0], Vector2(center_x, start_y))
@@ -318,9 +321,83 @@ func _setup_footer():
 	footer_slots_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	hbox.add_child(footer_slots_container)
 
+	# Reset button - use same outline style as CloseButton / other UI buttons
+	reset_button = Button.new()
+	reset_button.text = "[ RESET ABILITIES (1 DL) ]"
+	reset_button.pressed.connect(_on_reset_abilities_pressed)
+	reset_button.add_theme_stylebox_override("normal", load("res://assets/themes/style_btn_red.tres") as StyleBox)
+	reset_button.add_theme_stylebox_override("hover", load("res://assets/themes/style_btn_red_hover.tres") as StyleBox)
+	reset_button.add_theme_stylebox_override("pressed", load("res://assets/themes/style_btn_red_pressed.tres") as StyleBox)
+	reset_button.add_theme_stylebox_override("disabled", load("res://assets/themes/style_btn_red.tres") as StyleBox)
+	reset_button.add_theme_color_override("font_color", Color(0.9, 0.75, 0.5))
+	reset_button.add_theme_color_override("font_disabled_color", Color(0.4, 0.35, 0.3))
+	reset_button.add_theme_font_size_override("font_size", 12)
+	reset_button.tooltip_text = "Clear all L2 and L3 ability choices. Level 1 ability is kept. Costs 1 Data Log."
+	hbox.add_child(reset_button)
+
+
+func _on_reset_abilities_pressed() -> void:
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "click")
+	var od = GameState.get_officer(current_officer_key)
+	if not od: return
+	if od.data_logs < RESET_COST_DL:
+		return
+	var abilities = GameState.OFFICER_ABILITIES.get(current_officer_key, [])
+	if abilities.size() < 2:
+		return
+	# Check if there are any L2/L3 to reset
+	var has_l2_or_l3 := false
+	for i in range(1, abilities.size()):
+		if od.has_ability(abilities[i]):
+			has_l2_or_l3 = true
+			break
+	if not has_l2_or_l3:
+		return
+	_show_reset_confirmation()
+
+
+func _show_reset_confirmation() -> void:
+	var dialog_scene = load("res://scenes/ui/confirm_dialog.tscn")
+	var dialog = dialog_scene.instantiate()
+	dialog.z_index = 100
+	add_child(dialog)
+	dialog.setup(
+		"[ RESET ABILITIES? ]",
+		"This will clear all Level 2 and Level 3 ability choices.\nThe Level 1 ability will be kept.\n\nCosts 1 Data Log. This cannot be undone!",
+		"RESET",
+		"CANCEL"
+	)
+	dialog.confirmed.connect(_do_reset_abilities)
+	dialog.show_dialog()
+
+
+func _do_reset_abilities() -> void:
+	var od = GameState.get_officer(current_officer_key)
+	if not od: return
+	od.data_logs -= RESET_COST_DL
+	od.reset_abilities_above_level1()
+	GameState.save_game()
+	GameState.officer_progression_changed.emit()
+	_update_unlock_states()
+	_refresh_header_stats()
+
 
 func _update_footer_slots():
 	if not footer_slots_container: return
+	
+	# Update reset button state
+	if reset_button:
+		var od = GameState.get_officer(current_officer_key)
+		var can_reset = false
+		if od:
+			var abilities = GameState.OFFICER_ABILITIES.get(current_officer_key, [])
+			if abilities.size() >= 2 and od.data_logs >= RESET_COST_DL:
+				for i in range(1, abilities.size()):
+					if od.has_ability(abilities[i]):
+						can_reset = true
+						break
+		reset_button.disabled = not can_reset
 	
 	# Clear previous (use immediate free to avoid one-frame doubling with deferred queue_free)
 	for child in footer_slots_container.get_children():

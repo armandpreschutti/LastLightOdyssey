@@ -583,7 +583,8 @@ As the mission progresses throughout the voyage, the game displays **emotional s
 - **Movement Range**: Blue overlay on reachable tiles
 - **Execute Range**: Red overlay for Captain's Execute ability range
 - **Pathfinding Visualization**: Neon blue glowing path line with arrowhead showing unit's movement path when hovering over destination tiles
-- **Unit Stats Tooltip**: Hover tooltip displaying unit statistics (HP, AP, movement range, sight range, shoot range, damage, unit type) with color-coded HP and AP indicators
+- **Unit Stats Tooltip**: Hover tooltip displaying unit statistics (HP, AP, movement range, sight range, shoot range, damage, unit type) with color-coded HP and AP indicators. Includes **Active Effects** section listing status effects (poison, stim, marked, etc.) with remaining turn counts.
+- **Status Effect Icons**: Officers and enemies display programmatic Polygon2D icons above units for active status effects (poison, pin_down, marked, adrenaline, immune, stim, phantom, untouchable, bulldozer_armor, deep_scanned, last_stand, inspired). Icons use `EffectIconConfig` for consistent shapes (circle, triangle, diamond, square) and layout; cover indicators share the same positioning system.
 - **Comprehensive Tooltips**: Extensive tooltip system for all UI elements (pause button, turn label, stability, haul, HP, AP, end turn, extract, abilities, movement, attack range, status, cover bonus)
 - **Extract Button Pulse**: The `[EXTRACT TEAM]` button features a continuous sine-wave opacity pulse (1.0 to 0.15 over 0.4s) managed by a GDScript Tween when extraction is available, visually prompting the player to complete the mission.
 
@@ -829,8 +830,17 @@ Interface icons used throughout the game for resource displays, combat info, and
 
 1. **Finalize Story Node Loop**: Wire `intel >= 10` progression into deterministic story mission spawning/consumption.
 2. **Connect Victory Trigger**: Replace placeholder win emit with a validated final-story completion path.
-3. **Reduce Legacy Drift**: Remove or archive old/parallel map-generation code paths no longer used in production flow.
-4. **Add GDD Change Log**: Track significant design and systems changes by date to avoid future status drift.
+3. **Reduce Legacy Drift**: Remove or archive old/parallel map-generation code paths no longer used in production flow. See `docs/UNUSED_FILES_REPORT.md` for catalog.
+
+
+## GDD Change Log
+
+| Date | Change |
+|------|--------|
+| 2026-02-22 | **Status Effect Icons**: Added `EffectIconConfig` autoload—shared config for Polygon2D status-effect icons (poison, pin_down, marked, adrenaline, immune, stim, phantom, untouchable, bulldozer_armor, deep_scanned, last_stand, inspired). Officer and enemy units now display icons above sprites; cover indicators share the same positioning. |
+| 2026-02-22 | **Unit Stats Tooltip**: Tooltip now shows **Active Effects** with effect names and remaining turn counts, using `EffectIconConfig.get_data()` for labels. |
+| 2026-02-22 | **Documentation**: Added `UNUSED_FILES_REPORT.md` cataloging orphaned scripts, scenes, resources, and assets for cleanup. Updated `ABILITY_QUICK_REFERENCE.md` with full 18-ability roster. |
+| 2026-02-22 | **Abilities Tech Tree**: XP bar and level display in header; UI refinements for officer progression. |
 
 
 ## Development Notes
@@ -846,7 +856,9 @@ Last Light Odyssey/
 │       ├── objects/    # Interactable objects and loot
 │       └── ui/icons/   # Resource, combat, and system icons
 ├── docs/
-│   └── GAME_DESIGN_DOCUMENT.md  # This file
+│   ├── GAME_DESIGN_DOCUMENT.md     # This file
+│   ├── ABILITY_QUICK_REFERENCE.md  # 18-ability roster reference
+│   └── UNUSED_FILES_REPORT.md      # Orphaned files catalog for cleanup
 ├── resources/
 │   ├── events/         # Event data resources
 │   └── officers/       # Officer data resources
@@ -866,6 +878,7 @@ Last Light Odyssey/
 - **GameState**: Global economy (`cash`, `intel`, `data_logs`), officer progression, win/loss logic.
 - **VoyageManager**: Infinite map generation (`InfiniteGridGenerator`), node state tracking.
 - **EventManager**: Random events resolution.
+- **EffectIconConfig**: Shared config for status-effect icons (Polygon2D shapes) on tactical units.
 
 ### Key Classes
 - **OfficerData**: Persistent character resource (Level, XP, Abilities).

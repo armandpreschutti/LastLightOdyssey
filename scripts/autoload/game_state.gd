@@ -75,7 +75,7 @@ const ABILITY_DEFS: Dictionary = {
 
 	# HEAVY - Level 2
 	"bulldozer":          {"name": "Bulldozer",          "desc": "Charge destroys all cover in its path. Gain +20 Armor after charging.",                                                                          "level": 2, "slot": "a", "type": "passive", "modifies": "charge", "armor_bonus": 20},
-	"suppression_fire":   {"name": "Suppression Fire",   "desc": "Deal light damage to all enemies in a cone and remove their ability to move next turn (Pin Down). (2 AP, active)",                               "level": 2, "slot": "b", "type": "active", "cost": 2},
+	"suppression_fire":   {"name": "Suppression Fire",   "desc": "Deal light damage to all enemies in a cone within 5 tiles and remove their ability to move next turn (Pin Down). (1 AP, active)",                               "level": 2, "slot": "b", "type": "active", "cost": 1},
 
 	# HEAVY - Level 3
 	"juggernaut":         {"name": "Juggernaut",         "desc": "Immune to Critical Hits. If you end your turn without attacking, regenerate 15% Max HP.",                                                        "level": 3, "slot": "a", "type": "passive"},
@@ -184,6 +184,8 @@ var total_tactical_turns: int = 0
 func _ready() -> void:
 	load_persistent_settings()
 	_init_officers()
+	# Intercept window close so we can save before quitting (prevents map reset when closing during tactical)
+	get_tree().set_auto_accept_quit(false)
 
 ## Load persistent non-run state from settings.cfg
 func load_persistent_settings() -> void:
@@ -232,7 +234,7 @@ func _init_officers() -> void:
 		if developer_mode:
 			od.level = 3
 			od.xp = 300  # XP threshold to reach level 3
-			od.data_logs = 5
+			od.data_logs = 100
 		# Unlock Level 1 ability by default
 		var abilities = OFFICER_ABILITIES.get(key, [])
 		if not abilities.is_empty():
@@ -308,6 +310,7 @@ func has_available_upgrades(officer_key: String = "") -> bool:
 
 
 func reset_game() -> void:
+	was_loaded_from_save = false
 	fuel = 3
 	ship_integrity = 100
 	cash = 20
@@ -428,6 +431,12 @@ func get_game_over_text(reason: String) -> String:
 #region Save/Load System
 const SAVE_PATH = "user://savegame.dat"
 
+## True when game was loaded via Continue (used to skip voyage intro)
+var was_loaded_from_save: bool = false
+
+## True when we're in an active game session (main scene); used to know when to save on window close
+var game_session_active: bool = false
+
 ## Star map data (saved to preserve the exact node layout)
 var saved_star_map_data: Dictionary = {}
 
@@ -467,6 +476,13 @@ func save_game() -> bool:
 	file.close()
 	
 	return true
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		if game_session_active:
+			save_game()
+		get_tree().quit()
 
 
 ## Load a saved game from disk
@@ -535,6 +551,8 @@ func load_game() -> bool:
 					od.alive = true
 					od.downed = true
 					od.injury_jumps = 4
+		if developer_mode:
+			od.data_logs = 100
 	
 	# Restore cumulative mission stats
 	total_fuel_collected = int(save_data.get("total_fuel_collected", 0))
@@ -546,6 +564,7 @@ func load_game() -> bool:
 	tactical_turn_count = 0
 	is_in_tactical_mode = false
 	
+	was_loaded_from_save = true
 	return true
 
 

@@ -112,10 +112,11 @@ var _first_node_clicked: bool = false
 var _first_event_seen: bool = false
 var _is_jump_animating: bool = false  # Track if jump animation is in progress
 var _suppress_fuel_warning: bool = false  # Track if player dismissed fuel warning
-var _wormhole_offered_at: String = ""  # Track if wormhole dialog was presented at current node
+var _waiting_wormhole_enter: bool = false  # True when at wormhole entrance, waiting for ENTER WORMHOLE or jump
 
 
 func _ready() -> void:
+	GameState.game_session_active = true
 	# Initialize random number generator seed
 	randomize()
 	
@@ -229,9 +230,9 @@ func _on_node_clicked(node_data: NodeData) -> void:
 		# Allow re-entry logic
 		var node_type = node_data.node_type
 		if node_type == EventManager.NodeType.WORMHOLE:
-			# Re-trigger wormhole dialog ONLY if it was offered at this node
-			# In infinite map, maybe just always offer?
-			_show_wormhole_dialog()
+			# Destination wormholes (arrow tip): no scene, you arrived here via teleport
+			if not VoyageManager.is_wormhole_destination(current_node_id):
+				_show_wormhole_scene()
 			return
 	
 
@@ -414,8 +415,12 @@ func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) ->
 					_on_mission_scene_dismissed()
 
 		EventManager.NodeType.WORMHOLE:
-			# Show wormhole interaction dialog
-			_show_wormhole_dialog()
+			# Destination wormholes: arrived via teleport, no scene - go straight to IDLE
+			if VoyageManager.is_wormhole_destination(node_data.id):
+				current_phase = GamePhase.IDLE
+				_update_deploy_button_visibility()
+			else:
+				_show_wormhole_scene()
 
 		# Outpost logic removed (deprecated)
 
@@ -522,6 +527,9 @@ func _on_team_selected(officer_keys: Array[String], objectives: Array[MissionObj
 	_pending_officer_keys = officer_keys
 	_pending_objectives = objectives
 	
+	# Save before entering tactical so closing the game during a mission preserves map state
+	GameState.save_game()
+	
 	# Fade to black, then transition to tactical mode
 	await _fade_out(0.6)
 	
@@ -601,8 +609,15 @@ func _on_mission_scene_dismissed() -> void:
 		_update_deploy_button_visibility()
 
 
-## Handle [DEPLOY] button press
+## Handle [DEPLOY] / [ENTER WORMHOLE] button press
 func _on_deploy_pressed() -> void:
+	if _waiting_wormhole_enter:
+		_execute_wormhole_teleport()
+		# We land on destination wormhole - hide button (entrance-only)
+		_waiting_wormhole_enter = false
+		management_hud.set_enter_wormhole_button_active(false)
+		return
+
 	if current_phase != GamePhase.IDLE and current_phase != GamePhase.EVENT_DISPLAY:
 		return
 		
@@ -639,8 +654,6 @@ func _transition_to_team_select() -> void:
 	var is_raider_ambush = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
 	team_select_dialog.show_dialog(pending_biome_type, is_raider_ambush)
 	
-	# Reset wormhole offered state when entering a mission (edge case cleanup)
-	_wormhole_offered_at = ""
 
 	
 	# Tutorial: Trigger scavenge_intro after team select dialog is visible
@@ -841,9 +854,12 @@ func _on_game_over_scene_dismissed() -> void:
 
 
 func _show_voyage_intro() -> void:
-	# Show voyage intro scene when starting a new voyage
+	# Show voyage intro scene when starting a new voyage (skip when continuing from save)
 	current_phase = GamePhase.EVENT_DISPLAY  # Use EVENT_DISPLAY phase to block interaction
-	if ENABLE_VOYAGE_INTRO_SCENE:
+	var skip_intro = GameState.was_loaded_from_save
+	if skip_intro:
+		GameState.was_loaded_from_save = false
+	if ENABLE_VOYAGE_INTRO_SCENE and not skip_intro:
 		voyage_intro_scene_dialog.show_scene()
 	else:
 		_on_voyage_intro_scene_dismissed()
@@ -890,6 +906,7 @@ func _on_enemy_elimination_scene_dismissed() -> void:
 func _on_quit_to_menu() -> void:
 	# Stop all music when quitting to menu
 	MusicManager.stop_music()
+	GameState.game_session_active = false
 	# Return to title menu
 	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
 
@@ -897,6 +914,7 @@ func _on_quit_to_menu() -> void:
 func _on_main_menu_pressed() -> void:
 	# Stop all music when returning to menu
 	MusicManager.stop_music()
+	GameState.game_session_active = false
 	# Return to title menu
 	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
 
@@ -915,7 +933,8 @@ func _on_restart_pressed() -> void:
 	_first_event_seen = false
 	_is_jump_animating = false
 	_suppress_fuel_warning = false
-	_wormhole_offered_at = ""
+	_waiting_wormhole_enter = false
+	management_hud.set_enter_wormhole_button_active(false)
 	
 	# Ensure management UI is visible
 	management_layer.visible = true
@@ -940,82 +959,49 @@ func _on_restart_pressed() -> void:
 	_show_voyage_intro()
 
 
-## Show wormhole detection dialog
-func _show_wormhole_dialog() -> void:
-	current_phase = GamePhase.EVENT_DISPLAY
-	
-	var dialog_scene = load("res://scenes/ui/wormhole_dialog.tscn")
-	var dialog = dialog_scene.instantiate()
-	$DialogLayer.add_child(dialog)
-	
-	dialog.setup()
-	
-	# Play alert SFX
-	if SFXManager:
-		SFXManager.play_sfx_by_name("ui", "menu_open")
-	
-	dialog.confirmed.connect(_on_wormhole_enter_pressed)
-	dialog.cancelled.connect(_on_wormhole_cancel_pressed)
-	
-	dialog.show_dialog()
+## Arrive at wormhole entrance - go straight to ENTER WORMHOLE button (no scene)
+func _show_wormhole_scene() -> void:
+	current_phase = GamePhase.IDLE
+	var raider_on_node = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
+	var is_destination = VoyageManager.is_wormhole_destination(VoyageManager.current_node_id)
+	if raider_on_node or is_destination:
+		_waiting_wormhole_enter = false
+		_update_deploy_button_visibility()
+	else:
+		_waiting_wormhole_enter = true
+		management_hud.set_enter_wormhole_button_active(true)
 
 
-## Handle entering wormhole
-func _on_wormhole_enter_pressed() -> void:
-	# Find all other wormhole nodes
-	var current_node_id = VoyageManager.current_node_id
-	var other_wormholes = []
-	
-	for node_id in VoyageManager.nodes:
-		if node_id != current_node_id and VoyageManager.nodes[node_id].node_type == EventManager.NodeType.WORMHOLE:
-			other_wormholes.append(node_id)
-	
-	if other_wormholes.size() > 0:
-		# Pick a random destination
-		var target_node_id = other_wormholes.pick_random()
-		var target_node = VoyageManager.nodes[target_node_id]
-		
-		# Teleport (no fuel cost for the jump itself)
-		# Update current node directly in VoyageManager
-		VoyageManager.current_node_id = target_node_id
-		
-		# Mark as visited
-		if target_node.state == NodeData.NodeState.UNVISITED:
-			target_node.state = NodeData.NodeState.VISITED
-			# Generate new nodes from here if needed, but wormhole arrival might be special.
-			# Let's assume we treat it as arrival for generation:
-			# But we need a "previous node" to define direction. Wormhole transport has no previous node direction.
-			# Maybe generate in all directions? Or just random?
-			# For now, let's NOT generate from wormhole arrival until player moves again?
-			# Or just generate default "Right"?
-			VoyageManager._handle_arrival_generation(target_node, target_node) # Pass self as previous to indicate no direction?
-		
-		VoyageManager.ship_moved.emit(target_node.position, target_node)
+## Execute wormhole teleport
+## Wormhole counts as a jump for raider turn (enemy ships still move), but uses no fuel.
+func _execute_wormhole_teleport() -> void:
+	var exit_node = VoyageManager.get_current_node()
+	var arrival_node = VoyageManager.attempt_wormhole_teleport(exit_node)
+
+	if arrival_node:
+		_is_jump_animating = true
+		management_hud.set_deploy_active(false)
+
+		VoyageManager.current_node_id = arrival_node.id
+		VoyageManager.ship_teleported.emit(arrival_node.position, arrival_node)
 		VoyageManager.map_updated.emit()
-		
-		# Play teleport SFX
+
 		if SFXManager:
 			SFXManager.play_sfx_by_name("ui", "outpost_arrival")
-		
-		# Refresh map and center on new node via signal handling (StarMap listens to ship_moved)
-		
-		# Resume normal flow at new node (as if we just arrived there)
-		# But since we're arriving at a wormhole, we don't want to re-trigger the dialog immediately
-		# So we just go to IDLE
-		current_phase = GamePhase.IDLE
-		
-		# Ensure we don't offer re-entry for the new wormhole immediately (must jump to it normally)
-		_wormhole_offered_at = ""
-		
-		# Maybe trigger a small notification or log?
+
 		VoyageManager.message_log_added.emit("Wormhole transport successful.")
+
+		# Count as jump: wait for teleport animation, then process raider turn (enemy ships move)
+		await star_map.jump_animation_complete
+		var raider_moved = VoyageManager.process_raider_turn()
+		if raider_moved:
+			await star_map.raider_animation_complete
+
+		_is_jump_animating = false
+		_update_deploy_button_visibility()
 	else:
-		# Should not happen given generation logic, but fallback just in case
-		current_phase = GamePhase.IDLE
+		VoyageManager.message_log_added.emit("Wormhole destination could not be computed.")
 
-
-## Handle cancelling wormhole entry
-func _on_wormhole_cancel_pressed() -> void:
 	current_phase = GamePhase.IDLE
 
 
@@ -1170,6 +1156,18 @@ func _fade_out(duration: float = 0.6) -> void:
 ## Helper to refresh DEPLOY button state and mission data based on current node
 func _update_deploy_button_visibility() -> void:
 	var current_node = VoyageManager.get_current_node()
+	var raider_on_node = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
+	# Raider takes priority: hide ENTER WORMHOLE, show DEPLOY until raider mission resolved
+	if _waiting_wormhole_enter and raider_on_node:
+		_waiting_wormhole_enter = false
+		management_hud.set_enter_wormhole_button_active(false)
+	# Clear wormhole button state when we're no longer at a wormhole
+	elif _waiting_wormhole_enter and (not current_node or current_node.node_type != EventManager.NodeType.WORMHOLE):
+		_waiting_wormhole_enter = false
+		management_hud.set_enter_wormhole_button_active(false)
+	# Don't overwrite ENTER WORMHOLE button when at wormhole (no raider) and waiting for choice
+	if _waiting_wormhole_enter:
+		return
 	if not current_node:
 		management_hud.set_deploy_active(false)
 		return
@@ -1183,6 +1181,10 @@ func _update_deploy_button_visibility() -> void:
 		pending_node_type = EventManager.NodeType.SCAVENGE_SITE
 		pending_biome_type = current_node.biome_type
 		management_hud.set_deploy_active(true)
+	elif current_node.node_type == EventManager.NodeType.WORMHOLE and not VoyageManager.is_wormhole_destination(current_node.id):
+		# Show ENTER WORMHOLE at entrances and unpaired wormholes; NOT at destinations (arrow tip)
+		_waiting_wormhole_enter = true
+		management_hud.set_enter_wormhole_button_active(true)
 	elif current_node.node_type == EventManager.NodeType.SCAVENGE_SITE and current_node.state != NodeData.NodeState.CLEARED:
 		# Ensure pending state is set for normal scavenge sites too
 		pending_node_type = current_node.node_type

@@ -40,24 +40,13 @@ mouse_filter = 2
 color = Color(0, 1, 0, 1)
 
 [node name="APIndicator" type="HBoxContainer" parent="."]
-offset_left = -10.0
-offset_top = -22.0
-offset_right = 10.0
-offset_bottom = -14.0
+offset_left = -14.0
+offset_top = 7.0
+offset_right = 14.0
+offset_bottom = 13.0
 mouse_filter = 2
-alignment = 1
-
-[node name="AP1" type="ColorRect" parent="APIndicator"]
-custom_minimum_size = Vector2(6, 6)
-layout_mode = 2
-mouse_filter = 2
-color = Color(1, 0.8, 0, 1)
-
-[node name="AP2" type="ColorRect" parent="APIndicator"]
-custom_minimum_size = Vector2(6, 6)
-layout_mode = 2
-mouse_filter = 2
-color = Color(1, 0.8, 0, 1)
+alignment = 0
+theme_override_constants/separation = 0.25
 
 [node name="OverwatchIndicator" type="ColorRect" parent="."]
 visible = false

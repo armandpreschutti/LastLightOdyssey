@@ -4,6 +4,7 @@ extends Node
 ## Handles navigation, generation, and node state management
 
 signal ship_moved(new_position: Vector2, node_data: NodeData, speed_mult: float)
+signal ship_teleported(new_position: Vector2, node_data: NodeData)
 signal map_updated
 signal message_log_added(message: String)
 signal story_node_spawned(node_data: NodeData)
@@ -22,6 +23,9 @@ var active_story_node_id: String = ""
 # Campaign Branching State
 var current_story_mission_id: String = ""    # ID of mission just completed
 var pending_branch_choice: String = ""       # Player's chosen next mission
+
+# Wormhole pairs (entrance -> exit) - white pathlines when player has jumped through
+var wormhole_pairs: Array[Array] = []  # Each is [exit_id, arrival_id] from teleport
 
 # Raider State
 var is_raider_active: bool = false
@@ -100,12 +104,17 @@ func _initialize_voyage() -> void:
 	for node in initial_nodes:
 		nodes[node.id] = node
 	
-	# Reset Raider state on new voyage
+	# Reset Raider and wormhole state on new voyage
+	wormhole_pairs.clear()
 	is_raider_active = false
 	raider_node_id = ""
 	jumps_since_raider_cleared = 0
 		
-	_apply_proximity_connections()
+	# Only connect the initial cluster (start + 5 initial nodes) - no global pass
+	var init_ids: Array[String] = [start_node.id]
+	for node in initial_nodes:
+		init_ids.append(node.id)
+	_apply_proximity_connections_for_new_nodes(init_ids)
 	_try_spawn_story_node()
 	_try_spawn_raider()
 	map_updated.emit()
@@ -287,6 +296,70 @@ func attempt_direct_travel(target_node: NodeData, speed_mult: float = 1.25) -> b
 	return true
 
 
+## Attempt wormhole teleport: if this wormhole already has a pair (white pathline), go to the other end.
+## Otherwise spawn a new WORMHOLE node and record the pair.
+func attempt_wormhole_teleport(exit_node: NodeData) -> NodeData:
+	if is_voyage_complete or not exit_node:
+		return null
+	if exit_node.node_type != EventManager.NodeType.WORMHOLE:
+		return null
+
+	# If we've used this wormhole before, teleport to the paired wormhole
+	var paired_id = _get_paired_wormhole_id(exit_node.id)
+	if paired_id != "" and nodes.has(paired_id):
+		return nodes[paired_id]
+
+	# First time through: spawn new wormhole (same logic as story signals and raiders)
+	# distance from all existing nodes, place at STORY_SPAWN distance range
+	var spawn_pos = _find_story_spawn_position(exit_node.position)
+
+	# Create new WORMHOLE node at destination
+	var new_id = generator.generate_uuid()
+	var arrival_node = NodeData.new(new_id, spawn_pos, EventManager.NodeType.WORMHOLE)
+	arrival_node.state = NodeData.NodeState.VISITED
+
+	# Register and connect via proximity
+	nodes[new_id] = arrival_node
+	_apply_proximity_connections_for_new_nodes([new_id])
+
+	# Generate options in all directions (360° spread)
+	var new_nodes = generator.generate_options(arrival_node, Vector2.ZERO, -1, true, nodes)
+	for node in new_nodes:
+		nodes[node.id] = node
+	var new_ids: Array[String] = []
+	for node in new_nodes:
+		new_ids.append(node.id)
+	_apply_proximity_connections_for_new_nodes(new_ids)
+
+	# Remember wormhole connection for white pathline (from -> to, direction for arrows)
+	wormhole_pairs.append([exit_node.id, arrival_node.id])
+
+	return arrival_node
+
+
+## Returns true if this wormhole is a destination (to end of a pair). Destinations do NOT show ENTER WORMHOLE.
+## Entrances (from end) and unpaired wormholes do show the button.
+func is_wormhole_destination(wormhole_id: String) -> bool:
+	for pair in wormhole_pairs:
+		if pair.size() == 2 and str(pair[1]) == wormhole_id:
+			return true
+	return false
+
+
+## Get the paired wormhole ID for a given wormhole (the other end of the white pathline).
+## Returns "" if this wormhole has no pair yet.
+func _get_paired_wormhole_id(wormhole_id: String) -> String:
+	for pair in wormhole_pairs:
+		if pair.size() == 2:
+			var id1 = str(pair[0])
+			var id2 = str(pair[1])
+			if id1 == wormhole_id:
+				return id2
+			if id2 == wormhole_id:
+				return id1
+	return ""
+
+
 ## Calculate fuel cost to jump to a target node
 func get_fuel_cost(target_node: NodeData) -> int:
 	var current_node = get_current_node()
@@ -327,8 +400,11 @@ func _handle_arrival_generation(target_node: NodeData, previous_node: NodeData) 
 		# Just need to make sure the target_node's connections are updated if not already done by reference?
 		# GDScript objects are passed by reference, so modifying source_node.connections in generator works.
 	
-	# Auto-connect any nodes that are within proximity distance
-	_apply_proximity_connections()
+	# Only connect the newly generated nodes to the graph - prevents cross-branch spurious links
+	var new_ids: Array[String] = []
+	for node in new_nodes:
+		new_ids.append(node.id)
+	_apply_proximity_connections_for_new_nodes(new_ids)
 
 func _on_intel_changed(_new_value: int) -> void:
 	_try_spawn_story_node()
@@ -381,8 +457,8 @@ func _try_spawn_story_node() -> void:
 	
 	pending_branch_choice = ""  # Clear after assigning
 	
-	# Check for proximity connections immediately
-	_apply_proximity_connections()
+	# Only connect the new story node to nearby nodes - prevents cross-branch spurious links
+	_apply_proximity_connections_for_new_nodes([new_id])
 	
 	message_log_added.emit("Signal detected: Story node locked to mission grid.")
 	map_updated.emit()
@@ -453,6 +529,7 @@ func get_visible_nodes() -> Array[NodeData]:
 
 ## Find a path between two nodes using Breadth-First Search
 ## Only traverses VISITED or CLEARED nodes
+## Includes wormhole pairs as traversable edges (white pathlines count for fast travel)
 ## Returns an array of NodeData representing the path (including start and end)
 func find_path(start_id: String, target_id: String) -> Array[NodeData]:
 	if not nodes.has(start_id) or not nodes.has(target_id):
@@ -476,7 +553,13 @@ func find_path(start_id: String, target_id: String) -> Array[NodeData]:
 			return node_path
 			
 		var current_node = nodes[current_id]
-		for neighbor_id in current_node.connections:
+		var neighbors_to_check: Array[String] = []
+		neighbors_to_check.assign(current_node.connections)
+		# Include paired wormhole as traversable (white pathlines = fast travel)
+		var paired_id = _get_paired_wormhole_id(current_id)
+		if paired_id != "" and nodes.has(paired_id):
+			neighbors_to_check.append(paired_id)
+		for neighbor_id in neighbors_to_check:
 			if not nodes.has(neighbor_id):
 				continue
 				
@@ -494,6 +577,7 @@ func find_path(start_id: String, target_id: String) -> Array[NodeData]:
 
 
 ## Find a path for the raider (can traverse ANY connected nodes, including unvisited)
+## Raiders can use wormholes - wormhole pairs count as traversable edges
 ## Returns an array of NodeData representing the path (including start and end)
 func find_path_for_raider(start_id: String, target_id: String) -> Array[NodeData]:
 	if not nodes.has(start_id) or not nodes.has(target_id):
@@ -517,7 +601,13 @@ func find_path_for_raider(start_id: String, target_id: String) -> Array[NodeData
 			return node_path
 			
 		var current_node = nodes[current_id]
-		for neighbor_id in current_node.connections:
+		var neighbors_to_check: Array[String] = []
+		neighbors_to_check.assign(current_node.connections)
+		# Raiders can enter wormholes - include paired wormhole as traversable
+		var paired_id = _get_paired_wormhole_id(current_id)
+		if paired_id != "" and nodes.has(paired_id):
+			neighbors_to_check.append(paired_id)
+		for neighbor_id in neighbors_to_check:
 			if not nodes.has(neighbor_id):
 				continue
 				
@@ -566,6 +656,7 @@ func get_save_data() -> Dictionary:
 	return {
 		"current_node_id": current_node_id,
 		"nodes": nodes_data,
+		"wormhole_pairs": wormhole_pairs,
 		"active_story_node_id": active_story_node_id,
 		"current_story_mission_id": current_story_mission_id,
 		"pending_branch_choice": pending_branch_choice,
@@ -576,9 +667,13 @@ func get_save_data() -> Dictionary:
 
 func load_save_data(data: Dictionary) -> void:
 	nodes.clear()
+	wormhole_pairs.clear()
 
 	if data.has("current_node_id"):
 		current_node_id = data["current_node_id"]
+	for pair in data.get("wormhole_pairs", []):
+		if pair is Array and pair.size() == 2:
+			wormhole_pairs.append([str(pair[0]), str(pair[1])])
 	active_story_node_id = data.get("active_story_node_id", "")
 	current_story_mission_id = data.get("current_story_mission_id", "")
 	pending_branch_choice = data.get("pending_branch_choice", "")
@@ -603,6 +698,10 @@ func load_save_data(data: Dictionary) -> void:
 
 			nodes[id] = node
 
+		# Rebuild connections from structural data only - fixes spurious links from old global proximity
+		# (continued voyages had accumulated cross-branch connections; new voyages don't have this)
+		_rebuild_connections_from_structure()
+
 	# Recover active story node pointer if needed.
 	if active_story_node_id == "":
 		for id in nodes:
@@ -611,18 +710,49 @@ func load_save_data(data: Dictionary) -> void:
 				active_story_node_id = id
 				break
 
-	_apply_proximity_connections()
 	_try_spawn_story_node()
 #endregion
 
 
-## Auto-connect any two nodes within PROXIMITY_CONNECT_DISTANCE of each other (bidirectional)
-func _apply_proximity_connections() -> void:
-	var node_ids = nodes.keys()
-	for i in range(node_ids.size()):
-		var node_a: NodeData = nodes[node_ids[i]]
-		for j in range(i + 1, node_ids.size()):
-			var node_b: NodeData = nodes[node_ids[j]]
+## Rebuild connections from parent_id structure only. Used on load for continued voyages.
+## Removes spurious cross-branch connections that accumulated from old global proximity.
+## Orphan nodes (story, wormhole, raider) get proximity connections to link into the graph.
+func _rebuild_connections_from_structure() -> void:
+	# Clear all connections
+	for id in nodes:
+		nodes[id].connections.clear()
+	
+	# Restore parent-child links (bidirectional)
+	for id in nodes:
+		var node = nodes[id]
+		if node.parent_id != "" and nodes.has(node.parent_id):
+			if not node.parent_id in node.connections:
+				node.connections.append(node.parent_id)
+			if not node.id in nodes[node.parent_id].connections:
+				nodes[node.parent_id].connections.append(node.id)
+	
+	# Orphan nodes (no parent or start node): connect via proximity
+	var orphan_ids: Array[String] = []
+	for id in nodes:
+		if nodes[id].connections.is_empty():
+			orphan_ids.append(id)
+	if orphan_ids.size() > 0:
+		_apply_proximity_connections_for_new_nodes(orphan_ids)
+
+
+## Connect only NEW nodes to the graph via proximity (within PROXIMITY_CONNECT_DISTANCE).
+## Only adds links where at least one endpoint is in new_node_ids. This prevents the
+## "leak" where a global O(n²) pass would link unrelated existing nodes from different
+## branches when new nodes are added (e.g. after a jump).
+func _apply_proximity_connections_for_new_nodes(new_node_ids: Array) -> void:
+	for new_id in new_node_ids:
+		if not nodes.has(new_id):
+			continue
+		var node_a: NodeData = nodes[new_id]
+		for other_id in nodes:
+			if other_id == new_id:
+				continue
+			var node_b: NodeData = nodes[other_id]
 			if node_a.position.distance_to(node_b.position) <= PROXIMITY_CONNECT_DISTANCE:
 				if not node_b.id in node_a.connections:
 					node_a.connections.append(node_b.id)
@@ -674,6 +804,7 @@ func _try_spawn_raider() -> void:
 
 func _generate_raider_bridge(raider_start_node: NodeData, direction_to_player: Vector2) -> void:
 	# Generate 2 nodes bridging the gap to the main graph
+	var new_node_ids: Array[String] = [raider_start_node.id]
 	var current_bridge_node = raider_start_node
 	var bridge_length = 2
 	
@@ -683,10 +814,11 @@ func _generate_raider_bridge(raider_start_node: NodeData, direction_to_player: V
 		if new_bridge_nodes.size() > 0:
 			var bridge = new_bridge_nodes[0]
 			nodes[bridge.id] = bridge
+			new_node_ids.append(bridge.id)
 			current_bridge_node = bridge
-			
-	# Then apply proximity links to lock this new disconnected string into the main graph
-	_apply_proximity_connections()
+	
+	# Only connect the raider+bridge nodes to the graph - prevents cross-branch spurious links
+	_apply_proximity_connections_for_new_nodes(new_node_ids)
 
 
 func _process_raider_turn() -> bool:
@@ -747,7 +879,9 @@ func clear_raider(success: bool) -> void:
 			GameState.down_officer(available_officers[i])
 			print("DEBUG Raider: Downing %s as penalty" % available_officers[i])
 
-## Create an emergency path toward player when normal pathfinding fails
+## Create an emergency path toward player when normal pathfinding fails.
+## Prefers using an existing node within PROXIMITY_CONNECT_DISTANCE of the proposed spawn
+## instead of creating a redundant node that would cluster the map.
 func _create_emergency_path_toward_player() -> void:
 	if not nodes.has(raider_node_id) or not nodes.has(current_node_id):
 		return
@@ -758,33 +892,62 @@ func _create_emergency_path_toward_player() -> void:
 	# Calculate direction from raider to player
 	var direction = (player_node.position - raider_node.position).normalized()
 	
-	# Create a new node in that direction (standard jump distance ~400-500 units)
-	var new_pos = raider_node.position + direction * 400.0
+	# Proposed position (standard jump distance ~400 units)
+	var proposed_pos = raider_node.position + direction * 400.0
 	
-	# Create the node
+	# Look for an existing node close to where we'd spawn - use it instead of creating a duplicate
+	var best_existing_id: String = ""
+	var best_dist_to_player: float = INF
+	for node_id in nodes:
+		if node_id == raider_node_id:
+			continue
+		var candidate = nodes[node_id]
+		var dist_to_proposed = candidate.position.distance_to(proposed_pos)
+		if dist_to_proposed > PROXIMITY_CONNECT_DISTANCE:
+			continue
+		# Must be in the direction toward player (ahead of raider, not behind)
+		var to_candidate = (candidate.position - raider_node.position).normalized()
+		if to_candidate.dot(direction) <= 0.0:
+			continue
+		var dist_to_player = candidate.position.distance_to(player_node.position)
+		if dist_to_player < best_dist_to_player:
+			best_dist_to_player = dist_to_player
+			best_existing_id = node_id
+	
+	if best_existing_id != "":
+		# Use existing node - connect raider to it and move there
+		var existing_node = nodes[best_existing_id]
+		if not best_existing_id in raider_node.connections:
+			raider_node.connections.append(best_existing_id)
+		if not raider_node_id in existing_node.connections:
+			existing_node.connections.append(raider_node_id)
+		raider_node_id = best_existing_id
+		raider_moved.emit(existing_node.position, best_existing_id)
+		print("DEBUG VoyageManager: Raider emergency moved to existing node %s (avoided redundant spawn)" % best_existing_id)
+		if raider_node_id == current_node_id:
+			_trigger_raider_ambush()
+		return
+	
+	# No suitable existing node - create new one
 	var new_id = generator.generate_uuid()
-	var new_node = NodeData.new(new_id, new_pos)
+	var new_node = NodeData.new(new_id, proposed_pos)
 	new_node.node_type = EventManager.NodeType.EMPTY_SPACE
 	new_node.biome_type = BiomeConfig.BiomeType.ASTEROID
 	new_node.difficulty_grade = NodeData.DifficultyGrade.EASY
 	
-	# Register node
 	nodes[new_id] = new_node
 	
-	# Connect raider's current node to new node
 	if not new_id in raider_node.connections:
 		raider_node.connections.append(new_id)
 	if not raider_node_id in new_node.connections:
 		new_node.connections.append(raider_node_id)
 	
-	print("DEBUG VoyageManager: Created emergency path node %s at %s" % [new_id, new_pos])
+	print("DEBUG VoyageManager: Created emergency path node %s at %s" % [new_id, proposed_pos])
 	
-	# Try to connect to nearby nodes via proximity
-	_apply_proximity_connections()
+	_apply_proximity_connections_for_new_nodes([new_id])
 	
-	# Move raider to the new node
 	raider_node_id = new_id
-	raider_moved.emit(new_pos, new_id)
+	raider_moved.emit(proposed_pos, new_id)
 	print("DEBUG VoyageManager: Raider emergency moved to %s" % new_id)
 	
 	# Check if we caught the player (rare but possible)

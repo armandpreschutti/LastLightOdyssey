@@ -32,6 +32,7 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="ScanlineOverlay" type="ColorRect" parent="PanelContainer" unique_id=1721780883]
+visible = false
 layout_mode = 2
 mouse_filter = 2
 color = Color(0.4, 0.9, 1, 0.03)
@@ -174,11 +175,11 @@ text = "[ BARRACKS ]"
 
 [node name="DeployPanel" type="PanelContainer" parent="." unique_id=987654322]
 layout_mode = 0
-offset_left = -4.0
+offset_left = 4.000001
 offset_top = -151.0
-offset_right = 275.99997
-offset_bottom = -101.0
-scale = Vector2(1.0483478, 1.0483478)
+offset_right = 283.99997
+offset_bottom = -91.0
+scale = Vector2(0.9537752, 0.9537752)
 
 [node name="DeployButton" type="Button" parent="DeployPanel" unique_id=987654321]
 layout_mode = 2
@@ -231,10 +232,10 @@ layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -111.0
-offset_top = -797.0
-offset_right = 47.0
-offset_bottom = -737.0
+offset_left = 15.0
+offset_top = 201.0
+offset_right = 173.0
+offset_bottom = 261.0
 grow_horizontal = 0
 
 [node name="CenterButton" type="Button" parent="TopRightPanel" unique_id=384719285]

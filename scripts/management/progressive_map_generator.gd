@@ -175,12 +175,16 @@ func _assign_difficulty_grade(node: NodeData) -> void:
 ## Roll node type
 func _roll_node_type() -> int:
 	var roll = rng.randf()
-	if roll < 0.16: # Reduced from 0.40 by 60%
+	var wormhole_chance := 0.08
+	var scavenge_chance := 0.16  # 0.08..0.24
+	if GameState.is_developer_mode_enabled():
+		wormhole_chance = 0.32  # 4x more frequent in dev mode
+	if roll < wormhole_chance:
+		return EventManager.NodeType.WORMHOLE
+	elif roll < wormhole_chance + scavenge_chance:
 		return EventManager.NodeType.SCAVENGE_SITE
-	elif roll < 0.80:
-		return EventManager.NodeType.EMPTY_SPACE
 	else:
-		return EventManager.NodeType.EMPTY_SPACE # Placeholder for others
+		return EventManager.NodeType.EMPTY_SPACE
 		
 ## Roll biome type
 func _roll_biome_type() -> int:

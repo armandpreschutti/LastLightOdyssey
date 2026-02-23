@@ -16,6 +16,9 @@ const OFFICER_DATA: Dictionary = {
 	"sniper": { "color": Color(0.35, 0.35, 0.4), "move_range": 4, "sight_range": 7, "max_hp": 70 },
 }
 
+# AP icon texture (lightning bolt - same as SELECTED UNIT panel)
+const AP_ICON_TEXTURE: Texture2D = preload("res://assets/sprites/ui/icons/icon_ap.png")
+
 # Sprite textures for different officer types
 const OFFICER_SPRITES = {
 	"captain": preload("res://assets/sprites/characters/officer_captain.png"),
@@ -78,6 +81,7 @@ var _move_speed: float = 150.0
 var _idle_tween: Tween = null
 var _attack_tween: Tween = null
 var _death_tween: Tween = null
+var _effect_icons_root: Node2D = null
 
 
 func _ready() -> void:
@@ -164,7 +168,7 @@ func _process(delta: float) -> void:
 	if _moving and _move_path.size() > 0:
 		var target = _move_path[0]
 		var direction = (target - position).normalized()
-		var old_pos = position
+		var _old_pos = position
 		position += direction * _move_speed * delta
 		
 		# Debug every 60 frames or so (approx 1 sec) roughly to avoid spam, or just checking movement
@@ -197,7 +201,7 @@ func move_along_path(path: PackedVector2Array) -> void:
 	
 	_move_path = centered_path
 	_moving = true
-	print("DEBUG: OfficerUnit move_along_path started. Path size: ", _move_path.size(), " First target: ", _move_path[0] if _move_path.size() > 0 else "None", " Process Mode: ", process_mode, " Is Inside Tree: ", is_inside_tree())
+	print("DEBUG: OfficerUnit move_along_path started. Path size: ", _move_path.size(), " First target: ", str(_move_path[0]) if _move_path.size() > 0 else "None", " Process Mode: ", process_mode, " Is Inside Tree: ", is_inside_tree())
 	set_process(true)
 
 	# Stop idle animation while moving
@@ -332,12 +336,26 @@ func _update_ap_display() -> void:
 	if not ap_indicator:
 		return
 	
-	var ap_nodes = ap_indicator.get_children()
-	for i in range(ap_nodes.size()):
-		if i < current_ap:
-			ap_nodes[i].color = Color(1.0, 0.8, 0.0, 1.0)  # Gold - available
-		else:
-			ap_nodes[i].color = Color(0.3, 0.3, 0.3, 1.0)  # Dark - used
+	# Icon count = max of current or base max (handles extra AP from Inspire, Lead by Example, etc.)
+	var icon_count: int = maxi(current_ap, max_ap)
+	
+	# Clear and rebuild icons dynamically (supports variable AP from abilities)
+	for child in ap_indicator.get_children():
+		ap_indicator.remove_child(child)
+		child.queue_free()
+	
+	const ICON_SIZE := 6  # 40% smaller than original 10
+	for i in range(icon_count):
+		var tex_rect := TextureRect.new()
+		tex_rect.texture = AP_ICON_TEXTURE
+		tex_rect.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
+		tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		tex_rect.layout_mode = 2  # Control.LayoutMode.LAYOUT_MODE_CONTAINER (enum not exposed in GDScript)
+		# Available = bright gold; used = dimmed gray
+		tex_rect.modulate = Color(1.0, 0.85, 0.4, 1.0) if i < current_ap else Color(0.35, 0.35, 0.35, 0.8)
+		ap_indicator.add_child(tex_rect)
 
 
 func _flash_damage() -> void:
@@ -702,7 +720,7 @@ func has_ability_unlocked(ability_id: String) -> bool:
 
 
 ## Check if target is valid for Precision Shot (any visible enemy, no distance/cover restrictions)
-func can_precision_shot_target(target_pos: Vector2i) -> bool:
+func can_precision_shot_target(_target_pos: Vector2i) -> bool:
 	if officer_type != "sniper":
 		return false
 	# Precision Shot can target any visible enemy regardless of distance or cover
@@ -742,28 +760,37 @@ func face_towards(target_pos: Vector2i) -> void:
 		sprite.flip_h = direction.x < 0
 
 
-## Update cover indicator visibility based on cover level (0=none, 1=half, 2=full)
+## Update cover indicator visibility and position. Cover is always first (leftmost) icon.
 func update_cover_indicator(cover_level: int) -> void:
+	const COVER_SLOT := 0  ## Cover always first from left
+	var scale_vec := Vector2(EffectIconConfig.ICON_SCALE, EffectIconConfig.ICON_SCALE)
 	if half_cover_indicator:
 		half_cover_indicator.visible = (cover_level == 1)
+		if cover_level == 1:
+			half_cover_indicator.position = EffectIconConfig.get_icon_position(COVER_SLOT)
+			half_cover_indicator.scale = scale_vec
 	if full_cover_indicator:
 		full_cover_indicator.visible = (cover_level == 2)
+		if cover_level == 2:
+			full_cover_indicator.position = EffectIconConfig.get_icon_position(COVER_SLOT)
+			full_cover_indicator.scale = scale_vec
+	_refresh_effect_icons()  ## Re-position effect icons (they shift right when cover is present)
 
 
 ## Add a status effect/buff to this unit
 func add_status_effect(effect_name: String, duration: int) -> void:
 	status_effects[effect_name] = duration
 	_apply_status_visual_feedback(effect_name)
-	# Apply movement bonus when adrenaline is granted
 	if effect_name == "adrenaline":
 		move_range += 2
-		_add_adrenaline_marker(duration)
+	_refresh_effect_icons()
 
 
 ## Remove a status effect
 func remove_status_effect(effect_name: String) -> void:
 	if effect_name in status_effects:
 		status_effects.erase(effect_name)
+		_refresh_effect_icons()
 
 
 ## Check if unit has a status effect
@@ -773,27 +800,23 @@ func has_status_effect(effect_name: String) -> bool:
 
 ## Decrement all status effect durations (call at end of enemy turn)
 func tick_status_effects() -> void:
-	# Apply poison damage before decrementing
 	if has_status_effect("poison"):
-		current_hp = maxi(1, current_hp - 5)  # Poison: 5 DMG/turn, doesn't kill outright
+		current_hp = maxi(1, current_hp - 5)
 		_update_hp_bar()
 		_flash_damage()
 
-	var effects_to_remove = []
+	var effects_to_remove: Array = []
 	for effect_name in status_effects:
 		status_effects[effect_name] -= 1
-		# Update adrenaline marker to show remaining turns
-		if effect_name == "adrenaline":
-			_update_adrenaline_marker()
 		if status_effects[effect_name] <= 0:
 			effects_to_remove.append(effect_name)
 
 	for effect_name in effects_to_remove:
-		# Remove movement bonus when adrenaline expires
 		if effect_name == "adrenaline":
 			move_range -= 2
-			_remove_adrenaline_marker()
 		remove_status_effect(effect_name)
+
+	_refresh_effect_icons()
 
 
 ## Apply visual feedback for status effects
@@ -855,33 +878,44 @@ func _apply_status_visual_feedback(effect_name: String) -> void:
 			tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.25)
 
 
-## Add an "ADRENALINE" visual marker to this unit
-func _add_adrenaline_marker(duration: int) -> void:
-	# Remove existing marker first to avoid duplicates
-	_remove_adrenaline_marker()
-	
-	var marker_label = Label.new()
-	marker_label.name = "AdrenalineMarker"
-	marker_label.text = "ADRENALINE [%d]" % duration
-	marker_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.4))  # Green
-	marker_label.add_theme_font_size_override("font_size", 12)
-	marker_label.position = Vector2(-30, -55)
-	marker_label.z_index = 10
-	add_child(marker_label)
+#region Effect Icons (Node2D + Polygon2D, same layout as cover indicators)
+
+func _ensure_effect_icons_root() -> void:
+	if _effect_icons_root and is_instance_valid(_effect_icons_root):
+		return
+	_effect_icons_root = Node2D.new()
+	_effect_icons_root.name = "EffectIcons"
+	_effect_icons_root.z_index = 10
+	add_child(_effect_icons_root)
 
 
-## Remove the adrenaline marker from this unit
-func _remove_adrenaline_marker() -> void:
-	var existing = get_node_or_null("AdrenalineMarker")
-	if existing:
-		existing.queue_free()
+func _refresh_effect_icons() -> void:
+	_ensure_effect_icons_root()
+	for child in _effect_icons_root.get_children():
+		_effect_icons_root.remove_child(child)
+		child.queue_free()
 
+	var slot := 1 if (half_cover_indicator and half_cover_indicator.visible) or (full_cover_indicator and full_cover_indicator.visible) else 0
+	for effect_key in EffectIconConfig.EFFECT_PRIORITY:
+		if status_effects.get(effect_key, 0) <= 0:
+			continue
+		var data: Dictionary = EffectIconConfig.get_data(effect_key)
+		if data.is_empty():
+			continue
+		var icon := EffectIconConfig.create_effect_icon(effect_key, data, slot)
+		_effect_icons_root.add_child(icon)
+		slot += 1
 
-## Update adrenaline marker text to show remaining turns
-func _update_adrenaline_marker() -> void:
-	var marker = get_node_or_null("AdrenalineMarker")
-	if marker and has_status_effect("adrenaline"):
-		marker.text = "ADRENALINE [%d]" % status_effects.get("adrenaline", 0)
+	# Cover is always slot 0; re-position and scale when visible
+	var scale_vec := Vector2(EffectIconConfig.ICON_SCALE, EffectIconConfig.ICON_SCALE)
+	if half_cover_indicator and half_cover_indicator.visible:
+		half_cover_indicator.position = EffectIconConfig.get_icon_position(0)
+		half_cover_indicator.scale = scale_vec
+	if full_cover_indicator and full_cover_indicator.visible:
+		full_cover_indicator.position = EffectIconConfig.get_icon_position(0)
+		full_cover_indicator.scale = scale_vec
+
+#endregion
 
 
 ## Gain bonus AP (used by abilities like Lead by Example, Inspire)
@@ -897,8 +931,8 @@ func gain_bonus_movement(amount: int) -> void:
 
 
 ## Calculate damage taken considering status effects
-func calculate_damage_received(base_damage: int) -> int:
-	var actual_damage = base_damage
+func calculate_damage_received(incoming_damage: int) -> int:
+	var actual_damage = incoming_damage
 
 	# Immune: no damage at all
 	if has_status_effect("immune"):
@@ -1316,9 +1350,9 @@ func apply_bulldozer_armor() -> void:
 		tween.parallel().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.2)
 
 
-## Heavy Level 2B: Suppression Fire - all visible enemies -25% accuracy for 3 turns
+## Heavy Level 2B: Suppression Fire - visible enemies within 5 tiles -25% accuracy for 3 turns
 func apply_suppression_fire() -> bool:
-	if not use_ap(2):
+	if not use_ap(1):
 		return false
 	if is_ability_on_cooldown("suppression_fire"):
 		return false
@@ -1395,10 +1429,8 @@ func apply_war_machine_kill() -> void:
 #===================
 
 ## Sniper Level 2A: Damn Good Ground - Activate "Last Stand" stance
-## Spends 1 AP. Next shot is guaranteed hit with no cover penalty. Cooldown 2.
+## AP is consumed by tactical_controller. Next shot guaranteed hit, no cover penalty. Cooldown 2.
 func apply_damn_good_ground() -> bool:
-	if not use_ap(1):
-		return false
 	if is_ability_on_cooldown("damn_good_ground"):
 		return false
 
@@ -1449,7 +1481,7 @@ func get_apex_predator_damage_multiplier(target: Node2D) -> float:
 
 
 ## Sniper Level 3C: Double Tap - Fire twice with accuracy penalty
-func apply_double_tap(target_pos: Vector2i, hit_chance: float) -> Dictionary:
+func apply_double_tap(_target_pos: Vector2i, hit_chance: float) -> Dictionary:
 	if not use_ap(1):
 		return {"success": false}
 	if is_ability_on_cooldown("double_tap"):

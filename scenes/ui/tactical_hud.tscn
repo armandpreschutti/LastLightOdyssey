@@ -276,7 +276,6 @@ theme_override_font_sizes/font_size = 18
 text = "STATUS: >> READY TO ACT"
 
 [node name="AbilitiesPanel" type="PanelContainer" parent="." unique_id=-194967293]
-visible = false
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
@@ -373,7 +372,6 @@ theme_override_font_sizes/font_size = 15
 text = "[ CANCEL ]"
 
 [node name="SystemPanel" type="PanelContainer" parent="." unique_id=987654322]
-visible = false
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
@@ -440,8 +438,8 @@ layout_mode = 1
 anchors_preset = 2
 anchor_left = 0.0
 anchor_right = 0.0
-offset_left = 8.0
-offset_top = -385.0
-offset_right = 298.0
-offset_bottom = -175.0
+offset_left = 1600.0
+offset_top = -373.0
+offset_right = 1890.0
+offset_bottom = -163.0
 grow_horizontal = 1

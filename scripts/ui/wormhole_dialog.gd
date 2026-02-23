@@ -24,7 +24,7 @@ func _input(event: InputEvent) -> void:
 
 func setup() -> void:
 	title_label.text = "WORMHOLE DETECTED"
-	message_label.text = "ANOMALY DETECTED\n\nA stable wormhole has been detected in this sector. Logic engines calculate a 94.3% probability of safe transport to another wormhole node within the cluster.\n\nDestination unknown."
+	message_label.text = "ANOMALY DETECTED\n\nA stable wormhole has been detected in this sector. Logic engines calculate a 94.3% probability of safe transport to an unknown sector within the cluster.\n\nDestination unknown."
 	enter_button.text = "[ ENTER WORMHOLE ]"
 	cancel_button.text = "[ STAY ]"
 

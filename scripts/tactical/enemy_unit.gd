@@ -85,6 +85,7 @@ var _idle_tween: Tween = null
 var _targetable_tween: Tween = null
 var _attack_tween: Tween = null
 var _highlight_tween: Tween = null
+var _effect_icons_root: Node2D = null
 
 
 func _ready() -> void:
@@ -478,24 +479,27 @@ func _stop_targetable_highlight() -> void:
 	sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)
 
 
-## Update cover indicator visibility based on cover level (0=none, 1=half, 2=full)
+## Update cover indicator visibility and position. Cover is always first (leftmost) icon.
 func update_cover_indicator(cover_level: int) -> void:
+	const COVER_SLOT := 0  ## Cover always first from left
+	var scale_vec := Vector2(EffectIconConfig.ICON_SCALE, EffectIconConfig.ICON_SCALE)
 	if half_cover_indicator:
 		half_cover_indicator.visible = (cover_level == 1)
+		if cover_level == 1:
+			half_cover_indicator.position = EffectIconConfig.get_icon_position(COVER_SLOT)
+			half_cover_indicator.scale = scale_vec
 	if full_cover_indicator:
 		full_cover_indicator.visible = (cover_level == 2)
+		if cover_level == 2:
+			full_cover_indicator.position = EffectIconConfig.get_icon_position(COVER_SLOT)
+			full_cover_indicator.scale = scale_vec
+	_refresh_effect_icons()  ## Re-position effect icons (they shift right when cover is present)
 
 
 ## Add a status effect
 func add_status_effect(effect: String, duration: int) -> void:
 	status_effects[effect] = duration
-	
-	# Add visual marker for poison effect
-	if effect == "poison":
-		_add_poison_marker()
-	# Add visual marker for suppressed (pin_down) effect
-	if effect == "pin_down":
-		_add_suppressed_marker()
+	_refresh_effect_icons()
 
 
 ## Check if a status effect is active
@@ -510,9 +514,7 @@ func is_deep_scanned() -> bool:
 
 ## Tick all status effects down by 1 turn. Apply poison damage first.
 func tick_status_effects() -> void:
-	var had_poison = has_status_effect("poison")
-	var had_suppressed = has_status_effect("pin_down")
-	if had_poison:
+	if has_status_effect("poison"):
 		take_damage(5)
 	var to_remove: Array[String] = []
 	for key in status_effects.keys():
@@ -521,76 +523,47 @@ func tick_status_effects() -> void:
 			to_remove.append(key)
 	for key in to_remove:
 		status_effects.erase(key)
-	# Update or remove poison marker
-	if had_poison:
-		if has_status_effect("poison"):
-			update_poison_marker()
-		else:
-			_remove_poison_marker()
-	# Update or remove suppressed marker
-	if had_suppressed:
-		if has_status_effect("pin_down"):
-			update_suppressed_marker()
-		else:
-			_remove_suppressed_marker()
+	_refresh_effect_icons()
 
 
-## Add a "POISONED" visual marker to this enemy
-func _add_poison_marker() -> void:
-	# Remove existing marker first to avoid duplicates
-	_remove_poison_marker()
-	
-	var marker_label = Label.new()
-	marker_label.name = "PoisonMarker"
-	marker_label.text = "POISONED [%d]" % status_effects.get("poison", 3)
-	marker_label.add_theme_color_override("font_color", Color(0.8, 0.2, 1.0))  # Purple
-	marker_label.add_theme_font_size_override("font_size", 11)
-	marker_label.position = Vector2(-25, -45)
-	marker_label.z_index = 10
-	add_child(marker_label)
+#region Effect Icons (Node2D + Polygon2D, same layout as cover indicators)
+
+func _ensure_effect_icons_root() -> void:
+	if _effect_icons_root and is_instance_valid(_effect_icons_root):
+		return
+	_effect_icons_root = Node2D.new()
+	_effect_icons_root.name = "EffectIcons"
+	_effect_icons_root.z_index = 10
+	add_child(_effect_icons_root)
 
 
-## Remove the poison marker from this enemy
-func _remove_poison_marker() -> void:
-	var existing = get_node_or_null("PoisonMarker")
-	if existing:
-		existing.queue_free()
+func _refresh_effect_icons() -> void:
+	_ensure_effect_icons_root()
+	for child in _effect_icons_root.get_children():
+		_effect_icons_root.remove_child(child)
+		child.queue_free()
 
+	var slot := 1 if (half_cover_indicator and half_cover_indicator.visible) or (full_cover_indicator and full_cover_indicator.visible) else 0
+	for effect_key in EffectIconConfig.EFFECT_PRIORITY:
+		if status_effects.get(effect_key, 0) <= 0:
+			continue
+		var data: Dictionary = EffectIconConfig.get_data(effect_key)
+		if data.is_empty():
+			continue
+		var icon := EffectIconConfig.create_effect_icon(effect_key, data, slot)
+		_effect_icons_root.add_child(icon)
+		slot += 1
 
-## Update poison marker text to show remaining turns (call at start of enemy turn)
-func update_poison_marker() -> void:
-	var marker = get_node_or_null("PoisonMarker")
-	if marker and has_status_effect("poison"):
-		marker.text = "POISONED [%d]" % status_effects.get("poison", 0)
+	# Cover is always slot 0; re-position and scale when visible
+	var scale_vec := Vector2(EffectIconConfig.ICON_SCALE, EffectIconConfig.ICON_SCALE)
+	if half_cover_indicator and half_cover_indicator.visible:
+		half_cover_indicator.position = EffectIconConfig.get_icon_position(0)
+		half_cover_indicator.scale = scale_vec
+	if full_cover_indicator and full_cover_indicator.visible:
+		full_cover_indicator.position = EffectIconConfig.get_icon_position(0)
+		full_cover_indicator.scale = scale_vec
 
-
-## Add a "SUPPRESSED" visual marker to this enemy
-func _add_suppressed_marker() -> void:
-	# Remove existing marker first to avoid duplicates
-	_remove_suppressed_marker()
-	
-	var marker_label = Label.new()
-	marker_label.name = "SuppressedMarker"
-	marker_label.text = "SUPPRESSED [%d]" % status_effects.get("pin_down", 1)
-	marker_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.1))  # Orange
-	marker_label.add_theme_font_size_override("font_size", 11)
-	marker_label.position = Vector2(-30, -60)  # Above poison marker
-	marker_label.z_index = 10
-	add_child(marker_label)
-
-
-## Remove the suppressed marker from this enemy
-func _remove_suppressed_marker() -> void:
-	var existing = get_node_or_null("SuppressedMarker")
-	if existing:
-		existing.queue_free()
-
-
-## Update suppressed marker text to show remaining turns
-func update_suppressed_marker() -> void:
-	var marker = get_node_or_null("SuppressedMarker")
-	if marker and has_status_effect("pin_down"):
-		marker.text = "SUPPRESSED [%d]" % status_effects.get("pin_down", 0)
+#endregion
 
 
 ## Start overwatch cooldown (called when sniper shoots)
