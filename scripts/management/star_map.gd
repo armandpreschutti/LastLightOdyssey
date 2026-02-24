@@ -17,12 +17,43 @@ var MapNodeScene: PackedScene
 var node_visuals: Dictionary = {}  # String (ID) -> MapNode visual instance
 var ship_visual: TextureRect
 var raider_visual: Node2D
+var raider_zone_visual: Node2D = null
 var _is_ship_animating: bool = false # Flag to prevent refresh from stomping animation
 const BASE_SPEED_PPS = 300.0 # Pixels per second base speed for ship movement
 
 const ZOOM_STEP = 0.1
+const SAME_NODE_SHIP_OFFSET: float = 50.0
 var _current_zoom: float = 1.0
 var _input_locked: bool = false
+
+
+func _both_on_same_node() -> bool:
+	return VoyageManager and VoyageManager.is_raider_active and \
+		VoyageManager.raider_node_id == VoyageManager.current_node_id
+
+
+func _get_player_display_offset(node_pos: Vector2) -> Vector2:
+	if _both_on_same_node():
+		return node_pos + Vector2(-SAME_NODE_SHIP_OFFSET, 0)
+	return node_pos
+
+
+func _get_raider_display_offset(node_pos: Vector2) -> Vector2:
+	if _both_on_same_node():
+		return node_pos + Vector2(SAME_NODE_SHIP_OFFSET, 0)
+	return node_pos
+
+
+func _update_raider_position_for_same_node() -> void:
+	## When player and raider share a node, reposition the raider to standoff layout.
+	## Needed when player jumps to raider's node (raider doesn't move, so no raider_moved signal).
+	if not raider_visual or not _both_on_same_node():
+		return
+	var raider_node = VoyageManager.nodes[VoyageManager.raider_node_id]
+	if not raider_node:
+		return
+	raider_visual.position = _get_raider_display_offset(raider_node.position)
+	raider_visual.rotation = PI  # Face left toward player
 
 
 func _process(_delta: float) -> void:
@@ -84,9 +115,11 @@ func _ready() -> void:
 	# Create ship visual
 	_create_ship_visual()
 	
-	# If raider already exists (loaded save), create visual
+	# If raider already exists (loaded save), restore visuals
 	if VoyageManager.is_raider_active and VoyageManager.nodes.has(VoyageManager.raider_node_id):
-		_create_raider_visual(VoyageManager.nodes[VoyageManager.raider_node_id])
+		var raider_node_data = VoyageManager.nodes[VoyageManager.raider_node_id]
+		_create_raider_zone_visual(raider_node_data.position, VoyageManager.RAIDER_DETECTION_RADIUS)
+		_create_raider_visual(raider_node_data)
 	
 	# Connect signals
 	VoyageManager.map_updated.connect(refresh)
@@ -109,6 +142,7 @@ func _ready() -> void:
 
 
 func _on_raider_spawned(node_data: NodeData) -> void:
+	_create_raider_zone_visual(node_data.position, VoyageManager.RAIDER_DETECTION_RADIUS)
 	_create_raider_visual(node_data)
 	refresh()
 	
@@ -120,7 +154,12 @@ func _on_raider_moved(new_pos: Vector2, node_id: String) -> void:
 		# Connect to the move_complete signal and relay it
 		if not raider_visual.move_complete.is_connected(_on_raider_move_complete):
 			raider_visual.move_complete.connect(_on_raider_move_complete)
-		raider_visual.move_to(new_pos, node_id)
+		var display_pos = _get_raider_display_offset(new_pos)
+		var target_rot = PI if _both_on_same_node() else -999.0  # Sentinel = use movement direction
+		raider_visual.move_to(display_pos, node_id, 1.0, target_rot)
+	# Move the detection circle to follow the raider
+	if raider_zone_visual:
+		raider_zone_visual.position = new_pos
 	refresh()
 
 func _on_raider_move_complete() -> void:
@@ -130,6 +169,9 @@ func _on_raider_destroyed() -> void:
 	if raider_visual:
 		raider_visual.queue_free()
 		raider_visual = null
+	if raider_zone_visual:
+		raider_zone_visual.queue_free()
+		raider_zone_visual = null
 	refresh()
 
 func _on_story_node_spawned(node_data: NodeData) -> void:
@@ -182,14 +224,32 @@ func _create_ship_visual() -> void:
 		ship_visual.texture = preload("res://assets/sprites/navigation/waypoint.png")
 		
 	ship_visual.modulate = Color(0.2, 0.8, 1.0) # Cyan/Blue for the ship
-	ship_visual.custom_minimum_size = Vector2(32, 32) # Icon is 64x64, maybe scale down? Or let it be larger?
-	# Let's keep 32x32 logic for consistency or update if needed. 
-	# If source is 64x64, expansion might look big. Let's set rect size or scale.
+	ship_visual.custom_minimum_size = Vector2(96, 96) # 3x base size for visibility
 	ship_visual.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	ship_visual.size = Vector2(48, 48) # Make ship slightly larger than nodes (usually 40-ish?)
-	# Nodes are just visuals.
-	ship_visual.pivot_offset = Vector2(24, 24) # Center pivot
+	ship_visual.size = Vector2(144, 144) # 3x larger ship icon for voyage menu visibility
+	ship_visual.pivot_offset = Vector2(72, 72) # Center pivot (half of 144)
 	ship_container.add_child(ship_visual)
+
+func _create_raider_zone_visual(origin: Vector2, radius: float) -> void:
+	if raider_zone_visual:
+		raider_zone_visual.queue_free()
+	raider_zone_visual = Node2D.new()
+	raider_zone_visual.position = origin
+	# Attach a minimal inline script so _draw() renders the filled circle
+	var script = GDScript.new()
+	script.source_code = """extends Node2D
+var zone_radius: float = 1200.0
+func _draw() -> void:
+	draw_circle(Vector2.ZERO, zone_radius, Color(1.0, 0.1, 0.1, 0.07))
+	draw_arc(Vector2.ZERO, zone_radius, 0.0, TAU, 128, Color(1.0, 0.2, 0.2, 0.25), 2.0)
+"""
+	script.reload()
+	raider_zone_visual.set_script(script)
+	raider_zone_visual.set("zone_radius", radius)
+	# Insert at index 0 so it renders beneath lines and nodes
+	map_content.add_child(raider_zone_visual)
+	map_content.move_child(raider_zone_visual, 0)
+
 
 func _create_raider_visual(node_data: NodeData) -> void:
 	if raider_visual:
@@ -199,8 +259,9 @@ func _create_raider_visual(node_data: NodeData) -> void:
 	if RaiderScene:
 		raider_visual = RaiderScene.instantiate()
 		ship_container.add_child(raider_visual)
-		# Center the raider ship on the node (same offset as player ship)
-		raider_visual.position = node_data.position
+		raider_visual.position = _get_raider_display_offset(node_data.position)
+		if _both_on_same_node():
+			raider_visual.rotation = PI  # Face left toward player
 
 func refresh() -> void:
 	_clear_visuals()
@@ -464,14 +525,14 @@ func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO, s
 		var current_node = VoyageManager.get_current_node()
 		if current_node:
 			final_pos = current_node.position
-			
-	# Center ship on node (ship is 32x32, pivot is center, but position is usually topleft for control)
-	# Wait, if pivot is center, setting position sets the position of the rect's top-left in local coords?
-	# Standard Control: Position is top-left.
-	# Let's align center to center.
-	# Center ship on node
-	# Visual size is 48x48 (pivot 24,24)
-	var visual_pos = final_pos - Vector2(24, 24)
+	
+	# Reposition raider when player jumps to its node (raider doesn't move, so no raider_moved signal)
+	_update_raider_position_for_same_node()
+	
+	# Apply same-node offset when player and raider share a node
+	var display_center = _get_player_display_offset(final_pos)
+	# Center ship on node (ship is 144x144, pivot 72,72)
+	var visual_pos = display_center - Vector2(72, 72)
 	
 	if animated:
 		_is_ship_animating = true
@@ -485,22 +546,20 @@ func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO, s
 		tween.set_parallel(true)
 		tween.tween_property(ship_visual, "position", visual_pos, duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 		
-		# Rotate ship to face movement direction if we have a significant move
-		if distance > 1.0:
-			# Calculate direction using visual positions (both are top-left, so vector is correct direction)
+		# Rotation: face opponent when same node (0 rad = right), else face movement direction
+		var target_rot: float
+		if _both_on_same_node():
+			target_rot = 0.0  # Face right toward raider
+		elif distance > 1.0:
 			var direction = (visual_pos - ship_visual.position).normalized()
-			
-			# Calculate target rotation
-			var target_rot = direction.angle()
-			
-			# Determine shortest rotation path
+			target_rot = direction.angle()
+		else:
+			target_rot = ship_visual.rotation  # No movement, keep current
+		
+		if distance > 1.0 or _both_on_same_node():
 			var current_rot = ship_visual.rotation
 			var diff = angle_difference(current_rot, target_rot)
-			
-			# Tween rotation
-			# Tween rotation
-			# Tween rotation
-			var rot_duration = min(duration * 0.5, 0.4) # Rotate quickly, at most 0.4s
+			var rot_duration = min(duration * 0.5, 0.4)
 			tween.tween_property(ship_visual, "rotation", current_rot + diff, rot_duration).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		
 		# Wait for completion to emit signal
@@ -511,12 +570,17 @@ func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO, s
 	else:
 		_is_ship_animating = false
 		ship_visual.position = visual_pos
-		# Maintain rotation - don't reset to 0
+		if _both_on_same_node():
+			ship_visual.rotation = 0.0
+		# Else maintain rotation
 
 func _play_teleport_animation(target_pos: Vector2) -> void:
 	if not ship_visual:
 		_create_ship_visual()
-	var visual_pos = target_pos - Vector2(24, 24)
+	# Reposition raider when player teleports to its node
+	_update_raider_position_for_same_node()
+	var display_center = _get_player_display_offset(target_pos)
+	var visual_pos = display_center - Vector2(72, 72)
 
 	# Dematerialize: fade out + shrink (0.2s)
 	var demat_tween = create_tween()

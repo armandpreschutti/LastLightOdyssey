@@ -35,6 +35,8 @@ const RAIDER_RESPAWN_JUMPS: int = 10
 const RAIDER_RESPAWN_JUMPS_DEV: int = 2
 const RAIDER_SPAWN_DISTANCE_MIN: float = 1200.0
 const RAIDER_SPAWN_DISTANCE_MAX: float = 1800.0
+const RAIDER_DETECTION_RADIUS: float = 1200.0
+const RAIDER_JUMPS_PER_TURN: int = 2
 
 # Constants
 const FUEL_COST_PER_JUMP: int = 1
@@ -760,6 +762,18 @@ func _apply_proximity_connections_for_new_nodes(new_node_ids: Array) -> void:
 
 #region Raider Mechanics
 
+## Returns true if the player's current node is within the raider's detection circle.
+## The circle is centered on the raider's current node position and moves with it.
+func is_player_in_raider_zone() -> bool:
+	if not is_raider_active or not nodes.has(raider_node_id):
+		return false
+	var current_node = get_current_node()
+	if not current_node:
+		return false
+	var raider_node = nodes[raider_node_id]
+	return current_node.position.distance_to(raider_node.position) <= RAIDER_DETECTION_RADIUS
+
+
 func _try_spawn_raider() -> void:
 	if is_voyage_complete or is_raider_active:
 		return
@@ -827,6 +841,11 @@ func _process_raider_turn() -> bool:
 	if raider_node_id == current_node_id:
 		print("DEBUG VoyageManager: Player jumped onto raider at %s" % current_node_id)
 		_trigger_raider_ambush()
+		return false
+
+	# Only chase if player's current node is within the detection zone
+	if not is_player_in_raider_zone():
+		print("DEBUG VoyageManager: Player outside raider detection zone, raider idling")
 		return false
 		
 	var raider_node = nodes[raider_node_id]
@@ -901,6 +920,9 @@ func _create_emergency_path_toward_player() -> void:
 	var proposed_pos = raider_node.position + direction * 400.0
 	
 	# Look for an existing node close to where we'd spawn - use it instead of creating a duplicate
+	# IMPORTANT: Only use existing node if raider→node distance <= MAX_RAIDER_JUMP_DISTANCE.
+	# Otherwise we get pathlines spanning 800+ units (proposed_pos + 450) which look wrong.
+	const MAX_RAIDER_JUMP_DISTANCE: float = 500.0  # Matches generator MAX_DISTANCE
 	var best_existing_id: String = ""
 	var best_dist_to_player: float = INF
 	for node_id in nodes:
@@ -910,6 +932,9 @@ func _create_emergency_path_toward_player() -> void:
 		var dist_to_proposed = candidate.position.distance_to(proposed_pos)
 		if dist_to_proposed > PROXIMITY_CONNECT_DISTANCE:
 			continue
+		var dist_from_raider = candidate.position.distance_to(raider_node.position)
+		if dist_from_raider > MAX_RAIDER_JUMP_DISTANCE:
+			continue  # Avoid pathlines that are way too long
 		# Must be in the direction toward player (ahead of raider, not behind)
 		var to_candidate = (candidate.position - raider_node.position).normalized()
 		if to_candidate.dot(direction) <= 0.0:

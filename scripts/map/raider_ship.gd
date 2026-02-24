@@ -14,8 +14,11 @@ func _ready() -> void:
 	if animation_player.has_animation("pulse"):
 		animation_player.play("pulse")
 
+const TARGET_ROTATION_SENTINEL: float = -999.0
+
 ## Move the ship visually to a new position
-func move_to(target_pos: Vector2, target_node_id: String, speed_mult: float = 1.0) -> void:
+## When target_rotation is provided (not TARGET_ROTATION_SENTINEL), use it instead of movement direction
+func move_to(target_pos: Vector2, target_node_id: String, speed_mult: float = 1.0, target_rotation: float = TARGET_ROTATION_SENTINEL) -> void:
 	current_node_id = target_node_id
 	
 	var distance = position.distance_to(target_pos)
@@ -30,10 +33,17 @@ func move_to(target_pos: Vector2, target_node_id: String, speed_mult: float = 1.
 	# Position tween
 	tween.tween_property(self, "position", target_pos, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	
-	# Rotate ship to face movement direction if we have a significant move
-	if distance > 1.0:
+	# Rotation: use override if provided, else face movement direction
+	var target_rot: float
+	if target_rotation != TARGET_ROTATION_SENTINEL:
+		target_rot = target_rotation
+	elif distance > 1.0:
 		var direction = (target_pos - position).normalized()
-		var target_rot = direction.angle()
+		target_rot = direction.angle()
+	else:
+		target_rot = rotation  # No movement, keep current
+	
+	if distance > 1.0 or target_rotation != TARGET_ROTATION_SENTINEL:
 		var current_rot = rotation
 		var diff = angle_difference(current_rot, target_rot)
 		var rot_duration = min(duration * 0.5, 0.4)

@@ -214,10 +214,16 @@ func _update_visual() -> void:
 		NodeState.VISITED:
 			var is_scavenge = node_data.node_type == EventManager.NodeType.SCAVENGE_SITE
 			if node_data.is_story_node:
-				label.add_theme_color_override("font_color", COLOR_STORY)
-				if glow_effect and node_data.state != NodeData.NodeState.CLEARED:
-					glow_effect.visible = true
-					_apply_panel_color(glow_effect, COLOR_STORY, 0.55)
+				if node_data.state == NodeData.NodeState.CLEARED:
+					# Cleared story nodes: muted, no highlight
+					label.add_theme_color_override("font_color", COLOR_VISITED)
+					if glow_effect:
+						glow_effect.visible = false
+				else:
+					label.add_theme_color_override("font_color", COLOR_STORY)
+					if glow_effect:
+						glow_effect.visible = true
+						_apply_panel_color(glow_effect, COLOR_STORY, 0.55)
 			elif is_scavenge and node_data.state != NodeData.NodeState.CLEARED:
 				# Show difficulty color and glow for visited but not cleared scavenger missions
 				_update_visited_mission_color()

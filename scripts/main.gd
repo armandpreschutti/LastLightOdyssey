@@ -303,12 +303,13 @@ func _execute_jump_with_animation(node_data: NodeData, _fuel_cost: int) -> void:
 		# Wait for animation to complete (StarMap should emit this when it sees ship_moved)
 		await star_map.jump_animation_complete
 		
-		# Process raider turn (after player animation)
-		var raider_moved = VoyageManager.process_raider_turn()
-		
-		# If raider moved, wait for its animation
-		if raider_moved:
-			await star_map.raider_animation_complete
+		# Process raider turn (after player animation) - enemy ship gets multiple jumps per turn
+		for i in VoyageManager.RAIDER_JUMPS_PER_TURN:
+			var raider_moved = VoyageManager.process_raider_turn()
+			if raider_moved:
+				await star_map.raider_animation_complete
+			else:
+				break
 		
 		# Clear flag after animation completes
 		_is_jump_animating = false
@@ -332,12 +333,13 @@ func _execute_direct_travel(target_node: NodeData) -> void:
 	if success:
 		await star_map.jump_animation_complete
 		
-		# Process raider turn (after player animation)
-		var raider_moved = VoyageManager.process_raider_turn()
-		
-		# If raider moved, wait for its animation
-		if raider_moved:
-			await star_map.raider_animation_complete
+		# Process raider turn (after player animation) - enemy ship gets multiple jumps per turn
+		for i in VoyageManager.RAIDER_JUMPS_PER_TURN:
+			var raider_moved = VoyageManager.process_raider_turn()
+			if raider_moved:
+				await star_map.raider_animation_complete
+			else:
+				break
 		
 		_is_jump_animating = false
 		
@@ -929,9 +931,12 @@ func _execute_wormhole_teleport() -> void:
 
 		# Count as jump: wait for teleport animation, then process raider turn (enemy ships move)
 		await star_map.jump_animation_complete
-		var raider_moved = VoyageManager.process_raider_turn()
-		if raider_moved:
-			await star_map.raider_animation_complete
+		for i in VoyageManager.RAIDER_JUMPS_PER_TURN:
+			var raider_moved = VoyageManager.process_raider_turn()
+			if raider_moved:
+				await star_map.raider_animation_complete
+			else:
+				break
 
 		_is_jump_animating = false
 		_update_deploy_button_visibility()

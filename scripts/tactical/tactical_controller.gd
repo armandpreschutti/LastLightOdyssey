@@ -354,7 +354,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	# Generate map with biome type
 	current_biome = biome_type as BiomeConfig.BiomeType
 	
-	# Initialize mission objectives based on biome (only for scavenger missions)
+	# Initialize mission objectives based on biome (only for story missions)
 	mission_objectives.clear()
 	if is_story_mission:
 		# Use provided objectives if available, otherwise generate random ones
@@ -362,8 +362,13 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 			mission_objectives = provided_objectives.duplicate()
 		else:
 			mission_objectives = MissionObjective.ObjectiveManager.get_objectives_for_biome(current_biome)
-		# Initialize objectives panel in HUD
+		# Initialize and show objectives panel in HUD
 		tactical_hud.initialize_objectives(mission_objectives)
+		tactical_hud.set_objectives_panel_visible(true)
+	else:
+		# Non-story missions: clear panel and ensure it stays hidden (mission_objectives already empty)
+		tactical_hud.initialize_objectives(mission_objectives)
+		tactical_hud.set_objectives_panel_visible(false)
 	
 	# Update background pattern based on biome
 	if biome_background:

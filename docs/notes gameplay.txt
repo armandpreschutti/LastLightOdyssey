@@ -1,13 +1,11 @@
 GENERAL NOTES
 
-- enemy units who haven't moved in 2 turns should automcatically move to a new  position.
-
 - add hot keys to actions
-
-- create icons (display to right of cover icons) for ability effects, along with a special animation for each type (poison, marked, suppressed, etc).
 
 - update drift mode menu
 
 - consolidate 'barracks' menu and 'team select' menu into one resuable menu for both scenerios
 
 - remove tutorial and rebuild from scratch per mechanic
+
+- convert some ship status elements (fuel, hull integrity). to 

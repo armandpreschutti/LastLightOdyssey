@@ -12,8 +12,8 @@ const MARGIN_BOTTOM: float = 40.0
 ## Arrow size (half-width/height of triangle)
 const ARROW_SIZE: float = 16.0
 
-## Vertical offset when on-screen: raise arrow above the raider ship (negative Y)
-const ON_SCREEN_Y_OFFSET: float = -28.0
+## Vertical offset when on-screen: raise arrow above the target (negative Y)
+const ON_SCREEN_Y_OFFSET: float = -38.0
 
 ## When true, marker snaps above target when both are on-screen. When false, marker hides when on-screen.
 const ENABLE_ON_SCREEN_SNAP: bool = false

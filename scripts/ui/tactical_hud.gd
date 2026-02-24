@@ -511,6 +511,12 @@ func initialize_objectives(objectives: Array[MissionObjective]) -> void:
 		objectives_panel.initialize(objectives)
 
 
+## Explicitly show/hide objectives panel (story missions only)
+func set_objectives_panel_visible(show: bool) -> void:
+	if objectives_panel:
+		objectives_panel.visible = show
+
+
 ## Update a specific objective's display
 func update_objective(objective_id: String) -> void:
 	if objectives_panel:
