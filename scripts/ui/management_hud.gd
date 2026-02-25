@@ -11,8 +11,10 @@ signal surrender_pressed
 
 # Updated paths for new icon-based layout
 @onready var cash_label: Label = $MarginContainer/VBoxContainer/StatsContainer/CashRow/CashLabel
-@onready var fuel_label: Label = $MarginContainer/VBoxContainer/StatsContainer/FuelRow/FuelLabel
-@onready var integrity_label: Label = $MarginContainer/VBoxContainer/StatsContainer/IntegrityRow/IntegrityLabel
+@onready var fuel_bar: ProgressBar = $MarginContainer/VBoxContainer/StatsContainer/FuelRow/FuelBar
+@onready var fuel_bar_label: Label = $MarginContainer/VBoxContainer/StatsContainer/FuelRow/FuelBar/FuelBarLabel
+@onready var integrity_bar: ProgressBar = $MarginContainer/VBoxContainer/StatsContainer/IntegrityRow/IntegrityBar
+@onready var integrity_bar_label: Label = $MarginContainer/VBoxContainer/StatsContainer/IntegrityRow/IntegrityBar/IntegrityBarLabel
 @onready var market_button: Button = $MarginContainer/VBoxContainer/MarketButton
 @onready var barracks_button: Button = $MarginContainer/VBoxContainer/BarracksButton
 @onready var deploy_panel: PanelContainer = $DeployPanel
@@ -23,10 +25,15 @@ signal surrender_pressed
 @onready var center_button: Button = $TopRightPanel/CenterButton
 @onready var status_panel: PanelContainer = $StatusPanel
 @onready var status_label: Label = $StatusPanel/StatusLabel
+@onready var hostile_status_panel: PanelContainer = null  # Created in _setup_hostile_warning, placed below StatusPanel
 
 signal center_view_pressed
 
 var _pulse_tween: Tween
+var _fuel_flash_tween: Tween
+var _integrity_flash_tween: Tween
+var _fuel_value_tween: Tween
+var _integrity_value_tween: Tween
 
 var _last_cash: int = 0
 var _last_fuel: int = 0
@@ -45,6 +52,8 @@ func _ready() -> void:
 	_last_intel = GameState.intel
 	
 	_setup_additional_stats()
+	_setup_stat_bars()
+	_setup_hostile_warning()
 	_connect_signals()
 	_update_all_stats()
 	_update_glass_style()
@@ -54,6 +63,10 @@ func _ready() -> void:
 	
 	VoyageManager.story_node_spawned.connect(_on_story_node_spawned)
 	VoyageManager.story_sequence_finished.connect(_on_story_sequence_finished)
+	VoyageManager.raider_spawned.connect(_on_raider_zone_changed)
+	VoyageManager.raider_destroyed.connect(_on_raider_zone_changed)
+	VoyageManager.raider_moved.connect(func(_p, _id): _on_raider_zone_changed())
+	VoyageManager.ship_moved.connect(func(_p, _n, _s): _on_raider_zone_changed())
 	GameState.officer_progression_changed.connect(_check_barracks_pulse)
 	
 	# Initial check
@@ -108,6 +121,63 @@ func _on_story_sequence_finished() -> void:
 	surrender_button.disabled = false
 
 
+func _setup_stat_bars() -> void:
+	var sb_bg := StyleBoxFlat.new()
+	sb_bg.bg_color = Color(0, 0, 0, 0.35)
+	sb_bg.set_corner_radius_all(3)
+	
+	var sb_fuel := StyleBoxFlat.new()
+	sb_fuel.bg_color = Color(1.0, 0.69, 0.0, 0.75)
+	sb_fuel.set_corner_radius_all(3)
+	
+	var sb_hull := StyleBoxFlat.new()
+	sb_hull.bg_color = Color(0.5, 0.8, 0.9, 0.75)
+	sb_hull.set_corner_radius_all(3)
+	
+	fuel_bar.add_theme_stylebox_override("background", sb_bg.duplicate())
+	fuel_bar.add_theme_stylebox_override("fill", sb_fuel)
+	
+	integrity_bar.add_theme_stylebox_override("background", sb_bg.duplicate())
+	integrity_bar.add_theme_stylebox_override("fill", sb_hull)
+
+
+func _setup_hostile_warning() -> void:
+	# Copy StatusPanel structure: red panel with label, placed underneath drift mode warning
+	hostile_status_panel = PanelContainer.new()
+	hostile_status_panel.name = "HostileStatusPanel"
+	hostile_status_panel.visible = false
+	hostile_status_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	# Position below StatusPanel (StatusPanel: offset_top -585, bottom -535). Place hostile at -535 to -485
+	hostile_status_panel.offset_left = 819
+	hostile_status_panel.offset_top = -535
+	hostile_status_panel.offset_right = 1100
+	hostile_status_panel.offset_bottom = -485
+	hostile_status_panel.scale = Vector2(1.05, 1.05)
+	var red_style = load("res://assets/themes/style_panel_red.tres") as StyleBox
+	if red_style:
+		hostile_status_panel.add_theme_stylebox_override("panel", red_style)
+	add_child(hostile_status_panel)
+
+	var hostile_label = Label.new()
+	hostile_label.name = "HostileLabel"
+	hostile_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hostile_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	hostile_label.add_theme_color_override("font_color", Color(1, 0.3, 0.2, 1))
+	hostile_label.add_theme_font_size_override("font_size", 20)
+	hostile_label.text = "[ HOSTILE INCOMING - FAST TRAVEL DISABLED ]"
+	hostile_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hostile_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	hostile_status_panel.add_child(hostile_label)
+
+	# Initial state (e.g. loaded save where player is already in detection zone)
+	hostile_status_panel.visible = VoyageManager.is_player_in_raider_zone() if VoyageManager else false
+
+
+func _on_raider_zone_changed() -> void:
+	if hostile_status_panel:
+		hostile_status_panel.visible = VoyageManager.is_player_in_raider_zone()
+
+
 func _update_glass_style() -> void:
 	var sb = StyleBoxFlat.new()
 	sb.bg_color = Color(0.02, 0.05, 0.1, 0.6)
@@ -141,6 +211,8 @@ func _connect_signals() -> void:
 	deploy_button.mouse_entered.connect(_on_deploy_hover)
 	deploy_button.mouse_exited.connect(_on_deploy_unhover)
 	surrender_button.pressed.connect(_on_surrender_pressed)
+	surrender_button.mouse_entered.connect(_on_surrender_hover)
+	surrender_button.mouse_exited.connect(_on_surrender_unhover)
 	quit_button.pressed.connect(_on_quit_pressed)
 	if center_button:
 		center_button.pressed.connect(func(): center_view_pressed.emit())
@@ -173,6 +245,10 @@ func _on_surrender_pressed() -> void:
 func set_surrender_visible(is_visible: bool) -> void:
 	if surrender_panel:
 		surrender_panel.visible = is_visible
+		if is_visible:
+			_start_pulse(surrender_panel)
+		else:
+			_stop_pulse(surrender_panel)
 
 
 func _on_deploy_hover() -> void:
@@ -197,6 +273,18 @@ func _on_deploy_unhover() -> void:
 	# Resume pulse if button is active
 	if not deploy_button.disabled:
 		_start_pulse(deploy_panel)
+
+
+func _on_surrender_hover() -> void:
+	_stop_pulse(surrender_panel)
+	var glow_rect = surrender_panel.get_node_or_null("GlowRect")
+	if glow_rect:
+		glow_rect.color.a = 0.8
+
+
+func _on_surrender_unhover() -> void:
+	if surrender_panel and surrender_panel.visible:
+		_start_pulse(surrender_panel)
 
 
 func set_deploy_active(active: bool) -> void:
@@ -332,6 +420,9 @@ func _setup_additional_stats() -> void:
 	intel_label.add_theme_color_override("font_color", Color(0.8, 0.5, 1.0)) # Purple-ish
 	intel_label.add_theme_font_size_override("font_size", 18)
 	intel_row.add_child(intel_label)
+	
+	# Position after CashRow (index 0), before FuelRow
+	stats_container.move_child(intel_row, 1)
 
 
 ## Spawns a floating text indicator next to a label to show resource changes
@@ -398,13 +489,45 @@ func _on_cash_changed(new_value: int) -> void:
 	# So no need to call check here.
 
 
+## Returns the resting modulate color for the integrity bar based on current HP level.
+func _get_integrity_rest_color(value: int) -> Color:
+	if value <= 25:
+		return Color(1.0, 0.3, 0.3)
+	elif value <= 50:
+		return Color(1.0, 1.0, 0.3)
+	return Color(1, 1, 1)
+
+
+## Flashes bar fill to flash_color then eases back to rest_color.
+## Uses self_modulate so the overlay label text is not tinted.
+func _flash_bar(bar: ProgressBar, flash_color: Color, rest_color: Color, tween_ref: String) -> void:
+	var existing: Tween = get(tween_ref)
+	if existing and existing.is_valid():
+		existing.kill()
+	
+	bar.self_modulate = flash_color
+	var t := create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	t.tween_property(bar, "self_modulate", rest_color, 1.1)
+	set(tween_ref, t)
+
+
 func _on_fuel_changed(new_value: int) -> void:
 	var delta = new_value - _last_fuel
-	_spawn_stat_change_indicator(fuel_label, delta)
 	_last_fuel = new_value
-	fuel_label.text = "FUEL: %d" % new_value
+	fuel_bar_label.text = "FUEL:  %d / %d" % [new_value, GameState.MAX_FUEL]
+	
+	# Animate bar fill sliding to new value
+	if _fuel_value_tween and _fuel_value_tween.is_valid():
+		_fuel_value_tween.kill()
+	_fuel_value_tween = create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	_fuel_value_tween.tween_property(fuel_bar, "value", float(new_value), 1.1)
+	
+	if delta != 0:
+		var flash := Color(0.3, 1.0, 0.4) if delta > 0 else Color(1.0, 0.25, 0.25)
+		_flash_bar(fuel_bar, flash, Color(1, 1, 1), "_fuel_flash_tween")
+	
 	if new_value == 0:
-		status_label.text = "[ DRIFT MODE - NO FUEL ]"
+		status_label.text = "[ DRIFT MODE - FAST TRAVEL DISABLED ]"
 		if status_panel: status_panel.visible = true
 		status_label.visible = true
 	else:
@@ -416,9 +539,30 @@ func _on_fuel_changed(new_value: int) -> void:
 
 func _on_integrity_changed(new_value: int) -> void:
 	var delta = new_value - _last_integrity
-	_spawn_stat_change_indicator(integrity_label, delta, true)
 	_last_integrity = new_value
-	integrity_label.text = "HULL: %d%%" % new_value
+	integrity_bar_label.text = "HULL:  %d%%" % new_value
+	
+	# Animate bar fill sliding to new value
+	if _integrity_value_tween and _integrity_value_tween.is_valid():
+		_integrity_value_tween.kill()
+	_integrity_value_tween = create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	_integrity_value_tween.tween_property(integrity_bar, "value", float(new_value), 1.1)
+	
+	var rest_color := _get_integrity_rest_color(new_value)
+	
+	# Update label color to match resting threshold immediately
+	if new_value <= 25:
+		integrity_bar_label.add_theme_color_override("font_color", Color(1, 0.85, 0.85))
+	elif new_value <= 50:
+		integrity_bar_label.add_theme_color_override("font_color", Color(1, 1, 0.9))
+	else:
+		integrity_bar_label.add_theme_color_override("font_color", Color(1, 1, 1))
+	
+	if delta != 0:
+		var flash := Color(0.3, 1.0, 0.4) if delta > 0 else Color(1.0, 0.25, 0.25)
+		_flash_bar(integrity_bar, flash, rest_color, "_integrity_flash_tween")
+	else:
+		integrity_bar.self_modulate = rest_color
 	
 	_check_market_pulse()
 
@@ -450,8 +594,11 @@ func set_view_recap_mode(enabled: bool) -> void:
 			$DeployPanel.visible = false
 		if surrender_panel:
 			surrender_panel.visible = false
+			_stop_pulse(surrender_panel)
 		if has_node("StatusPanel"):
 			$StatusPanel.visible = false
+		if hostile_status_panel:
+			hostile_status_panel.visible = false
 		quit_button.text = "VIEW RECAP"
 		quit_button.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2)) # Gold
 		quit_button.pressed.connect(_on_view_recap_pressed)
@@ -463,6 +610,8 @@ func set_view_recap_mode(enabled: bool) -> void:
 			$DeployPanel.visible = true
 		if has_node("StatusPanel") and GameState.fuel == 0:
 			$StatusPanel.visible = true
+		if hostile_status_panel and VoyageManager.is_player_in_raider_zone():
+			hostile_status_panel.visible = true
 		quit_button.text = "QUIT TO MENU"
 		quit_button.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4)) # Reddish
 		quit_button.pressed.connect(_on_quit_pressed)

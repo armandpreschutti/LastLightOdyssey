@@ -177,7 +177,7 @@ func _roll_node_type() -> int:
 	var roll = rng.randf()
 	var wormhole_chance := 0.08
 	var scavenge_chance := 0.16  # 0.08..0.24
-	if GameState.is_developer_mode_enabled():
+	if GameState.dev_wormhole_4x:
 		wormhole_chance = 0.32  # 4x more frequent in dev mode
 	if roll < wormhole_chance:
 		return EventManager.NodeType.WORMHOLE

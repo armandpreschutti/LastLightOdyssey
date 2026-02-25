@@ -1,11 +1,13 @@
 GENERAL NOTES
 
-- add hot keys to actions
+done - add hot keys to actions, ask questions on as to which actions get hotkeys 
 
-- update drift mode menu
+started - I want to build the tutorial from scratch per mechanic, ask questions and help me plan it out
 
-- consolidate 'barracks' menu and 'team select' menu into one resuable menu for both scenerios
+done - convert some ship status elements (fuel, hull integrity) to slider bars. ask questions for clarity
 
-- remove tutorial and rebuild from scratch per mechanic
+done - I want add a panel in the bottom left of screen that describes what each node is. for example, when on a scavenger mission node it should describe the mission. when on a wormhole it should describe the wormhole. etc, don't make this panel apply to WAYPOINT nodes. ask questions for clarity
 
-- convert some ship status elements (fuel, hull integrity). to 
+done - I want to add a mechanic to the NAVIGATION LEGEND. when the player clicks on a node, I want the camera to automatically snap to that nodes position on map. if the player presses an icon more than once (and there is more than one of that node, ei PLANET 3) then cycle through each nodes position on click. ask questions for complete clarity
+
+- go through all tutorials and update rules

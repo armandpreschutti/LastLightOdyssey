@@ -1,6 +1,6 @@
 [gd_scene load_steps=5 format=3 uid="uid://c6s1p7j0q2u9e"]
 
-[ext_resource type="Texture2D" uid="uid://bqi1jm2b2f1" path="res://assets/sprites/navigation/ship_icon.png" id="1_tex"]
+[ext_resource type="Texture2D" path="res://assets/sprites/navigation/enemy_ship_icon.png" id="1_tex"]
 [ext_resource type="Script" path="res://scripts/map/raider_ship.gd" id="2_script"]
 
 [sub_resource type="Animation" id="Animation_pulse"]
@@ -9,22 +9,10 @@ loop_mode = 1
 tracks/0/type = "value"
 tracks/0/imported = false
 tracks/0/enabled = true
-tracks/0/path = NodePath(".:modulate")
+tracks/0/path = NodePath(".:scale")
 tracks/0/interp = 2
 tracks/0/loop_wrap = true
 tracks/0/keys = {
-"times": PackedFloat32Array(0, 0.5, 1),
-"transitions": PackedFloat32Array(1, 1, 1),
-"update": 0,
-"values": [Color(1, 0.2, 0.2, 1), Color(1, 0.4, 0.4, 1), Color(1, 0.2, 0.2, 1)]
-}
-tracks/1/type = "value"
-tracks/1/imported = false
-tracks/1/enabled = true
-tracks/1/path = NodePath(".:scale")
-tracks/1/interp = 2
-tracks/1/loop_wrap = true
-tracks/1/keys = {
 "times": PackedFloat32Array(0, 0.5, 1),
 "transitions": PackedFloat32Array(1, 1, 1),
 "update": 0,
@@ -37,7 +25,6 @@ _data = {
 }
 
 [node name="RaiderShip" type="Node2D"]
-modulate = Color(1, 0.2, 0.2, 1)
 scale = Vector2(0.8, 0.8)
 script = ExtResource("2_script")
 

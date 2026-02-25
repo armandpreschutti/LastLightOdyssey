@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://4sfd3x5a0yko" path="res://scripts/management/nebula_background.gd" id="2_nebula"]
 [ext_resource type="PackedScene" path="res://scenes/ui/raider_off_screen_indicator.tscn" id="4_story_indicator"]
 [ext_resource type="PackedScene" path="res://scenes/ui/navigation_legend_strip.tscn" id="5_legend"]
+[ext_resource type="PackedScene" path="res://scenes/ui/node_info_panel.tscn" id="6_node_info_panel"]
 
 [node name="StarMap" type="Control" unique_id=380385132]
 layout_mode = 3
@@ -78,3 +79,17 @@ offset_top = 1013.0
 offset_right = 540.0
 offset_bottom = 1073.0
 grow_horizontal = 1
+
+[node name="NodeInfoPanel" parent="." instance=ExtResource("6_node_info_panel")]
+layout_mode = 0
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -310.0
+offset_top = -210.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 0
+grow_vertical = 0
+visible = false

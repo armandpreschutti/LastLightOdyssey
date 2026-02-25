@@ -12,6 +12,7 @@ signal story_sequence_finished
 signal raider_moved(new_position: Vector2, node_id: String)
 signal raider_spawned(node_data: NodeData)
 signal raider_destroyed
+signal raider_sequence_finished
 
 # Core State
 var current_node_id: String = ""
@@ -37,6 +38,10 @@ const RAIDER_SPAWN_DISTANCE_MIN: float = 1200.0
 const RAIDER_SPAWN_DISTANCE_MAX: float = 1800.0
 const RAIDER_DETECTION_RADIUS: float = 1200.0
 const RAIDER_JUMPS_PER_TURN: int = 2
+## When true, raider spawn creates 2 bridge nodes toward the player; when false, raider spawns alone
+const RAIDER_BRIDGE_ENABLED: bool = false
+## Radius within which the player can direct-travel to visited nodes (same scale as raider detection)
+const PLAYER_TRAVEL_RADIUS: float = 1200.0
 
 # Constants
 const FUEL_COST_PER_JUMP: int = 1
@@ -221,7 +226,7 @@ func get_story_chain_length() -> int:
 
 
 func _get_story_intel_threshold() -> int:
-	return STORY_INTEL_THRESHOLD_DEV if GameState.is_developer_mode_enabled() else STORY_INTEL_THRESHOLD
+	return STORY_INTEL_THRESHOLD_DEV if GameState.dev_story_intel else STORY_INTEL_THRESHOLD
 
 
 func complete_story_node(node_id: String, mission_success: bool) -> Dictionary:
@@ -270,6 +275,14 @@ func complete_story_node(node_id: String, mission_success: bool) -> Dictionary:
 	return result
 
 
+## Returns true if the target node is within direct-travel radius of current position
+func is_node_within_travel_radius(target_node: NodeData) -> bool:
+	var current_node = get_current_node()
+	if not current_node or not target_node:
+		return false
+	return current_node.position.distance_to(target_node.position) <= PLAYER_TRAVEL_RADIUS
+
+
 ## Move the ship directly to a target visited node (skipping intermediates)
 func attempt_direct_travel(target_node: NodeData, speed_mult: float = 1.25) -> bool:
 	if is_voyage_complete:
@@ -277,10 +290,25 @@ func attempt_direct_travel(target_node: NodeData, speed_mult: float = 1.25) -> b
 		
 	if not target_node:
 		return false
+
+	# Cannot fast travel while within raider detection zone
+	if is_player_in_raider_zone():
+		message_log_added.emit("Cannot fast travel while being pursued!")
+		return false
+
+	# Cannot fast travel without fuel (drift mode)
+	if GameState.fuel <= 0:
+		message_log_added.emit("Cannot fast travel in Drift Mode - no fuel!")
+		return false
 		
 	# Verify target is visited
 	if target_node.state == NodeData.NodeState.UNVISITED:
 		message_log_added.emit("Cannot direct travel to unvisited coordinates.")
+		return false
+
+	# Verify target is within travel radius
+	if not is_node_within_travel_radius(target_node):
+		message_log_added.emit("Target is beyond travel range.")
 		return false
 		
 	# Verify path exists (connectivity check)
@@ -778,7 +806,7 @@ func _try_spawn_raider() -> void:
 	if is_voyage_complete or is_raider_active:
 		return
 		
-	var required_jumps = RAIDER_RESPAWN_JUMPS_DEV if GameState.is_developer_mode_enabled() else RAIDER_RESPAWN_JUMPS
+	var required_jumps = RAIDER_RESPAWN_JUMPS_DEV if GameState.dev_raider_fast else RAIDER_RESPAWN_JUMPS
 	if jumps_since_raider_cleared < required_jumps:
 		return
 		
@@ -807,8 +835,9 @@ func _try_spawn_raider() -> void:
 	
 	print("DEBUG VoyageManager: Spawned Raider ship at %s" % new_node.id)
 	
-	# Generate a bridge of nodes leading towards the player's graph
-	_generate_raider_bridge(new_node, incoming_vector)
+	# Generate a bridge of nodes leading towards the player's graph (disabled via RAIDER_BRIDGE_ENABLED)
+	if RAIDER_BRIDGE_ENABLED:
+		_generate_raider_bridge(new_node, incoming_vector)
 
 	message_log_added.emit("WARNING: Hostile Raider signature detected on long-range scanners!")
 	map_updated.emit()

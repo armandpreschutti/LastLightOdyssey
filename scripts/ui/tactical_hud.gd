@@ -77,6 +77,8 @@ var ability_panel: Control = null
 var _is_animating: bool = false  # Track animation state to disable ability button
 var _current_officer_key: String = ""  # Track current officer for ability panel
 var _extract_tween: Tween = null  # Track extract pulse animation
+# Maps slot index (0-2) to the ability ID shown in that slot ("" if locked/passive/empty)
+var _slot_ability_ids: Array[String] = ["", "", ""]
 
 
 func _ready() -> void:
@@ -317,7 +319,8 @@ func update_ability_buttons(officer_type: String, current_ap: int, unit_ref: Obj
 		btn.visible = false
 		for conn in btn.pressed.get_connections():
 			btn.pressed.disconnect(conn["callable"])
-			
+	
+	_slot_ability_ids = ["", "", ""]
 	var active_ab_count := 0
 	
 	# Determine base ability info
@@ -350,7 +353,7 @@ func update_ability_buttons(officer_type: String, current_ap: int, unit_ref: Obj
 		"sniper":
 			ability_name = "precision_shot"
 			ability_text = "[ PRECISION SHOT ] - 1 AP"
-			ability_tooltip = "Precision Shot: Costs 1 AP. Guaranteed hit on any visible enemy for 60 damage."
+			ability_tooltip = "Precision Shot: Costs 1 AP. Guaranteed hit on any visible enemy for 45 damage."
 
 	# Configure base ability if exists
 	if ability_name != "" and active_ab_count < ability_buttons.size():
@@ -373,6 +376,7 @@ func update_ability_buttons(officer_type: String, current_ap: int, unit_ref: Obj
 		btn.pressed.connect(func(): ability_used.emit(captured_id))
 		btn.visible = true
 		ability_container.visible = true
+		_slot_ability_ids[active_ab_count] = ability_name
 		active_ab_count += 1
 
 	# Add tier 2/3 abilities (unlocked or locked, active or passive)
@@ -424,13 +428,14 @@ func update_ability_buttons(officer_type: String, current_ap: int, unit_ref: Obj
 							btn.text = "[ %s ] - %d AP (CD: %d)" % [def.get("name", tier_ab_id).to_upper(), ab_cost, cd_remaining]
 						else:
 							btn.text = "[ %s ] - %d AP" % [def.get("name", tier_ab_id).to_upper(), ab_cost]
-							
+						
 						btn.disabled = on_cd or current_ap < ab_cost or _is_animating
 						btn.tooltip_text = def.get("desc", "")
 						
 						var captured_lambda := func(cid: String): ability_used.emit(cid)
 						btn.pressed.connect(captured_lambda.bind(tier_ab_id))
-						
+						_slot_ability_ids[active_ab_count] = tier_ab_id
+				
 				btn.visible = true
 				ability_container.visible = true
 				active_ab_count += 1
@@ -615,3 +620,16 @@ func _on_ability_panel_ability_selected(ability_id: String) -> void:
 ## Called when ability panel is closed
 func _on_ability_panel_closed() -> void:
 	pass
+
+
+## Returns the ability ID for slot index (0-2), or "" if the slot is locked/passive/empty.
+## Used by tactical_controller to route Q/W/E hotkeys to the correct ability.
+func get_ability_id_for_slot(slot: int) -> String:
+	if slot < 0 or slot >= _slot_ability_ids.size():
+		return ""
+	return _slot_ability_ids[slot]
+
+
+## Returns true when the Extract button is currently visible (i.e. extraction is available).
+func is_extract_available() -> bool:
+	return extract_button.visible

@@ -73,7 +73,7 @@
 
 | Ability | Type | Cost | CD | Effect |
 |---------|------|------|----|--------|
-| **Precision Shot** | Active | 1 AP | 2 | Guaranteed hit on any visible enemy, 2x damage |
+| **Precision Shot** | Active | 1 AP | 2 | Guaranteed hit on any visible enemy, 1.5x damage |
 | **Damn Good Ground** | Passive | — | — | If stationary this turn: +15% critical chance |
 | **Snap Shot** | Passive | — | — | Precision Shot has no cooldown |
 | **Serial** | Passive | — | — | Killing an enemy refunds all AP (chain kills) |

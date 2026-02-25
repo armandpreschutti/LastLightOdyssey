@@ -10,12 +10,18 @@ signal officer_died(officer_type: String)
 signal officer_injured(officer_key: String)
 signal game_over(reason: String)
 signal game_won(ending_type: String)
-signal developer_mode_changed(enabled: bool)
+signal developer_flags_changed
 signal officer_progression_changed # Emitted when any officer gains XP/DL or unlocks an ability
 
 const SETTINGS_CONFIG_PATH: String = "user://settings.cfg"
 const SETTINGS_DEVELOPER_SECTION: String = "developer"
-const SETTINGS_DEVELOPER_KEY: String = "developer_mode"
+
+## Developer feature keys — used for persistence in settings.cfg [developer] section.
+const DEV_KEYS: Array[String] = [
+	"protect_fuel", "protect_integrity", "protect_cash", "protect_intel",
+	"officers_maxed", "story_intel", "raider_fast", "wormhole_4x", "story_tactical_ease", "raider_tactical_ease",
+	"skip_raider_spawn_camera", "skip_story_spawn_camera"
+]
 
 # --- Ability & Officer Definitions ---
 const OFFICER_COLOR = {
@@ -35,7 +41,7 @@ const ABILITY_DEFS: Dictionary = {
 	"turret":             {"name": "Turret",             "desc": "Deploy an auto-firing sentry on an adjacent tile. Lasts 3 turns. 2-turn cooldown.",                                                              "level": 1, "slot": "base", "type": "active", "cost": 1},
 	"patch":              {"name": "Patch",              "desc": "Heal yourself or an ally within 3 tiles for 62.5% Max HP. 2-turn cooldown.",                                                                    "level": 1, "slot": "base", "type": "active", "cost": 1},
 	"charge":             {"name": "Charge",             "desc": "Rush an enemy within 4 tiles. Instant-kills basic enemies; deals 2x Base Damage to heavy enemies. 2-turn cooldown.",                             "level": 1, "slot": "base", "type": "active", "cost": 1},
-	"precision_shot":     {"name": "Precision Shot",     "desc": "Guaranteed hit on any visible enemy. Deals 2x Base Damage. 2-turn cooldown.",                                                                   "level": 1, "slot": "base", "type": "active", "cost": 1},
+	"precision_shot":     {"name": "Precision Shot",     "desc": "Guaranteed hit on any visible enemy. Deals 1.5x Base Damage. 2-turn cooldown.",                                                                   "level": 1, "slot": "base", "type": "active", "cost": 1},
 
 	# CAPTAIN - Level 2
 	"lead_by_example":    {"name": "Lead by Example",    "desc": "When the Captain kills an enemy, all other squad members gain +1 AP on their next turn.",                                                       "level": 2, "slot": "a", "type": "passive"},
@@ -102,22 +108,33 @@ const OFFICER_ABILITIES: Dictionary = {
 	"sniper":  ["precision_shot", "damn_good_ground", "snap_shot", "serial",          "apex_predator",      "double_tap"],
 }
 
-var developer_mode: bool = false:
-	set(value):
-		developer_mode = value
-		developer_mode_changed.emit(developer_mode)
+# --- Developer Flags (granular per-feature toggles) ---
+var dev_protect_fuel: bool = false
+var dev_protect_integrity: bool = false
+var dev_protect_cash: bool = false
+var dev_protect_intel: bool = false
+var dev_officers_maxed: bool = false
+var dev_story_intel: bool = false
+var dev_raider_fast: bool = false
+var dev_wormhole_4x: bool = false
+var dev_story_tactical_ease: bool = false
+var dev_raider_tactical_ease: bool = false
+var dev_skip_raider_spawn_camera: bool = false
+var dev_skip_story_spawn_camera: bool = false
 
 # Primary Statistics (Voyage 2.0 Economy)
+const MAX_FUEL: int = 20
+
 var fuel: int = 3:
 	set(value):
-		if developer_mode and value < fuel:
+		if dev_protect_fuel and value < fuel:
 			value = fuel
-		fuel = maxi(0, value)
+		fuel = clampi(value, 0, MAX_FUEL)
 		fuel_changed.emit(fuel)
 
 var ship_integrity: int = 100:
 	set(value):
-		if developer_mode and value < ship_integrity:
+		if dev_protect_integrity and value < ship_integrity:
 			value = ship_integrity
 		ship_integrity = clampi(value, 0, 100)
 		integrity_changed.emit(ship_integrity)
@@ -127,14 +144,14 @@ var ship_integrity: int = 100:
 
 var cash: int = 20:
 	set(value):
-		if developer_mode and value < cash:
+		if dev_protect_cash and value < cash:
 			value = cash
 		cash = maxi(0, value)
 		cash_changed.emit(cash)
 
 var intel: int = 0:
 	set(value):
-		if developer_mode and value < intel:
+		if dev_protect_intel and value < intel:
 			value = intel
 		intel = maxi(0, value)
 		intel_changed.emit(intel)
@@ -189,22 +206,77 @@ func _ready() -> void:
 
 ## Load persistent non-run state from settings.cfg
 func load_persistent_settings() -> void:
-	developer_mode = get_saved_developer_mode(false)
+	_load_developer_flags()
 
 
-## Returns the persisted Developer Mode flag from settings.cfg with type-safe coercion.
-func get_saved_developer_mode(default_value: bool = false) -> bool:
+## Load all granular developer flags from settings.cfg.
+## Migrates old single developer_mode=true by enabling all flags.
+func _load_developer_flags() -> void:
 	var config = ConfigFile.new()
 	var err = config.load(SETTINGS_CONFIG_PATH)
 	if err != OK:
-		return default_value
-	var raw_value = config.get_value(SETTINGS_DEVELOPER_SECTION, SETTINGS_DEVELOPER_KEY, default_value)
-	return _coerce_bool(raw_value, default_value)
+		return
+
+	# Migrate legacy single developer_mode key → enable all flags
+	var legacy_raw = config.get_value(SETTINGS_DEVELOPER_SECTION, "developer_mode", null)
+	if legacy_raw != null and _coerce_bool(legacy_raw, false):
+		dev_protect_fuel = true
+		dev_protect_integrity = true
+		dev_protect_cash = true
+		dev_protect_intel = true
+		dev_officers_maxed = true
+		dev_story_intel = true
+		dev_raider_fast = true
+		dev_wormhole_4x = true
+		dev_story_tactical_ease = true
+		dev_raider_tactical_ease = true
+		dev_skip_raider_spawn_camera = true
+		dev_skip_story_spawn_camera = true
+		return
+
+	dev_protect_fuel       = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "protect_fuel", false), false)
+	dev_protect_integrity  = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "protect_integrity", false), false)
+	dev_protect_cash       = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "protect_cash", false), false)
+	dev_protect_intel      = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "protect_intel", false), false)
+	dev_officers_maxed     = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "officers_maxed", false), false)
+	dev_story_intel        = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "story_intel", false), false)
+	dev_raider_fast        = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "raider_fast", false), false)
+	dev_wormhole_4x        = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "wormhole_4x", false), false)
+	dev_story_tactical_ease = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "story_tactical_ease", false), false)
+	dev_raider_tactical_ease = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "raider_tactical_ease", false), false)
+	dev_skip_raider_spawn_camera = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "skip_raider_spawn_camera", false), false)
+	dev_skip_story_spawn_camera = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "skip_story_spawn_camera", false), false)
 
 
-## Centralized Developer Mode check for gameplay systems.
-func is_developer_mode_enabled() -> bool:
-	return developer_mode
+## Save all granular developer flags to settings.cfg.
+func save_developer_flags() -> void:
+	var config = ConfigFile.new()
+	config.load(SETTINGS_CONFIG_PATH)  # Load existing to preserve other settings
+	config.set_value(SETTINGS_DEVELOPER_SECTION, "protect_fuel",       dev_protect_fuel)
+	config.set_value(SETTINGS_DEVELOPER_SECTION, "protect_integrity",  dev_protect_integrity)
+	config.set_value(SETTINGS_DEVELOPER_SECTION, "protect_cash",       dev_protect_cash)
+	config.set_value(SETTINGS_DEVELOPER_SECTION, "protect_intel",      dev_protect_intel)
+	config.set_value(SETTINGS_DEVELOPER_SECTION, "officers_maxed",     dev_officers_maxed)
+	config.set_value(SETTINGS_DEVELOPER_SECTION, "story_intel",        dev_story_intel)
+	config.set_value(SETTINGS_DEVELOPER_SECTION, "raider_fast",        dev_raider_fast)
+	config.set_value(SETTINGS_DEVELOPER_SECTION, "wormhole_4x",        dev_wormhole_4x)
+	config.set_value(SETTINGS_DEVELOPER_SECTION, "story_tactical_ease", dev_story_tactical_ease)
+	config.set_value(SETTINGS_DEVELOPER_SECTION, "raider_tactical_ease", dev_raider_tactical_ease)
+	config.set_value(SETTINGS_DEVELOPER_SECTION, "skip_raider_spawn_camera", dev_skip_raider_spawn_camera)
+	config.set_value(SETTINGS_DEVELOPER_SECTION, "skip_story_spawn_camera", dev_skip_story_spawn_camera)
+	# Remove legacy key if present
+	if config.has_section_key(SETTINGS_DEVELOPER_SECTION, "developer_mode"):
+		config.erase_section_key(SETTINGS_DEVELOPER_SECTION, "developer_mode")
+	config.save(SETTINGS_CONFIG_PATH)
+	developer_flags_changed.emit()
+
+
+## Returns true if any developer flag is currently active.
+func is_any_dev_flag_active() -> bool:
+	return (dev_protect_fuel or dev_protect_integrity or dev_protect_cash or dev_protect_intel
+		or dev_officers_maxed or dev_story_intel or dev_raider_fast or dev_wormhole_4x
+		or dev_story_tactical_ease or dev_raider_tactical_ease
+		or dev_skip_raider_spawn_camera or dev_skip_story_spawn_camera)
 
 
 func _coerce_bool(value: Variant, default_value: bool = false) -> bool:
@@ -231,7 +303,7 @@ func _init_officers() -> void:
 	for key in ["captain", "scout", "tech", "medic", "heavy", "sniper"]:
 		var od = OfficerData.new()
 		od.initialize(key)
-		if developer_mode:
+		if dev_officers_maxed:
 			od.level = 3
 			od.xp = 300  # XP threshold to reach level 3
 			od.data_logs = 100
@@ -551,7 +623,7 @@ func load_game() -> bool:
 					od.alive = true
 					od.downed = true
 					od.injury_jumps = 4
-		if developer_mode:
+		if dev_officers_maxed:
 			od.data_logs = 100
 	
 	# Restore cumulative mission stats

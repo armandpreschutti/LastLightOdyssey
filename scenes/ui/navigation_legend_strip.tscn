@@ -36,6 +36,8 @@ theme_override_constants/separation = 8
 
 [node name="StoryEntry" type="HBoxContainer" parent="PanelContainer/HBoxContainer"]
 layout_mode = 2
+mouse_filter = 1
+cursor_shape = 2
 theme_override_constants/separation = 4
 
 [node name="StoryIcon" type="TextureRect" parent="PanelContainer/HBoxContainer/StoryEntry"]
@@ -56,6 +58,8 @@ vertical_alignment = 1
 
 [node name="RaiderEntry" type="HBoxContainer" parent="PanelContainer/HBoxContainer"]
 layout_mode = 2
+mouse_filter = 1
+cursor_shape = 2
 theme_override_constants/separation = 4
 
 [node name="RaiderIcon" type="TextureRect" parent="PanelContainer/HBoxContainer/RaiderEntry"]
@@ -83,6 +87,8 @@ color = Color(0.4, 0.9, 1, 0.3)
 
 [node name="AsteroidEntry" type="HBoxContainer" parent="PanelContainer/HBoxContainer"]
 layout_mode = 2
+mouse_filter = 1
+cursor_shape = 2
 theme_override_constants/separation = 4
 
 [node name="AsteroidIcon" type="TextureRect" parent="PanelContainer/HBoxContainer/AsteroidEntry"]
@@ -103,6 +109,8 @@ vertical_alignment = 1
 
 [node name="PlanetEntry" type="HBoxContainer" parent="PanelContainer/HBoxContainer"]
 layout_mode = 2
+mouse_filter = 1
+cursor_shape = 2
 theme_override_constants/separation = 4
 
 [node name="PlanetIcon" type="TextureRect" parent="PanelContainer/HBoxContainer/PlanetEntry"]
@@ -123,6 +131,8 @@ vertical_alignment = 1
 
 [node name="WormholeEntry" type="HBoxContainer" parent="PanelContainer/HBoxContainer"]
 layout_mode = 2
+mouse_filter = 1
+cursor_shape = 2
 theme_override_constants/separation = 4
 
 [node name="WormholeIcon" type="TextureRect" parent="PanelContainer/HBoxContainer/WormholeEntry"]

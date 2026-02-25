@@ -35,7 +35,6 @@ const OFFICER_SPRITES = {
 @onready var hp_bar: ColorRect = $HPBar
 @onready var hp_bar_bg: ColorRect = $HPBarBG
 @onready var ap_indicator: HBoxContainer = $APIndicator
-@onready var overwatch_indicator: ColorRect = $OverwatchIndicator
 @onready var half_cover_indicator: Node2D = $HalfCoverIndicator
 @onready var full_cover_indicator: Node2D = $FullCoverIndicator
 
@@ -87,8 +86,6 @@ var _effect_icons_root: Node2D = null
 func _ready() -> void:
 	set_process(false)
 	selection_indicator.visible = false
-	if overwatch_indicator:
-		overwatch_indicator.visible = false
 	_start_idle_animation()
 
 
@@ -443,10 +440,7 @@ func toggle_overwatch() -> bool:
 	if overwatch_active:
 		_start_cooldown("overwatch")
 	
-	# Update overwatch indicator
-	if overwatch_indicator:
-		overwatch_indicator.visible = overwatch_active
-	
+	_refresh_effect_icons()
 	return true
 
 
@@ -462,10 +456,7 @@ func try_overwatch_shot(enemy_pos: Vector2i, _hit_chance: float, damage: int = -
 	# Always emit as a hit with full damage (100% success rate)
 	shot_fired.emit(enemy_pos, true, actual_damage)
 	overwatch_active = false  # Deactivate after shooting
-	
-	if overwatch_indicator:
-		overwatch_indicator.visible = false
-	
+	_refresh_effect_icons()
 	return true  # Always hits - 100% success
 
 
@@ -653,7 +644,7 @@ func use_execute() -> bool:
 	return true
 
 
-## Use Precision Shot ability (Sniper) - guaranteed hit on any visible enemy for 2x damage
+## Use Precision Shot ability (Sniper) - guaranteed hit on any visible enemy for 1.5x damage
 func use_precision_shot() -> bool:
 	if officer_type != "sniper":
 		return false
@@ -897,7 +888,13 @@ func _refresh_effect_icons() -> void:
 
 	var slot := 1 if (half_cover_indicator and half_cover_indicator.visible) or (full_cover_indicator and full_cover_indicator.visible) else 0
 	for effect_key in EffectIconConfig.EFFECT_PRIORITY:
-		if status_effects.get(effect_key, 0) <= 0:
+		# Overwatch uses overwatch_active, not status_effects
+		var show_effect := false
+		if effect_key == "overwatch":
+			show_effect = overwatch_active
+		else:
+			show_effect = status_effects.get(effect_key, 0) > 0
+		if not show_effect:
 			continue
 		var data: Dictionary = EffectIconConfig.get_data(effect_key)
 		if data.is_empty():
@@ -1673,8 +1670,8 @@ func play_death_animation() -> void:
 		ap_indicator.visible = false
 	if selection_indicator:
 		selection_indicator.visible = false
-	if overwatch_indicator:
-		overwatch_indicator.visible = false
+	if _effect_icons_root and is_instance_valid(_effect_icons_root):
+		_effect_icons_root.visible = false
 	if half_cover_indicator:
 		half_cover_indicator.visible = false
 	if full_cover_indicator:

@@ -102,10 +102,16 @@ static var EFFECT_DATA: Dictionary = {
 		"outline": Color(0.8, 0.6, 0.0, 0.7),
 		"label": "Inspired",
 	},
+	"overwatch": {
+		"polygon": _DIAMOND,
+		"color": Color(0.2, 0.85, 1.0, 0.95),
+		"outline": Color(0.0, 0.5, 0.75, 0.7),
+		"label": "Overwatch",
+	},
 }
 
 static var EFFECT_PRIORITY: Array[String] = [
-	"poison", "pin_down", "marked", "deep_scanned",
+	"overwatch", "poison", "pin_down", "marked", "deep_scanned",
 	"adrenaline", "immune", "stim", "phantom", "untouchable",
 	"bulldozer_armor", "last_stand", "inspired",
 ]

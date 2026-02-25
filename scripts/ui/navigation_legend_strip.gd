@@ -1,7 +1,8 @@
 extends MarginContainer
 ## Compact navigation legend strip. Updates dynamically based on node types
 ## present in the current voyage. Shows icon + count; hides entries with zero count.
-## Styling matches Ship Status (cyan accents).
+## Clicking an entry snaps the star map camera to that node type. Successive clicks
+## cycle through all visible nodes of that category.
 
 const TOOLTIP_DELAY := 0.3
 
@@ -17,6 +18,21 @@ const TOOLTIP_DELAY := 0.3
 @onready var wormhole_entry: HBoxContainer = $PanelContainer/HBoxContainer/WormholeEntry
 @onready var wormhole_count_label: Label = $PanelContainer/HBoxContainer/WormholeEntry/WormholeCountLabel
 
+# Cached node lists per legend category. Rebuilt each time the legend refreshes.
+var _story_nodes: Array[NodeData] = []
+var _raider_nodes: Array[NodeData] = []
+var _asteroid_nodes: Array[NodeData] = []
+var _planet_nodes: Array[NodeData] = []
+var _wormhole_nodes: Array[NodeData] = []
+
+# Cycle indices — start at -1 so the first click lands on index 0.
+# Reset to -1 whenever the node lists are rebuilt.
+var _story_idx: int = -1
+var _raider_idx: int = -1
+var _asteroid_idx: int = -1
+var _planet_idx: int = -1
+var _wormhole_idx: int = -1
+
 
 func _ready() -> void:
 	_set_tooltip_delay(story_entry.get_node("StoryIcon"))
@@ -24,6 +40,12 @@ func _ready() -> void:
 	_set_tooltip_delay(asteroid_entry.get_node("AsteroidIcon"))
 	_set_tooltip_delay(planet_entry.get_node("PlanetIcon"))
 	_set_tooltip_delay(wormhole_entry.get_node("WormholeIcon"))
+
+	story_entry.gui_input.connect(func(e): _on_entry_gui_input(e, "story"))
+	raider_entry.gui_input.connect(func(e): _on_entry_gui_input(e, "raider"))
+	asteroid_entry.gui_input.connect(func(e): _on_entry_gui_input(e, "asteroid"))
+	planet_entry.gui_input.connect(func(e): _on_entry_gui_input(e, "planet"))
+	wormhole_entry.gui_input.connect(func(e): _on_entry_gui_input(e, "wormhole"))
 
 	if VoyageManager:
 		VoyageManager.map_updated.connect(_refresh_legend)
@@ -52,6 +74,8 @@ func _refresh_legend() -> void:
 	var asteroid_count := 0
 	for id in VoyageManager.nodes:
 		var n = VoyageManager.nodes[id]
+		if not _is_legend_visible(n):
+			continue
 		if n.node_type == EventManager.NodeType.SCAVENGE_SITE and not n.is_story_node:
 			if n.biome_type == BiomeConfig.BiomeType.ASTEROID:
 				asteroid_count += 1
@@ -64,6 +88,8 @@ func _refresh_legend() -> void:
 	var planet_count := 0
 	for id in VoyageManager.nodes:
 		var n = VoyageManager.nodes[id]
+		if not _is_legend_visible(n):
+			continue
 		if n.node_type == EventManager.NodeType.TRADING_OUTPOST:
 			planet_count += 1
 		elif n.node_type == EventManager.NodeType.SCAVENGE_SITE and not n.is_story_node:
@@ -77,12 +103,106 @@ func _refresh_legend() -> void:
 	# Wormhole (WORMHOLE node type)
 	var wormhole_count := 0
 	for id in VoyageManager.nodes:
-		if VoyageManager.nodes[id].node_type == EventManager.NodeType.WORMHOLE:
+		var n = VoyageManager.nodes[id]
+		if not _is_legend_visible(n):
+			continue
+		if n.node_type == EventManager.NodeType.WORMHOLE:
 			wormhole_count += 1
 
 	wormhole_entry.visible = wormhole_count > 0
 	if wormhole_count > 0:
 		wormhole_count_label.text = str(wormhole_count)
+
+	_build_node_lists()
+
+
+## Rebuild the per-category node arrays and reset all cycle indices.
+## Called at the end of every _refresh_legend() so the cache stays in sync.
+func _build_node_lists() -> void:
+	if not VoyageManager:
+		return
+
+	_story_nodes.clear()
+	_raider_nodes.clear()
+	_asteroid_nodes.clear()
+	_planet_nodes.clear()
+	_wormhole_nodes.clear()
+
+	_story_idx = -1
+	_raider_idx = -1
+	_asteroid_idx = -1
+	_planet_idx = -1
+	_wormhole_idx = -1
+
+	if not VoyageManager.active_story_node_id.is_empty() \
+			and VoyageManager.nodes.has(VoyageManager.active_story_node_id):
+		_story_nodes.append(VoyageManager.nodes[VoyageManager.active_story_node_id])
+
+	if VoyageManager.is_raider_active and VoyageManager.nodes.has(VoyageManager.raider_node_id):
+		_raider_nodes.append(VoyageManager.nodes[VoyageManager.raider_node_id])
+
+	for id in VoyageManager.nodes:
+		var n: NodeData = VoyageManager.nodes[id]
+		if not _is_legend_visible(n):
+			continue
+		match n.node_type:
+			EventManager.NodeType.SCAVENGE_SITE:
+				if n.is_story_node:
+					pass
+				elif n.biome_type == BiomeConfig.BiomeType.ASTEROID:
+					_asteroid_nodes.append(n)
+				elif n.biome_type == BiomeConfig.BiomeType.PLANET:
+					_planet_nodes.append(n)
+			EventManager.NodeType.TRADING_OUTPOST:
+				if not n.is_story_node:
+					_planet_nodes.append(n)
+			EventManager.NodeType.WORMHOLE:
+				_wormhole_nodes.append(n)
+
+
+## Handle gui_input on each legend entry HBoxContainer.
+func _on_entry_gui_input(event: InputEvent, entry_type: String) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	if event.button_index != MOUSE_BUTTON_LEFT or not event.pressed:
+		return
+
+	match entry_type:
+		"story":
+			_story_idx = (_story_idx + 1) % max(1, _story_nodes.size())
+			_snap_to(_story_nodes, _story_idx)
+		"raider":
+			_raider_idx = (_raider_idx + 1) % max(1, _raider_nodes.size())
+			_snap_to(_raider_nodes, _raider_idx)
+		"asteroid":
+			_asteroid_idx = (_asteroid_idx + 1) % max(1, _asteroid_nodes.size())
+			_snap_to(_asteroid_nodes, _asteroid_idx)
+		"planet":
+			_planet_idx = (_planet_idx + 1) % max(1, _planet_nodes.size())
+			_snap_to(_planet_nodes, _planet_idx)
+		"wormhole":
+			_wormhole_idx = (_wormhole_idx + 1) % max(1, _wormhole_nodes.size())
+			_snap_to(_wormhole_nodes, _wormhole_idx)
+
+
+## Ask the parent StarMap to instantly center the camera on the given node.
+func _snap_to(nodes: Array[NodeData], idx: int) -> void:
+	if nodes.is_empty():
+		return
+	var star_map = get_parent()
+	if star_map and star_map.has_method("center_view_on_node"):
+		star_map.center_view_on_node(nodes[idx])
+
+
+## Returns true when a node should appear in the legend — i.e. it is not showing
+## a question mark on the map. A node is visible when it has been seen before
+## (state != UNVISITED) OR when it is directly reachable from the current position
+## (adjacent in the graph, so the player can see its type).
+func _is_legend_visible(n: NodeData) -> bool:
+	if n.state != NodeData.NodeState.UNVISITED:
+		return true
+	var current = VoyageManager.get_current_node()
+	return current != null and n.id in current.connections
 
 
 func _set_tooltip_delay(control: Control) -> void:

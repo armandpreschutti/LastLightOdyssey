@@ -139,7 +139,7 @@ Refactored from a simple roster to a persistent RPG system.
 | **Tech** | Can see items through walls | **Turret** (1 AP): Deploy auto-firing sentry on adjacent tile. Lasts 3 turns, auto-shoots nearest enemy each turn (15 DMG, 6 tile range). 2-turn cooldown. | 70 | 4 | 5 |
 | **Medic** | Can see exact enemy HP, +25% healing bonus | **Patch** (1 AP): Heal yourself or ally within 3 tiles for 62.5% max HP (50% base + 25% enhanced healing). 2-turn cooldown. | 75 | 5 | 5 |
 | **Heavy** | Armor Plating (−20% damage taken), +35 base damage | **Charge** (1 AP): Rush enemy within 4 tiles. Instant-kills basic enemies; deals 2x base damage to heavy enemies. 2-turn cooldown. | 120 | 3 | 5 |
-| **Sniper** | +2 sight range (base 7 + 2 = 9), +2 shoot range, +30 base damage | **Precision Shot** (1 AP): Guaranteed hit on any visible enemy. Deals 2x base damage (60). 2-turn cooldown. | 70 | 4 | 9 |
+| **Sniper** | +2 sight range (base 7 + 2 = 9), +2 shoot range, +30 base damage | **Precision Shot** (1 AP): Guaranteed hit on any visible enemy. Deals 1.5x base damage (45). 2-turn cooldown. | 70 | 4 | 9 |
 
 ### 3.3 Progression & Tech Tree (Barracks)
 
@@ -290,7 +290,7 @@ Snipers can **deliver devastating long-range shots** with perfect accuracy:
 
 - **Range**: Any visible enemy (no distance restriction)
 - **Requirement**: Target must be visible (within revealed fog of war)
-- **Effect**: Guaranteed hit dealing 2x base damage (60 damage from 30 base damage)
+- **Effect**: Guaranteed hit dealing 1.5x base damage (45 damage from 30 base damage)
 - **Accuracy**: Never misses (bypasses all cover and hit chance calculations)
 - **Cooldown**: 2-turn cooldown after use
 - **Visual**: Cinematic precision aiming sequence with camera focus, "TAKING AIM..." message

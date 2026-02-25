@@ -4,7 +4,8 @@
 [ext_resource type="Theme" uid="uid://c6rjhh6buixy4" path="res://assets/themes/base_ui_theme.tres" id="3_theme"]
 [ext_resource type="Texture2D" uid="uid://cpy36v51jmkqa" path="res://assets/sprites/ui/icons/icon_hull.png" id="4_hull"]
 [ext_resource type="StyleBox" path="res://assets/themes/style_panel_red.tres" id="4_panel_red"]
-[ext_resource type="Texture2D" uid="uid://bogrtadpxsc8r" path="res://assets/sprites/ui/icons/icon_fuel.png" id="6_cash"]
+[ext_resource type="Texture2D" uid="uid://bogrtadpxsc8r" path="res://assets/sprites/ui/icons/icon_fuel.png" id="6_fuel"]
+[ext_resource type="Texture2D" uid="uid://boa53jw1bdpa7" path="res://assets/sprites/ui/icons/icon_credits.png" id="7_credits"]
 
 [node name="ManagementHUD" type="Control" unique_id=2015427981]
 layout_mode = 3
@@ -25,10 +26,13 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -82.0
-offset_bottom = 21.0
+offset_left = 1.0
+offset_top = 8.0
+offset_right = 1.0
+offset_bottom = -1.0
 grow_horizontal = 2
 grow_vertical = 2
+scale = Vector2(1, 1.0800024)
 mouse_filter = 2
 
 [node name="ScanlineOverlay" type="ColorRect" parent="PanelContainer" unique_id=1721780883]
@@ -42,8 +46,10 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -89.0
-offset_bottom = 37.5
+offset_left = 1.0
+offset_top = 15.0
+offset_right = 1.0
+offset_bottom = 7.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
@@ -83,6 +89,22 @@ size_flags_vertical = 4
 mouse_filter = 2
 color = Color(0.4, 0.9, 1, 0.5)
 
+[node name="MarketButton" type="Button" parent="MarginContainer/VBoxContainer" unique_id=2119121707]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.8, 0.4, 1)
+theme_override_colors/font_pressed_color = Color(0.2, 0.6, 0.2, 1)
+theme_override_colors/font_hover_color = Color(0.6, 1, 0.6, 1)
+theme_override_font_sizes/font_size = 16
+text = "[ TRADING TERMINAL ]"
+
+[node name="BarracksButton" type="Button" parent="MarginContainer/VBoxContainer" unique_id=2119121708]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.8, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.2, 0.5, 0.8, 1)
+theme_override_colors/font_hover_color = Color(0.6, 1, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "[ BARRACKS ]"
+
 [node name="HSeparator" type="ColorRect" parent="MarginContainer/VBoxContainer" unique_id=695907586]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
@@ -102,7 +124,7 @@ theme_override_constants/separation = 10
 [node name="CashIcon" type="TextureRect" parent="MarginContainer/VBoxContainer/StatsContainer/CashRow" unique_id=576571545]
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
-texture = ExtResource("6_cash")
+texture = ExtResource("7_credits")
 expand_mode = 1
 stretch_mode = 5
 
@@ -121,16 +143,31 @@ theme_override_constants/separation = 10
 [node name="FuelIcon" type="TextureRect" parent="MarginContainer/VBoxContainer/StatsContainer/FuelRow" unique_id=1720426279]
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
-texture = ExtResource("6_cash")
+texture = ExtResource("6_fuel")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="FuelLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/FuelRow" unique_id=599598153]
+[node name="FuelBar" type="ProgressBar" parent="MarginContainer/VBoxContainer/StatsContainer/FuelRow" unique_id=599598153]
+custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(1, 0.69, 0, 1)
-theme_override_font_sizes/font_size = 18
-text = "FUEL CELLS: 10"
+max_value = 20.0
+value = 3.0
+show_percentage = false
+
+[node name="FuelBarLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/FuelRow/FuelBar" unique_id=599598154]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_right = -6.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "FUEL:  3 / 20"
+vertical_alignment = 1
 
 [node name="IntegrityRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/StatsContainer" unique_id=1199695057]
 layout_mode = 2
@@ -144,42 +181,34 @@ texture = ExtResource("4_hull")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="IntegrityLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/IntegrityRow" unique_id=1731214028]
+[node name="IntegrityBar" type="ProgressBar" parent="MarginContainer/VBoxContainer/StatsContainer/IntegrityRow" unique_id=1731214028]
+custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
-theme_override_font_sizes/font_size = 18
-text = "HULL INTEGRITY: 100%"
+value = 100.0
+show_percentage = false
 
-[node name="HSeparator2" type="ColorRect" parent="MarginContainer/VBoxContainer" unique_id=1410202378]
-custom_minimum_size = Vector2(0, 1)
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.3)
-
-[node name="MarketButton" type="Button" parent="MarginContainer/VBoxContainer" unique_id=2119121707]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.4, 0.8, 0.4, 1)
-theme_override_colors/font_pressed_color = Color(0.2, 0.6, 0.2, 1)
-theme_override_colors/font_hover_color = Color(0.6, 1, 0.6, 1)
-theme_override_font_sizes/font_size = 16
-text = "[ TRADING TERMINAL ]"
-
-[node name="BarracksButton" type="Button" parent="MarginContainer/VBoxContainer" unique_id=2119121708]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.4, 0.8, 1, 1)
-theme_override_colors/font_pressed_color = Color(0.2, 0.5, 0.8, 1)
-theme_override_colors/font_hover_color = Color(0.6, 1, 1, 1)
-theme_override_font_sizes/font_size = 16
-text = "[ BARRACKS ]"
+[node name="IntegrityBarLabel" type="Label" parent="MarginContainer/VBoxContainer/StatsContainer/IntegrityRow/IntegrityBar" unique_id=1731214029]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_right = -6.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "HULL:  100%"
+vertical_alignment = 1
 
 [node name="SurrenderPanel" type="PanelContainer" parent="." unique_id=1433524707]
 visible = false
 layout_mode = 0
-offset_left = 4.000001
-offset_top = -211.0
-offset_right = 283.99997
-offset_bottom = -161.0
+offset_left = 6.000001
+offset_top = -119.999985
+offset_right = 285.99997
+offset_bottom = -59.999985
 scale = Vector2(0.9537752, 0.9537752)
 
 [node name="SurrenderButton" type="Button" parent="SurrenderPanel" unique_id=1573864052]
@@ -195,10 +224,10 @@ flat = true
 
 [node name="DeployPanel" type="PanelContainer" parent="." unique_id=987654322]
 layout_mode = 0
-offset_left = 4.000001
-offset_top = -151.0
-offset_right = 283.99997
-offset_bottom = -91.0
+offset_left = 7.000001
+offset_top = -55.999985
+offset_right = 286.99997
+offset_bottom = 4.0000153
 scale = Vector2(0.9537752, 0.9537752)
 
 [node name="DeployButton" type="Button" parent="DeployPanel" unique_id=987654321]
@@ -253,9 +282,9 @@ anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
 offset_left = 15.0
-offset_top = 148.0
+offset_top = 151.0
 offset_right = 173.0
-offset_bottom = 208.0
+offset_bottom = 211.0
 grow_horizontal = 0
 
 [node name="CenterButton" type="Button" parent="TopRightPanel" unique_id=384719285]

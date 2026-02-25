@@ -2,13 +2,19 @@
 
 [ext_resource type="Script" uid="uid://8m24nq50xapp" path="res://scripts/ui/confirm_dialog.gd" id="1_dialog"]
 [ext_resource type="Theme" path="res://assets/themes/base_ui_theme.tres" id="2_theme"]
-[ext_resource type="StyleBox" path="res://assets/themes/style_panel_yellow.tres" id="3_panel_yellow"]
-[ext_resource type="StyleBox" path="res://assets/themes/style_btn_red.tres" id="4_btn_red"]
-[ext_resource type="StyleBox" path="res://assets/themes/style_btn_red_hover.tres" id="5_btn_red_hover"]
-[ext_resource type="StyleBox" path="res://assets/themes/style_btn_red_pressed.tres" id="6_btn_red_pressed"]
-[ext_resource type="StyleBox" path="res://assets/themes/style_btn_yellow.tres" id="7_btn_yellow"]
-[ext_resource type="StyleBox" path="res://assets/themes/style_btn_yellow_hover.tres" id="8_btn_yellow_hover"]
-[ext_resource type="StyleBox" path="res://assets/themes/style_btn_yellow_pressed.tres" id="9_btn_yellow_pressed"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_focus"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.04, 0.04, 0.07, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4, 0.9, 1.0, 0.35)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
 
 [node name="ConfirmDialog" type="Control" unique_id=1047492231]
 layout_mode = 3
@@ -41,10 +47,10 @@ anchor_bottom = 0.5
 offset_left = -220.0
 offset_top = -166.0
 offset_right = 220.0
-offset_bottom = 206.0
+offset_bottom = 166.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_styles/panel = ExtResource("3_panel_yellow")
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="MarginContainer" type="MarginContainer" parent="PanelContainer" unique_id=884598536]
 layout_mode = 2
@@ -62,27 +68,47 @@ layout_mode = 2
 mouse_filter = 2
 alignment = 1
 
+[node name="LeftDecor" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer/HeaderContainer"]
+custom_minimum_size = Vector2(20, 2)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.5)
+
 [node name="TitleLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/HeaderContainer" unique_id=175852276]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.69, 0, 1)
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 24
 text = "[ CONFIRM ]"
 horizontal_alignment = 1
+
+[node name="RightDecor" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer/HeaderContainer"]
+custom_minimum_size = Vector2(20, 2)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.5)
 
 [node name="HSeparator" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=658928387]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2
-color = Color(1, 0.69, 0, 0.3)
+color = Color(0.4, 0.9, 1, 0.3)
 
 [node name="MessageLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=508691515]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.7, 0.85, 0.9, 1)
+theme_override_colors/font_color = Color(0.82, 0.82, 0.82, 1)
 theme_override_font_sizes/font_size = 16
 text = "Are you sure you want to proceed?
 This action cannot be undone."
 horizontal_alignment = 1
 autowrap_mode = 2
+
+[node name="HSeparator2" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.3)
 
 [node name="ButtonContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=974796545]
 layout_mode = 2
@@ -92,25 +118,18 @@ alignment = 1
 [node name="YesButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer" unique_id=921672860]
 custom_minimum_size = Vector2(140, 45)
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.3, 0.2, 1)
-theme_override_colors/font_pressed_color = Color(0.8, 0.2, 0.1, 1)
-theme_override_colors/font_hover_color = Color(1, 0.5, 0.4, 1)
+theme_override_styles/focus = SubResource("StyleBoxEmpty_focus")
+theme_override_colors/font_color = Color(1.0, 0.5, 0.4, 1)
+theme_override_colors/font_hover_color = Color(1.0, 0.6, 0.5, 1)
+theme_override_colors/font_pressed_color = Color(0.9, 0.35, 0.25, 1)
 theme_override_font_sizes/font_size = 18
-theme_override_styles/normal = ExtResource("4_btn_red")
-theme_override_styles/hover = ExtResource("5_btn_red_hover")
-theme_override_styles/pressed = ExtResource("6_btn_red_pressed")
 text = "[ YES ]"
 
 [node name="NoButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonContainer" unique_id=2066202750]
 custom_minimum_size = Vector2(140, 45)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.2, 1, 0.5, 1)
-theme_override_colors/font_pressed_color = Color(0.1, 0.8, 0.3, 1)
-theme_override_colors/font_hover_color = Color(0.4, 1, 0.7, 1)
+theme_override_styles/focus = SubResource("StyleBoxEmpty_focus")
+theme_override_colors/font_color = Color(0.8, 0.9, 1, 1)
+theme_override_colors/font_hover_color = Color(0.4, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 18
-theme_override_styles/normal = ExtResource("7_btn_yellow")
-theme_override_styles/hover = ExtResource("8_btn_yellow_hover")
-theme_override_styles/pressed = ExtResource("9_btn_yellow_pressed")
 text = "[ NO ]"
-
-

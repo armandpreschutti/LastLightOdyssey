@@ -38,6 +38,8 @@ var _pending_next_choices: Array[String] = []
 var _pending_is_terminal_mission: bool = false
 var _pending_completed_mission_id: String = ""
 var _pending_story_after_raider: bool = false
+var _pending_raider_clear: bool = false
+var _pending_raider_success: bool = false
 
 const CAMPAIGN_PRE_SCENES: Dictionary = {
 	"1A": {"title": "CHAPTER 1 — MISSION 1A", "text": "Long-range telemetry locks onto a fragmented pre-colony beacon. You are not the first to cross this void.", "location": "SIGNAL 1A"},
@@ -110,6 +112,7 @@ var star_map_generator: StarMapGenerator = null
 var _is_jump_animating: bool = false  # Track if jump animation is in progress
 var _suppress_fuel_warning: bool = false  # Track if player dismissed fuel warning
 var _waiting_wormhole_enter: bool = false  # True when at wormhole entrance, waiting for ENTER WORMHOLE or jump
+var _open_market: Control = null  # Tracks the live market menu instance for hotkey toggling
 
 
 func _ready() -> void:
@@ -136,6 +139,43 @@ func _ready() -> void:
 	
 	# Show voyage intro scene when starting a new voyage
 	_show_voyage_intro()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	# Management hotkeys — only active while the management layer is visible
+	if not management_layer.visible:
+		return
+
+	if event.is_action_pressed("management_deploy"):
+		if not management_hud.deploy_button.disabled:
+			get_viewport().set_input_as_handled()
+			_on_deploy_pressed()
+
+	elif event.is_action_pressed("management_market"):
+		get_viewport().set_input_as_handled()
+		if is_instance_valid(_open_market):
+			# Market is open — close it
+			_open_market._on_close_pressed()
+		elif not management_hud.market_button.disabled:
+			_on_market_pressed()
+
+	elif event.is_action_pressed("management_barracks"):
+		if management_hud.barracks_button:
+			get_viewport().set_input_as_handled()
+			if barracks_menu.visible:
+				# Barracks is open — close it
+				barracks_menu._on_close_pressed()
+			elif not management_hud.barracks_button.disabled:
+				_on_barracks_pressed()
+
+	elif event.is_action_pressed("management_quit"):
+		if not management_hud.quit_button.disabled:
+			get_viewport().set_input_as_handled()
+			_on_quit_to_menu()
+
+	elif event.is_action_pressed("management_center"):
+		get_viewport().set_input_as_handled()
+		_on_center_view_pressed()
 
 
 func _connect_signals() -> void:
@@ -170,6 +210,8 @@ func _connect_signals() -> void:
 		barracks_menu.closed.connect(_on_barracks_menu_closed)
 	GameState.game_over.connect(_on_game_over)
 	GameState.game_won.connect(_on_game_won)
+	VoyageManager.story_sequence_finished.connect(_on_story_sequence_finished_tutorial)
+	VoyageManager.raider_sequence_finished.connect(_on_raider_sequence_finished_tutorial)
 
 
 func _initialize_star_map() -> void:
@@ -250,8 +292,7 @@ func _on_node_clicked(node_data: NodeData) -> void:
 
 ## Show fuel warning dialog when player doesn't have enough fuel for the jump
 func _show_fuel_warning(node_data: NodeData, fuel_cost: int) -> void:
-	var fuel_deficit = fuel_cost - GameState.fuel
-	var hull_loss = GameState.SHIP_INTEGRITY_LOSS_PER_JUMP * fuel_deficit
+	var hull_loss = VoyageManager.HULL_DAMAGE_NO_FUEL  # Actual damage applied per drift jump
 	
 	var dialog_scene = load("res://scenes/ui/fuel_warning_dialog.tscn")
 	var dialog = dialog_scene.instantiate()
@@ -317,7 +358,10 @@ func _execute_jump_with_animation(node_data: NodeData, _fuel_cost: int) -> void:
 		# Check if we won
 		if current_phase == GamePhase.GAME_WON or current_phase == GamePhase.GAME_OVER:
 			return
-		
+
+		# First jump is the right moment to explain all four resources
+		TutorialManager.request_tutorial("resources")
+
 		_process_node_after_jump(node_data, was_visited)
 	else:
 		_is_jump_animating = false
@@ -640,11 +684,12 @@ func _on_mission_complete(success: bool, stats: Dictionary) -> void:
 	var is_raider_ambush = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
 
 	if is_raider_ambush:
-		# Raider mission only: clear the raider, do NOT affect the underlying node state
+		# Raider mission only: apply bounty but defer clear until after recap + attack animation
 		if success:
 			GameState.cash += 50
 			VoyageManager.message_log_added.emit("Raider bounty claimed: 50 CR")
-		VoyageManager.clear_raider(success)
+		_pending_raider_clear = true
+		_pending_raider_success = success
 	elif success and pending_node_type == EventManager.NodeType.SCAVENGE_SITE:
 		# Normal mission: handle story completion and mark node CLEARED
 		var current_node = VoyageManager.get_current_node()
@@ -672,6 +717,21 @@ func _on_mission_complete(success: bool, stats: Dictionary) -> void:
 func _on_recap_dismissed() -> void:
 	# Resume navigation music after returning from tactical mission
 	MusicManager.play_navigation_music()
+
+	# Raider outcome: play attack animation then finalize the clear
+	if _pending_raider_clear:
+		_pending_raider_clear = false
+		var raider_success := _pending_raider_success
+		_pending_raider_success = false
+		await star_map.play_raider_outcome_animation(raider_success)
+		VoyageManager.clear_raider(raider_success)
+
+		if _pending_story_after_raider:
+			_pending_story_after_raider = false
+			_trigger_story_after_raider()
+			return
+		_on_post_story_flow_complete()
+		return
 
 	# Check if we need to show post-story scene
 	if _pending_completed_mission_id != "" and ENABLE_STORY_POST_SCENE:
@@ -819,6 +879,10 @@ func _on_voyage_intro_scene_dismissed() -> void:
 	# After voyage intro is dismissed, allow normal gameplay
 	current_phase = GamePhase.IDLE
 
+	# Show star map tutorial the first time a player sees the map.
+	# request_tutorial() is a no-op if the mechanic has already been completed.
+	TutorialManager.request_tutorial("star_map")
+
 	# Restore deploy button state if we loaded into a mission node
 	_restore_deploy_button_state()
 
@@ -908,6 +972,7 @@ func _show_wormhole_scene() -> void:
 	else:
 		_waiting_wormhole_enter = true
 		management_hud.set_enter_wormhole_button_active(true)
+		TutorialManager.request_tutorial("wormholes")
 
 
 ## Execute wormhole teleport
@@ -989,11 +1054,12 @@ func _on_market_pressed() -> void:
 	var market_scene = load("res://scenes/ui/market_menu.tscn")
 	var market = market_scene.instantiate()
 	$DialogLayer.add_child(market)
-	
+	_open_market = market
 	market.closed.connect(_on_market_menu_closed)
 
 
 func _on_market_menu_closed() -> void:
+	_open_market = null
 	current_phase = GamePhase.IDLE
 	star_map.refresh()
 	_update_deploy_button_visibility()
@@ -1081,10 +1147,14 @@ func _on_surrender_pressed() -> void:
 
 
 func _on_surrender_confirmed() -> void:
-	GameState.damage_ship(15)
-	VoyageManager.clear_raider_surrender()
 	management_hud.set_surrender_visible(false)
 	management_hud.set_deploy_active(false)
+
+	# Play raider fade-out (surrender, 2s) before applying damage and clearing
+	await star_map.play_raider_outcome_animation(false, true)
+
+	GameState.damage_ship(15)
+	VoyageManager.clear_raider_surrender()
 
 	if _pending_story_after_raider:
 		_pending_story_after_raider = false
@@ -1107,6 +1177,14 @@ func _on_story_choice_made(choice_id: String) -> void:
 	current_phase = GamePhase.IDLE
 	star_map.refresh()
 	star_map.center_view_on_ship(false)
+
+
+func _on_story_sequence_finished_tutorial() -> void:
+	TutorialManager.request_tutorial("story_signals")
+
+
+func _on_raider_sequence_finished_tutorial() -> void:
+	TutorialManager.request_tutorial("raiders")
 
 
 func _fade_in(duration: float = 0.6) -> void:
@@ -1152,7 +1230,8 @@ func _update_deploy_button_visibility() -> void:
 		# Force deploy button active when raider is present
 		# Ensure pending state is set so [DEPLOY] button works correctly after load/refresh
 		pending_node_type = EventManager.NodeType.SCAVENGE_SITE
-		pending_biome_type = current_node.biome_type
+		# Raider ambushes always use STATION biome - never inherit the node's native biome
+		pending_biome_type = BiomeConfig.BiomeType.STATION
 		management_hud.set_deploy_active(true)
 		management_hud.set_surrender_visible(true)
 	elif current_node.node_type == EventManager.NodeType.WORMHOLE and not VoyageManager.is_wormhole_destination(current_node.id):

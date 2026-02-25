@@ -5,6 +5,8 @@ extends Control
 ## Now uses sprite-based graphics for planets and stations
 
 signal clicked(node_data: NodeData)
+signal hovered(node_data: NodeData)
+signal hover_ended()
 
 enum NodeState { LOCKED, AVAILABLE, CURRENT, VISITED, RAIDER_THREAT }
 
@@ -61,6 +63,9 @@ const SKULL_TEXTURE = preload("res://assets/sprites/navigation/skull_icon.png")
 const STORY_TEXTURE = preload("res://assets/sprites/navigation/story_signal.png")
 const COLOR_STORY = Color(0.95, 0.45, 1.0, 1.0)
 
+## When false, node type labels (WAYPOINT, PLANET, etc.) are hidden but not removed
+const SHOW_NODE_LABELS := false
+
 var is_hovered: bool = false
 var _pulse_tween: Tween = null
 var _story_pulse_tween: Tween = null
@@ -92,9 +97,12 @@ func _notification(what: int) -> void:
 		_on_mouse_exited()
 
 
+var is_direct_travelable: bool = true  # Visited nodes within travel radius can be clicked for direct jump
+
 ## Initialize the node with data
-func initialize(p_node_data: NodeData, is_current: bool, is_reachable: bool, is_raider_threatened: bool = false) -> void:
+func initialize(p_node_data: NodeData, is_current: bool, is_reachable: bool, is_raider_threatened: bool = false, p_is_direct_travelable: bool = true) -> void:
 	node_data = p_node_data
+	is_direct_travelable = p_is_direct_travelable
 	
 	# Map internal NodeData state to visual state
 	# We also need to consider if it's the CURRENT node or reachable
@@ -259,6 +267,10 @@ func _update_visual() -> void:
 	
 	# Update event results (penalty/mitigation)
 	_update_event_result_visuals()
+	
+	# Disable node type label if configured (keeps logic intact, just hides display)
+	if label:
+		label.visible = SHOW_NODE_LABELS
 
 func _update_difficulty_visuals() -> void:
 	if node_data and node_data.is_story_node:
@@ -604,7 +616,12 @@ func stop_story_pulse() -> void:
 
 ## Check if node is clickable
 func is_clickable() -> bool:
-	return current_state == NodeState.AVAILABLE or current_state == NodeState.VISITED
+	if current_state == NodeState.AVAILABLE:
+		return true
+	if current_state == NodeState.VISITED:
+		# Visited non-neighbors: only clickable if within travel radius (direct travel)
+		return is_direct_travelable
+	return false
 
 
 ## Check if this is the New Earth node
@@ -645,25 +662,21 @@ func _on_mouse_entered() -> void:
 	is_hovered = true
 	if current_state == NodeState.AVAILABLE or current_state == NodeState.VISITED:
 		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
-		# Scale up slightly on hover
 		var tween = create_tween()
 		tween.tween_property(self, "scale", Vector2(1.1, 1.1), 0.15).set_ease(Tween.EASE_OUT)
-		
-		# Brighten the sprite
 		if sprite:
 			sprite.modulate = Color(1.2, 1.2, 1.2, 1.0)
+	if node_data:
+		hovered.emit(node_data)
 
 
 func _on_mouse_exited() -> void:
 	is_hovered = false
 	Input.set_default_cursor_shape(Input.CURSOR_ARROW)
-	
-	# Scale back to normal
 	var tween = create_tween()
 	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.15).set_ease(Tween.EASE_OUT)
-	
-	# Restore visual state
 	_update_visual()
+	hover_ended.emit()
 
 
 func _update_visited_mission_color() -> void:

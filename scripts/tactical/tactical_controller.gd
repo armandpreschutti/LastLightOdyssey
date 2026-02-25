@@ -58,6 +58,8 @@ var current_biome: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION
 var is_scavenger_mission: bool = false  # Track if this is a scavenger mission
 var is_story_mission: bool = false  # Track if this tactical run came from a STORY node
 var is_story_dev_mode: bool = false  # True only for story missions while Developer Mode is enabled
+var is_raider_ambush: bool = false  # True when raider caught us on current node
+var is_raider_ambush_dev_mode: bool = false  # True for raider ambush when dev_raider_tactical_ease is enabled
 var mission_objectives: Array[MissionObjective] = []  # Current mission objectives
 var stored_player_zoom: Vector2 = Vector2(1.0, 1.0)  # Store player's zoom level between turns
 var mission_roster: Array[String] = []  # Track all officers who were deployed (including those who died)
@@ -235,6 +237,62 @@ func _input(event: InputEvent) -> void:
 			return
 		_show_pause_menu()
 		get_viewport().set_input_as_handled()
+		return
+
+	if not mission_active or is_paused or is_animating:
+		return
+
+	# End Turn — Space
+	if event.is_action_pressed("end_turn"):
+		if not end_turn_button_disabled():
+			_on_end_turn_pressed()
+			get_viewport().set_input_as_handled()
+		return
+
+	# Pause — P
+	if event.is_action_pressed("tactical_pause"):
+		_show_pause_menu()
+		get_viewport().set_input_as_handled()
+		return
+
+	# Extract — X
+	if event.is_action_pressed("tactical_extract"):
+		if tactical_hud.is_extract_available():
+			_on_extract_pressed()
+			get_viewport().set_input_as_handled()
+		return
+
+	# Ability slots — Q / W / E
+	if event.is_action_pressed("ability_1"):
+		_try_hotkey_ability(0)
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("ability_2"):
+		_try_hotkey_ability(1)
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("ability_3"):
+		_try_hotkey_ability(2)
+		get_viewport().set_input_as_handled()
+		return
+
+
+## Fire the ability in the given HUD slot via keyboard shortcut.
+func _try_hotkey_ability(slot: int) -> void:
+	var ability_id: String = tactical_hud.get_ability_id_for_slot(slot)
+	if ability_id == "":
+		return
+	# Ability button must not be disabled (cooldown, no AP, or animating)
+	if slot < tactical_hud.ability_buttons.size():
+		var btn: Button = tactical_hud.ability_buttons[slot]
+		if not btn.visible or btn.disabled:
+			return
+	_on_ability_used(ability_id)
+
+
+## Returns true when the End Turn button is disabled (animation in progress or camera busy).
+func end_turn_button_disabled() -> bool:
+	return is_animating or combat_camera.is_transitioning()
 
 
 func _show_pause_menu() -> void:
@@ -335,15 +393,17 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	is_scavenger_mission = (current_node.node_type == EventManager.NodeType.SCAVENGE_SITE) if current_node else false
 	
 	# Explicitly check for raider ambush to enable "beam down" and other scavenger mechanics
-	if not is_scavenger_mission and VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id:
+	is_raider_ambush = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
+	if not is_scavenger_mission and is_raider_ambush:
 		is_scavenger_mission = true
 		print("DEBUG_MISSION: Raider ambush detected, enabling is_scavenger_mission features")
+	is_raider_ambush_dev_mode = is_raider_ambush and GameState.dev_raider_tactical_ease
 	
 	is_story_mission = (current_node.state == NodeData.NodeState.STORY) if current_node else false
 	# Raider ambush on a story node must NOT use story mechanics
 	if is_story_mission and VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id:
 		is_story_mission = false
-	is_story_dev_mode = is_story_mission and GameState.is_developer_mode_enabled()
+	is_story_dev_mode = is_story_mission and GameState.dev_story_tactical_ease
 
 
 	GameState.enter_tactical_mode()
@@ -631,8 +691,9 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	var difficulty = GameState.get_mission_difficulty()
 	var _enemy_config = BiomeConfig.get_enemy_config(current_biome, difficulty)
 	
-	# Spawn boss enemy based on spawn chance (disabled only for story missions in Developer Mode)
-	if not is_story_dev_mode:
+	# Spawn boss enemy based on spawn chance (disabled for story/raider ambush when tactical ease is on)
+	var use_tactical_ease = is_story_dev_mode or is_raider_ambush_dev_mode
+	if not use_tactical_ease:
 		var boss_spawn_chance = _calculate_boss_spawn_chance(difficulty)
 		var _boss_spawned = false
 		if randf() < boss_spawn_chance:
@@ -677,8 +738,8 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	
 	print("DEBUG_MISSION: Requesting enemy spawn positions. Difficulty=%.2f, MinRequired=%d" % [difficulty, min_enemies_required])
 	var enemy_positions = generator.get_enemy_spawn_positions(difficulty, min_enemies_required)
-	if is_story_dev_mode:
-		# Story missions are intentionally minimal for testing: exactly one BASIC enemy.
+	if use_tactical_ease:
+		# Story or raider ambush with tactical ease: exactly one BASIC enemy for testing.
 		if enemy_positions.is_empty():
 			enemy_positions = generator.get_enemy_spawn_positions(difficulty, 1)
 		if enemy_positions.is_empty():
@@ -705,7 +766,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		enemy.died.connect(_on_enemy_died.bind(enemy))
 		tactical_map.add_unit(enemy, final_enemy_pos)
 		# Select enemy type based on voyage progression
-		var enemy_type = "basic" if is_story_dev_mode else _select_enemy_type(difficulty)
+		var enemy_type = "basic" if use_tactical_ease else _select_enemy_type(difficulty)
 		enemy.initialize(enemy_id, enemy_type, current_biome)
 		enemy.initialize(enemy_id, enemy_type, current_biome)
 		enemy.visible = false  # Start invisible until revealed
@@ -5910,8 +5971,8 @@ func _try_precision_shot(grid_pos: Vector2i) -> void:
 		tactical_hud.update_ability_buttons(selected_unit.officer_type, selected_unit.current_ap, selected_unit)
 		return
 	
-	# Precision Shot deals 2x base damage (60 for sniper with 30 base damage)
-	var precision_damage = selected_unit.base_damage * 2
+	# Precision Shot deals 1.5x base damage (45 for sniper with 30 base damage) — 25% less than 2x
+	var precision_damage = int(selected_unit.base_damage * 1.5)
 	selected_unit.face_towards(grid_pos)
 	
 	# Focus camera on action
