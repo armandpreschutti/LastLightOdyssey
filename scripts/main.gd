@@ -40,6 +40,10 @@ var _pending_completed_mission_id: String = ""
 var _pending_story_after_raider: bool = false
 var _pending_raider_clear: bool = false
 var _pending_raider_success: bool = false
+var _pending_ambush_raider_id: String = ""  # Node ID of the raider that triggered the current ambush
+
+## Hull damage applied at the moment of the last raider machine-gun impact (failure path).
+const RAIDER_HULL_DAMAGE: int = 15
 
 const CAMPAIGN_PRE_SCENES: Dictionary = {
 	"1A": {"title": "CHAPTER 1 — MISSION 1A", "text": "Long-range telemetry locks onto a fragmented pre-colony beacon. You are not the first to cross this void.", "location": "SIGNAL 1A"},
@@ -242,7 +246,7 @@ func _on_node_clicked(node_data: NodeData) -> void:
 	var current_node_id = VoyageManager.current_node_id
 	
 	# BLOCK: If raider is on same node, player cannot jump away until dealing with it
-	if VoyageManager.is_raider_active and VoyageManager.raider_node_id == current_node_id:
+	if VoyageManager.is_any_raider_on_player_node():
 		# Only allow clicking current node (to deploy), block jumping to other nodes
 		if node_data.id != current_node_id:
 			VoyageManager.message_log_added.emit("Cannot retreat! Raiders blocking all escape routes! DEPLOY to fight!")
@@ -321,6 +325,7 @@ func _execute_jump_with_animation(node_data: NodeData, _fuel_cost: int) -> void:
 	# Set flag to prevent multiple clicks during animation
 	_is_jump_animating = true
 	management_hud.set_deploy_active(false)
+	management_hud.set_surrender_active(false)
 	
 	# Start ship jump animation (StarMap handles visual)
 	# We might need to tell StarMap to animate first?
@@ -343,15 +348,16 @@ func _execute_jump_with_animation(node_data: NodeData, _fuel_cost: int) -> void:
 	if success:
 		# Wait for animation to complete (StarMap should emit this when it sees ship_moved)
 		await star_map.jump_animation_complete
-		
-		# Process raider turn (after player animation) - enemy ship gets multiple jumps per turn
-		for i in VoyageManager.RAIDER_JUMPS_PER_TURN:
+
+		# Update spawn counters once, then give each active raider one move
+		VoyageManager.begin_player_jump_processing()
+		for i in range(VoyageManager.raider_node_ids.size()):
 			var raider_moved = VoyageManager.process_raider_turn()
 			if raider_moved:
 				await star_map.raider_animation_complete
-			else:
+			if VoyageManager.raider_ambush_triggered:
 				break
-		
+
 		# Clear flag after animation completes
 		_is_jump_animating = false
 		
@@ -371,25 +377,27 @@ func _execute_jump_with_animation(node_data: NodeData, _fuel_cost: int) -> void:
 func _execute_direct_travel(target_node: NodeData) -> void:
 	_is_jump_animating = true
 	management_hud.set_deploy_active(false)
+	management_hud.set_surrender_active(false)
 	
 	var success = VoyageManager.attempt_direct_travel(target_node, 3.0)
 	
 	if success:
 		await star_map.jump_animation_complete
-		
-		# Process raider turn (after player animation) - enemy ship gets multiple jumps per turn
-		for i in VoyageManager.RAIDER_JUMPS_PER_TURN:
+
+		# Update spawn counters once, then give each active raider one move
+		VoyageManager.begin_player_jump_processing()
+		for i in range(VoyageManager.raider_node_ids.size()):
 			var raider_moved = VoyageManager.process_raider_turn()
 			if raider_moved:
 				await star_map.raider_animation_complete
-			else:
+			if VoyageManager.raider_ambush_triggered:
 				break
-		
+
 		_is_jump_animating = false
-		
+
 		if current_phase == GamePhase.GAME_WON or current_phase == GamePhase.GAME_OVER:
 			return
-			
+
 		_process_node_after_jump(target_node, true) # true = was_visited
 	else:
 		_is_jump_animating = false
@@ -398,7 +406,8 @@ func _execute_direct_travel(target_node: NodeData) -> void:
 
 func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) -> void:
 	# Check for raider ambush first
-	if VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id:
+	if VoyageManager.is_any_raider_on_player_node():
+		_pending_ambush_raider_id = VoyageManager.get_ambushing_raider_id()
 		_waiting_wormhole_enter = false
 		_show_raider_ambush_scene()
 		return
@@ -609,7 +618,7 @@ func _on_mission_scene_dismissed() -> void:
 ## Handle [DEPLOY] / [ENTER WORMHOLE] button press
 func _on_deploy_pressed() -> void:
 	# Raider takes priority: if ambushed, always deploy (never wormhole)
-	var raider_on_node = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
+	var raider_on_node = VoyageManager.is_any_raider_on_player_node()
 	if raider_on_node:
 		_waiting_wormhole_enter = false  # Clear stale state
 
@@ -625,6 +634,7 @@ func _on_deploy_pressed() -> void:
 		
 	# Disable button immediately to prevent double-click or stale state
 	management_hud.set_deploy_active(false)
+	management_hud.set_surrender_active(false)
 	
 	# Only re-read biome from current node if we don't have a valid pending biome
 	# This preserves raider ambush biomes while still fixing the abandon/retry case
@@ -653,7 +663,7 @@ func _transition_to_team_select() -> void:
 	current_phase = GamePhase.TEAM_SELECT
 	
 	# Check if this is a raider ambush
-	var 	is_raider_ambush = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
+	var is_raider_ambush = VoyageManager.is_any_raider_on_player_node()
 	team_select_dialog.show_dialog(pending_biome_type, is_raider_ambush)
 
 
@@ -671,6 +681,7 @@ func _on_mission_complete(success: bool, stats: Dictionary) -> void:
 	
 	# Ensure deploy button is inactive when returning from mission
 	management_hud.set_deploy_active(false)
+	management_hud.set_surrender_active(false)
 
 	# Fade in from black
 	_fade_in(0.6)
@@ -681,7 +692,9 @@ func _on_mission_complete(success: bool, stats: Dictionary) -> void:
 	_pending_completed_mission_id = ""
 
 	# Check if this was a Raider ambush BEFORE touching node state
-	var is_raider_ambush = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
+	var is_raider_ambush = VoyageManager.is_any_raider_on_player_node()
+	if is_raider_ambush and _pending_ambush_raider_id.is_empty():
+		_pending_ambush_raider_id = VoyageManager.get_ambushing_raider_id()
 
 	if is_raider_ambush:
 		# Raider mission only: apply bounty but defer clear until after recap + attack animation
@@ -723,8 +736,16 @@ func _on_recap_dismissed() -> void:
 		_pending_raider_clear = false
 		var raider_success := _pending_raider_success
 		_pending_raider_success = false
-		await star_map.play_raider_outcome_animation(raider_success)
-		VoyageManager.clear_raider(raider_success)
+		var ambush_id := _pending_ambush_raider_id
+		_pending_ambush_raider_id = ""
+		# For failure: apply hull damage the instant the last laser lands,
+		# so the hull bar animation lines up with the final impact explosion.
+		if not raider_success:
+			star_map.raider_attack_impact.connect(
+				func(): GameState.damage_ship(RAIDER_HULL_DAMAGE),
+				CONNECT_ONE_SHOT)
+		await star_map.play_raider_outcome_animation(raider_success, false, ambush_id)
+		VoyageManager.clear_raider(ambush_id, raider_success)
 
 		if _pending_story_after_raider:
 			_pending_story_after_raider = false
@@ -964,7 +985,7 @@ func _on_restart_pressed() -> void:
 ## Arrive at wormhole entrance - go straight to ENTER WORMHOLE button (no scene)
 func _show_wormhole_scene() -> void:
 	current_phase = GamePhase.IDLE
-	var raider_on_node = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
+	var raider_on_node = VoyageManager.is_any_raider_on_player_node()
 	var is_destination = VoyageManager.is_wormhole_destination(VoyageManager.current_node_id)
 	if raider_on_node or is_destination:
 		_waiting_wormhole_enter = false
@@ -984,6 +1005,7 @@ func _execute_wormhole_teleport() -> void:
 	if arrival_node:
 		_is_jump_animating = true
 		management_hud.set_deploy_active(false)
+		management_hud.set_surrender_active(false)
 
 		VoyageManager.current_node_id = arrival_node.id
 		VoyageManager.ship_teleported.emit(arrival_node.position, arrival_node)
@@ -996,11 +1018,12 @@ func _execute_wormhole_teleport() -> void:
 
 		# Count as jump: wait for teleport animation, then process raider turn (enemy ships move)
 		await star_map.jump_animation_complete
-		for i in VoyageManager.RAIDER_JUMPS_PER_TURN:
+		VoyageManager.begin_player_jump_processing()
+		for i in range(VoyageManager.raider_node_ids.size()):
 			var raider_moved = VoyageManager.process_raider_turn()
 			if raider_moved:
 				await star_map.raider_animation_complete
-			else:
+			if VoyageManager.raider_ambush_triggered:
 				break
 
 		_is_jump_animating = false
@@ -1129,6 +1152,7 @@ func _on_raider_scene_dismissed() -> void:
 	current_phase = GamePhase.IDLE
 	management_hud.set_deploy_active(true)
 	management_hud.set_surrender_visible(true)
+	management_hud.set_surrender_active(true)
 
 
 func _on_surrender_pressed() -> void:
@@ -1148,13 +1172,16 @@ func _on_surrender_pressed() -> void:
 
 func _on_surrender_confirmed() -> void:
 	management_hud.set_surrender_visible(false)
+	management_hud.set_surrender_active(false)
 	management_hud.set_deploy_active(false)
 
 	# Play raider fade-out (surrender, 2s) before applying damage and clearing
-	await star_map.play_raider_outcome_animation(false, true)
+	var surrender_raider_id := _pending_ambush_raider_id
+	_pending_ambush_raider_id = ""
+	await star_map.play_raider_outcome_animation(false, true, surrender_raider_id)
 
 	GameState.damage_ship(15)
-	VoyageManager.clear_raider_surrender()
+	VoyageManager.clear_raider_surrender(surrender_raider_id)
 
 	if _pending_story_after_raider:
 		_pending_story_after_raider = false
@@ -1205,7 +1232,7 @@ func _fade_out(duration: float = 0.6) -> void:
 ## Helper to refresh DEPLOY button state and mission data based on current node
 func _update_deploy_button_visibility() -> void:
 	var current_node = VoyageManager.get_current_node()
-	var raider_on_node = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
+	var raider_on_node = VoyageManager.is_any_raider_on_player_node()
 	# Raider takes priority: hide ENTER WORMHOLE, show DEPLOY until raider mission resolved
 	if _waiting_wormhole_enter and raider_on_node:
 		_waiting_wormhole_enter = false
@@ -1221,10 +1248,11 @@ func _update_deploy_button_visibility() -> void:
 	if not current_node:
 		management_hud.set_deploy_active(false)
 		management_hud.set_surrender_visible(false)
+		management_hud.set_surrender_active(false)
 		return
 	
 	# Check if raider is on current node (must deploy to clear it)
-	var raider_present = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
+	var raider_present = VoyageManager.is_any_raider_on_player_node()
 	
 	if raider_present:
 		# Force deploy button active when raider is present
@@ -1234,17 +1262,21 @@ func _update_deploy_button_visibility() -> void:
 		pending_biome_type = BiomeConfig.BiomeType.STATION
 		management_hud.set_deploy_active(true)
 		management_hud.set_surrender_visible(true)
+		management_hud.set_surrender_active(true)
 	elif current_node.node_type == EventManager.NodeType.WORMHOLE and not VoyageManager.is_wormhole_destination(current_node.id):
 		# Show ENTER WORMHOLE at entrances and unpaired wormholes; NOT at destinations (arrow tip)
 		_waiting_wormhole_enter = true
 		management_hud.set_enter_wormhole_button_active(true)
 		management_hud.set_surrender_visible(false)
+		management_hud.set_surrender_active(false)
 	elif current_node.node_type == EventManager.NodeType.SCAVENGE_SITE and current_node.state != NodeData.NodeState.CLEARED:
 		# Ensure pending state is set for normal scavenge sites too
 		pending_node_type = current_node.node_type
 		pending_biome_type = current_node.biome_type
 		management_hud.set_deploy_active(true)
 		management_hud.set_surrender_visible(false)
+		management_hud.set_surrender_active(false)
 	else:
 		management_hud.set_deploy_active(false)
 		management_hud.set_surrender_visible(false)
+		management_hud.set_surrender_active(false)

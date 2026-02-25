@@ -251,6 +251,17 @@ func set_surrender_visible(is_visible: bool) -> void:
 			_stop_pulse(surrender_panel)
 
 
+## Mirror of set_deploy_active: disables the surrender button when inactive
+## (during jump, mission, etc.). Call whenever set_deploy_active(false) is called.
+func set_surrender_active(active: bool) -> void:
+	if surrender_button:
+		surrender_button.disabled = not active
+		if active and surrender_panel and surrender_panel.visible:
+			_start_pulse(surrender_panel)
+		elif not active:
+			_stop_pulse(surrender_panel)
+
+
 func _on_deploy_hover() -> void:
 	# Stop pulse on hover and set to max glow for highlight
 	if _pulse_tween and _pulse_tween.is_valid():
@@ -283,7 +294,7 @@ func _on_surrender_hover() -> void:
 
 
 func _on_surrender_unhover() -> void:
-	if surrender_panel and surrender_panel.visible:
+	if surrender_panel and surrender_panel.visible and not surrender_button.disabled:
 		_start_pulse(surrender_panel)
 
 

@@ -65,7 +65,7 @@ func _refresh_legend() -> void:
 		story_count_label.text = str(story_count)
 
 	# Raider Ambush
-	var raider_count := 1 if VoyageManager.is_raider_active else 0
+	var raider_count := VoyageManager.raider_node_ids.size()
 	raider_entry.visible = raider_count > 0
 	if raider_count > 0:
 		raider_count_label.text = str(raider_count)
@@ -138,8 +138,9 @@ func _build_node_lists() -> void:
 			and VoyageManager.nodes.has(VoyageManager.active_story_node_id):
 		_story_nodes.append(VoyageManager.nodes[VoyageManager.active_story_node_id])
 
-	if VoyageManager.is_raider_active and VoyageManager.nodes.has(VoyageManager.raider_node_id):
-		_raider_nodes.append(VoyageManager.nodes[VoyageManager.raider_node_id])
+	for rid in VoyageManager.raider_node_ids:
+		if VoyageManager.nodes.has(rid):
+			_raider_nodes.append(VoyageManager.nodes[rid])
 
 	for id in VoyageManager.nodes:
 		var n: NodeData = VoyageManager.nodes[id]

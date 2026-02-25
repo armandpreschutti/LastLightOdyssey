@@ -393,7 +393,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	is_scavenger_mission = (current_node.node_type == EventManager.NodeType.SCAVENGE_SITE) if current_node else false
 	
 	# Explicitly check for raider ambush to enable "beam down" and other scavenger mechanics
-	is_raider_ambush = VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id
+	is_raider_ambush = VoyageManager.is_any_raider_on_player_node()
 	if not is_scavenger_mission and is_raider_ambush:
 		is_scavenger_mission = true
 		print("DEBUG_MISSION: Raider ambush detected, enabling is_scavenger_mission features")
@@ -401,7 +401,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	
 	is_story_mission = (current_node.state == NodeData.NodeState.STORY) if current_node else false
 	# Raider ambush on a story node must NOT use story mechanics
-	if is_story_mission and VoyageManager.is_raider_active and VoyageManager.raider_node_id == VoyageManager.current_node_id:
+	if is_story_mission and VoyageManager.is_any_raider_on_player_node():
 		is_story_mission = false
 	is_story_dev_mode = is_story_mission and GameState.dev_story_tactical_ease
 

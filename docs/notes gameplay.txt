@@ -10,4 +10,8 @@ done - I want add a panel in the bottom left of screen that describes what each 
 
 done - I want to add a mechanic to the NAVIGATION LEGEND. when the player clicks on a node, I want the camera to automatically snap to that nodes position on map. if the player presses an icon more than once (and there is more than one of that node, ei PLANET 3) then cycle through each nodes position on click. ask questions for complete clarity
 
-- go through all tutorials and update rules
+----------------------------------------------------------
+
+started - go through all tutorials and update rules
+
+to do - add difficulty levels to radier ships

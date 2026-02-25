@@ -351,9 +351,15 @@ func _create_officer_xp_row(data: Dictionary, mission_success: bool) -> VBoxCont
 
 
 func _animate_recap_in(stats: Dictionary) -> void:
+	visible = true
+
+	# Dev mode: skip all animations and show immediately
+	if GameState.dev_skip_mission_recap_animations:
+		_show_recap_immediately()
+		return
+
 	# Start with everything hidden
 	modulate.a = 0.0
-	visible = true
 	continue_button.modulate.a = 0.0
 	continue_button.disabled = true
 	
@@ -518,6 +524,39 @@ func _flash_label(target: Label, flash_color: Color, original_color: Color) -> v
 	t.tween_property(target, "scale", Vector2(1.0, 1.0), 0.1)
 
 
+func _show_recap_immediately() -> void:
+	modulate.a = 1.0
+	fuel_row.modulate.a = 1.0
+	cash_row.modulate.a = 1.0
+	xp_row.modulate.a = 1.0
+	enemies_row.modulate.a = 1.0
+	turns_row.modulate.a = 1.0
+	if objectives_header.visible:
+		objectives_header.modulate.a = 1.0
+		objectives_border.modulate.a = 1.0
+		for label in _objective_labels:
+			label.modulate.a = 1.0
+	for child in officers_container.get_children():
+		child.modulate.a = 1.0
+		var xp_bar = child.find_child("XPBar_*", true, false)
+		if xp_bar:
+			var name_split = xp_bar.name.split("_")
+			if name_split.size() > 1:
+				var officer_name = name_split[1]
+				var od = GameState.get_officer(officer_name.to_lower())
+				if od:
+					xp_bar.max_value = od.get_next_xp_threshold()
+					xp_bar.value = od.xp
+				var lvl_label = child.find_child("LevelLabel_*", true, false)
+				if lvl_label and od:
+					lvl_label.text = "LVL %d" % od.level
+				var gain_label = child.find_child("GainLabel_*", true, false)
+				if gain_label:
+					gain_label.modulate.a = 1.0
+	continue_button.modulate.a = 1.0
+	continue_button.disabled = false
+
+
 func _on_continue_pressed() -> void:
 	if _stat_tween and _stat_tween.is_running():
 		_stat_tween.kill()
@@ -540,40 +579,8 @@ func _input(event: InputEvent) -> void:
 	
 	if event is InputEventKey and event.pressed and event.keycode == KEY_SPACE:
 		if continue_button.disabled:
-			# Skip animation
 			if _stat_tween and _stat_tween.is_running():
 				_stat_tween.kill()
-			modulate.a = 1.0
-			fuel_row.modulate.a = 1.0
-			cash_row.modulate.a = 1.0
-			xp_row.modulate.a = 1.0
-			enemies_row.modulate.a = 1.0
-			turns_row.modulate.a = 1.0
-
-			if objectives_header.visible:
-				objectives_header.modulate.a = 1.0
-				objectives_border.modulate.a = 1.0
-				for label in _objective_labels:
-					label.modulate.a = 1.0
-			for child in officers_container.get_children():
-				child.modulate.a = 1.0
-				# Finalize XP bar if it exists
-				var xp_bar = child.find_child("XPBar_*", true, false)
-				if xp_bar:
-					var name_split = xp_bar.name.split("_")
-					if name_split.size() > 1:
-						var officer_name = name_split[1]
-						var od = GameState.get_officer(officer_name.to_lower())
-						if od:
-							xp_bar.max_value = od.get_next_xp_threshold()
-							xp_bar.value = od.xp
-						var lvl_label = child.find_child("LevelLabel_*", true, false)
-						if lvl_label and od:
-							lvl_label.text = "LVL %d" % od.level
-						var gain_label = child.find_child("GainLabel_*", true, false)
-						if gain_label:
-							gain_label.modulate.a = 1.0
-			continue_button.modulate.a = 1.0
-			continue_button.disabled = false
+			_show_recap_immediately()
 		else:
 			_on_continue_pressed()

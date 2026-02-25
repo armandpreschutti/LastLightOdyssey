@@ -15,6 +15,7 @@ const TOGGLES: Array = [
 	# Voyage
 	["STORY INTEL COST x1 (vs 3)", "dev_story_intel"],
 	["RAIDER FAST RESPAWN (2 vs 10 jumps)", "dev_raider_fast"],
+	["RAIDER 1 JUMP PER TURN (vs 2)", "dev_raider_1_jump_per_turn"],
 	["WORMHOLE 4x SPAWN RATE", "dev_wormhole_4x"],
 	# Tactical
 	["STORY TACTICAL EASE (no boss, 1 enemy)", "dev_story_tactical_ease"],
@@ -22,6 +23,7 @@ const TOGGLES: Array = [
 	# Spawn camera
 	["SKIP RAIDER SPAWN CAMERA", "dev_skip_raider_spawn_camera"],
 	["SKIP STORY SIGNAL SPAWN CAMERA", "dev_skip_story_spawn_camera"],
+	["SKIP MISSION RECAP ANIMATIONS", "dev_skip_mission_recap_animations"],
 ]
 
 const SECTION_HEADERS: Dictionary = {
@@ -30,6 +32,7 @@ const SECTION_HEADERS: Dictionary = {
 	5: "VOYAGE",
 	8: "TACTICAL",
 	10: "SPAWN CAMERAS",
+	12: "RECAP",
 }
 
 # Colors matching game palette

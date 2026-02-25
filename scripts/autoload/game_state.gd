@@ -19,8 +19,8 @@ const SETTINGS_DEVELOPER_SECTION: String = "developer"
 ## Developer feature keys — used for persistence in settings.cfg [developer] section.
 const DEV_KEYS: Array[String] = [
 	"protect_fuel", "protect_integrity", "protect_cash", "protect_intel",
-	"officers_maxed", "story_intel", "raider_fast", "wormhole_4x", "story_tactical_ease", "raider_tactical_ease",
-	"skip_raider_spawn_camera", "skip_story_spawn_camera"
+	"officers_maxed", "story_intel", "raider_fast", "raider_1_jump_per_turn", "wormhole_4x", "story_tactical_ease", "raider_tactical_ease",
+	"skip_raider_spawn_camera", "skip_story_spawn_camera", "skip_mission_recap_animations"
 ]
 
 # --- Ability & Officer Definitions ---
@@ -116,11 +116,13 @@ var dev_protect_intel: bool = false
 var dev_officers_maxed: bool = false
 var dev_story_intel: bool = false
 var dev_raider_fast: bool = false
+var dev_raider_1_jump_per_turn: bool = false
 var dev_wormhole_4x: bool = false
 var dev_story_tactical_ease: bool = false
 var dev_raider_tactical_ease: bool = false
 var dev_skip_raider_spawn_camera: bool = false
 var dev_skip_story_spawn_camera: bool = false
+var dev_skip_mission_recap_animations: bool = false
 
 # Primary Statistics (Voyage 2.0 Economy)
 const MAX_FUEL: int = 20
@@ -227,11 +229,13 @@ func _load_developer_flags() -> void:
 		dev_officers_maxed = true
 		dev_story_intel = true
 		dev_raider_fast = true
+		dev_raider_1_jump_per_turn = true
 		dev_wormhole_4x = true
 		dev_story_tactical_ease = true
 		dev_raider_tactical_ease = true
 		dev_skip_raider_spawn_camera = true
 		dev_skip_story_spawn_camera = true
+		dev_skip_mission_recap_animations = true
 		return
 
 	dev_protect_fuel       = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "protect_fuel", false), false)
@@ -241,11 +245,13 @@ func _load_developer_flags() -> void:
 	dev_officers_maxed     = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "officers_maxed", false), false)
 	dev_story_intel        = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "story_intel", false), false)
 	dev_raider_fast        = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "raider_fast", false), false)
+	dev_raider_1_jump_per_turn = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "raider_1_jump_per_turn", false), false)
 	dev_wormhole_4x        = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "wormhole_4x", false), false)
 	dev_story_tactical_ease = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "story_tactical_ease", false), false)
 	dev_raider_tactical_ease = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "raider_tactical_ease", false), false)
 	dev_skip_raider_spawn_camera = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "skip_raider_spawn_camera", false), false)
 	dev_skip_story_spawn_camera = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "skip_story_spawn_camera", false), false)
+	dev_skip_mission_recap_animations = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "skip_mission_recap_animations", false), false)
 
 
 ## Save all granular developer flags to settings.cfg.
@@ -259,11 +265,13 @@ func save_developer_flags() -> void:
 	config.set_value(SETTINGS_DEVELOPER_SECTION, "officers_maxed",     dev_officers_maxed)
 	config.set_value(SETTINGS_DEVELOPER_SECTION, "story_intel",        dev_story_intel)
 	config.set_value(SETTINGS_DEVELOPER_SECTION, "raider_fast",        dev_raider_fast)
+	config.set_value(SETTINGS_DEVELOPER_SECTION, "raider_1_jump_per_turn", dev_raider_1_jump_per_turn)
 	config.set_value(SETTINGS_DEVELOPER_SECTION, "wormhole_4x",        dev_wormhole_4x)
 	config.set_value(SETTINGS_DEVELOPER_SECTION, "story_tactical_ease", dev_story_tactical_ease)
 	config.set_value(SETTINGS_DEVELOPER_SECTION, "raider_tactical_ease", dev_raider_tactical_ease)
 	config.set_value(SETTINGS_DEVELOPER_SECTION, "skip_raider_spawn_camera", dev_skip_raider_spawn_camera)
 	config.set_value(SETTINGS_DEVELOPER_SECTION, "skip_story_spawn_camera", dev_skip_story_spawn_camera)
+	config.set_value(SETTINGS_DEVELOPER_SECTION, "skip_mission_recap_animations", dev_skip_mission_recap_animations)
 	# Remove legacy key if present
 	if config.has_section_key(SETTINGS_DEVELOPER_SECTION, "developer_mode"):
 		config.erase_section_key(SETTINGS_DEVELOPER_SECTION, "developer_mode")
@@ -274,9 +282,10 @@ func save_developer_flags() -> void:
 ## Returns true if any developer flag is currently active.
 func is_any_dev_flag_active() -> bool:
 	return (dev_protect_fuel or dev_protect_integrity or dev_protect_cash or dev_protect_intel
-		or dev_officers_maxed or dev_story_intel or dev_raider_fast or dev_wormhole_4x
+		or dev_officers_maxed or dev_story_intel or dev_raider_fast or dev_raider_1_jump_per_turn or dev_wormhole_4x
 		or dev_story_tactical_ease or dev_raider_tactical_ease
-		or dev_skip_raider_spawn_camera or dev_skip_story_spawn_camera)
+		or dev_skip_raider_spawn_camera or dev_skip_story_spawn_camera
+		or dev_skip_mission_recap_animations)
 
 
 func _coerce_bool(value: Variant, default_value: bool = false) -> bool:

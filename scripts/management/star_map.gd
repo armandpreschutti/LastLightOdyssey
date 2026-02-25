@@ -6,6 +6,9 @@ signal node_clicked(node_data: NodeData)
 signal jump_animation_complete
 signal raider_animation_complete
 signal raider_outcome_animation_complete
+## Emitted at the moment the last raider laser hits the player (failure path).
+## main.gd connects this ONE_SHOT to apply hull damage in sync with the impact.
+signal raider_attack_impact
 
 @onready var map_content: Control = $MapContent
 @onready var raider_indicator: Control = $RaiderIndicator
@@ -18,14 +21,17 @@ signal raider_outcome_animation_complete
 var MapNodeScene: PackedScene
 var node_visuals: Dictionary = {}  # String (ID) -> MapNode visual instance
 var ship_visual: TextureRect
-var raider_visual: Node2D
-var raider_zone_visual: Node2D = null
+var raider_visuals: Dictionary = {}       # current_node_id -> RaiderShip Node2D
+var raider_zone_visuals: Dictionary = {}  # current_node_id -> Node2D (detection circle)
 var player_travel_zone_visual: Node2D = null
 var _is_ship_animating: bool = false # Flag to prevent refresh from stomping animation
-var _is_raider_animating: bool = false # Flag to prevent refresh from snapping raider mid-move
+var _raiders_animating: int = 0  # Count of raiders currently mid-move animation
 var _ship_pulse_tween: Tween = null
-var _raider_hit_shake_tween: Tween = null  # Killed and recreated on each machine-gun hit
-var _raider_hit_flash_tween: Tween = null  # Killed and recreated on each machine-gun hit
+var _raider_hit_shake_tween: Tween = null   # Killed and recreated on each raider-side hit
+var _raider_hit_flash_tween: Tween = null   # Killed and recreated on each raider-side hit
+var _player_hit_shake_tween: Tween = null   # Killed and recreated on each player-side hit
+var _player_hit_flash_tween: Tween = null   # Killed and recreated on each player-side hit
+var _outcome_raider_id: String = ""  # ID of the raider currently undergoing outcome animation
 const BASE_SPEED_PPS = 300.0 # Pixels per second base speed for ship movement
 
 const ZOOM_STEP = 0.1
@@ -35,8 +41,7 @@ var _input_locked: bool = false
 
 
 func _both_on_same_node() -> bool:
-	return VoyageManager and VoyageManager.is_raider_active and \
-		VoyageManager.raider_node_id == VoyageManager.current_node_id
+	return VoyageManager and VoyageManager.is_any_raider_on_player_node()
 
 
 func _get_player_display_offset(node_pos: Vector2) -> Vector2:
@@ -45,23 +50,27 @@ func _get_player_display_offset(node_pos: Vector2) -> Vector2:
 	return node_pos
 
 
-func _get_raider_display_offset(node_pos: Vector2) -> Vector2:
-	if _both_on_same_node():
+## For a raider at the given node_pos, offset it only if it is on the player's current node.
+func _get_raider_display_offset(node_pos: Vector2, is_on_player_node: bool = false) -> Vector2:
+	if is_on_player_node:
 		return node_pos + Vector2(SAME_NODE_SHIP_OFFSET, 0)
 	return node_pos
 
 
 func _update_raider_position_for_same_node(animated: bool = false) -> void:
-	## When player and raider share a node, reposition the raider to standoff layout.
-	## Needed when player jumps to raider's node (raider doesn't move, so no raider_moved signal).
-	## Skip when raider is animating (e.g. moving to player node) to avoid snapping mid-move.
-	if not raider_visual or not _both_on_same_node() or _is_raider_animating:
+	## When a raider and the player share a node, reposition that raider to standoff layout.
+	## Needed when player jumps to the raider's node (raider doesn't move, so no raider_moved signal).
+	if _raiders_animating > 0 or not _both_on_same_node():
 		return
-	var raider_node = VoyageManager.nodes[VoyageManager.raider_node_id]
+	var ambush_id = VoyageManager.get_ambushing_raider_id()
+	if ambush_id == "" or not raider_visuals.has(ambush_id):
+		return
+	var raider_visual = raider_visuals[ambush_id]
+	var raider_node = VoyageManager.nodes[ambush_id]
 	if not raider_node:
 		return
-	var target_pos = _get_raider_display_offset(raider_node.position)
-	const ROT_DURATION: float = 1.2  # Smooth, deliberate rotation to face opponent
+	var target_pos = _get_raider_display_offset(raider_node.position, true)
+	const ROT_DURATION: float = 1.2
 	if animated:
 		var tween = create_tween()
 		tween.set_parallel(true)
@@ -71,7 +80,6 @@ func _update_raider_position_for_same_node(animated: bool = false) -> void:
 		tween.tween_property(raider_visual, "rotation", current_rot + diff, ROT_DURATION).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	else:
 		raider_visual.position = target_pos
-		# Always smoothly rotate to face player (never snap)
 		var current_rot = raider_visual.rotation
 		var diff = angle_difference(current_rot, PI)
 		if abs(diff) > 0.01:
@@ -92,31 +100,34 @@ func _update_raider_indicator() -> void:
 	if not VoyageManager or not VoyageManager.is_raider_active:
 		raider_indicator.visible = false
 		return
-	if not VoyageManager.nodes.has(VoyageManager.raider_node_id):
+
+	# Point the indicator at the closest raider (or the ambushing one if on player node)
+	var indicator_rid = VoyageManager.get_ambushing_raider_id()
+	if indicator_rid == "" and not VoyageManager.raider_node_ids.is_empty():
+		indicator_rid = VoyageManager.raider_node_ids[0]
+	if indicator_rid == "" or not VoyageManager.nodes.has(indicator_rid):
 		raider_indicator.visible = false
 		return
 
 	var raider_world_pos: Vector2
-	if raider_visual:
-		raider_world_pos = raider_visual.position
+	if raider_visuals.has(indicator_rid):
+		raider_world_pos = raider_visuals[indicator_rid].position
 	else:
-		var raider_node = VoyageManager.nodes[VoyageManager.raider_node_id]
-		raider_world_pos = raider_node.position
+		raider_world_pos = VoyageManager.nodes[indicator_rid].position
 
 	var raider_screen_pos := map_content.position + raider_world_pos * _current_zoom
 	raider_indicator.update_indicator(raider_screen_pos, size)
 
-	# Update detection circle brightness based on whether player is inside it
+	# Update detection circle brightness for all zones
 	_update_raider_zone_brightness()
 
 
 func _update_raider_zone_brightness() -> void:
-	if not raider_zone_visual:
-		return
 	var in_zone := VoyageManager.is_player_in_raider_zone()
-	if raider_zone_visual.get("player_in_zone") != in_zone:
-		raider_zone_visual.set("player_in_zone", in_zone)
-		raider_zone_visual.queue_redraw()
+	for zone in raider_zone_visuals.values():
+		if zone and zone.get("player_in_zone") != in_zone:
+			zone.set("player_in_zone", in_zone)
+			zone.queue_redraw()
 
 
 func _update_story_indicator() -> void:
@@ -152,11 +163,12 @@ func _ready() -> void:
 	# Create ship visual
 	_create_ship_visual()
 	
-	# If raider already exists (loaded save), restore visuals
-	if VoyageManager.is_raider_active and VoyageManager.nodes.has(VoyageManager.raider_node_id):
-		var raider_node_data = VoyageManager.nodes[VoyageManager.raider_node_id]
-		_create_raider_zone_visual(raider_node_data.position, VoyageManager.RAIDER_DETECTION_RADIUS)
-		_create_raider_visual(raider_node_data)
+	# If raiders already exist (loaded save), restore all visuals
+	for rid in VoyageManager.raider_node_ids:
+		if VoyageManager.nodes.has(rid):
+			var raider_node_data = VoyageManager.nodes[rid]
+			_create_raider_zone_visual(rid, raider_node_data.position, VoyageManager.RAIDER_DETECTION_RADIUS)
+			_create_raider_visual(rid, raider_node_data)
 	
 	# Create green travel radius circle (always visible around player)
 	_create_player_travel_zone_visual()
@@ -186,43 +198,50 @@ func _ready() -> void:
 
 
 func _on_raider_spawned(node_data: NodeData) -> void:
-	_create_raider_zone_visual(node_data.position, VoyageManager.RAIDER_DETECTION_RADIUS)
-	_create_raider_visual(node_data)
+	_create_raider_zone_visual(node_data.id, node_data.position, VoyageManager.RAIDER_DETECTION_RADIUS)
+	_create_raider_visual(node_data.id, node_data)
 	refresh()
-	
-	# Start camera sequence for raider spawn
 	_run_spawn_camera_sequence(node_data)
 
-func _on_raider_moved(new_pos: Vector2, node_id: String) -> void:
-	if raider_visual:
-		_is_raider_animating = true
-		# Connect to the move_complete signal and relay it
-		if not raider_visual.move_complete.is_connected(_on_raider_move_complete):
-			raider_visual.move_complete.connect(_on_raider_move_complete)
-		var display_pos = _get_raider_display_offset(new_pos)
-		var target_rot = PI if _both_on_same_node() else -999.0  # Sentinel = use movement direction
-		raider_visual.move_to(display_pos, node_id, 1.0, target_rot)
-	# Smoothly animate the detection circle to follow the raider (match raider ship speed)
-	if raider_zone_visual:
-		var dist = raider_zone_visual.position.distance_to(new_pos)
+func _on_raider_moved(new_pos: Vector2, old_id: String, new_id: String) -> void:
+	# Migrate the visual and zone to the new node_id key
+	if raider_visuals.has(old_id):
+		var visual = raider_visuals[old_id]
+		raider_visuals.erase(old_id)
+		raider_visuals[new_id] = visual
+
+		_raiders_animating += 1
+		if not visual.move_complete.is_connected(_on_raider_move_complete):
+			visual.move_complete.connect(_on_raider_move_complete)
+
+		var is_on_player_node = (new_id == VoyageManager.current_node_id)
+		var display_pos = _get_raider_display_offset(new_pos, is_on_player_node)
+		var target_rot = PI if is_on_player_node else -999.0
+		visual.move_to(display_pos, new_id, 1.0, target_rot)
+
+	if raider_zone_visuals.has(old_id):
+		var zone = raider_zone_visuals[old_id]
+		raider_zone_visuals.erase(old_id)
+		raider_zone_visuals[new_id] = zone
+		var dist = zone.position.distance_to(new_pos)
 		var duration = clampf(dist / 600.0, 0.5, 2.0)
 		var tween = create_tween()
-		tween.tween_property(raider_zone_visual, "position", new_pos, duration) \
+		tween.tween_property(zone, "position", new_pos, duration) \
 			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	refresh()
 
 func _on_raider_move_complete() -> void:
-	_is_raider_animating = false
-	raider_animation_complete.emit()
+	_raiders_animating = max(0, _raiders_animating - 1)
+	if _raiders_animating == 0:
+		raider_animation_complete.emit()
 
-func _on_raider_destroyed() -> void:
-	_is_raider_animating = false
-	if raider_visual:
-		raider_visual.queue_free()
-		raider_visual = null
-	if raider_zone_visual:
-		raider_zone_visual.queue_free()
-		raider_zone_visual = null
+func _on_raider_destroyed(destroyed_id: String) -> void:
+	if raider_visuals.has(destroyed_id):
+		raider_visuals[destroyed_id].queue_free()
+		raider_visuals.erase(destroyed_id)
+	if raider_zone_visuals.has(destroyed_id):
+		raider_zone_visuals[destroyed_id].queue_free()
+		raider_zone_visuals.erase(destroyed_id)
 	refresh()
 
 func _on_story_node_spawned(node_data: NodeData) -> void:
@@ -313,12 +332,12 @@ func _stop_ship_idle_pulse() -> void:
 		ship_visual.scale = Vector2(1.0, 1.0)
 
 
-func _create_raider_zone_visual(origin: Vector2, radius: float) -> void:
-	if raider_zone_visual:
-		raider_zone_visual.queue_free()
-	raider_zone_visual = Node2D.new()
-	raider_zone_visual.position = origin
-	# Attach a minimal inline script so _draw() renders the filled circle
+func _create_raider_zone_visual(raider_id: String, origin: Vector2, radius: float) -> void:
+	# Remove previous zone for this raider if it exists
+	if raider_zone_visuals.has(raider_id):
+		raider_zone_visuals[raider_id].queue_free()
+	var zone = Node2D.new()
+	zone.position = origin
 	var script = GDScript.new()
 	script.source_code = """extends Node2D
 var zone_radius: float = 1200.0
@@ -336,11 +355,11 @@ func _draw() -> void:
 	draw_arc(Vector2.ZERO, zone_radius, 0.0, TAU, 128, outline, 4.0)
 """
 	script.reload()
-	raider_zone_visual.set_script(script)
-	raider_zone_visual.set("zone_radius", radius)
-	# Insert at index 0 so it renders beneath lines and nodes
-	map_content.add_child(raider_zone_visual)
-	map_content.move_child(raider_zone_visual, 0)
+	zone.set_script(script)
+	zone.set("zone_radius", radius)
+	map_content.add_child(zone)
+	map_content.move_child(zone, 0)
+	raider_zone_visuals[raider_id] = zone
 
 
 func _create_player_travel_zone_visual() -> void:
@@ -367,25 +386,26 @@ func _draw() -> void:
 	map_content.move_child(player_travel_zone_visual, 0)
 
 
-func _create_raider_visual(node_data: NodeData) -> void:
-	if raider_visual:
-		raider_visual.queue_free()
-		
+func _create_raider_visual(raider_id: String, node_data: NodeData) -> void:
+	if raider_visuals.has(raider_id):
+		raider_visuals[raider_id].queue_free()
+
 	var RaiderScene = load("res://scenes/map/raider_ship.tscn")
 	if RaiderScene:
-		raider_visual = RaiderScene.instantiate()
-		ship_container.add_child(raider_visual)
-		raider_visual.position = _get_raider_display_offset(node_data.position)
-		if _both_on_same_node():
-			# Smoothly rotate to face player (never snap)
+		var visual = RaiderScene.instantiate()
+		ship_container.add_child(visual)
+		var is_on_player_node = (raider_id == VoyageManager.current_node_id)
+		visual.position = _get_raider_display_offset(node_data.position, is_on_player_node)
+		raider_visuals[raider_id] = visual
+		if is_on_player_node:
 			const ROT_DURATION: float = 1.2
-			var current_rot = raider_visual.rotation
+			var current_rot = visual.rotation
 			var diff = angle_difference(current_rot, PI)
 			if abs(diff) > 0.01:
 				var rot_tween = create_tween()
-				rot_tween.tween_property(raider_visual, "rotation", current_rot + diff, ROT_DURATION).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+				rot_tween.tween_property(visual, "rotation", current_rot + diff, ROT_DURATION).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 			else:
-				raider_visual.rotation = PI
+				visual.rotation = PI
 
 func refresh() -> void:
 	_clear_visuals()
@@ -409,9 +429,11 @@ func refresh() -> void:
 			var dist = 0.0
 			if ship_visual:
 				dist = ship_visual.position.distance_to(target_visual)
-			# Smoothly animate when ship needs to recenter (e.g. raider left standoff)
+			# Smoothly animate when ship needs to recenter (e.g. raider left standoff).
+			# Use a slow speed_mult so the short 50 px standoff gap glides over ~1s
+			# instead of snapping in ~0.17s.
 			if dist > 2.0:
-				_update_ship_position(true, current_node.position, 1.0, false)  # animate, no jump_complete emit
+				_update_ship_position(true, current_node.position, 0.15, false)  # animate, no jump_complete emit
 			else:
 				_update_ship_position(false)
 
@@ -427,9 +449,8 @@ func _draw_nodes() -> void:
 	var nodes = VoyageManager.get_visible_nodes()
 	var current_node = VoyageManager.get_current_node()
 	
-	# Check if raider is ON the player's current node (ambush active)
-	var raider_on_player_node = VoyageManager.is_raider_active and \
-		VoyageManager.raider_node_id == VoyageManager.current_node_id
+	# Check if any raider is ON the player's current node (ambush active)
+	var raider_on_player_node = VoyageManager.is_any_raider_on_player_node()
 	
 	for node_data in nodes:
 		var visual = MapNodeScene.instantiate()
@@ -732,6 +753,12 @@ func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO, s
 	
 	if animated:
 		_is_ship_animating = true
+		# Kill any hit-shake tweens that animate ship_visual.position — if left
+		# running they fight this tween and snap the ship back to the shake's
+		# captured base_pos, causing an infinite recenter loop.
+		if _player_hit_shake_tween:
+			_player_hit_shake_tween.kill()
+			_player_hit_shake_tween = null
 		
 		var distance = ship_visual.position.distance_to(visual_pos)
 		var duration = distance / (BASE_SPEED_PPS * speed_mult)
@@ -850,7 +877,13 @@ func center_view_on_ship(animated: bool) -> void:
 ## success=false, no surrender → raider fires laser at player, raider flies away
 ## success=false, is_surrender → raider rotates away and departs (no attack)
 ## Emits raider_outcome_animation_complete when sequence is finished.
-func play_raider_outcome_animation(success: bool, is_surrender: bool = false) -> void:
+func play_raider_outcome_animation(success: bool, is_surrender: bool = false, raider_id: String = "") -> void:
+	# If no specific raider given, use the one on the player's node (or first available)
+	if raider_id == "":
+		raider_id = VoyageManager.get_ambushing_raider_id()
+	if raider_id == "" and not VoyageManager.raider_node_ids.is_empty():
+		raider_id = VoyageManager.raider_node_ids[0]
+	_outcome_raider_id = raider_id
 	center_view_on_ship(false)
 
 	if is_surrender:
@@ -863,13 +896,18 @@ func play_raider_outcome_animation(success: bool, is_surrender: bool = false) ->
 		# Machine-gun lasers + raider shake run in parallel with the lurch,
 		# then the explosion fires immediately after the last hit (no gap).
 		_start_player_ship_attack_lurch()
-		await _spawn_machine_gun_lasers(_get_player_center(), _get_raider_center())
+		await _spawn_machine_gun_lasers(_get_player_center(), _get_raider_center(), true)
 		await _play_raider_destruction()
 		await get_tree().create_timer(0.3).timeout
 	else:
 		await get_tree().create_timer(0.5).timeout
-		_spawn_laser_beam(_get_raider_center(), _get_player_center(), false)
-		await _play_raider_ship_attack()
+		# Raider lurch fires in the background.
+		# Machine-gun red lasers + player shake run in parallel,
+		# then raider_attack_impact is emitted (hull damage applied by main.gd),
+		# then the raider flies away.
+		_start_raider_attack_lurch()
+		await _spawn_machine_gun_lasers(_get_raider_center(), _get_player_center(), false)
+		raider_attack_impact.emit()
 		await _play_raider_fly_away()
 		await get_tree().create_timer(0.3).timeout
 
@@ -883,11 +921,15 @@ func _get_player_center() -> Vector2:
 	return ship_visual.position + Vector2(72.0, 72.0)
 
 
-## Center of the raider visual in ship_container local space.
+## Center of the raider currently involved in an outcome animation.
 func _get_raider_center() -> Vector2:
-	if not raider_visual:
-		return Vector2.ZERO
-	return raider_visual.position
+	if raider_visuals.has(_outcome_raider_id):
+		return raider_visuals[_outcome_raider_id].position
+	# Fallback: first available raider visual
+	for visual in raider_visuals.values():
+		if is_instance_valid(visual):
+			return visual.position
+	return Vector2.ZERO
 
 
 ## Spawn a temporary laser beam Line2D from from_pos to to_pos.
@@ -948,41 +990,40 @@ func _play_player_ship_attack() -> void:
 
 ## Raider fires on player – delegates to raider_ship.play_attack_animation().
 func _play_raider_ship_attack() -> void:
-	if not raider_visual or not raider_visual.has_method("play_attack_animation"):
+	var visual = raider_visuals.get(_outcome_raider_id)
+	if not visual or not visual.has_method("play_attack_animation"):
 		return
-
-	raider_visual.play_attack_animation()
-	await raider_visual.attack_animation_complete
+	visual.play_attack_animation()
+	await visual.attack_animation_complete
 
 
 ## Raider destruction sequence after player wins – spawns explosion VFX then
 ## delegates sprite fade to play_destruction_sequence().
 func _play_raider_destruction() -> void:
-	if not raider_visual or not raider_visual.has_method("play_destruction_sequence"):
+	var visual = raider_visuals.get(_outcome_raider_id)
+	if not visual or not visual.has_method("play_destruction_sequence"):
 		return
-
-	# Explosion cloud runs in parallel with the sprite flash-and-fade.
-	_spawn_explosion_vfx(raider_visual.position)
-	raider_visual.play_destruction_sequence()
-	await raider_visual.destruction_complete
+	_spawn_explosion_vfx(visual.position)
+	visual.play_destruction_sequence()
+	await visual.destruction_complete
 
 
 ## Raider fly-away after defeat – delegates to play_fly_away().
 func _play_raider_fly_away() -> void:
-	if not raider_visual or not raider_visual.has_method("play_fly_away"):
+	var visual = raider_visuals.get(_outcome_raider_id)
+	if not visual or not visual.has_method("play_fly_away"):
 		return
-
-	raider_visual.play_fly_away()
-	await raider_visual.fly_away_complete
+	visual.play_fly_away()
+	await visual.fly_away_complete
 
 
 ## Raider surrender depart – delegates to play_surrender_depart().
 func _play_raider_surrender_depart() -> void:
-	if not raider_visual or not raider_visual.has_method("play_surrender_depart"):
+	var visual = raider_visuals.get(_outcome_raider_id)
+	if not visual or not visual.has_method("play_surrender_depart"):
 		return
-
-	raider_visual.play_surrender_depart()
-	await raider_visual.surrender_depart_complete
+	visual.play_surrender_depart()
+	await visual.surrender_depart_complete
 
 
 ## Kick off the player ship lurch/recoil without awaiting — runs in background
@@ -1007,26 +1048,62 @@ func _start_player_ship_attack_lurch() -> void:
 	tween.tween_callback(_start_ship_idle_pulse)
 
 
-## Fire 4 rapid laser shots from player to raider, shaking the raider on each hit.
-## Each beam is a quick flash (appear 0.03s / hold 0.06s / fade 0.12s).
+## Fire a sustained machine-gun burst between the two ships.
+## is_player=true  → gold beams, raider shakes (success path).
+## is_player=false → red beams, player ship shakes (failure path).
+## Each beam: appear 0.03s / hold 0.06s / fade 0.12s.
+## Spawns a small impact explosion on every hit.
 ## Awaitable — resolves once the last beam has faded.
-func _spawn_machine_gun_lasers(from_pos: Vector2, to_pos: Vector2) -> void:
-	var shots := 4
-	var interval := 0.11  # seconds between shots
+func _spawn_machine_gun_lasers(from_pos: Vector2, to_pos: Vector2, is_player: bool) -> void:
+	var shots := 10
+	var interval := 0.10  # seconds between shots
 	for i in range(shots):
 		if i > 0:
 			await get_tree().create_timer(interval).timeout
 		# Slight random spread per shot for a machine-gun feel
-		var spread := Vector2(randf_range(-3.0, 3.0), randf_range(-2.5, 2.5))
-		_spawn_laser_beam(from_pos, to_pos + spread, true, true)
-		_hit_shake_raider()
+		var spread := Vector2(randf_range(-4.0, 4.0), randf_range(-3.0, 3.0))
+		_spawn_laser_beam(from_pos, to_pos + spread, is_player, true)
+		if is_player:
+			_hit_shake_raider()
+		else:
+			_hit_shake_player_ship()
+		_spawn_impact_vfx(to_pos + spread)
 	# Wait for the last beam to finish fading before returning
-	await get_tree().create_timer(0.22).timeout
+	await get_tree().create_timer(0.25).timeout
+
+
+## Small two-stage impact burst spawned on each machine-gun hit.
+## Smaller and faster than the final explosion — gives a chain-of-pops feel.
+func _spawn_impact_vfx(center: Vector2) -> void:
+	# Stage 1: Bright core pop
+	var core := ColorRect.new()
+	core.size = Vector2(20, 20)
+	core.pivot_offset = Vector2(10, 10)
+	core.position = center - Vector2(10, 10)
+	core.color = Color(1.0, 0.9, 0.4, 1.0)
+	ship_container.add_child(core)
+	var t1 := core.create_tween()
+	t1.tween_property(core, "scale", Vector2(2.8, 2.8), 0.08)
+	t1.parallel().tween_property(core, "color", Color(1.0, 0.5, 0.1, 0.0), 0.18)
+	t1.tween_callback(core.queue_free)
+
+	# Stage 2: Small orange blast ring
+	var blast := ColorRect.new()
+	blast.size = Vector2(28, 28)
+	blast.pivot_offset = Vector2(14, 14)
+	blast.position = center - Vector2(14, 14)
+	blast.color = Color(1.0, 0.35, 0.05, 0.7)
+	ship_container.add_child(blast)
+	var t2 := blast.create_tween()
+	t2.tween_property(blast, "scale", Vector2(3.0, 3.0), 0.22)
+	t2.parallel().tween_property(blast, "color:a", 0.0, 0.28)
+	t2.tween_callback(blast.queue_free)
 
 
 ## Shake the raider sprite and flash it red-orange to sell each laser impact.
 ## Kills any in-progress shake/flash tweens first to avoid property conflicts.
 func _hit_shake_raider() -> void:
+	var raider_visual = raider_visuals.get(_outcome_raider_id)
 	if not raider_visual:
 		return
 	var sprite: Sprite2D = raider_visual.get_node_or_null("Sprite2D")
@@ -1049,6 +1126,39 @@ func _hit_shake_raider() -> void:
 	_raider_hit_flash_tween = sprite.create_tween()
 	_raider_hit_flash_tween.tween_property(sprite, "modulate", Color(2.2, 0.5, 0.2, 1.0), 0.03)
 	_raider_hit_flash_tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+
+
+## Shake the player ship and flash it red on each raider laser impact (failure path).
+## Uses scale squish instead of position jitter so it never touches ship_visual.position
+## and cannot fight _update_ship_position's position tween.
+func _hit_shake_player_ship() -> void:
+	if not ship_visual:
+		return
+
+	if _player_hit_shake_tween:
+		_player_hit_shake_tween.kill()
+	if _player_hit_flash_tween:
+		_player_hit_flash_tween.kill()
+
+	# Squish/stretch impact — doesn't touch position, no tween conflict
+	var sx := randf_range(0.88, 0.94)
+	var sy := 2.0 - sx  # opposite axis expands to preserve rough area
+	_player_hit_shake_tween = ship_visual.create_tween()
+	_player_hit_shake_tween.tween_property(ship_visual, "scale", Vector2(sx, sy), 0.04).set_ease(Tween.EASE_OUT)
+	_player_hit_shake_tween.tween_property(ship_visual, "scale", Vector2(1.0, 1.0), 0.1).set_ease(Tween.EASE_OUT)
+
+	_player_hit_flash_tween = ship_visual.create_tween()
+	_player_hit_flash_tween.tween_property(ship_visual, "modulate", Color(1.9, 0.3, 0.3, 1.0), 0.03)
+	_player_hit_flash_tween.tween_property(ship_visual, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+
+
+## Start the raider lurch/recoil in the background (no await) so it plays
+## alongside the machine-gun burst during the failure path.
+func _start_raider_attack_lurch() -> void:
+	var raider_visual = raider_visuals.get(_outcome_raider_id)
+	if not raider_visual or not raider_visual.has_method("play_attack_animation"):
+		return
+	raider_visual.play_attack_animation()  # fire and forget — signal ignored here
 
 
 ## Three-stage explosion cloud centred on `center` in ship_container local space.

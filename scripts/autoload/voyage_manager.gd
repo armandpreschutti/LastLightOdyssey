@@ -9,9 +9,9 @@ signal map_updated
 signal message_log_added(message: String)
 signal story_node_spawned(node_data: NodeData)
 signal story_sequence_finished
-signal raider_moved(new_position: Vector2, node_id: String)
+signal raider_moved(new_position: Vector2, old_node_id: String, new_node_id: String)
 signal raider_spawned(node_data: NodeData)
-signal raider_destroyed
+signal raider_destroyed(raider_node_id: String)
 signal raider_sequence_finished
 
 # Core State
@@ -29,19 +29,39 @@ var pending_branch_choice: String = ""       # Player's chosen next mission
 var wormhole_pairs: Array[Array] = []  # Each is [exit_id, arrival_id] from teleport
 
 # Raider State
-var is_raider_active: bool = false
-var raider_node_id: String = ""
-var jumps_since_raider_cleared: int = 0
+var raider_node_ids: Array[String] = []  # All active raider node IDs, up to MAX_RAIDERS
+var jumps_since_raider_cleared: int = 0   # Jumps since ALL raiders were cleared (first spawn)
+var jumps_since_last_raider_spawn: int = 0 # Jumps since the last individual raider spawned
+var raider_ambush_triggered: bool = false  # True when a raider has landed on the player's node
+var _raider_turn_index: int = 0            # Round-robin index for per-raider turn processing
+const MAX_RAIDERS: int = 3
 const RAIDER_RESPAWN_JUMPS: int = 10
 const RAIDER_RESPAWN_JUMPS_DEV: int = 2
-const RAIDER_SPAWN_DISTANCE_MIN: float = 1200.0
-const RAIDER_SPAWN_DISTANCE_MAX: float = 1800.0
+const RAIDER_SPAWN_DISTANCE_MIN: float = 2400.0
+const RAIDER_SPAWN_DISTANCE_MAX: float = 3600.0
 const RAIDER_DETECTION_RADIUS: float = 1200.0
 const RAIDER_JUMPS_PER_TURN: int = 2
+
+## Returns effective raider jumps per player turn (1 if dev_raider_1_jump_per_turn, else RAIDER_JUMPS_PER_TURN).
+static func get_raider_jumps_per_turn() -> int:
+	return 1 if GameState.dev_raider_1_jump_per_turn else RAIDER_JUMPS_PER_TURN
 ## When true, raider spawn creates 2 bridge nodes toward the player; when false, raider spawns alone
 const RAIDER_BRIDGE_ENABLED: bool = false
 ## Radius within which the player can direct-travel to visited nodes (same scale as raider detection)
 const PLAYER_TRAVEL_RADIUS: float = 1200.0
+
+## True if any raider ship is currently active
+var is_raider_active: bool:
+	get:
+		return raider_node_ids.size() > 0
+
+## Returns the raider that is on the player's node (for ambush), or the first active raider.
+## Read-only compatibility shim — use is_any_raider_on_player_node() for ambush checks.
+var raider_node_id: String:
+	get:
+		if current_node_id in raider_node_ids:
+			return current_node_id
+		return raider_node_ids[0] if not raider_node_ids.is_empty() else ""
 
 # Constants
 const FUEL_COST_PER_JUMP: int = 1
@@ -115,9 +135,11 @@ func _initialize_voyage() -> void:
 	
 	# Reset Raider and wormhole state on new voyage
 	wormhole_pairs.clear()
-	is_raider_active = false
-	raider_node_id = ""
+	raider_node_ids.clear()
 	jumps_since_raider_cleared = 0
+	jumps_since_last_raider_spawn = 0
+	raider_ambush_triggered = false
+	_raider_turn_index = 0
 		
 	# Only connect the initial cluster (start + 5 initial nodes) - no global pass
 	var init_ids: Array[String] = [start_node.id]
@@ -206,15 +228,38 @@ func attempt_jump(target_node: NodeData) -> bool:
 
 	return true
 
-## Process raider turn after player jump animation completes
-## Returns true if raider moved, false if no raider or couldn't move
-func process_raider_turn() -> bool:
-	if not is_raider_active:
+## Call exactly once after each player jump to update spawn counters and attempt spawning.
+## Must be called before the process_raider_turn() loop.
+func begin_player_jump_processing() -> void:
+	if raider_node_ids.is_empty():
 		jumps_since_raider_cleared += 1
-		_try_spawn_raider()
+	jumps_since_last_raider_spawn += 1
+	raider_ambush_triggered = false
+	_raider_turn_index = 0
+	_try_spawn_raider()
+
+## Process the next raider's move in round-robin order.
+## Returns true if a raider actually moved (caller should await animation).
+## Returns false if no move occurred (raider skipped or all raiders processed).
+## Break the calling loop when raider_ambush_triggered becomes true.
+func process_raider_turn() -> bool:
+	if raider_node_ids.is_empty() or raider_ambush_triggered:
 		return false
-	
-	return _process_raider_turn()
+	if _raider_turn_index >= raider_node_ids.size():
+		return false
+	var moved = _process_single_raider_turn(_raider_turn_index)
+	_raider_turn_index += 1
+	return moved
+
+## Returns true if any raider is currently on the player's node (ambush state).
+func is_any_raider_on_player_node() -> bool:
+	return current_node_id in raider_node_ids
+
+## Returns the node ID of the raider that is on the player's node, or "" if none.
+func get_ambushing_raider_id() -> String:
+	if current_node_id in raider_node_ids:
+		return current_node_id
+	return ""
 
 
 func get_story_progress() -> int:
@@ -688,9 +733,9 @@ func get_save_data() -> Dictionary:
 		"active_story_node_id": active_story_node_id,
 		"current_story_mission_id": current_story_mission_id,
 		"pending_branch_choice": pending_branch_choice,
-		"is_raider_active": is_raider_active,
-		"raider_node_id": raider_node_id,
-		"jumps_since_raider_cleared": jumps_since_raider_cleared
+		"raider_node_ids": raider_node_ids,
+		"jumps_since_raider_cleared": jumps_since_raider_cleared,
+		"jumps_since_last_raider_spawn": jumps_since_last_raider_spawn
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -705,9 +750,20 @@ func load_save_data(data: Dictionary) -> void:
 	active_story_node_id = data.get("active_story_node_id", "")
 	current_story_mission_id = data.get("current_story_mission_id", "")
 	pending_branch_choice = data.get("pending_branch_choice", "")
-	is_raider_active = data.get("is_raider_active", false)
-	raider_node_id = data.get("raider_node_id", "")
 	jumps_since_raider_cleared = data.get("jumps_since_raider_cleared", 0)
+	jumps_since_last_raider_spawn = data.get("jumps_since_last_raider_spawn", 0)
+	raider_node_ids.clear()
+	raider_ambush_triggered = false
+	_raider_turn_index = 0
+	# Support both new format (raider_node_ids array) and old single-raider saves
+	if data.has("raider_node_ids"):
+		var loaded_ids = data["raider_node_ids"]
+		for rid in loaded_ids:
+			raider_node_ids.append(str(rid))
+	elif data.get("is_raider_active", false):
+		var old_id = data.get("raider_node_id", "")
+		if old_id != "":
+			raider_node_ids.append(old_id)
 
 	if data.has("nodes"):
 		var nodes_data = data["nodes"]
@@ -790,181 +846,209 @@ func _apply_proximity_connections_for_new_nodes(new_node_ids: Array) -> void:
 
 #region Raider Mechanics
 
-## Returns true if the player's current node is within the raider's detection circle.
-## The circle is centered on the raider's current node position and moves with it.
+## Returns true if the player's current node is within ANY raider's detection radius.
 func is_player_in_raider_zone() -> bool:
-	if not is_raider_active or not nodes.has(raider_node_id):
+	if raider_node_ids.is_empty():
 		return false
 	var current_node = get_current_node()
 	if not current_node:
 		return false
-	var raider_node = nodes[raider_node_id]
-	return current_node.position.distance_to(raider_node.position) <= RAIDER_DETECTION_RADIUS
+	for rid in raider_node_ids:
+		if not nodes.has(rid):
+			continue
+		if current_node.position.distance_to(nodes[rid].position) <= RAIDER_DETECTION_RADIUS:
+			return true
+	return false
 
 
 func _try_spawn_raider() -> void:
-	if is_voyage_complete or is_raider_active:
+	if is_voyage_complete or raider_node_ids.size() >= MAX_RAIDERS:
 		return
-		
+
 	var required_jumps = RAIDER_RESPAWN_JUMPS_DEV if GameState.dev_raider_fast else RAIDER_RESPAWN_JUMPS
-	if jumps_since_raider_cleared < required_jumps:
+
+	# When no raiders exist use the "since cleared" counter; otherwise use "since last spawn"
+	var jumps_to_check = jumps_since_raider_cleared if raider_node_ids.is_empty() else jumps_since_last_raider_spawn
+	if jumps_to_check < required_jumps:
 		return
-		
+
 	var current_node = get_current_node()
 	if not current_node:
 		return
-		
-	# Find spawn position (reusing logic from story nodes)
-	var spawn_pos = _find_story_spawn_position(current_node.position)
-	
-	# Calculate direction vector to make it look like it's coming from outside
+
+	# Find a spawn position well away from the player
+	var spawn_pos = _find_story_spawn_position(current_node.position, RAIDER_SPAWN_DISTANCE_MIN, RAIDER_SPAWN_DISTANCE_MAX)
 	var incoming_vector = (current_node.position - spawn_pos).normalized()
-	
-	# Create the actual Raider node
+
+	# Create the raider map node
 	var new_id = generator.generate_uuid()
 	var new_node = NodeData.new(new_id, spawn_pos)
 	new_node.node_type = EventManager.NodeType.EMPTY_SPACE
 	new_node.biome_type = BiomeConfig.BiomeType.ASTEROID
 	new_node.difficulty_grade = NodeData.DifficultyGrade.EASY
 	nodes[new_id] = new_node
-	
-	# Set state
-	is_raider_active = true
-	raider_node_id = new_id
-	jumps_since_raider_cleared = 0
-	
-	print("DEBUG VoyageManager: Spawned Raider ship at %s" % new_node.id)
-	
-	# Generate a bridge of nodes leading towards the player's graph (disabled via RAIDER_BRIDGE_ENABLED)
+
+	# Register as active raider
+	raider_node_ids.append(new_id)
+	jumps_since_last_raider_spawn = 0
+
+	print("DEBUG VoyageManager: Spawned Raider #%d at %s" % [raider_node_ids.size(), new_node.id])
+
 	if RAIDER_BRIDGE_ENABLED:
 		_generate_raider_bridge(new_node, incoming_vector)
 
-	message_log_added.emit("WARNING: Hostile Raider signature detected on long-range scanners!")
+	var msg = "WARNING: Hostile Raider signature detected on long-range scanners!" \
+		if raider_node_ids.size() == 1 \
+		else "WARNING: Additional Raider signature detected! %d hostiles closing." % raider_node_ids.size()
+	message_log_added.emit(msg)
 	map_updated.emit()
 	raider_spawned.emit(new_node)
 
+
 func _generate_raider_bridge(raider_start_node: NodeData, direction_to_player: Vector2) -> void:
-	# Generate 2 nodes bridging the gap to the main graph
 	var new_node_ids: Array[String] = [raider_start_node.id]
 	var current_bridge_node = raider_start_node
-	var bridge_length = 2
-	
-	for i in range(bridge_length):
-		# Override parameters to force 1 node in the specific direction
+	for i in range(2):
 		var new_bridge_nodes = generator.generate_options(current_bridge_node, direction_to_player, 1, false, nodes)
 		if new_bridge_nodes.size() > 0:
 			var bridge = new_bridge_nodes[0]
 			nodes[bridge.id] = bridge
 			new_node_ids.append(bridge.id)
 			current_bridge_node = bridge
-	
-	# Only connect the raider+bridge nodes to the graph - prevents cross-branch spurious links
 	_apply_proximity_connections_for_new_nodes(new_node_ids)
 
 
-func _process_raider_turn() -> bool:
-	if not is_raider_active or not nodes.has(raider_node_id):
+## Process the move for the raider at the given index in raider_node_ids.
+## Returns true if the raider actually moved.
+func _process_single_raider_turn(index: int) -> bool:
+	if index >= raider_node_ids.size():
 		return false
-	
-	# Check if player landed on raider's node (player jumped onto raider)
-	if raider_node_id == current_node_id:
-		print("DEBUG VoyageManager: Player jumped onto raider at %s" % current_node_id)
+
+	var rid = raider_node_ids[index]
+	if not nodes.has(rid):
+		return false
+
+	# Player jumped onto this raider's node
+	if rid == current_node_id:
+		print("DEBUG VoyageManager: Player jumped onto raider %s" % rid)
 		_trigger_raider_ambush()
 		return false
 
-	# Only chase if player's current node is within the detection zone
-	if not is_player_in_raider_zone():
-		print("DEBUG VoyageManager: Player outside raider detection zone, raider idling")
+	# Idle if player is outside detection radius
+	if not _is_raider_in_detection_range(rid):
+		print("DEBUG VoyageManager: Raider %s outside detection zone, idling" % rid)
 		return false
-		
-	var raider_node = nodes[raider_node_id]
-	# Use raider-specific pathfinding that can traverse unvisited nodes
-	var path_to_player = find_path_for_raider(raider_node_id, current_node_id)
-	
+
+	# --- "Never Same Node" blocking rule ---
+	# Only one raider may occupy the player's node at any time.
+	# If the player's node is already taken by another active raider, skip this raider's move.
+	if is_any_raider_on_player_node():
+		print("DEBUG VoyageManager: Raider %s skipping – player node already occupied" % rid)
+		return false
+
+	var path_to_player = find_path_for_raider(rid, current_node_id)
 	if path_to_player.size() > 1:
-		# Index 0 is the raider's current node, Index 1 is the next step
 		var next_step = path_to_player[1]
-		raider_node_id = next_step.id
-		raider_moved.emit(next_step.position, next_step.id)
-		print("DEBUG VoyageManager: Raider moved to %s" % next_step.id)
-		
-		# Did the raider catch the player?
-		if raider_node_id == current_node_id:
-			print("DEBUG VoyageManager: Raider caught player at %s" % current_node_id)
+
+		# If next step is the player's node but another raider already occupies it, skip
+		if next_step.id == current_node_id and is_any_raider_on_player_node():
+			print("DEBUG VoyageManager: Raider %s blocked from player node – already occupied" % rid)
+			return false
+
+		# Move this raider
+		raider_node_ids[index] = next_step.id
+		raider_moved.emit(next_step.position, rid, next_step.id)
+		print("DEBUG VoyageManager: Raider %s moved to %s" % [rid, next_step.id])
+
+		if next_step.id == current_node_id:
+			print("DEBUG VoyageManager: Raider %s caught player at %s" % [rid, current_node_id])
+			# Update index entry to new id before triggering ambush
 			_trigger_raider_ambush()
 		return true
 	else:
-		# No path found - create a new node toward the player
-		print("DEBUG VoyageManager: No path found, creating emergency path toward player")
-		_create_emergency_path_toward_player()
+		print("DEBUG VoyageManager: No path found for raider %s, creating emergency path" % rid)
+		_create_emergency_path_for_raider(index)
 		return true
 
+
+func _is_raider_in_detection_range(rid: String) -> bool:
+	var current_node = get_current_node()
+	if not current_node or not nodes.has(rid):
+		return false
+	return current_node.position.distance_to(nodes[rid].position) <= RAIDER_DETECTION_RADIUS
+
+
 func _trigger_raider_ambush() -> void:
+	raider_ambush_triggered = true
 	print("DEBUG VoyageManager: RAIDER AMBUSH TRIGGERED ON NODE %s" % current_node_id)
 	message_log_added.emit("CRITICAL: Intercepted by Raiders! Prepare to deploy!")
 
-func clear_raider(success: bool) -> void:
-	is_raider_active = false
-	raider_node_id = ""
-	jumps_since_raider_cleared = 0
-	raider_destroyed.emit()
+
+## Clear a specific raider by the node ID it currently occupies.
+## success=true → raider was defeated; success=false → player retreated.
+func clear_raider(cleared_raider_node_id: String, success: bool) -> void:
+	raider_node_ids.erase(cleared_raider_node_id)
+	raider_ambush_triggered = false
+
+	if raider_node_ids.is_empty():
+		jumps_since_raider_cleared = 0
+		jumps_since_last_raider_spawn = 0
+
+	raider_destroyed.emit(cleared_raider_node_id)
+
 	if success:
 		message_log_added.emit("Raider vessel destroyed. Threat eliminated.")
 	else:
 		message_log_added.emit("Retreated from raiders. Squad sustained massive injuries!")
-		
-		# Apply mechanical penalty: Down 1-2 random officers if they aren't already injured
 		var available_officers = []
 		for key in GameState.officers.keys():
 			if GameState.is_officer_available(key):
 				available_officers.append(key)
-		
 		available_officers.shuffle()
 		var num_to_down = min(available_officers.size(), 2)
 		for i in range(num_to_down):
 			GameState.down_officer(available_officers[i])
 			print("DEBUG Raider: Downing %s as penalty" % available_officers[i])
 
-func clear_raider_surrender() -> void:
-	is_raider_active = false
-	raider_node_id = ""
-	jumps_since_raider_cleared = 0
-	raider_destroyed.emit()
+
+## Clear a specific raider as a surrender outcome (no penalty fight).
+func clear_raider_surrender(cleared_raider_node_id: String) -> void:
+	raider_node_ids.erase(cleared_raider_node_id)
+	raider_ambush_triggered = false
+
+	if raider_node_ids.is_empty():
+		jumps_since_raider_cleared = 0
+		jumps_since_last_raider_spawn = 0
+
+	raider_destroyed.emit(cleared_raider_node_id)
 	message_log_added.emit("Surrendered to raiders. Hull compromised.")
 
-## Create an emergency path toward player when normal pathfinding fails.
-## Prefers using an existing node within PROXIMITY_CONNECT_DISTANCE of the proposed spawn
-## instead of creating a redundant node that would cluster the map.
-func _create_emergency_path_toward_player() -> void:
-	if not nodes.has(raider_node_id) or not nodes.has(current_node_id):
+
+## Create an emergency path toward the player for the raider at the given index.
+## Prefers reusing an existing nearby node to avoid map clutter.
+func _create_emergency_path_for_raider(index: int) -> void:
+	if index >= raider_node_ids.size():
 		return
-		
-	var raider_node = nodes[raider_node_id]
+	var rid = raider_node_ids[index]
+	if not nodes.has(rid) or not nodes.has(current_node_id):
+		return
+
+	var raider_node = nodes[rid]
 	var player_node = nodes[current_node_id]
-	
-	# Calculate direction from raider to player
 	var direction = (player_node.position - raider_node.position).normalized()
-	
-	# Proposed position (standard jump distance ~400 units)
 	var proposed_pos = raider_node.position + direction * 400.0
-	
-	# Look for an existing node close to where we'd spawn - use it instead of creating a duplicate
-	# IMPORTANT: Only use existing node if raider→node distance <= MAX_RAIDER_JUMP_DISTANCE.
-	# Otherwise we get pathlines spanning 800+ units (proposed_pos + 450) which look wrong.
-	const MAX_RAIDER_JUMP_DISTANCE: float = 500.0  # Matches generator MAX_DISTANCE
+
+	const MAX_RAIDER_JUMP_DISTANCE: float = 500.0
 	var best_existing_id: String = ""
 	var best_dist_to_player: float = INF
 	for node_id in nodes:
-		if node_id == raider_node_id:
+		if node_id == rid:
 			continue
 		var candidate = nodes[node_id]
-		var dist_to_proposed = candidate.position.distance_to(proposed_pos)
-		if dist_to_proposed > PROXIMITY_CONNECT_DISTANCE:
+		if candidate.position.distance_to(proposed_pos) > PROXIMITY_CONNECT_DISTANCE:
 			continue
-		var dist_from_raider = candidate.position.distance_to(raider_node.position)
-		if dist_from_raider > MAX_RAIDER_JUMP_DISTANCE:
-			continue  # Avoid pathlines that are way too long
-		# Must be in the direction toward player (ahead of raider, not behind)
+		if candidate.position.distance_to(raider_node.position) > MAX_RAIDER_JUMP_DISTANCE:
+			continue
 		var to_candidate = (candidate.position - raider_node.position).normalized()
 		if to_candidate.dot(direction) <= 0.0:
 			continue
@@ -972,46 +1056,42 @@ func _create_emergency_path_toward_player() -> void:
 		if dist_to_player < best_dist_to_player:
 			best_dist_to_player = dist_to_player
 			best_existing_id = node_id
-	
+
+	var new_node_id: String
 	if best_existing_id != "":
-		# Use existing node - connect raider to it and move there
 		var existing_node = nodes[best_existing_id]
 		if not best_existing_id in raider_node.connections:
 			raider_node.connections.append(best_existing_id)
-		if not raider_node_id in existing_node.connections:
-			existing_node.connections.append(raider_node_id)
-		raider_node_id = best_existing_id
-		raider_moved.emit(existing_node.position, best_existing_id)
-		print("DEBUG VoyageManager: Raider emergency moved to existing node %s (avoided redundant spawn)" % best_existing_id)
-		if raider_node_id == current_node_id:
-			_trigger_raider_ambush()
+		if not rid in existing_node.connections:
+			existing_node.connections.append(rid)
+		new_node_id = best_existing_id
+		print("DEBUG VoyageManager: Raider %s emergency → existing node %s" % [rid, best_existing_id])
+	else:
+		var new_id = generator.generate_uuid()
+		var new_node = NodeData.new(new_id, proposed_pos)
+		new_node.node_type = EventManager.NodeType.EMPTY_SPACE
+		new_node.biome_type = BiomeConfig.BiomeType.ASTEROID
+		new_node.difficulty_grade = NodeData.DifficultyGrade.EASY
+		nodes[new_id] = new_node
+		if not new_id in raider_node.connections:
+			raider_node.connections.append(new_id)
+		if not rid in new_node.connections:
+			new_node.connections.append(rid)
+		_apply_proximity_connections_for_new_nodes([new_id])
+		new_node_id = new_id
+		print("DEBUG VoyageManager: Raider %s emergency → new node %s" % [rid, new_id])
+
+	# Block landing on player node if another raider is already there
+	if new_node_id == current_node_id and is_any_raider_on_player_node():
+		print("DEBUG VoyageManager: Raider %s emergency blocked from player node" % rid)
 		return
-	
-	# No suitable existing node - create new one
-	var new_id = generator.generate_uuid()
-	var new_node = NodeData.new(new_id, proposed_pos)
-	new_node.node_type = EventManager.NodeType.EMPTY_SPACE
-	new_node.biome_type = BiomeConfig.BiomeType.ASTEROID
-	new_node.difficulty_grade = NodeData.DifficultyGrade.EASY
-	
-	nodes[new_id] = new_node
-	
-	if not new_id in raider_node.connections:
-		raider_node.connections.append(new_id)
-	if not raider_node_id in new_node.connections:
-		new_node.connections.append(raider_node_id)
-	
-	print("DEBUG VoyageManager: Created emergency path node %s at %s" % [new_id, proposed_pos])
-	
-	_apply_proximity_connections_for_new_nodes([new_id])
-	
-	raider_node_id = new_id
-	raider_moved.emit(proposed_pos, new_id)
-	print("DEBUG VoyageManager: Raider emergency moved to %s" % new_id)
-	
-	# Check if we caught the player (rare but possible)
-	if raider_node_id == current_node_id:
-		print("DEBUG VoyageManager: Raider caught player at %s" % current_node_id)
+
+	raider_node_ids[index] = new_node_id
+	var final_pos = nodes[new_node_id].position if nodes.has(new_node_id) else proposed_pos
+	raider_moved.emit(final_pos, rid, new_node_id)
+
+	if new_node_id == current_node_id:
+		print("DEBUG VoyageManager: Raider %s emergency caught player at %s" % [rid, current_node_id])
 		_trigger_raider_ambush()
 
 #endregion
