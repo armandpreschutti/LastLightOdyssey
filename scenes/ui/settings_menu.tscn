@@ -317,32 +317,7 @@ theme_override_colors/font_hover_color = Color(1, 0.85, 0.4, 1)
 theme_override_font_sizes/font_size = 18
 text = "[ RESET TUTORIAL ]"
 
-[node name="HSeparator4" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1855547981]
-custom_minimum_size = Vector2(0, 1)
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.4, 0.9, 1, 0.2)
-
-[node name="DeveloperSection" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1053513440]
-layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = 8
-
-[node name="DeveloperLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/DeveloperSection" unique_id=1652002543]
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.2, 0.2, 1)
-theme_override_font_sizes/font_size = 22
-text = "DEVELOPER"
-
-[node name="DeveloperPanelButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/DeveloperSection" unique_id=2004302357]
-custom_minimum_size = Vector2(280, 44)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
-theme_override_colors/font_hover_color = Color(0.7, 1, 1, 1)
-theme_override_font_sizes/font_size = 18
-text = "[ OPEN DEVELOPER PANEL ]"
-
-[node name="HSeparator5" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1158419332]
+[node name="HSeparator4" type="ColorRect" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1158419332]
 custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 mouse_filter = 2

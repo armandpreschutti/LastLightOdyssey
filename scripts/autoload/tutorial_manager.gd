@@ -128,6 +128,15 @@ func reset_all_tutorials() -> void:
 	config.save(CONFIG_PATH)
 
 
+## Disables ALL tutorials permanently (called when player presses Skip Tutorial in any popup).
+func disable_all_tutorials() -> void:
+	var config := ConfigFile.new()
+	config.load(CONFIG_PATH)
+	for mechanic_id in TUTORIALS.keys():
+		config.set_value(CONFIG_SECTION, mechanic_id + "_completed", true)
+	config.save(CONFIG_PATH)
+
+
 ## Request the tutorial for a mechanic. Shows the overlay if not yet completed.
 ## Safe to call every time the mechanic is first accessed — guards internally.
 func request_tutorial(mechanic_id: String) -> void:
@@ -164,14 +173,23 @@ func _show_tutorial(mechanic_id: String) -> void:
 
 	overlay.setup_steps(steps)
 
-	overlay.tutorial_completed.connect(_on_tutorial_finished.bind(mechanic_id))
-	overlay.tutorial_skipped.connect(_on_tutorial_finished.bind(mechanic_id))
+	overlay.tutorial_completed.connect(_on_tutorial_completed.bind(mechanic_id))
+	overlay.tutorial_skipped.connect(_on_tutorial_skipped)
 
 	overlay.show_overlay()
 
 
-func _on_tutorial_finished(mechanic_id: String) -> void:
+func _on_tutorial_completed(mechanic_id: String) -> void:
 	mark_mechanic_completed(mechanic_id)
+	_cleanup_overlay()
+
+
+func _on_tutorial_skipped() -> void:
+	disable_all_tutorials()
+	_cleanup_overlay()
+
+
+func _cleanup_overlay() -> void:
 	if _current_canvas_layer and is_instance_valid(_current_canvas_layer):
 		_current_canvas_layer.queue_free()
 	_current_canvas_layer = null

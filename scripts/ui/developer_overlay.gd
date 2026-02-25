@@ -186,6 +186,21 @@ func _build_ui() -> void:
 	active_row.add_child(active_val)
 	_update_active_indicator()
 
+	_add_separator(vbox)
+
+	var reset_row = HBoxContainer.new()
+	reset_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(reset_row)
+	var reset_tutorial_btn = Button.new()
+	reset_tutorial_btn.name = "ResetTutorialButton"
+	reset_tutorial_btn.custom_minimum_size = Vector2(0, 40)
+	reset_tutorial_btn.text = "[ RESET TUTORIAL ]"
+	reset_tutorial_btn.add_theme_color_override("font_color", COLOR_TITLE)
+	reset_tutorial_btn.add_theme_color_override("font_hover_color", Color(1, 0.85, 0.4, 1.0))
+	reset_tutorial_btn.add_theme_font_size_override("font_size", 18)
+	reset_tutorial_btn.pressed.connect(_on_reset_tutorial_pressed)
+	reset_row.add_child(reset_tutorial_btn)
+
 
 func _add_separator(parent: Control) -> void:
 	var sep = ColorRect.new()
@@ -235,6 +250,19 @@ func _update_active_indicator() -> void:
 	else:
 		active_val.text = "NO"
 		active_val.add_theme_color_override("font_color", Color(0.3, 0.8, 0.4, 1.0))
+
+
+func _on_reset_tutorial_pressed() -> void:
+	TutorialManager.reset_all_tutorials()
+	var btn = _panel.find_child("ResetTutorialButton", true, false) as Button
+	if btn:
+		btn.text = "[ TUTORIAL RESET! ]"
+		btn.disabled = true
+		var t = get_tree().create_timer(1.5)
+		t.timeout.connect(func():
+			btn.text = "[ RESET TUTORIAL ]"
+			btn.disabled = false
+		)
 
 
 ## Toggle visibility and re-sync when opening.

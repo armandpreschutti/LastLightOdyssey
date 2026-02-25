@@ -25,7 +25,6 @@ const RESOLUTIONS: Array[Vector2i] = [
 @onready var music_value: Label = $PanelContainer/MarginContainer/VBoxContainer/AudioSection/MusicContainer/MusicValue
 @onready var reset_settings_button: Button = $PanelContainer/MarginContainer/VBoxContainer/AudioSection/ResetSettingsButton
 @onready var reset_tutorial_button: Button = $PanelContainer/MarginContainer/VBoxContainer/TutorialSection/ResetTutorialButton
-@onready var developer_panel_button: Button = $PanelContainer/MarginContainer/VBoxContainer/DeveloperSection/DeveloperPanelButton
 @onready var apply_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/ApplyButton
 @onready var back_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonContainer/BackButton
 
@@ -94,11 +93,6 @@ func _connect_signals() -> void:
 		push_error("SettingsMenu: reset_tutorial_button is null!")
 	else:
 		reset_tutorial_button.pressed.connect(_on_reset_tutorial_pressed)
-
-	if not developer_panel_button:
-		push_error("SettingsMenu: developer_panel_button is null!")
-	else:
-		developer_panel_button.pressed.connect(_on_developer_panel_pressed)
 		
 	if not apply_button:
 		push_error("SettingsMenu: apply_button is null!")
@@ -197,13 +191,6 @@ func _apply_audio_settings() -> void:
 	if MusicManager:
 		MusicManager.set_master_volume(_pending_master)
 		MusicManager.set_music_volume(_pending_music)
-
-
-func _on_developer_panel_pressed() -> void:
-	if SFXManager:
-		SFXManager.play_sfx_by_name("ui", "click")
-	if DeveloperOverlay:
-		DeveloperOverlay.toggle()
 
 
 func _on_fullscreen_toggled(toggled: bool) -> void:
