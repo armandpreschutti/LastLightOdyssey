@@ -40,76 +40,79 @@ This layer simulates the command of the ship across an infinite procedurally gen
 
 ### 2.1 Economic & Survival Stats
 
-The economy has been overhauled to support a non-linear "Voyage" loop.
+The game features a **Cash-only economy** — no scrap resource.
 
 | Statistic | Initial | Description |
 |-----------|---------|-------------|
-| **Fuel** | 10 | Ship Stamina. Consumed per jump (1-3 based on distance). At 0, applies Hull Damage. |
-| **Scrap** | 25 | Material Resource. Used ONLY for: 1) Hull Repairs, 2) Event Mitigation. |
+| **Fuel** | 3 | Ship Stamina. Consumed per jump (1-3 based on distance). At 0, applies Hull Damage. |
 | **Hull Integrity** | 100.0 | Ship Health. At 0.0, trigger Game Over (Ship Destruction). |
-| **Cash** | 100 | Liquid Assets. Primary currency. Used in the **Market** to buy Fuel/Scrap. |
-| **Intel** | 0 | Story Progress. Gained from tactical missions. **Threshold of 10** spawns a Story Node. |
-| **Data Logs** | 0 | [REFACTORED] Tech Currency. Now earned individually by Officers upon Level Up. |
+| **Cash** | 20 | Liquid Assets. Primary currency. Used in the Market to buy Fuel and repair Hull. |
+| **Intel** | 0 | Story Progress. Gained from tactical missions. **Threshold of 3** (1 in dev mode) spawns a Story Node. |
+| **Data Logs** | 0 | Tech Currency. Earned per-officer upon level-up. |
 
-### 2.2 The Infinite Map System
+### 2.2 The Progressive Map System
 
-Replaces the linear "Oregon Trail" path with an **Infinite Grid System**.
+Replaces old grid approaches with the **Progressive Map System**.
 
 **Structure:**
-- **Coordinate-Based Generation**: The map is generated infinitely based on grid coordinates `Vector2(x, y)`.
-- **Exploration Logic**: Players can move to any of the 6 adjacent hex coordinates (or 4 grid coordinates) relative to their position.
-- **Node Discovery**: New nodes are generated as "Unvisited" when they come within range.
-- **Backtracking**: Players can revisit nodes, but "Cleared" nodes become "Dead Zones" (traversable but offer no rewards).
+- **Distance-Based Graph**: Generated via `ProgressiveMapGenerator` (not InfiniteGridGenerator).
+- **Generation**: New nodes spawn 300–500 units from the arrival node in a forward cone (140° spread), yielding 2–3 nodes per jump.
+- **Node Discovery**: Nodes dynamically appear as the player travels; there are no hex coordinates.
 
-**Node Types:**
+**Node Types (from `_roll_node_type`):**
 | Type | Frequency | Description |
 |------|-----------|-------------|
-| **Scavenge Site** | 40% | Triggers Isometric Tactical Mode for resource gathering. |
-| **Empty / Event** | 40% | No tactical map, triggers a Random Event roll. |
-| **Story Node** | Dynamic | Spawns automatically when **Intel >= 10**. Advances the narrative. |
+| **Empty / Event** | ~76% | No tactical map, ~17.5% chance of pre-rolled Random Event. |
+| **Scavenge Site** | 16% | Triggers Tactical Mode (Asteroid or Planet biome). |
+| **Wormhole** | 8% | Teleports player to distant node (32% spawn rate with `dev_wormhole_4x`). |
+| **Story Node** | Dynamic | Spawns when Intel >= 3. Advances branching campaign. |
 
-**Node States:**
-1.  **UNVISITED**: Default state. Clickable. Enters Tactical Mode or Event.
-2.  **CLEARED**: Set after mission success. Traversable but costs fuel with no reward.
-3.  **STORY**: Special state. Overrides standard behavior for plot progression.
-
-**Story Node Spawning:**
--   **Trigger**: When `GameState.intel >= 10`.
--   **Logic**: The system searches for an UNVISITED node within Range 3. If none, it generates one.
--   **Effect**: Forces that node to be a Story Mission. Completing it resets Intel to 0.
+*(Note: "Trading Terminal" is the in-universe functional name for the Market accessed via the Management HUD and does not spawn as a map node.)*
 
 ### 2.3 Random Event System
 
-Upon entering an "Empty / Event" node, the game rolls **1d10** against the Event Table.
+Upon entering an "Empty / Event" node, there is a roughly ~17.5% chance of a pre-rolled event occurring. The game rolls **1–20** (generic system).
 
-**Events:**
-| Roll | Event | Base Loss | Specialist | Mitigated Loss | Mitigation Cost |
-|------|-------|-----------|------------|----------------|-----------------|
-| 1 | Solar Flare | −30% integrity | Tech | −10% integrity | 18 scrap |
-| 2 | Meteor Shower | −40% integrity | Scout | −15% integrity | 22 scrap |
-| 3 | System Critical | −25% integrity | Tech | −5% integrity | 15 scrap |
-| 4 | Pirate Ambush | −50% integrity | Heavy | −20% integrity | 28 scrap |
-| 5 | Space Debris | −20% integrity | Scout | −10% integrity | 20 scrap |
-| 6 | Sensor Ghost | No effect | — | — | — |
-| 7 | Radiation Storm | −35% integrity | Tech | −15% integrity | 25 scrap |
-| 8 | Void Rift | −45% integrity | Scout | −20% integrity | 30 scrap |
-| 9 | Hull Malfunction | −25% integrity | Tech | −10% integrity | 20 scrap |
-| 10 | Clear Skies | No effect | — | — | — |
+**Generic Mechanics:**
+- Events affect Integrity, Cash, and Fuel.
+- **Mitigation**: Having a specific living, available Specialist reduces integrity loss when applicable (the code function returns false but reduces the severity).
+- **Cost Scaling**: Mitigation sets `get_mitigation_cost_multiplier()` which scales by voyage progress.
 
-**Mitigation Cost Scaling:**
-Costs scale with `GameState.total_jumps_made` to maintain economic pressure as the player accumulates wealth.
+**Simplified Event Table (Examples 1-5):**
+| Roll | Base Loss | Mitigated Loss | Mitigation Specialist | Cash/Fuel Effects |
+|------|-----------|----------------|-----------------------|-------------------|
+| 1 | −30% integrity | −10% integrity | Tech | −10 Cash |
+| 2 | −40% integrity | −15% integrity | Scout | No changes |
+| 3 | −25% integrity | −5% integrity | Tech | −1 Fuel |
+| 4 | −50% integrity | −20% integrity | Heavy | −20 Cash |
+| 5 | −20% integrity | −10% integrity | Scout | No changes |
 
-**Resolution:**
-If the required specialist is **Alive** and **Available** (not injured), and the player has enough Scrap, they can mitigate the damage.
+### 2.4 The Market System (Trading Terminal)
 
-### 2.4 The Market System
-
-Accessible from the Management HUD, the Market is the primary resource sink and bailout mechanic.
+Accessible from the Management HUD, the Market ("Trading Terminal" in-fiction) is the primary resource sink and bailout mechanic.
 
 **Transactions:**
-- **Buy Fuel**: 10 Cash → +5 Fuel
-- **Buy Scrap**: 10 Cash → +10 Scrap
-- **Repair Hull**: 50 Cash → +10% Integrity (Max 100%)
+- **Buy Fuel**: 15 Cash → +1 Fuel
+- **Repair Hull**: 50 Cash → +25 Hull Integrity (Max 100)
+
+*(Buy Scrap has been removed.)*
+
+### 2.5 Raider System
+
+A dynamic threat that chases the player across the progressive map.
+
+- **Spawning**: After a delay of `RAIDER_RESPAWN_JUMPS` (10, or 2 in dev mode), within `RAIDER_SPAWN_DISTANCE` (2400–3600 units). Max 3 raiders total.
+- **Detection**: 1200 radius. Player entering this zone triggers chase. HUD shows "Hostile Warning" and disables fast travel.
+- **Movement**: Chases the player at 2 jumps per ONE player turn (1 in dev).
+- **Ambush**: If the raider reaches the player's node, the player must Deploy to combat or Surrender resources.
+
+### 2.6 Wormhole System
+
+- **Node type**: 8% spawn rate from `ProgressiveMapGenerator`.
+- **Cost**: 0 fuel to enter.
+- **Destination**: Unknown. Teleports player to a distant node.
+- **Raiders**: Do not follow the player through wormholes.
+- **Pairs**: Tracked via `wormhole_pairs`; traversed pairs display white pathlines.
 
 ---
 
@@ -129,17 +132,55 @@ Refactored from a simple roster to a persistent RPG system.
 
 ### 3.2 Officer Classes & Abilities
 
-**Base Archetypes:**
-(Abilities listed here are *Base* abilities. Upgrades are unlocked via Tech Tree).
+Source of truth: `GameState.ABILITY_DEFS`. Each class has 1 Base (Level 1) ability, 2 Level 2 abilities, and 3 Level 3 abilities.
 
-| Role | Passive Ability | Active Ability | HP | Move | Sight |
-|------|-----------------|----------------|-----|------|-------|
-| **Captain** | — | **Execute** (1 AP): Guaranteed kill on enemy within 4 tiles below 50% HP. Never misses. 2-turn cooldown. | 100 | 5 | 6 |
-| **Scout** | +2 sight range (base 8 + 2 = 10), extended enemy detection | **Overwatch** (1 AP): Reaction shot at first enemy that moves in LOS. Guaranteed hit. 2-turn cooldown. | 80 | 6 | 10 |
-| **Tech** | Can see items through walls | **Turret** (1 AP): Deploy auto-firing sentry on adjacent tile. Lasts 3 turns, auto-shoots nearest enemy each turn (15 DMG, 6 tile range). 2-turn cooldown. | 70 | 4 | 5 |
-| **Medic** | Can see exact enemy HP, +25% healing bonus | **Patch** (1 AP): Heal yourself or ally within 3 tiles for 62.5% max HP (50% base + 25% enhanced healing). 2-turn cooldown. | 75 | 5 | 5 |
-| **Heavy** | Armor Plating (−20% damage taken), +35 base damage | **Charge** (1 AP): Rush enemy within 4 tiles. Instant-kills basic enemies; deals 2x base damage to heavy enemies. 2-turn cooldown. | 120 | 3 | 5 |
-| **Sniper** | +2 sight range (base 7 + 2 = 9), +2 shoot range, +30 base damage | **Precision Shot** (1 AP): Guaranteed hit on any visible enemy. Deals 1.5x base damage (45). 2-turn cooldown. | 70 | 4 | 9 |
+**Captain** (100 HP, 5 Move, 6 Sight)
+- **Level 1 (Base): Execute** (1 AP, 2 CD) - Guaranteed kill on target <50% HP within 4 tiles.
+- **Level 2A: Lead by Example** (Passive) - Squad gains +1 AP when Captain kills.
+- **Level 2B: Coordinate Fire** (1 AP, active) - Mark target: allies +20% acc/crit vs target for 1 turn.
+- **Level 3A: Warlord** (Passive) - Execute has no cooldown.
+- **Level 3B: No One Left Behind** (Passive) - Ally near death survives with 1 HP + immunity (once per mission).
+- **Level 3C: Inspire** (1 AP, 3 CD) - Grant an ally within 5 tiles +1 AP immediately.
+
+**Scout** (80 HP, 6 Move, 10 Sight)
+- **Level 1 (Base): Overwatch** (1 AP, 2 CD) - React shot at first enemy that moves in LOS (Guaranteed hit).
+- **Level 2A: Hit & Run** (0 AP, 1 CD) - Dash up to 3 tiles to reposition.
+- **Level 2B: Deep Scanner** (0 AP, 3 CD) - Reveals enemies in 15 tile radius for 1 turn.
+- **Level 3A: Explosive Ambush** (0 AP, 0 CD) - Plant trap on tile: 100 damage + pinned when walked over.
+- **Level 3B: Phantom** (1 AP, 2 duration) - Invisible 2 turns; first attack deals +100% damage but reveals.
+- **Level 3C: Untouchable** (Passive) - If you kill an enemy, next attack against you is guaranteed to miss.
+
+**Tech** (70 HP, 4 Move, 5 Sight)
+- **Level 1 (Base): Turret** (1 AP, 2 CD) - Deploy auto-firing sentry (3 turns).
+- **Level 2A: Combat Engineer** (Passive) - Turrets gain 20 HP shield and last 5 turns.
+- **Level 2B: Field Repair** (0 AP, 3 CD) - Instantly restore 25 HP and +1 turn duration to nearest turret.
+- **Level 3A: Overcharge** (1 AP, 3 CD) - Active turrets deal 2x damage for 2 turns; allows 2 turrets simultaneously.
+- **Level 3B: Remote Detonation** (0 AP) - Destroy nearest turret for 30 AoE damage within 2 tiles.
+- **Level 3C: System Reboot** (1 AP, 1 use) - Reset all ability cooldowns and grant every deployed ally +1 AP.
+
+**Medic** (75 HP, 5 Move, 5 Sight)
+- **Level 1 (Base): Patch** (1 AP, 2 CD) - Heal self/ally within 3 tiles for 62.5% max HP.
+- **Level 2A: Adrenaline Patch** (Passive) - Patch also grants target +2 Movement and +15% Accuracy for 2 turns.
+- **Level 2B: Field Surgeon** (Passive) - Auto-stabilize ally within 4 tiles from death.
+- **Level 3A: Miracle Worker** (2 AP, 1 use) - Instantly restore 50% HP to all squad members.
+- **Level 3B: Toxicologist** (Passive) - Attacks apply Poison (5 DMG/turn, -20% Aim).
+- **Level 3C: Stim Injector** (1 AP, 3 CD) - Inject ally: +2 AP and -50% damage taken for 1 turn.
+
+**Heavy** (120 HP, 3 Move, 5 Sight. Armor Plating: -20% dmg taken)
+- **Level 1 (Base): Charge** (1 AP, 2 CD) - Rush enemy within 4 tiles. Instakill basic, 2x damage heavy.
+- **Level 2A: Bulldozer** (Passive) - Charge destroys cover and grants +20 Armor.
+- **Level 2B: Suppression Fire** (1 AP, 3 CD) - Deal 12 light damage and Pin Down target (no movement 3 turns).
+- **Level 3A: Juggernaut** (Passive) - Immune to Critical Hits. Regen 15% HP if ending turn without attacking.
+- **Level 3B: Rocket Salvo** (2 AP, 3 CD) - 40 damage to all enemies in 3x3 area.
+- **Level 3C: War Machine** (Passive) - Each killed enemy this mission permanently grants +5 base damage.
+
+**Sniper** (70 HP, 4 Move, 9 Sight)
+- **Level 1 (Base): Precision Shot** (1 AP, 2 CD) - Guaranteed hit on visible enemy, 1.5x damage.
+- **Level 2A: Last Stand** (1 AP, 2 CD) - Next shot guaranteed hit, ignores all cover penalties.
+- **Level 2B: Snap Shot** (Passive) - Precision Shot has no cooldown.
+- **Level 3A: Serial** (Passive) - Kill with main weapon fully refunds AP.
+- **Level 3B: Apex Predator** (Passive) - Deal +100% damage against full-health enemies.
+- **Level 3C: Double Tap** (1 AP, 2 CD) - Fire twice at same target (-15% accuracy penalty on second shot).
 
 ### 3.3 Progression & Tech Tree (Barracks)
 
@@ -243,8 +284,8 @@ func get_damage_modifier(target: Unit) -> float:
 
 | Cover Type | Defender Penalty | Attacker Bonus | Destructible |
 |------------|------------------|----------------|--------------|
-| Half Cover | −25% to hit | +10% accuracy | Yes |
-| Full Cover | −50% to hit | +15% accuracy | Yes |
+| Half Cover | −25% to hit | +5% accuracy | Yes |
+| Full Cover | −50% to hit | +10% accuracy | Yes |
 | Walls | Blocks LOS | — | Some destructible |
 
 When cover is destroyed, it becomes rubble (0% cover value).
@@ -252,48 +293,7 @@ When cover is destroyed, it becomes rubble (0% cover value).
 **Flanking System:**
 Cover only protects from the direction it faces. Attacking from an unprotected angle (flanking) bypasses cover AND deals **+50% bonus damage**. Tactical positioning is crucial!
 
-### 3.7 Specialist Abilities Detail
 
-#### Turret System (Tech Ability)
-Tech officers can deploy **auto-firing sentry turrets** on tactical maps:
-
-- **Placement**: Adjacent tile only, must be walkable and unoccupied
-- **Duration**: 3 turns (auto-expires after 3 enemy turns)
-- **Auto-Fire**: Each turn, turret automatically targets and shoots the nearest visible enemy within range
-- **Range**: 6 tiles (Manhattan distance)
-- **Damage**: 15 per shot (always hits)
-- **Cooldown**: 2-turn cooldown after deployment
-- **Visual Feedback**: Turret displays remaining turns with color-coded indicator
-
-#### Charge System (Heavy Ability)
-Heavy officers can **rush enemies** in close combat:
-
-- **Range**: 4 tiles (Manhattan distance)
-- **Movement**: Heavy automatically moves adjacent to target (if path exists)
-- **Basic Enemies**: Instant kill on contact
-- **Heavy Enemies**: Deals 2x base damage (70 damage from Heavy's 35 base damage)
-- **Cooldown**: 2-turn cooldown after use
-- **Visual**: Cinematic melee attack animation with camera focus
-
-#### Execute System (Captain Ability)
-Captains can **finish off weakened enemies** with precision:
-
-- **Range**: 4 tiles (Manhattan distance)
-- **Requirement**: Target must be below 50% HP
-- **Effect**: Guaranteed instant kill (deals damage equal to target's current HP)
-- **Accuracy**: Never misses (bypasses all cover and hit chance calculations)
-- **Cooldown**: 2-turn cooldown after use
-- **Visual**: Cinematic execution sequence with camera focus
-
-#### Precision Shot System (Sniper Ability)
-Snipers can **deliver devastating long-range shots** with perfect accuracy:
-
-- **Range**: Any visible enemy (no distance restriction)
-- **Requirement**: Target must be visible (within revealed fog of war)
-- **Effect**: Guaranteed hit dealing 1.5x base damage (45 damage from 30 base damage)
-- **Accuracy**: Never misses (bypasses all cover and hit chance calculations)
-- **Cooldown**: 2-turn cooldown after use
-- **Visual**: Cinematic precision aiming sequence with camera focus, "TAKING AIM..." message
 
 ### 3.8 Fog of War
 
@@ -335,7 +335,7 @@ Snipers can **deliver devastating long-range shots** with perfect accuracy:
 
 *\*Boss HP and damage scale with `difficulty_multiplier`. Each biome has a unique boss variant (Station, Asteroid, Planet).*
 
-*Note: Spawn rates vary by biome (see Section 3.8 Biome System). Sniper and Elite enemies appear more frequently as mission difficulty increases.*
+*Note: Spawn rates vary by biome (see Section 3.10 Biome System). Sniper and Elite enemies appear more frequently as mission difficulty increases.*
 
 #### 3.9.1 Enemy Tiers (Evolution)
 
@@ -357,23 +357,34 @@ Bosses (Station, Asteroid, Planet) are no longer static.
 
 ### 3.10 Biome System
 
-Scavenge sites have one of three procedurally-assigned biome types, each with unique map generation, visuals, and enemy distribution.
+Locations have procedurally-assigned biome types, each with unique map generation, visuals, and enemy distribution.
+
+**Scavenge Missions**
+Only Asteroid and Planet biomes appear for standard scavenge node generation.
 
 | Biome | Map Type | Size | Enemies | Heavy % | Loot Focus |
 |-------|----------|------|---------|---------|------------|
-| **Derelict Station** | BSP Rooms & Corridors | 17-20 | 4-6 | 30% | Balanced |
-| **Asteroid Mine** | Cellular Automata Caves | 14-17 | 3-5 | 50% | More Scrap |
-| **Planetary Surface** | Open Field w/ Clusters | 24-27 | 5-8 | 20% | More Fuel |
+| **Asteroid Mine** | Cellular Automata Caves | 14-17 | 3-5 | 50% | More Cash/Fuel |
+| **Planetary Surface** | Open Field w/ Clusters | 24-27 | 5-8 | 20% | Balanced |
+
+**Story Missions**
+Story nodes use specific biomes based on the chapter:
+- **Station**: Chapters 1, 5
+- **Asteroid**: Chapters 2, 4
+- **Planet**: Chapter 3
+
+| Biome | Map Type | Size | Enemies | Heavy % | Loot Focus |
+|-------|----------|------|---------|---------|------------|
+| **Derelict Station** | BSP Rooms & Corridors | 17-20 | 4-6 | 30% | Story Intel |
 
 **Generation Algorithms:**
 - **Station**: Binary Space Partitioning creates interconnected rooms with corridors. Industrial aesthetic with metal floors and walls.
-- **Asteroid**: Cellular automata generates organic cave networks. Rocky browns with tighter spaces and high-value scrap deposits.
+- **Asteroid**: Cellular automata generates organic cave networks. Rocky browns with tighter spaces and high-value deposits.
 - **Planet**: Open terrain with scattered obstacle clusters and cover. Alien teal/purple aesthetic with bioluminescent elements.
 
 **Biome Assignment:**
-- Biomes are pre-assigned to scavenge nodes during star map generation
-- Variety balancing ensures all three biome types appear across the journey
-- Each biome has distinct visual themes and color palettes
+- Biomes are pre-assigned to nodes during star map generation or forced by Story campaigns.
+- Each biome has distinct visual themes and color palettes.
 
 ### 3.11 Mission Difficulty Scaling
 
@@ -440,16 +451,21 @@ Each objective requires interacting with specific objects on the tactical map:
 ## 4. Survival Mechanics
 
 ### 4.1 Fuel & Drift Mode
-- **Consumption**: 1-3 Fuel per jump (based on distance/route).
+- **Consumption**: `FUEL_COST_PER_JUMP = 1`
 - **Drift Mode**: If Fuel reaches **0**, the ship enters Drift Mode.
     - **Effect**: Jumps remain possible but cost **Hull Integrity** instead of Fuel.
-    - **Penalty**: -15% Hull Integrity per jump.
+    - **Penalty**: `HULL_DAMAGE_NO_FUEL = 5` per jump.
 
-### 4.2 Hull Integrity
+### 4.2 Structural Stress
+Replaces the legacy Cryo-Stability system (icon_cryo remains as an asset reference).
+- **Effect**: The ship takes 1 Hull damage per tactical turn (`HULL_DAMAGE_PER_TURN = 1`).
+- **Purpose**: Creates pressure to finish missions quickly without relying on hard timers.
+
+### 4.3 Hull Integrity
 The ship's structural health.
-- **Damage Sources**: Events, Drift Mode jumps.
+- **Damage Sources**: Events, Drift Mode jumps, Structural Stress turns.
 - **Critical Failure**: At **0%**, the ship is destroyed (Game Over).
-- **Repairs**: Available in the **Market** (50 Cash for +10%).
+- **Repairs**: Available in the **Market** (50 Cash for +25%).
 
 ### 4.3 Extraction Policy
 - **Success**: All living officers must reach the Extraction Zone.
@@ -468,9 +484,14 @@ Players can pause during tactical missions and choose to **Abandon Mission**:
 ## 5. Win/Loss Logic
 
 ### 5.1 Win Condition
-**The Final Signal**: The voyage concludes when the player completes the **Final Story Mission**.
-- **Progression**: Collecting **Intel** spawns Story Nodes.
-- **Victory**: The final Story Node in the chain triggers the Victory Screen.
+**The Final Signal**: The voyage concludes when the player completes a **Terminal Story Mission** (Chapter 5).
+- **Progression**: Collecting **Intel** spawns Story Nodes. The Intel threshold is 3 (1 in dev mode).
+- **Branching Campaign**: Uses `CAMPAIGN_TREE` from `VoyageManager`. 
+  - 1A → 2A or 2B
+  - 2A → 3A or 3B, etc.
+- **Terminal Missions**: 5A, 5B, 5C, 5D, 5E.
+- **Story Difficulty**: Grades from EASY to IMPOSSIBLE as chapters progress.
+- **Victory**: Defeating the final chapter's node triggers the Victory Screen.
 
 ### 5.2 Loss Conditions
 The voyage ends in failure if:
@@ -629,17 +650,13 @@ As the mission progresses throughout the voyage, the game displays **emotional s
 - Color-coded status indicators (HP bars, AP dots, stability warnings)
 
 ### Tutorial System
-First-time players receive a **9-step guided tutorial** that covers:
+First-time players receive a **contextual tutorial system** that triggers on first encounters:
 
-1. **Core Objective** - Understand the voyage loop and long-term survival goal
-2. **Resource Management** - Understanding fuel, hull, and scrap
-3. **Random Events** - How events work and specialist mitigation
-4. **Scavenge Missions** - Team selection and permadeath warning
-5. **Tactical Movement** - Action points and movement
-6. **Combat** - Attacking enemies and cover mechanics
-7. **Abilities** - Specialist unique abilities (Scout Overwatch, Tech Turret, Medic Patch, Heavy Charge, Captain Execute, Sniper Precision Shot)
-8. **Cryo-Stability** - Time pressure and ship protection
-9. **Extraction** - Completing missions
+- **star_map**: 2 steps (star map, node types including Wormholes).
+- **resources**: 4 steps (Cash, Intel, Fuel, Hull Integrity including "1% per turn").
+- **beacon_signals**: 1 step (beacon signals).
+- **raiders**: 2 steps (raider ship, detection zone).
+- **wormholes**: 1 step.
 
 Tutorial can be skipped at any time and reset from the Settings menu.
 
@@ -804,13 +821,13 @@ Interface icons used throughout the game for resource displays, combat info, and
 ### Completed Systems (Code-Verified)
 
 - [x] **GameState.gd Cleanup**: Remove `colonists` and `cryo_stability` (management). Add `cash`, `intel`, `data_logs`.
-- [x] **MarketMenu.tscn**: Implement static transactions (Buy Fuel/Scrap, Repair Hull).
+- [x] **MarketMenu.tscn**: Implement static transactions (Buy Fuel, Repair Hull).
 - [x] **HUD Update**: Replace Colonist counter with Economy counters.
-- [x] **InfiniteGridGenerator.gd**: Implement coordinate-based generation (40% Scavenge / 40% Empty).
+- [x] **ProgressiveMapGenerator.gd**: Implement distance-based cone generation.
 - [x] **Unit Progression Refactor**: Per-unit Data Logs, auto-leveling, and animated XP sliders.
 - [x] **Injury System V2**: Backtracking (Amber Path) jump exclusion and full health restoration on recovery.
 - [x] **Story Branching Labels**: Final story nodes updated with "CHOICE 5A/5B" button labels.
-- [x] **VoyageManager.gd**: Add grid tracking `Vector2`, movement logic (adjacent nodes), and fuel consumption.
+- [x] **VoyageManager.gd**: Add map generation based on `ProgressiveMapGenerator`, movement logic (adjacent nodes), and fuel consumption.
 - [x] **Node State System**: Implement UNVISITED, CLEARED, STORY states.
 - [x] **OfficerData.gd**: Persistent class with `level`, `xp`, `unlocked_abilities`, `injury_jumps`.
 - [x] **Barracks + Ability Tree UI**: Implemented with unlock logic using XP/Data Logs and per-tier choices.
@@ -819,7 +836,9 @@ Interface icons used throughout the game for resource displays, combat info, and
 - [x] **Mission Rewards Pipeline**: Tactical results award XP, cash, intel, and data logs.
 - [x] **Enemy Progression Scaling**: Enemy composition scales by voyage progression/difficulty.
 - [x] **Loss Conditions**: Ship destruction and crew wipe game-over paths implemented.
-- [x] **Tactical UI Refinements**: Extract button pulsing animation and dynamically formatted, left-justified ability buttons (Active/Passive/Locked states).
+- [x] **Tactical UI Refinements**: Extract button pulsing animation and dynamically formatted, left-justified ability buttons.
+- [x] **Raider System**: Threats that spawn, chase, and ambush the player.
+- [x] **Wormhole System**: 0-fuel jumps across the progressive map.
 
 ### In Progress / Partial
 
@@ -837,6 +856,7 @@ Interface icons used throughout the game for resource displays, combat info, and
 
 | Date | Change |
 |------|--------|
+| 2026-02-25 | **GDD Update Review**: Overhaul economy to Cash-only. Replace infinite grid with `ProgressiveMapGenerator`. Introduce Raider chase mechanics, Wormholes, and generic Event System. Replace Cryo-Stability with Structural Stress. Sync all 18 abilities from GameState to Section 3.2. Updates to documentation structure and completion status. |
 | 2026-02-22 | **Status Effect Icons**: Added `EffectIconConfig` autoload—shared config for Polygon2D status-effect icons (poison, pin_down, marked, adrenaline, immune, stim, phantom, untouchable, bulldozer_armor, deep_scanned, last_stand, inspired). Officer and enemy units now display icons above sprites; cover indicators share the same positioning. |
 | 2026-02-22 | **Unit Stats Tooltip**: Tooltip now shows **Active Effects** with effect names and remaining turn counts, using `EffectIconConfig.get_data()` for labels. |
 | 2026-02-22 | **Documentation**: Added `UNUSED_FILES_REPORT.md` cataloging orphaned scripts, scenes, resources, and assets for cleanup. Updated `ABILITY_QUICK_REFERENCE.md` with full 18-ability roster. |
@@ -876,14 +896,14 @@ Last Light Odyssey/
 
 ### Key Autoloads
 - **GameState**: Global economy (`cash`, `intel`, `data_logs`), officer progression, win/loss logic.
-- **VoyageManager**: Infinite map generation (`InfiniteGridGenerator`), node state tracking.
+- **VoyageManager**: Progressive map generation (`ProgressiveMapGenerator`), node state tracking.
 - **EventManager**: Random events resolution.
-- **EffectIconConfig**: Shared config for status-effect icons (Polygon2D shapes) on tactical units.
 
 ### Key Classes
 - **OfficerData**: Persistent character resource (Level, XP, Abilities).
-- **InfiniteGridGenerator**: Procedural generation of the coordinate-based map.
+- **ProgressiveMapGenerator**: Procedural generation of the distance-based progressive map.
 - **BiomeConfig**: Biome type definitions and difficulty scaling.
+- **EffectIconConfig**: Shared config for status-effect icons (Polygon2D shapes) on tactical units.
 
 ### Design Philosophy
 > *"Start with Gray Boxes."*

@@ -8,20 +8,20 @@ Last Light Odyssey is a space-faring survival manager built in Godot 4.6. Drawin
 
 *   **Strategic Navigation**: Plot a course through a procedural star map while managing **Fuel** and **Ship Integrity**.
 *   **Random Event Resolution**: Survive solar flares, pirate ambushes, and system failures using your officers' expertise to mitigate losses.
-*   **Tactical Scavenging**: Deploy a team of 3 officers to isometric, turn-based combat zones to scavenge for scrap and fuel.
-*   **Pressure Mechanics**: Battle the **Cryo-Stability Timer**; spend too long on a mission, and your ship's life-support efficiency will decline, causing systems failure and hull damage.
+*   **Tactical Scavenging**: Deploy a team of 3 officers to isometric, turn-based combat zones to scavenge for cash and fuel.
+*   **Pressure Mechanics**: Battle against **Structural Stress**; the ship takes damage each tactical turn, creating pressure to finish missions quickly.
 
 ## Features
 
 ### Quick Start
-*   **Procedural Star Map**: 50 nodes across 16 rows, featuring branching paths, backtracking risks, and variable fuel costs.
+*   **Progressive Star Map**: Infinite procedural graph generating new nodes in a cone as the player travels.
 *   **Resource Management**:
-    *   **Fuel**: Your clock. Running out triggers "Drift Mode" (−10 hull integrity per jump).
+    *   **Fuel**: Your clock. Running out triggers "Drift Mode" (−5 hull integrity per jump).
     *   **Hull**: Your survival. Reaches 0% and the mission fails.
-    *   **Scrap**: Your economy. Used for repairs and buying supplies.
-*   **Specialist Mitigation**: Use specific officer roles (Medic, Tech, Scout, etc.) to spend Scrap and prevent catastrophic losses during random events.
+    *   **Cash**: Your economy. Used for fuel, repairs, and mitigating negative events.
+*   **Specialist Mitigation**: Use specific officer roles (Medic, Tech, Scout, etc.) to mitigate catastrophic losses during random events.
 *   **Tactical Gameplay**: Turn-based grid combat. Extract your officers to survive.
-*   **Narrative**: Intro scene & Milestone events (Fuel/Hull/Scrap) | [management_hud.gd](file:///c:/Users/arman/Documents/Godot/Projects/Last%20Light%20Odyssey/scripts/ui/management_hud.gd)
+*   **Narrative**: Branching story campaign with an Intel threshold of 3.
 
 ### 2. The Tactical Layer ("The Search")
 
@@ -48,13 +48,14 @@ The game features three distinct biomes, each rendered programmatically with uni
 | System | Status |
 | :--- | :--- |
 | **Core Engine** | Godot 4.6 / GL Compatibility |
-| **Star Map** | 50-node procedural graph |
+| **Star Map** | Progressive procedural graph |
 | **Tactical Combat** | AP System, LOS, Pathfinding |
 | **Save/Load** | JSON-based persistence |
-| **Tutorial** | 9-step guided onboarding |
+| **Tutorial** | Contextual system triggered on encounter |
 | **Smart AI** | Flanking awareness & Repositioning |
-| **Narrative** | Intro scene & Milestone events |
-| **Audio** | Music & SFX Integration (In Progress) |
+| **Narrative** | Branching campaign tree |
+| **Threats** | Raiders chase mechanic |
+| **Navigation** | Wormholes for long-distance jumps |
 
 ## Project Structure
 

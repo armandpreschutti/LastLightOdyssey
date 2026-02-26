@@ -4,7 +4,6 @@
 [ext_resource type="PackedScene" uid="uid://bhd16wq58r0sj" path="res://scenes/ui/management_hud.tscn" id="2_hud"]
 [ext_resource type="PackedScene" uid="uid://cg8k2qaxnv5rl" path="res://scenes/ui/event_dialog.tscn" id="3_event"]
 [ext_resource type="PackedScene" uid="uid://dp8k7m6qv5n2w" path="res://scenes/management/star_map.tscn" id="3_starmap"]
-[ext_resource type="PackedScene" uid="uid://blam7n4qp2x5v" path="res://scenes/ui/team_select_dialog.tscn" id="4_team"]
 [ext_resource type="PackedScene" uid="uid://dm8lan5qv3p6r" path="res://scenes/tactical/tactical_mode.tscn" id="5_tactical"]
 [ext_resource type="PackedScene" uid="uid://cjd5wailexeke" path="res://scenes/ui/event_scene_dialog.tscn" id="6_event_scene"]
 [ext_resource type="PackedScene" uid="uid://b8k2m5qv3n7x" path="res://scenes/ui/mission_scene_dialog.tscn" id="6_mission_scene"]
@@ -58,9 +57,6 @@ visible = false
 visible = false
 
 [node name="EventDialog" parent="DialogLayer" unique_id=939277613 instance=ExtResource("3_event")]
-visible = false
-
-[node name="TeamSelectDialog" parent="DialogLayer" unique_id=1249424020 instance=ExtResource("4_team")]
 visible = false
 
 [node name="MissionRecap" parent="DialogLayer" unique_id=1150457164 instance=ExtResource("7_recap")]

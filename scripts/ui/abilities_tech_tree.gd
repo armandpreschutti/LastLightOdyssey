@@ -457,17 +457,14 @@ func _update_footer_slots():
 				break
 		
 		if unlocked_ab_id != "":
+			# Use the process-based tooltip handler (same as barracks card slots)
+			# This avoids set_script() on PanelContainer which is invalid in Godot 4
+			var tooltip_handler = preload("res://scripts/ui/ability_tooltip_handler.gd").new()
+			slot_panel.add_child(tooltip_handler)
+			tooltip_handler.setup(slot_panel, unlocked_ab_id)
+
+			# Also update the static description label at the bottom of the tree
 			var def = GameState.ABILITY_DEFS.get(unlocked_ab_id, {})
-			var ab_name = def.get("name", "Unknown")
-			var ab_desc = def.get("desc", "")
-			var tooltip_text = "%s: %s" % [ab_name, ab_desc]
-
-			# Use tooltip_area for proper tooltip support
-			slot_panel.set_script(preload("res://scripts/ui/tooltip_area.gd"))
-			slot_panel.tooltip_delay_sec = 0.25
-			slot_panel.tooltip_text = tooltip_text
-
-			# Also update the static description box immediately on hover
 			slot_panel.mouse_entered.connect(_on_node_hovered.bind(def.get("desc", "")))
 			slot_panel.mouse_exited.connect(_on_node_unhovered)
 

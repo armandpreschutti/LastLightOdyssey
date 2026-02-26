@@ -63,8 +63,8 @@ func _ready() -> void:
 	
 	VoyageManager.story_node_spawned.connect(_on_story_node_spawned)
 	VoyageManager.story_sequence_finished.connect(_on_story_sequence_finished)
-	VoyageManager.raider_spawned.connect(_on_raider_zone_changed)
-	VoyageManager.raider_destroyed.connect(_on_raider_zone_changed)
+	VoyageManager.raider_spawned.connect(func(_nd): _on_raider_zone_changed())
+	VoyageManager.raider_destroyed.connect(func(_id): _on_raider_zone_changed())
 	VoyageManager.raider_moved.connect(func(_p, _id): _on_raider_zone_changed())
 	VoyageManager.ship_moved.connect(func(_p, _n, _s): _on_raider_zone_changed())
 	GameState.officer_progression_changed.connect(_check_barracks_pulse)
@@ -117,8 +117,9 @@ func _on_story_sequence_finished() -> void:
 	# Let's just Un-disable it. If it should be disabled logic-wise, the selection logic would have set it?
 	# No, UI state is retained.
 	# Let's just un-disable.
-	deploy_button.disabled = false 
-	surrender_button.disabled = false
+	deploy_button.disabled = false
+	# Surrender visibility/activity is managed by deploy/raider flow;
+	# do NOT re-enable or show it here.
 
 
 func _setup_stat_bars() -> void:
@@ -251,15 +252,18 @@ func set_surrender_visible(is_visible: bool) -> void:
 			_stop_pulse(surrender_panel)
 
 
-## Mirror of set_deploy_active: disables the surrender button when inactive
-## (during jump, mission, etc.). Call whenever set_deploy_active(false) is called.
+## Mirror of set_deploy_active: disables AND hides the surrender button when inactive.
+## RULE: Surrender may NEVER be visible or active if deploy is not active.
 func set_surrender_active(active: bool) -> void:
 	if surrender_button:
-		surrender_button.disabled = not active
-		if active and surrender_panel and surrender_panel.visible:
+		# Enforce: surrender cannot be active when deploy is disabled
+		var effective_active := active and not deploy_button.disabled
+		surrender_button.disabled = not effective_active
+		if effective_active and surrender_panel and surrender_panel.visible:
 			_start_pulse(surrender_panel)
-		elif not active:
-			_stop_pulse(surrender_panel)
+		elif not effective_active:
+			# Fully hide the panel — not just disable
+			set_surrender_visible(false)
 
 
 func _on_deploy_hover() -> void:
@@ -309,6 +313,9 @@ func set_deploy_active(active: bool) -> void:
 		_start_pulse(deploy_panel)
 	else:
 		_stop_pulse(deploy_panel)
+		# RULE: Surrender must never be visible/active when deploy is inactive
+		set_surrender_visible(false)
+		set_surrender_active(false)
 
 
 ## Show ENTER WORMHOLE button (same placement/style as DEPLOY TEAM)

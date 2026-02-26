@@ -583,15 +583,11 @@ func _update_ability_preview(officer_type: String) -> void:
 		icon_rect.custom_minimum_size = Vector2(28, 28)
 		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if unlocked_ab_id != "":
-			var def = GameState.ABILITY_DEFS.get(unlocked_ab_id, {})
-			var ab_name = def.get("name", "Unknown")
-			var ab_desc = def.get("desc", "")
-			var tooltip_text = "%s: %s" % [ab_name, ab_desc]
-
-			# Use tooltip_area for proper tooltip support
-			slot.set_script(preload("res://scripts/ui/tooltip_area.gd"))
-			slot.tooltip_delay_sec = 0.25
-			slot.tooltip_text = tooltip_text
+			# Use the process-based tooltip handler — set_script(tooltip_area.gd) on a
+			# PanelContainer is invalid in Godot 4 (script must extend the same base class)
+			var tooltip_handler = preload("res://scripts/ui/ability_tooltip_handler.gd").new()
+			slot.add_child(tooltip_handler)
+			tooltip_handler.setup(slot, unlocked_ab_id)
 
 			var tex = load(ABILITY_ICON_PATH + "%s_%s.png" % [officer_type, unlocked_ab_id])
 			if tex:

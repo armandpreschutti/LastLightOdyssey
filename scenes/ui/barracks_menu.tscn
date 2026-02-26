@@ -36,9 +36,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -450.0
-offset_top = -350.0
+offset_top = -360.0
 offset_right = 450.0
-offset_bottom = 350.0
+offset_bottom = 360.0
 grow_horizontal = 2
 grow_vertical = 2
 
@@ -79,17 +79,109 @@ theme_override_styles/hover = ExtResource("5_btn_red_hover")
 theme_override_styles/pressed = ExtResource("6_btn_red_pressed")
 text = "X"
 
+[node name="MissionContextMargin" type="MarginContainer" parent="MenuPanel/Layout"]
+layout_mode = 2
+visible = false
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_top = 0
+theme_override_constants/margin_bottom = 0
+
+[node name="MissionContextVBox" type="VBoxContainer" parent="MenuPanel/Layout/MissionContextMargin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="DescLabel" type="Label" parent="MenuPanel/Layout/MissionContextMargin/MissionContextVBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.8, 0.9, 1)
+theme_override_font_sizes/font_size = 15
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="ObjectiveLabel" type="Label" parent="MenuPanel/Layout/MissionContextMargin/MissionContextVBox"]
+layout_mode = 2
+visible = false
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_constants/outline_size = 1
+theme_override_font_sizes/font_size = 14
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="HSeparatorTop" type="ColorRect" parent="MenuPanel/Layout"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+visible = false
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.3)
+
 [node name="ScrollContainer" type="ScrollContainer" parent="MenuPanel/Layout"]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/margin_left = 8
 theme_override_constants/margin_right = 8
-theme_override_constants/margin_bottom = 12
+theme_override_constants/margin_bottom = 4
 
 [node name="VBoxContainer" type="VBoxContainer" parent="MenuPanel/Layout/ScrollContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
+
+[node name="HSeparatorBottom" type="ColorRect" parent="MenuPanel/Layout"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+visible = false
+mouse_filter = 2
+color = Color(0.4, 0.9, 1, 0.3)
+
+[node name="FooterMargin" type="MarginContainer" parent="MenuPanel/Layout"]
+layout_mode = 2
+visible = false
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_bottom = 8
+
+[node name="FooterVBox" type="VBoxContainer" parent="MenuPanel/Layout/FooterMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SelectedLabel" type="Label" parent="MenuPanel/Layout/FooterMargin/FooterVBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 17
+text = "SELECTED: 0 / 3"
+horizontal_alignment = 1
+
+[node name="ButtonContainer" type="HBoxContainer" parent="MenuPanel/Layout/FooterMargin/FooterVBox"]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="CancelButton" type="Button" parent="MenuPanel/Layout/FooterMargin/FooterVBox/ButtonContainer"]
+custom_minimum_size = Vector2(150, 42)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.3, 0.3, 1)
+theme_override_colors/font_hover_color = Color(1, 0.4, 0.3, 1)
+theme_override_font_sizes/font_size = 17
+theme_override_styles/normal = ExtResource("4_btn_red")
+theme_override_styles/hover = ExtResource("5_btn_red_hover")
+theme_override_styles/pressed = ExtResource("6_btn_red_pressed")
+text = "[ CANCEL ]"
+
+[node name="DeployButton" type="Button" parent="MenuPanel/Layout/FooterMargin/FooterVBox/ButtonContainer"]
+custom_minimum_size = Vector2(150, 42)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.2, 1, 0.5, 1)
+theme_override_colors/font_hover_color = Color(0.4, 1, 0.7, 1)
+theme_override_font_sizes/font_size = 17
+text = "[ DEPLOY ]"
+
+[node name="PortraitSlots" type="HBoxContainer" parent="MenuPanel/Layout/FooterMargin/FooterVBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
 
 [node name="AbilitiesTechTree" parent="." instance=ExtResource("2_tech_tree")]
 visible = false

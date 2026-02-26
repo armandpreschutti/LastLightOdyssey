@@ -11,7 +11,8 @@ signal raider_outcome_animation_complete
 signal raider_attack_impact
 
 @onready var map_content: Control = $MapContent
-@onready var raider_indicator: Control = $RaiderIndicator
+var raider_indicators: Dictionary = {}  # raider_node_id -> RaiderOffScreenIndicator
+var RaiderIndicatorScene: PackedScene
 @onready var story_indicator: Control = $StoryIndicator
 @onready var nodes_container: Control = $MapContent/NodesContainer
 @onready var lines_container: Control = $MapContent/LinesContainer
@@ -25,6 +26,7 @@ var raider_visuals: Dictionary = {}       # current_node_id -> RaiderShip Node2D
 var raider_zone_visuals: Dictionary = {}  # current_node_id -> Node2D (detection circle)
 var player_travel_zone_visual: Node2D = null
 var _is_ship_animating: bool = false # Flag to prevent refresh from stomping animation
+var _ship_recenter_tween: Tween = null # Tracked so we can kill it before jumps
 var _raiders_animating: int = 0  # Count of raiders currently mid-move animation
 var _ship_pulse_tween: Tween = null
 var _raider_hit_shake_tween: Tween = null   # Killed and recreated on each raider-side hit
@@ -42,6 +44,10 @@ var _input_locked: bool = false
 
 func _both_on_same_node() -> bool:
 	return VoyageManager and VoyageManager.is_any_raider_on_player_node()
+
+
+func is_animating() -> bool:
+	return _is_ship_animating or _raiders_animating > 0 or _input_locked
 
 
 func _get_player_display_offset(node_pos: Vector2) -> Vector2:
@@ -95,28 +101,39 @@ func _process(_delta: float) -> void:
 
 
 func _update_raider_indicator() -> void:
-	if not raider_indicator:
-		return
 	if not VoyageManager or not VoyageManager.is_raider_active:
-		raider_indicator.visible = false
+		for ind in raider_indicators.values():
+			ind.visible = false
 		return
 
-	# Point the indicator at the closest raider (or the ambushing one if on player node)
-	var indicator_rid = VoyageManager.get_ambushing_raider_id()
-	if indicator_rid == "" and not VoyageManager.raider_node_ids.is_empty():
-		indicator_rid = VoyageManager.raider_node_ids[0]
-	if indicator_rid == "" or not VoyageManager.nodes.has(indicator_rid):
-		raider_indicator.visible = false
-		return
+	# Track which raider IDs are still active so we can clean up stale indicators
+	var active_ids := {}
 
-	var raider_world_pos: Vector2
-	if raider_visuals.has(indicator_rid):
-		raider_world_pos = raider_visuals[indicator_rid].position
-	else:
-		raider_world_pos = VoyageManager.nodes[indicator_rid].position
+	for rid in VoyageManager.raider_node_ids:
+		if not VoyageManager.nodes.has(rid):
+			continue
+		active_ids[rid] = true
 
-	var raider_screen_pos := map_content.position + raider_world_pos * _current_zoom
-	raider_indicator.update_indicator(raider_screen_pos, size)
+		# Create indicator if it doesn't exist yet
+		if not raider_indicators.has(rid):
+			var ind = RaiderIndicatorScene.instantiate()
+			add_child(ind)
+			raider_indicators[rid] = ind
+
+		var raider_world_pos: Vector2
+		if raider_visuals.has(rid):
+			raider_world_pos = raider_visuals[rid].position
+		else:
+			raider_world_pos = VoyageManager.nodes[rid].position
+
+		var raider_screen_pos := map_content.position + raider_world_pos * _current_zoom
+		raider_indicators[rid].update_indicator(raider_screen_pos, size)
+
+	# Remove indicators for raiders that no longer exist
+	for rid in raider_indicators.keys():
+		if not active_ids.has(rid):
+			raider_indicators[rid].queue_free()
+			raider_indicators.erase(rid)
 
 	# Update detection circle brightness for all zones
 	_update_raider_zone_brightness()
@@ -156,6 +173,12 @@ func _ready() -> void:
 		return
 		
 	MapNodeScene = load("res://scenes/management/map_node.tscn")
+	RaiderIndicatorScene = load("res://scenes/ui/raider_off_screen_indicator.tscn")
+
+	# Remove the hardcoded RaiderIndicator node (now spawned dynamically)
+	var old_indicator = get_node_or_null("RaiderIndicator")
+	if old_indicator:
+		old_indicator.queue_free()
 
 	if story_indicator:
 		story_indicator.set_indicator_color(StarMapNode.COLOR_STORY)
@@ -179,11 +202,13 @@ func _ready() -> void:
 	VoyageManager.ship_teleported.connect(_on_ship_teleported)
 	GameState.fuel_changed.connect(func(_v): refresh())
 	
+	# Initial ship placement (must run BEFORE refresh so the ship is at the
+	# correct position — otherwise refresh sees dist > 2 and spawns a slow
+	# recenter tween that fights subsequent jump tweens).
+	_update_ship_position(false)
+
 	# Initial draw
 	refresh()
-	
-	# Initial ship placement
-	_update_ship_position(false)
 	
 	# Center view
 	center_view_on_ship(false)
@@ -219,6 +244,11 @@ func _on_raider_moved(new_pos: Vector2, old_id: String, new_id: String) -> void:
 		var target_rot = PI if is_on_player_node else -999.0
 		visual.move_to(display_pos, new_id, 1.0, target_rot)
 
+	if raider_indicators.has(old_id):
+		var ind = raider_indicators[old_id]
+		raider_indicators.erase(old_id)
+		raider_indicators[new_id] = ind
+
 	if raider_zone_visuals.has(old_id):
 		var zone = raider_zone_visuals[old_id]
 		raider_zone_visuals.erase(old_id)
@@ -242,6 +272,9 @@ func _on_raider_destroyed(destroyed_id: String) -> void:
 	if raider_zone_visuals.has(destroyed_id):
 		raider_zone_visuals[destroyed_id].queue_free()
 		raider_zone_visuals.erase(destroyed_id)
+	if raider_indicators.has(destroyed_id):
+		raider_indicators[destroyed_id].queue_free()
+		raider_indicators.erase(destroyed_id)
 	refresh()
 
 func _on_story_node_spawned(node_data: NodeData) -> void:
@@ -433,7 +466,9 @@ func refresh() -> void:
 			# Use a slow speed_mult so the short 50 px standoff gap glides over ~1s
 			# instead of snapping in ~0.17s.
 			if dist > 2.0:
-				_update_ship_position(true, current_node.position, 0.15, false)  # animate, no jump_complete emit
+				if _ship_recenter_tween and _ship_recenter_tween.is_valid():
+					_ship_recenter_tween.kill()
+				_ship_recenter_tween = _update_ship_position(true, current_node.position, 0.15, false)  # animate, no jump_complete emit
 			else:
 				_update_ship_position(false)
 
@@ -731,7 +766,7 @@ func _update_node_info_panel() -> void:
 	else:
 		node_info_panel.show_node(current_node)
 
-func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO, speed_mult: float = 1.0, emit_jump_complete: bool = true) -> void:
+func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO, speed_mult: float = 1.0, emit_jump_complete: bool = true) -> Tween:
 	if not ship_visual:
 		_create_ship_visual()
 		
@@ -759,7 +794,11 @@ func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO, s
 		if _player_hit_shake_tween:
 			_player_hit_shake_tween.kill()
 			_player_hit_shake_tween = null
-		
+		# Kill any lingering recenter tween so it doesn't fight the jump tween.
+		if _ship_recenter_tween and _ship_recenter_tween.is_valid():
+			_ship_recenter_tween.kill()
+			_ship_recenter_tween = null
+
 		var distance = ship_visual.position.distance_to(visual_pos)
 		var duration = distance / (BASE_SPEED_PPS * speed_mult)
 		# Clamp minimum duration to avoid instant snaps on tiny movements, but allow fast direct travel
@@ -768,7 +807,7 @@ func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO, s
 		var tween = create_tween()
 		tween.set_parallel(true)
 		tween.tween_property(ship_visual, "position", visual_pos, duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-		
+
 		# Rotation: face opponent when same node (0 rad = right), else face movement direction
 		var target_rot: float
 		if _both_on_same_node():
@@ -778,19 +817,20 @@ func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO, s
 			target_rot = direction.angle()
 		else:
 			target_rot = ship_visual.rotation  # No movement, keep current
-		
+
 		if distance > 1.0 or _both_on_same_node():
 			var current_rot = ship_visual.rotation
 			var diff = angle_difference(current_rot, target_rot)
 			var rot_duration = min(duration * 0.5, 1.2)
 			tween.tween_property(ship_visual, "rotation", current_rot + diff, rot_duration).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		
+
 		# Wait for completion to emit signal (skip for recenter animation)
 		tween.chain().tween_callback(func():
 			_is_ship_animating = false
 			if emit_jump_complete:
 				jump_animation_complete.emit()
 		)
+		return tween
 	else:
 		_is_ship_animating = false
 		ship_visual.position = visual_pos
@@ -805,6 +845,7 @@ func _update_ship_position(animated: bool, target_pos: Vector2 = Vector2.ZERO, s
 			else:
 				ship_visual.rotation = 0.0
 		# Else maintain rotation
+	return null
 
 func _play_teleport_animation(target_pos: Vector2) -> void:
 	if not ship_visual:

@@ -196,13 +196,13 @@ func _emit_complete() -> void:
 func _build_ui() -> void:
 	# Fill the whole viewport
 	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	mouse_filter = MOUSE_FILTER_IGNORE   # pass clicks to game beneath
+	mouse_filter = MOUSE_FILTER_STOP   # block all input while tutorial is active
 
 	# ── Vignette ──────────────────────────────────────────────────────────────
 	_vignette = ColorRect.new()
 	_vignette.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	_vignette.color = Color(0.0, 0.0, 0.0, VIGNETTE_ALPHA)
-	_vignette.mouse_filter = MOUSE_FILTER_IGNORE
+	_vignette.mouse_filter = MOUSE_FILTER_STOP   # blocks clicks reaching the game beneath
 	add_child(_vignette)
 
 	# ── Arrow layer (drawn on top of vignette, under panel) ───────────────────

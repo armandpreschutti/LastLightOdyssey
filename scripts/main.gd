@@ -14,7 +14,6 @@ extends Node
 @onready var voyage_intro_scene_dialog: Control = $DialogLayer/VoyageIntroSceneDialog
 @onready var game_over_scene_dialog: Control = $DialogLayer/GameOverSceneDialog
 @onready var game_over_recap: Control = $DialogLayer/GameOverRecap
-@onready var team_select_dialog: Control = $DialogLayer/TeamSelectDialog
 # @onready var trading_dialog: Control = $DialogLayer/TradingDialog - Removed in V2
 @onready var mission_scene_dialog: Control = $DialogLayer/MissionSceneDialog
 @onready var objective_complete_scene_dialog: Control = $DialogLayer/ObjectiveCompleteSceneDialog
@@ -173,7 +172,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				_on_barracks_pressed()
 
 	elif event.is_action_pressed("management_quit"):
-		if not management_hud.quit_button.disabled:
+		if not management_hud.quit_button.disabled and _can_quit_to_menu():
 			get_viewport().set_input_as_handled()
 			_on_quit_to_menu()
 
@@ -185,8 +184,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _connect_signals() -> void:
 	event_scene_dialog.scene_dismissed.connect(_on_event_scene_dismissed)
 	event_dialog.event_choice_made.connect(_on_event_choice_made)
-	team_select_dialog.team_selected.connect(_on_team_selected)
-	team_select_dialog.cancelled.connect(_on_team_select_cancelled)
+	barracks_menu.team_selected.connect(_on_team_selected)
+	barracks_menu.cancelled.connect(_on_team_select_cancelled)
 	# trading_dialog.trading_complete.connect(_on_trading_complete) - Removed in V2
 	mission_scene_dialog.scene_dismissed.connect(_on_mission_scene_dismissed)
 	tactical_mode.mission_complete.connect(_on_mission_complete)
@@ -210,8 +209,7 @@ func _connect_signals() -> void:
 	management_hud.deploy_pressed.connect(_on_deploy_pressed)
 	management_hud.surrender_pressed.connect(_on_surrender_pressed)
 	management_hud.center_view_pressed.connect(_on_center_view_pressed)
-	if barracks_menu.has_signal("closed"):
-		barracks_menu.closed.connect(_on_barracks_menu_closed)
+	barracks_menu.closed.connect(_on_barracks_menu_closed)
 	GameState.game_over.connect(_on_game_over)
 	GameState.game_won.connect(_on_game_won)
 	VoyageManager.story_sequence_finished.connect(_on_story_sequence_finished_tutorial)
@@ -349,21 +347,30 @@ func _execute_jump_with_animation(node_data: NodeData, _fuel_cost: int) -> void:
 		# Wait for animation to complete (StarMap should emit this when it sees ship_moved)
 		await star_map.jump_animation_complete
 
-		# Update spawn counters once, then give each active raider one move
+		# Update spawn counters once, then give each active raider moves based on jumps per turn
 		VoyageManager.begin_player_jump_processing()
-		for i in range(VoyageManager.raider_node_ids.size()):
-			var raider_moved = VoyageManager.process_raider_turn()
-			if raider_moved:
-				await star_map.raider_animation_complete
+		var raider_jumps = VoyageManager.get_raider_jumps_per_turn()
+		for j in range(raider_jumps):
+			if j > 0:
+				VoyageManager._raider_turn_index = 0
+			for i in range(VoyageManager.raider_node_ids.size()):
+				var raider_moved = VoyageManager.process_raider_turn()
+				if raider_moved:
+					await star_map.raider_animation_complete
+				if VoyageManager.raider_ambush_triggered:
+					break
 			if VoyageManager.raider_ambush_triggered:
 				break
 
 		# Clear flag after animation completes
 		_is_jump_animating = false
-		
+
 		# Check if we won
 		if current_phase == GamePhase.GAME_WON or current_phase == GamePhase.GAME_OVER:
 			return
+
+		# Auto-save after jump + raider processing so progress is never lost
+		GameState.save_game()
 
 		# First jump is the right moment to explain all four resources
 		TutorialManager.request_tutorial("resources")
@@ -378,18 +385,24 @@ func _execute_direct_travel(target_node: NodeData) -> void:
 	_is_jump_animating = true
 	management_hud.set_deploy_active(false)
 	management_hud.set_surrender_active(false)
-	
+
 	var success = VoyageManager.attempt_direct_travel(target_node, 3.0)
-	
+
 	if success:
 		await star_map.jump_animation_complete
 
-		# Update spawn counters once, then give each active raider one move
+		# Update spawn counters once, then give each active raider moves based on jumps per turn
 		VoyageManager.begin_player_jump_processing()
-		for i in range(VoyageManager.raider_node_ids.size()):
-			var raider_moved = VoyageManager.process_raider_turn()
-			if raider_moved:
-				await star_map.raider_animation_complete
+		var raider_jumps = VoyageManager.get_raider_jumps_per_turn()
+		for j in range(raider_jumps):
+			if j > 0:
+				VoyageManager._raider_turn_index = 0
+			for i in range(VoyageManager.raider_node_ids.size()):
+				var raider_moved = VoyageManager.process_raider_turn()
+				if raider_moved:
+					await star_map.raider_animation_complete
+				if VoyageManager.raider_ambush_triggered:
+					break
 			if VoyageManager.raider_ambush_triggered:
 				break
 
@@ -397,6 +410,9 @@ func _execute_direct_travel(target_node: NodeData) -> void:
 
 		if current_phase == GamePhase.GAME_WON or current_phase == GamePhase.GAME_OVER:
 			return
+
+		# Auto-save after jump + raider processing so progress is never lost
+		GameState.save_game()
 
 		_process_node_after_jump(target_node, true) # true = was_visited
 	else:
@@ -545,8 +561,8 @@ func _on_team_selected(officer_keys: Array[String], objectives: Array[MissionObj
 	# Fade to black, then transition to tactical mode
 	await _fade_out(0.6)
 	
-	# Hide the team select dialog explicitly now that we are faded out
-	team_select_dialog.visible = false
+	# Hide the officer menu explicitly now that we are faded out
+	barracks_menu.visible = false
 	
 	# Go directly to tactical mission (scene was already shown before team select)
 	current_phase = GamePhase.TACTICAL
@@ -664,7 +680,7 @@ func _transition_to_team_select() -> void:
 	
 	# Check if this is a raider ambush
 	var is_raider_ambush = VoyageManager.is_any_raider_on_player_node()
-	team_select_dialog.show_dialog(pending_biome_type, is_raider_ambush)
+	barracks_menu.show_team_select(pending_biome_type, is_raider_ambush)
 
 
 func _on_mission_complete(success: bool, stats: Dictionary) -> void:
@@ -931,7 +947,22 @@ func _on_enemy_elimination_scene_dismissed() -> void:
 	# The tactical controller will handle setting is_paused = false when it receives control back
 
 
+func _can_quit_to_menu() -> bool:
+	# Block quit while any animation is playing or a mission hasn't fully resolved
+	if _is_jump_animating:
+		return false
+	if current_phase != GamePhase.IDLE:
+		return false
+	if star_map and star_map.is_animating():
+		return false
+	return true
+
+
 func _on_quit_to_menu() -> void:
+	if not _can_quit_to_menu():
+		return
+	# Save progress before leaving so nothing is lost
+	GameState.save_game()
 	# Stop all music when quitting to menu
 	MusicManager.stop_music()
 	GameState.game_session_active = false
@@ -1019,10 +1050,16 @@ func _execute_wormhole_teleport() -> void:
 		# Count as jump: wait for teleport animation, then process raider turn (enemy ships move)
 		await star_map.jump_animation_complete
 		VoyageManager.begin_player_jump_processing()
-		for i in range(VoyageManager.raider_node_ids.size()):
-			var raider_moved = VoyageManager.process_raider_turn()
-			if raider_moved:
-				await star_map.raider_animation_complete
+		var raider_jumps = VoyageManager.get_raider_jumps_per_turn()
+		for j in range(raider_jumps):
+			if j > 0:
+				VoyageManager._raider_turn_index = 0
+			for i in range(VoyageManager.raider_node_ids.size()):
+				var raider_moved = VoyageManager.process_raider_turn()
+				if raider_moved:
+					await star_map.raider_animation_complete
+				if VoyageManager.raider_ambush_triggered:
+					break
 			if VoyageManager.raider_ambush_triggered:
 				break
 
@@ -1207,7 +1244,7 @@ func _on_story_choice_made(choice_id: String) -> void:
 
 
 func _on_story_sequence_finished_tutorial() -> void:
-	TutorialManager.request_tutorial("story_signals")
+	TutorialManager.request_tutorial("beacon_signals")
 
 
 func _on_raider_sequence_finished_tutorial() -> void:

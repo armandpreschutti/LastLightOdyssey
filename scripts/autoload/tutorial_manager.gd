@@ -16,13 +16,13 @@ const TUTORIALS: Dictionary = {
 		"steps": [
 			{
 				"header": "STAR MAP",
-				"body": "This is your star map. Your ship must reach NEW EARTH.\n\nClick any AMBER node connected to your ship to jump there. Gray nodes are locked until you reach them.",
+				"body": "This is your STAR MAP, use it to navigate space and answer BEACON SIGNALS.\n\nTo travel, click on a node within range of your ship.",
 				"panel_anchor": "center",
 				"arrow_target": Vector2(-1.0, -1.0),
 			},
 			{
-				"header": "NODE TYPES",
-				"body": "WAYPOINTS — trigger random events (good or bad)\nSCAVENGE SITES — tactical combat missions\nWORMHOLES — instant teleport to another sector\n\nPlan your route and conserve resources.",
+				"header": "FAST TRAVEL",
+				"body": "You can fast travel to any visited node within your travel radius (green circle).",
 				"panel_anchor": "center",
 				"arrow_target": Vector2(-1.0, -1.0),
 			},
@@ -38,7 +38,7 @@ const TUTORIALS: Dictionary = {
 			},
 			{
 				"header": "INTEL",
-				"body": "INTEL is gathered from Data Logs found during missions.\n\nSpend it at the BARRACKS to unlock and upgrade officer abilities between deployments.",
+				"body": "INTEL is gathered each time you visit a new node.\n\nGather INTEL to reveal BEACON SIGNALS.",
 				"panel_anchor": "center",
 				"arrow_target": Vector2(0.11, 0.897),
 			},
@@ -50,17 +50,17 @@ const TUTORIALS: Dictionary = {
 			},
 			{
 				"header": "HULL INTEGRITY",
-				"body": "HULL INTEGRITY is your ship's health. It drops 1% every turn during tactical missions.\n\nIf it reaches 0%, the voyage ends in failure. Repair it at the Trading Terminal.",
+				"body": "HULL INTEGRITY is your ship's health, it can be damaged by enemy ships, lack of fuel, and various other circumstances.\n\nIf it reaches 0%, the voyage ends in failure. Use your credits to repair it at the Trading Terminal.",
 				"panel_anchor": "center",
 				"arrow_target": Vector2(0.11, 0.955),
 			},
 		],
 	},
-	"story_signals": {
+	"beacon_signals": {
 		"steps": [
 			{
-				"header": "STORY SIGNAL",
-				"body": "A STORY SIGNAL has appeared. These beacons carry the main narrative — reach them, complete the mission, and the choice you make afterward will shape the voyage ahead.",
+				"header": "BEACON SIGNAL",
+				"body": "A BEACON SIGNAL has appeared. These beacons carry the main narrative — reach them, complete the mission, and the choice you make afterward will shape the voyage ahead.",
 				"panel_anchor": "center",
 				"arrow_target": Vector2(-1.0, -1.0),
 			},
