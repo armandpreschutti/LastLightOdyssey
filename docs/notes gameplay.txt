@@ -12,6 +12,50 @@ done - I want to add a mechanic to the NAVIGATION LEGEND. when the player clicks
 
 ----------------------------------------------------------
 
-started - go through all tutorials and update rules
 
-to do - add difficulty levels to radier ships
+done - wormhole to wormhole travel vs pathlines
+
+done - remove free fuel on traveled pathlines, get circle
+
+to do - fuel is too scarce, find more mechanics to distribute, don't just award more
+
+done - replace EARTH with a trading outpost, possibly traveling merchant
+
+to do - add boundary to entire voyage map
+
+to do - very text heavy, too much nfo at once
+
+done - make the TECH, HEAVY, and SNIPER units unlockable
+
+to do - downed/wounded units should still gain XP, maybe at a penalty
+
+to do - make wormholes spawn on first node generation
+
+to do - make enemies move on their own when not pursuing player
+
+// Joshitha notes (some of them, at least)
+
+- Text is too tiny. :(
+
+- Fast-forwarding or turn order for the turn-based combat (and/or a history of actions taken)?
+
+- Definitely needs more tutorialization... Too many options when I don't yet know what any of them mean!
+
+- Wormhole doesn't have visual feedback on hover
+
+- Not feeling like I'm gathering resources when deploying my team/in combat
+
+- I tend to prefer there to be more narrative, but that's just me!
+
+- "Extract" to beam your crew back up was a little confusing, especially when they were on a planet trying to mine resources.
+
+
+POTENTIAL SHIP UPGRADES
+
+- FUEL CAPACITY
+- FUEL EFFICIENCY (can move 2-3 jumps vs 1)
+- HULL FORTIFICATION
+
+
+
+

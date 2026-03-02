@@ -43,10 +43,8 @@ func _roll_node_type(rng: RandomNumberGenerator) -> int:
 		return EventManager.NodeType.EMPTY_SPACE
 	else:
 		# Reserved/Event/Special
-		# For now, treat as Empty or potentially Wormhole
-		if rng.randf() < 0.1: # Small chance for Wormhole in the "reserved" bucket
-			return EventManager.NodeType.WORMHOLE
-		return EventManager.NodeType.EMPTY_SPACE
+		# User requested ~20% total chance for Wormhole
+		return EventManager.NodeType.WORMHOLE
 
 ## Roll biome type for scavenge sites
 func _roll_biome_type(rng: RandomNumberGenerator) -> int:

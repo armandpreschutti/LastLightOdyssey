@@ -8,6 +8,8 @@ signal market_pressed
 signal barracks_pressed
 signal deploy_pressed
 signal surrender_pressed
+signal wormhole_cancel_pressed
+signal enter_trading_outpost_pressed
 
 # Updated paths for new icon-based layout
 @onready var cash_label: Label = $MarginContainer/VBoxContainer/StatsContainer/CashRow/CashLabel
@@ -25,7 +27,8 @@ signal surrender_pressed
 @onready var center_button: Button = $TopRightPanel/CenterButton
 @onready var status_panel: PanelContainer = $StatusPanel
 @onready var status_label: Label = $StatusPanel/StatusLabel
-@onready var hostile_status_panel: PanelContainer = null  # Created in _setup_hostile_warning, placed below StatusPanel
+@onready var _wormhole_select_panel: PanelContainer = $WormholeSelectPanel
+@onready var hostile_status_panel: PanelContainer = $HostileStatusPanel
 
 signal center_view_pressed
 
@@ -33,6 +36,7 @@ var _pulse_tween: Tween
 var _fuel_flash_tween: Tween
 var _integrity_flash_tween: Tween
 var _fuel_value_tween: Tween
+var _wormhole_cancel_mode: bool = false
 var _integrity_value_tween: Tween
 
 var _last_cash: int = 0
@@ -53,19 +57,22 @@ func _ready() -> void:
 	
 	_setup_additional_stats()
 	_setup_stat_bars()
-	_setup_hostile_warning()
 	_connect_signals()
+	hostile_status_panel.visible = VoyageManager.is_player_in_raider_zone() if VoyageManager else false
 	_update_all_stats()
 	_update_glass_style()
 	
 	# Initial state: Hidden and inactive
 	set_deploy_active(false)
 	
+	# Hide TRADING TERMINAL button — replaced by ENTER TRADING OUTPOST deploy button
+	market_button.visible = false
+	
 	VoyageManager.story_node_spawned.connect(_on_story_node_spawned)
 	VoyageManager.story_sequence_finished.connect(_on_story_sequence_finished)
 	VoyageManager.raider_spawned.connect(func(_nd): _on_raider_zone_changed())
 	VoyageManager.raider_destroyed.connect(func(_id): _on_raider_zone_changed())
-	VoyageManager.raider_moved.connect(func(_p, _id): _on_raider_zone_changed())
+	VoyageManager.raider_moved.connect(func(_p, _old, _new): _on_raider_zone_changed())
 	VoyageManager.ship_moved.connect(func(_p, _n, _s): _on_raider_zone_changed())
 	GameState.officer_progression_changed.connect(_check_barracks_pulse)
 	
@@ -142,36 +149,10 @@ func _setup_stat_bars() -> void:
 	integrity_bar.add_theme_stylebox_override("fill", sb_hull)
 
 
-func _setup_hostile_warning() -> void:
-	# Copy StatusPanel structure: red panel with label, placed underneath drift mode warning
-	hostile_status_panel = PanelContainer.new()
-	hostile_status_panel.name = "HostileStatusPanel"
-	hostile_status_panel.visible = false
-	hostile_status_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	# Position below StatusPanel (StatusPanel: offset_top -585, bottom -535). Place hostile at -535 to -485
-	hostile_status_panel.offset_left = 819
-	hostile_status_panel.offset_top = -535
-	hostile_status_panel.offset_right = 1100
-	hostile_status_panel.offset_bottom = -485
-	hostile_status_panel.scale = Vector2(1.05, 1.05)
-	var red_style = load("res://assets/themes/style_panel_red.tres") as StyleBox
-	if red_style:
-		hostile_status_panel.add_theme_stylebox_override("panel", red_style)
-	add_child(hostile_status_panel)
 
-	var hostile_label = Label.new()
-	hostile_label.name = "HostileLabel"
-	hostile_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hostile_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	hostile_label.add_theme_color_override("font_color", Color(1, 0.3, 0.2, 1))
-	hostile_label.add_theme_font_size_override("font_size", 20)
-	hostile_label.text = "[ HOSTILE INCOMING - FAST TRAVEL DISABLED ]"
-	hostile_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hostile_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	hostile_status_panel.add_child(hostile_label)
 
-	# Initial state (e.g. loaded save where player is already in detection zone)
-	hostile_status_panel.visible = VoyageManager.is_player_in_raider_zone() if VoyageManager else false
+func set_wormhole_select_panel_visible(vis: bool) -> void:
+	_wormhole_select_panel.visible = vis
 
 
 func _on_raider_zone_changed() -> void:
@@ -236,11 +217,49 @@ func _on_barracks_pressed() -> void:
 
 
 func _on_deploy_pressed() -> void:
-	deploy_pressed.emit()
-
+	if _wormhole_cancel_mode:
+		wormhole_cancel_pressed.emit()
+	elif deploy_button.text == "[ ENTER TRADING OUTPOST ]":
+		enter_trading_outpost_pressed.emit()
+	else:
+		deploy_pressed.emit()
 
 func _on_surrender_pressed() -> void:
 	surrender_pressed.emit()
+
+
+## Show CANCEL button in the deploy slot during wormhole selection mode.
+func set_wormhole_cancel_mode(active: bool) -> void:
+	_wormhole_cancel_mode = active
+	if active:
+		deploy_button.text = "[ CANCEL ]"
+		deploy_button.disabled = false
+		# Red text — matches surrender button colours
+		deploy_button.add_theme_color_override("font_color", Color(1.0, 0.35, 0.25, 1.0))
+		deploy_button.add_theme_color_override("font_hover_color", Color(1.0, 0.5, 0.4, 1.0))
+		deploy_button.add_theme_color_override("font_pressed_color", Color(0.8, 0.2, 0.15, 1.0))
+		# Red panel border
+		var sb = StyleBoxFlat.new()
+		sb.bg_color = Color(0.02, 0.05, 0.1, 0.6)
+		sb.border_width_left = 2
+		sb.border_width_top = 2
+		sb.border_width_right = 2
+		sb.border_width_bottom = 2
+		sb.border_color = Color(1.0, 0.3, 0.2, 0.8)
+		sb.set_corner_radius_all(4)
+		deploy_panel.add_theme_stylebox_override("panel", sb)
+		deploy_panel.visible = true
+		_start_pulse(deploy_panel)
+	else:
+		deploy_button.text = "[ DEPLOY TEAM ]"
+		_wormhole_cancel_mode = false
+		# Restore yellow colours
+		deploy_button.add_theme_color_override("font_color", Color(1, 0.69, 0, 1))
+		deploy_button.add_theme_color_override("font_hover_color", Color(1, 0.9, 0.6, 1))
+		deploy_button.add_theme_color_override("font_pressed_color", Color(1, 0.6, 0, 1))
+		deploy_panel.remove_theme_stylebox_override("panel")
+		deploy_panel.visible = false
+		_stop_pulse(deploy_panel)
 
 
 func set_surrender_visible(is_visible: bool) -> void:
@@ -304,7 +323,9 @@ func _on_surrender_unhover() -> void:
 
 func set_deploy_active(active: bool) -> void:
 	deploy_button.disabled = not active
-	deploy_button.text = "[ DEPLOY TEAM ]"
+	# Only reset text if it's not in wormhole cancel mode (which manages its own text)
+	if not _wormhole_cancel_mode:
+		deploy_button.text = "[ DEPLOY TEAM ]"
 	
 	if has_node("DeployPanel"):
 		$DeployPanel.visible = active
@@ -322,6 +343,22 @@ func set_deploy_active(active: bool) -> void:
 func set_enter_wormhole_button_active(active: bool) -> void:
 	if active:
 		deploy_button.text = "[ ENTER WORMHOLE ]"
+		deploy_button.disabled = false
+		if has_node("DeployPanel"):
+			$DeployPanel.visible = true
+		_start_pulse(deploy_panel)
+	else:
+		deploy_button.text = "[ DEPLOY TEAM ]"
+		deploy_button.disabled = true
+		if has_node("DeployPanel"):
+			$DeployPanel.visible = false
+		_stop_pulse(deploy_panel)
+
+
+## Show ENTER TRADING OUTPOST button (same placement/style as DEPLOY TEAM)
+func set_enter_trading_outpost_button_active(active: bool) -> void:
+	if active:
+		deploy_button.text = "[ ENTER TRADING OUTPOST ]"
 		deploy_button.disabled = false
 		if has_node("DeployPanel"):
 			$DeployPanel.visible = true
@@ -409,7 +446,7 @@ func _check_market_pulse() -> void:
 	if not market_button: return
 	
 	# Pulse if Drift Mode (Fuel == 0) or Critical Hull (<= 25%) AND player can afford something
-	var can_afford_anything := GameState.cash >= 15  # Cheapest item = fuel at 15 CR
+	var can_afford_anything := GameState.cash >= 5  # Cheapest item = fuel at 5 CR
 	if (GameState.fuel == 0 or GameState.ship_integrity <= 25) and can_afford_anything:
 		_start_pulse(market_button)
 	else:
@@ -545,7 +582,7 @@ func _on_fuel_changed(new_value: int) -> void:
 		_flash_bar(fuel_bar, flash, Color(1, 1, 1), "_fuel_flash_tween")
 	
 	if new_value == 0:
-		status_label.text = "[ DRIFT MODE - FAST TRAVEL DISABLED ]"
+		status_label.text = "[ DRIFT MODE - NO FUEL ]"
 		if status_panel: status_panel.visible = true
 		status_label.visible = true
 	else:
@@ -621,7 +658,7 @@ func set_view_recap_mode(enabled: bool) -> void:
 		quit_button.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2)) # Gold
 		quit_button.pressed.connect(_on_view_recap_pressed)
 	else:
-		market_button.visible = true
+		market_button.visible = false # TRADING TERMINAL removed — always hidden
 		if barracks_button:
 			barracks_button.visible = true
 		if has_node("DeployPanel"):

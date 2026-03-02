@@ -149,8 +149,36 @@ func _setup_tooltips() -> void:
 	cover_bonus_label.set_script(_TOOLTIP_LBL)
 	fuel_label.set_script(_TOOLTIP_LBL)
 
+var _turn_limit: int = 0
+var _timer_label: Label = null
+
+## Call once at mission start to enable the countdown display (0 = disabled)
+func set_turn_limit(limit: int) -> void:
+	_turn_limit = limit
+	if _turn_limit > 0:
+		if not _timer_label:
+			_timer_label = Label.new()
+			_timer_label.name = "TimerLabel"
+			_timer_label.add_theme_font_size_override("font_size", 13)
+			# Insert directly below TurnLabel's parent row container
+			var turn_container = turn_label.get_parent().get_parent()  # TurnContainer VBox
+			turn_container.add_child(_timer_label)
+		_timer_label.visible = true
+	elif _timer_label:
+		_timer_label.visible = false
+
+
 func update_turn(turn_number: int) -> void:
 	turn_label.text = "TURN: %d" % turn_number
+	if _turn_limit > 0 and _timer_label:
+		var turns_left = max(0, _turn_limit - turn_number + 1)
+		_timer_label.text = "%d TURN%s LEFT" % [turns_left, "" if turns_left == 1 else "S"]
+		if turns_left <= 1:
+			_timer_label.add_theme_color_override("font_color", Color(1.0, 0.2, 0.2))
+		elif turns_left <= 2:
+			_timer_label.add_theme_color_override("font_color", Color(1.0, 0.65, 0.1))
+		else:
+			_timer_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 
 
 func update_integrity(integrity: int) -> void:

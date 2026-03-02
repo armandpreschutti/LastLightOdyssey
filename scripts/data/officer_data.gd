@@ -18,6 +18,7 @@ const DATA_LOGS_LEVEL3_COST: int = 1
 
 var id: String = ""
 var alive: bool = true
+var unlocked: bool = true
 var level: int = 1
 var xp: int = 0
 var data_logs: int = 0
@@ -31,6 +32,7 @@ var injury_jumps: int = 0
 func initialize(officer_key: String) -> void:
 	id = officer_key
 	alive = true
+	unlocked = true
 	level = 1
 	xp = 0
 	data_logs = 0
@@ -128,6 +130,7 @@ func to_dict() -> Dictionary:
 	return {
 		"id": id,
 		"alive": alive,
+		"unlocked": unlocked,
 		"downed": downed,
 		"level": level,
 		"xp": xp,
@@ -142,6 +145,7 @@ func to_dict() -> Dictionary:
 func from_dict(d: Dictionary) -> void:
 	id = d.get("id", id)
 	alive = d.get("alive", true)
+	unlocked = d.get("unlocked", true)
 	downed = d.get("downed", false)
 	level = d.get("level", 1)
 	xp = d.get("xp", 0)

@@ -3,6 +3,7 @@ extends Node2D
 
 signal mission_complete(success: bool, stats: Dictionary)
 signal turn_ended(turn_number: int)
+signal turn_display_updated()  # Emitted whenever the turn order panel should refresh
 
 @onready var tactical_map: Node2D = $MapContainer/TacticalMap
 @onready var map_container: Node2D = $MapContainer
@@ -14,6 +15,7 @@ signal turn_ended(turn_number: int)
 @onready var damage_popup_container: Node2D = $MapContainer/EffectsLayer/DamagePopupContainer
 @onready var ui_layer: CanvasLayer = $UILayer
 @onready var biome_background: Control = $BackgroundLayer/Background
+@onready var turn_order_panel: Control = $UILayer/TurnOrderPanel
 
 var deployed_officers: Array[Node2D] = []
 var enemies: Array[Node2D] = []
@@ -38,6 +40,9 @@ var overcharge_active: bool = false    # Tech Twin Link: turrets deal 2x damage
 var overcharge_turns_remaining: int = 0
 var current_turn: int = 0
 var current_unit_index: int = 0  # Which unit's turn it is (0-based index)
+var display_turn_order: Array = []   # Units sorted by initiative for display
+var display_turn_pos: int = 0        # Current unit's index in display_turn_order
+var display_history: Array = []      # Units that already acted this round
 var mission_active: bool = false
 var is_paused: bool = false  # Track pause state
 var extraction_in_progress: bool = false
@@ -56,6 +61,8 @@ var mission_cash_collected: int = 0  # Cash collected during this mission
 var mission_enemies_killed: int = 0  # Enemies killed during this mission
 var current_biome: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION
 var is_scavenger_mission: bool = false  # Track if this is a scavenger mission
+var is_abandoned_station_mission: bool = false  # Track if this is an Abandoned Station (timer) mission
+var turn_limit: int = 0  # 0 = no limit; set to 4 for Abandoned Station missions
 var is_story_mission: bool = false  # Track if this tactical run came from a STORY node
 var is_story_dev_mode: bool = false  # True only for story missions while Developer Mode is enabled
 var is_raider_ambush: bool = false  # True when raider caught us on current node
@@ -75,6 +82,7 @@ var DataLogScene: PackedScene
 var SampleCollectorScene: PackedScene
 var BeaconScene: PackedScene
 var NestScene: PackedScene
+var CrewMemberScene: PackedScene
 var OfficerUnitScene: PackedScene
 var EnemyUnitScene: PackedScene
 var TurretUnitScene: PackedScene
@@ -122,6 +130,7 @@ func _ready() -> void:
 	SampleCollectorScene = load("res://scenes/tactical/sample_collector.tscn")
 	BeaconScene = load("res://scenes/tactical/beacon.tscn")
 	NestScene = load("res://scenes/tactical/nest.tscn")
+	CrewMemberScene = load("res://scenes/tactical/crew_member.tscn")
 	OfficerUnitScene = load("res://scenes/tactical/officer_unit.tscn")
 	EnemyUnitScene = load("res://scenes/tactical/enemy_unit.tscn")
 	TurretUnitScene = load("res://scenes/tactical/turret_unit.tscn")
@@ -139,6 +148,12 @@ func _ready() -> void:
 	tactical_hud.pause_pressed.connect(_show_pause_menu)
 	combat_camera.camera_transition_started.connect(_update_end_turn_button)
 	combat_camera.camera_transition_complete.connect(_update_end_turn_button)
+
+	# Turn order panel — connect display signal
+	if turn_order_panel:
+		turn_display_updated.connect(func():
+			turn_order_panel.refresh(display_history, display_turn_order, display_turn_pos, _biome_name())
+		)
 
 	if extraction_indicator:
 		extraction_indicator.set_indicator_color(Color(0.3, 0.95, 0.5))
@@ -391,7 +406,15 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	# Check if this is a scavenger mission
 	var current_node = VoyageManager.get_current_node()
 	is_scavenger_mission = (current_node.node_type == EventManager.NodeType.SCAVENGE_SITE) if current_node else false
-	
+
+	# Check if this is an Abandoned Station mission and set 4-turn limit
+	is_abandoned_station_mission = (current_node.node_type == EventManager.NodeType.ABANDONED_STATION) if current_node else false
+	if is_abandoned_station_mission:
+		is_scavenger_mission = true  # Enable scavenger mechanics (loot, beam-down, etc.)
+		turn_limit = 10
+	else:
+		turn_limit = 0
+
 	# Explicitly check for raider ambush to enable "beam down" and other scavenger mechanics
 	is_raider_ambush = VoyageManager.is_any_raider_on_player_node()
 	if not is_scavenger_mission and is_raider_ambush:
@@ -414,7 +437,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	# Generate map with biome type
 	current_biome = biome_type as BiomeConfig.BiomeType
 	
-	# Initialize mission objectives based on biome (only for story missions)
+	# Initialize mission objectives based on biome (only for story missions or abandoned station)
 	mission_objectives.clear()
 	if is_story_mission:
 		# Use provided objectives if available, otherwise generate random ones
@@ -423,6 +446,11 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		else:
 			mission_objectives = MissionObjective.ObjectiveManager.get_objectives_for_biome(current_biome)
 		# Initialize and show objectives panel in HUD
+		tactical_hud.initialize_objectives(mission_objectives)
+		tactical_hud.set_objectives_panel_visible(true)
+	elif is_abandoned_station_mission:
+		# Abandoned Station always has the rescue_crew objective
+		mission_objectives = [MissionObjective.ObjectiveManager.create_rescue_crew()]
 		tactical_hud.initialize_objectives(mission_objectives)
 		tactical_hud.set_objectives_panel_visible(true)
 	else:
@@ -441,13 +469,17 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	# For now, let's pass cycle as current index and a fixed 'max' to simulate progression
 	var simulated_max_nodes = 50 
 	print("DEBUG_MISSION: Generating map with cycle=%d, max_nodes=%d" % [cycle, simulated_max_nodes])
-	var layout = generator.generate(current_biome, cycle, simulated_max_nodes)
-	
+	var map_size_multiplier = 1.0
+	var layout = generator.generate(current_biome, cycle, simulated_max_nodes, map_size_multiplier)
+
 	# Set tactical map dimensions and biome theme
 	var map_dims = generator.get_map_dimensions()
+	if is_abandoned_station_mission:
+		map_dims = Vector2i(20, 20)
 	print("DEBUG_MISSION: Map generated. Dimensions: %s" % str(map_dims))
 	tactical_map.set_map_dimensions(map_dims.x, map_dims.y)
 	tactical_map.initialize_map(layout, current_biome)
+	tactical_map.set_abandoned_station(is_abandoned_station_mission)
 
 	extraction_positions = generator.get_extraction_positions()
 	print("DEBUG_MISSION: Extraction positions: %s" % str(extraction_positions))
@@ -676,9 +708,9 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 		var loot: Node2D
 		var difficulty = GameState.get_mission_difficulty()
 		if loot_data["type"] == "fuel":
-			# Skip fuel drops during story missions
-			if is_story_mission:
-				continue
+			# Skip fuel drops during story missions (Removed)
+			#if is_story_mission:
+			#	continue
 			loot = FuelCrateScene.instantiate()
 			if loot.has_method("set_amount"): # Assuming loot has a way to scale? If not, I'll just scale the pickup logic or spawn more
 				loot.amount = maxi(1, int(1 * difficulty * 0.1))
@@ -690,7 +722,46 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	# Spawn enemies with difficulty-based scaling
 	var difficulty = GameState.get_mission_difficulty()
 	var _enemy_config = BiomeConfig.get_enemy_config(current_biome, difficulty)
-	
+
+	# Abandoned Station missions have zero enemies — skip all enemy spawning
+	if is_abandoned_station_mission:
+		# Spawn 5 crew member interactables spread across the map
+		var crew_used_positions: Array[Vector2i] = []
+		var map_dims_crew = generator.get_map_dimensions()
+		for i in range(5):
+			var crew_pos = _find_valid_mining_equipment_position(map_dims_crew, crew_used_positions)
+			if crew_pos != Vector2i(-1, -1):
+				crew_used_positions.append(crew_pos)
+				mission_tile_positions.append(crew_pos)
+				tactical_map.add_mission_highlight(crew_pos)
+				var crew_member = CrewMemberScene.instantiate()
+				crew_member.set_grid_position(crew_pos)
+				tactical_map.add_interactable(crew_member, crew_pos)
+
+		_update_enemy_visibility()
+		_update_all_cover_indicators()
+		tactical_hud.set_turn_limit(turn_limit)
+		tactical_hud.update_turn(current_turn)
+		tactical_hud.update_integrity(GameState.ship_integrity)
+		tactical_hud.set_extract_visible(false)
+		tactical_hud.visible = true
+		ui_layer.visible = true
+		if spawn_positions.size() > 0:
+			_center_camera_on_spawn_positions(spawn_positions)
+		await _play_beam_down_animation()
+		mission_active = true
+		_build_display_turn_order()
+		tactical_hud.show_pause_button()
+		if deployed_officers.size() > 0:
+			current_unit_index = 0
+			_select_unit(deployed_officers[current_unit_index])
+			_center_camera_on_unit(deployed_officers[current_unit_index])
+		else:
+			tactical_map.clear_movement_range()
+		tactical_hud.update_haul(mission_fuel_collected, mission_cash_collected)
+		_set_animating(false)
+		return
+
 	# Spawn boss enemy based on spawn chance (disabled for story/raider ambush when tactical ease is on)
 	var use_tactical_ease = is_story_dev_mode or is_raider_ambush_dev_mode
 	if not use_tactical_ease:
@@ -781,6 +852,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	_update_all_cover_indicators()
 
 	# Update HUD
+	tactical_hud.set_turn_limit(0)  # No turn limit for normal missions
 	tactical_hud.update_turn(current_turn)
 	tactical_hud.update_integrity(GameState.ship_integrity)
 	tactical_hud.set_extract_visible(false)
@@ -797,6 +869,7 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 	
 	# Now activate the mission and start the turn
 	mission_active = true
+	_build_display_turn_order()
 	# Show pause button only when mission is active
 	tactical_hud.show_pause_button()
 
@@ -816,21 +889,19 @@ func start_mission(officer_keys: Array[String], biome_type: int = BiomeConfig.Bi
 ## Calculate boss spawn chance based on difficulty
 ## Currently set to 0% spawn rate
 func _calculate_boss_spawn_chance(_difficulty: float) -> float:
-	var current_node = VoyageManager.get_current_node()
-	var cycle = int(current_node.position.length() / 400.0) if current_node else 0
+	# Boss spawn rate disabled (0%)
+	return 0.0
 	
-	# Boss spawn only after cycle 10 (approx node 40 equivalent?)
-	# Let's say Cycle 10+ has boss chance
-	
-	if cycle < 10:
-		return 0.0
-	
-	if cycle >= 15:
-		return 0.10
-	
-	# Interpolate between 0% and 10% for cycles 10-15
-	var progress_in_range = float(cycle - 10) / float(15 - 10)
-	return lerpf(0.0, 0.10, progress_in_range)
+	# Original cycle-based logic (re-enable to restore boss spawning):
+	#var current_node = VoyageManager.get_current_node()
+	#var cycle = int(current_node.position.length() / 400.0) if current_node else 0
+	#if cycle < 10:
+	#	return 0.0
+	#if cycle >= 15:
+	#	return 0.10
+	## Interpolate between 0% and 10% for cycles 10-15
+	#var progress_in_range = float(cycle - 10) / float(15 - 10)
+	#return lerpf(0.0, 0.10, progress_in_range)
 
 
 ## Find a valid 2x2 spawn position for boss
@@ -1589,6 +1660,14 @@ func _pickup_item(interactable: Node2D, unit: Node2D) -> void:
 			# Interact with the item (will remove it)
 			interactable.interact()
 			return
+
+		if objective_id == "rescue_crew":
+			# Abandoned Station: progress rescue objective
+			_update_objective_progress("rescue_crew", 1)
+			interactable.interact()
+			# Check if all crew rescued — if so, enable instant extraction
+			_check_extraction_available()
+			return
 	
 	# Track what was collected by type (normal loot)
 	# NOTE: Fuel and cash do NOT count toward objectives - only objective-specific interactables do
@@ -1716,10 +1795,13 @@ func _on_end_turn_pressed() -> void:
 	if current_unit_index < deployed_officers.size():
 		previous_unit = deployed_officers[current_unit_index]
 	
+	# Advance display turn tracker for the officer whose turn just ended
+	_advance_display_turn()
+
 	# Advance to next unit's turn
 	current_unit_index += 1
 	var came_from_enemy_phase: bool = false
-	
+
 	# If all units have had their turn, advance to next round
 	if current_unit_index >= deployed_officers.size():
 		came_from_enemy_phase = true
@@ -1736,7 +1818,13 @@ func _on_end_turn_pressed() -> void:
 		await _execute_enemy_turn()
 		
 		current_turn += 1
-		
+		_build_display_turn_order()  # Rebuild for new round
+
+		# Abandoned Station: lockdown after turn 4 — down officers not in extraction, end mission
+		if is_abandoned_station_mission and turn_limit > 0 and current_turn > turn_limit:
+			_trigger_extraction_lockdown()
+			return
+
 		# Process turn (hull damage) - only once per round
 		GameState.process_tactical_turn()
 		
@@ -1934,6 +2022,11 @@ func _check_extraction_available() -> void:
 		# Only show button if objectives are done AND units are in extraction zone
 		# (Story missions require manual extraction after objectives)
 		tactical_hud.set_extract_visible(objectives_complete and any_on_extraction and any_alive)
+	elif is_abandoned_station_mission:
+		# Abandoned Station: extract if in zone OR if all crew rescued
+		var all_crew_rescued = _are_all_objectives_completed()
+		var can_instant_extract = all_crew_rescued and any_alive
+		tactical_hud.set_extract_visible((any_on_extraction and any_alive) or can_instant_extract)
 	else:
 		# Standard Mode: Extract if in zone OR if all enemies dead (Scavenger clear)
 		var all_enemies_dead = enemies.is_empty()
@@ -2188,6 +2281,27 @@ func _on_officer_died(officer_key: String) -> void:
 		_end_mission(false)
 
 
+## Abandoned Station: extraction zone locks down — down all officers not already in extraction
+func _trigger_extraction_lockdown() -> void:
+	tactical_hud.show_combat_message("EXTRACTION LOCKED — STATION COLLAPSING!", Color(1.0, 0.2, 0.2))
+	await get_tree().create_timer(1.5).timeout
+
+	# Down any officer still on the map who is not standing in the extraction zone
+	var officers_to_down: Array = []
+	for officer in deployed_officers:
+		var grid_pos: Vector2i = tactical_map.world_to_grid(officer.position)
+		if not tactical_map.is_extraction_tile(grid_pos):
+			officers_to_down.append(officer)
+
+	for officer in officers_to_down:
+		GameState.down_officer(officer.officer_key)
+		deployed_officers.erase(officer)
+		officer.queue_free()
+
+	# Mission ends as success — loot already collected is banked
+	_end_mission(true)
+
+
 func _end_mission(success: bool) -> void:
 	mission_active = false
 	_set_animating(false)
@@ -2204,12 +2318,17 @@ func _end_mission(success: bool) -> void:
 	var total_xp_awarded_mission: int = 0
 	
 	for officer_key in mission_roster:
-		# Only award XP to officers who were deployed in this mission
-		if individual_xp_map.has(officer_key) or _get_officer_node(officer_key) != null:
-			var officer_xp: int = int(60 * xp_mult) # survival
-			officer_xp += int(30 * officer_kills.get(officer_key, 0) * xp_mult) # kills
-			individual_xp_map[officer_key] = officer_xp
-			total_xp_awarded_mission += officer_xp
+		# Award XP to all deployed officers, applying a penalty if they were downed
+		var base_xp: int = int(60 * xp_mult) # survival
+		base_xp += int(30 * officer_kills.get(officer_key, 0) * xp_mult) # kills
+		
+		var survived = _get_officer_node(officer_key) != null
+		if not survived:
+			# Apply 50% penalty for being downed/left behind
+			base_xp = int(base_xp * 0.5)
+			
+		individual_xp_map[officer_key] = base_xp
+		total_xp_awarded_mission += base_xp
 
 	# Collect officer stats from FULL ROSTER (including downed ones)
 	var officers_status: Array = []
@@ -3416,9 +3535,58 @@ func _execute_enemy_turn() -> void:
 		if is_instance_valid(enemy) and enemy.has_method("tick_status_effects"):
 			enemy.tick_status_effects()
 
+		# Advance display turn tracker for this enemy
+		_advance_display_turn()
+
 func _on_enemy_movement_finished(_enemy: Node2D) -> void:
 	# Enemy movement completed
 	pass
+
+
+## Build the display-only turn order sorted by initiative (call at combat start and round reset).
+func _build_display_turn_order() -> void:
+	display_turn_order.clear()
+	display_history.clear()
+	display_turn_pos = 0
+	var all_units: Array = []
+	for u in deployed_officers:
+		if is_instance_valid(u) and u.current_hp > 0:
+			all_units.append(u)
+	for u in enemies:
+		if is_instance_valid(u) and u.current_hp > 0:
+			all_units.append(u)
+	all_units.sort_custom(func(a, b): return _get_initiative(a) > _get_initiative(b))
+	display_turn_order = all_units
+	turn_display_updated.emit()
+
+
+## Return a numeric initiative value for a unit (higher = acts earlier in display order).
+func _get_initiative(unit: Node2D) -> int:
+	var mr = unit.get("move_range")
+	if mr != null:
+		return int(mr)
+	return 3
+
+
+## Advance the display position by one step and record the previous actor in history.
+func _advance_display_turn() -> void:
+	if display_turn_pos < display_turn_order.size():
+		var actor = display_turn_order[display_turn_pos]
+		if is_instance_valid(actor):
+			display_history.append(actor)
+	display_turn_pos += 1
+	turn_display_updated.emit()
+
+
+## Convert the current biome enum to a lowercase string for portrait lookup.
+func _biome_name() -> String:
+	match current_biome:
+		BiomeConfig.BiomeType.ASTEROID:
+			return "asteroid"
+		BiomeConfig.BiomeType.PLANET:
+			return "planet"
+		_:
+			return "station"
 
 
 ## Calculate resource drop amount based on enemy type
@@ -3560,22 +3728,30 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	if enemy.has_method("play_death_animation"):
 		await enemy.play_death_animation()
 	
-	# Check if enemy should drop resources (10-15% chance)
-	var drop_chance = randi_range(10, 15)  # Random chance between 10% and 15%
+	# Check if enemy should drop resources
+	# Scavenger missions (not story, not raider): regular enemies have a 35-50% fuel drop chance
+	var is_pure_scavenger = is_scavenger_mission and not is_story_mission and not is_raider_ambush
+	var drop_chance = randi_range(35, 50) if is_pure_scavenger else randi_range(10, 15)
 	var should_drop = randf() * 100.0 < drop_chance
 
 	# Only spawn resource drop if chance succeeds
 	if should_drop:
-		# Bosses drop bonus loot (skip fuel during story missions)
-		if enemy_type == "boss" and not is_story_mission:
+		# Bosses drop bonus loot
+		if enemy_type == "boss":
 			# Bosses drop fuel
 			var fuel_amount = randi_range(5, 10)
 			var boss_center_pos = pos + Vector2i(1, 1)  # Center of 2x2 area
 
 			# Try to drop fuel at center
 			var fuel_crate = FuelCrateScene.instantiate()
-			fuel_crate.fuel_amount = fuel_amount
+			fuel_crate.amount = fuel_amount
 			_safe_add_interactable(fuel_crate, boss_center_pos)
+		elif enemy_type != "boss":
+			# Regular enemies drop small fuel crates in all missions
+			var fuel_amount = randi_range(1, 3)
+			var fuel_crate = FuelCrateScene.instantiate()
+			fuel_crate.amount = fuel_amount
+			_safe_add_interactable(fuel_crate, pos)
 	
 	# Remove node
 	enemy.queue_free()

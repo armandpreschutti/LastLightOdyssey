@@ -13,7 +13,7 @@ signal trading_complete
 @onready var close_button: Button = $PanelContainer/MarginContainer/VBoxContainer/CloseButton
 @onready var status_label: Label = $PanelContainer/MarginContainer/VBoxContainer/StatusLabel
 
-const CASH_PER_FUEL: int = 10  # Reduced cost vs Market (15)
+const CASH_PER_FUEL: int = 10  # Reduced cost vs Market (25 for 5)
 const FUEL_PER_TRADE: int = 5
 const CASH_PER_REPAIR: int = 35 # Reduced cost vs Market (50)
 const REPAIR_AMOUNT: int = 15   # Better repair value (25% in market costs 50)
@@ -38,7 +38,7 @@ func _update_display() -> void:
 	hull_label.text = "HULL: %d%%" % GameState.ship_integrity
 	
 	# Update trade button availability
-	var can_buy_fuel = GameState.cash >= CASH_PER_FUEL
+	var can_buy_fuel = GameState.cash >= CASH_PER_FUEL and GameState.fuel < GameState.MAX_FUEL
 	var can_buy_repair = GameState.cash >= CASH_PER_REPAIR and GameState.ship_integrity < 100
 	
 	fuel_trade_button.disabled = not can_buy_fuel
@@ -50,9 +50,10 @@ func _update_display() -> void:
 
 
 func _on_fuel_trade_pressed() -> void:
-	if GameState.cash >= CASH_PER_FUEL:
+	if GameState.cash >= CASH_PER_FUEL and GameState.fuel < GameState.MAX_FUEL:
 		GameState.cash -= CASH_PER_FUEL
-		GameState.fuel += FUEL_PER_TRADE
+		# Don't exceed MAX_FUEL if they buy a 5-pack and only need 2, for example.
+		GameState.fuel = min(GameState.fuel + FUEL_PER_TRADE, GameState.MAX_FUEL)
 		status_label.text = "FUEL PURCHASED: +%d" % FUEL_PER_TRADE
 		_update_display()
 

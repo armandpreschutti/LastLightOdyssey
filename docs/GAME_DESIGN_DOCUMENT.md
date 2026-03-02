@@ -65,6 +65,7 @@ Replaces old grid approaches with the **Progressive Map System**.
 | **Empty / Event** | ~76% | No tactical map, ~17.5% chance of pre-rolled Random Event. |
 | **Scavenge Site** | 16% | Triggers Tactical Mode (Asteroid or Planet biome). |
 | **Wormhole** | 8% | Teleports player to distant node (32% spawn rate with `dev_wormhole_4x`). |
+| **Abandoned Station** | 5% | Timer mission: 4-turn sprint for loot, no enemies. Officers not extracted are downed. |
 | **Story Node** | Dynamic | Spawns when Intel >= 3. Advances branching campaign. |
 
 *(Note: "Trading Terminal" is the in-universe functional name for the Market accessed via the Management HUD and does not spawn as a map node.)*

@@ -1,0 +1,285 @@
+[gd_scene format=3 uid="uid://turn_order_panel"]
+
+[ext_resource type="Script" path="res://scripts/ui/turn_order_panel.gd" id="1_top_script"]
+[ext_resource type="Theme" uid="uid://c6rjhh6buixy4" path="res://assets/themes/base_ui_theme.tres" id="2_theme"]
+
+[node name="TurnOrderPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(64, 0)
+anchor_left = 0.0
+anchor_top = 0.5
+anchor_right = 0.0
+anchor_bottom = 0.5
+offset_left = 0.0
+offset_top = -200.0
+offset_right = 64.0
+offset_bottom = 200.0
+grow_horizontal = 1
+grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_top_script")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 4
+mouse_filter = 2
+
+[node name="SlotPast" type="Control" parent="VBoxContainer"]
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Portrait" type="TextureRect" parent="VBoxContainer/SlotPast"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 6
+
+[node name="BorderRect" type="ColorRect" parent="VBoxContainer/SlotPast"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.8, 0.1, 0.85)
+
+[node name="TeamIndicator" type="ColorRect" parent="VBoxContainer/SlotPast"]
+layout_mode = 1
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -4.0
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.3, 0.3, 0.3, 1)
+
+[node name="NameLabel" type="Label" parent="VBoxContainer/SlotPast"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -18.0
+grow_vertical = 0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.85, 0.85, 0.85, 1)
+theme_override_font_sizes/font_size = 10
+text = ""
+horizontal_alignment = 1
+clip_text = true
+
+[node name="SlotCurrent" type="Control" parent="VBoxContainer"]
+custom_minimum_size = Vector2(64, 76)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Portrait" type="TextureRect" parent="VBoxContainer/SlotCurrent"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 6
+
+[node name="BorderRect" type="ColorRect" parent="VBoxContainer/SlotCurrent"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.8, 0.1, 0.85)
+
+[node name="TeamIndicator" type="ColorRect" parent="VBoxContainer/SlotCurrent"]
+layout_mode = 1
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -4.0
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.3, 0.3, 0.3, 1)
+
+[node name="NameLabel" type="Label" parent="VBoxContainer/SlotCurrent"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -18.0
+grow_vertical = 0
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 0.95, 0.5, 1)
+theme_override_font_sizes/font_size = 11
+text = ""
+horizontal_alignment = 1
+clip_text = true
+
+[node name="SlotNext1" type="Control" parent="VBoxContainer"]
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Portrait" type="TextureRect" parent="VBoxContainer/SlotNext1"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 6
+
+[node name="BorderRect" type="ColorRect" parent="VBoxContainer/SlotNext1"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.8, 0.1, 0.85)
+
+[node name="TeamIndicator" type="ColorRect" parent="VBoxContainer/SlotNext1"]
+layout_mode = 1
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -4.0
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.3, 0.3, 0.3, 1)
+
+[node name="NameLabel" type="Label" parent="VBoxContainer/SlotNext1"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -18.0
+grow_vertical = 0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.85, 0.85, 0.85, 1)
+theme_override_font_sizes/font_size = 10
+text = ""
+horizontal_alignment = 1
+clip_text = true
+
+[node name="SlotNext2" type="Control" parent="VBoxContainer"]
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Portrait" type="TextureRect" parent="VBoxContainer/SlotNext2"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 6
+
+[node name="BorderRect" type="ColorRect" parent="VBoxContainer/SlotNext2"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.8, 0.1, 0.85)
+
+[node name="TeamIndicator" type="ColorRect" parent="VBoxContainer/SlotNext2"]
+layout_mode = 1
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -4.0
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.3, 0.3, 0.3, 1)
+
+[node name="NameLabel" type="Label" parent="VBoxContainer/SlotNext2"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -18.0
+grow_vertical = 0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.85, 0.85, 0.85, 1)
+theme_override_font_sizes/font_size = 10
+text = ""
+horizontal_alignment = 1
+clip_text = true
+
+[node name="SlotNext3" type="Control" parent="VBoxContainer"]
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Portrait" type="TextureRect" parent="VBoxContainer/SlotNext3"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 6
+
+[node name="BorderRect" type="ColorRect" parent="VBoxContainer/SlotNext3"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.8, 0.1, 0.85)
+
+[node name="TeamIndicator" type="ColorRect" parent="VBoxContainer/SlotNext3"]
+layout_mode = 1
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -4.0
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.3, 0.3, 0.3, 1)
+
+[node name="NameLabel" type="Label" parent="VBoxContainer/SlotNext3"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -18.0
+grow_vertical = 0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.85, 0.85, 0.85, 1)
+theme_override_font_sizes/font_size = 10
+text = ""
+horizontal_alignment = 1
+clip_text = true

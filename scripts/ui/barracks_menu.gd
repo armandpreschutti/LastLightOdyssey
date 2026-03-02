@@ -19,7 +19,7 @@ const PORTRAIT_MAP = {
 }
 
 const ABILITY_ICON_PATH = "res://assets/sprites/ui/icons/abilities/"
-const OFFICER_KEYS: Array[String] = ["captain", "scout", "tech", "medic", "heavy", "sniper"]
+const OFFICER_KEYS: Array[String] = ["captain", "scout", "medic", "tech", "heavy", "sniper"]
 
 const MIN_TEAM_SIZE: int = 1
 const MAX_TEAM_SIZE: int = 3
@@ -47,6 +47,7 @@ var _portrait_slot_panels: Array[PanelContainer] = []
 var _mode: MenuMode = MenuMode.BARRACKS
 var current_biome_type: int = -1
 var _is_raider_ambush: bool = false
+var _current_node_type: int = -1
 var current_objectives: Array[MissionObjective] = []
 var selected_officers: Array[String] = []
 var officer_buttons: Dictionary = {}
@@ -88,10 +89,11 @@ func show_barracks() -> void:
 	visible = true
 
 
-func show_team_select(biome_type: int = -1, is_raider_ambush: bool = false) -> void:
+func show_team_select(biome_type: int = -1, is_raider_ambush: bool = false, node_type: int = -1) -> void:
 	_mode = MenuMode.TEAM_SELECT
 	current_biome_type = biome_type
 	_is_raider_ambush = is_raider_ambush
+	_current_node_type = node_type
 	_set_team_select_ui_visible(true)
 	close_button.visible = true
 	cancel_button.visible = false
@@ -128,9 +130,15 @@ func _set_team_select_ui_visible(show: bool) -> void:
 #  Mission context (team select mode only)
 # ──────────────────────────────────────────
 
+func _is_abandoned_station() -> bool:
+	return _current_node_type == EventManager.NodeType.ABANDONED_STATION
+
+
 func _update_title() -> void:
 	if _is_raider_ambush:
 		title_label.text = "[ RAIDER AMBUSH ]"
+	elif _is_abandoned_station():
+		title_label.text = "[ DERELICT STATION ]"
 	elif current_biome_type >= 0:
 		var biome_name = BiomeConfig.get_biome_name(current_biome_type)
 		title_label.text = "[ SCAVENGE: %s ]" % biome_name.to_upper()
@@ -141,6 +149,8 @@ func _update_title() -> void:
 func _update_description() -> void:
 	if _is_raider_ambush:
 		desc_label.text = "Hostile raiders have intercepted your ship! Deploy your team to eliminate the threat."
+	elif _is_abandoned_station():
+		desc_label.text = "Select %d–%d officers for deployment." % [MIN_TEAM_SIZE, MAX_TEAM_SIZE]
 	elif MIN_TEAM_SIZE == MAX_TEAM_SIZE:
 		desc_label.text = "Select %d officers for deployment." % MAX_TEAM_SIZE
 	else:
@@ -153,6 +163,9 @@ func _update_objective() -> void:
 		var objective = MissionObjective.ObjectiveManager.create_eliminate_hostiles()
 		current_objectives = [objective]
 		objective_label.text = "MISSION: Eliminate all raider units to continue your voyage."
+		objective_label.visible = true
+	elif _is_abandoned_station():
+		objective_label.text = "MISSION: Station is collapsing — you have 10 turns. Rescue all 5 crew members to trigger instant extraction, or reach the physical extraction zone before time runs out. Any officer not extracted in time will be left behind."
 		objective_label.visible = true
 	elif current_biome_type >= 0:
 		var biome = current_biome_type as BiomeConfig.BiomeType
@@ -230,6 +243,9 @@ func _populate() -> void:
 	if has_node("MenuPanel/Layout/MarginWrap/HeaderBar/DataLogsLabel"):
 		$MenuPanel/Layout/MarginWrap/HeaderBar/DataLogsLabel.visible = false
 
+	# Preserve the current selection before destroying and recreating cards.
+	var preserved_selection: Array[String] = selected_officers.duplicate()
+
 	for child in cards_container.get_children():
 		child.queue_free()
 
@@ -245,9 +261,109 @@ func _populate() -> void:
 		var card = _build_officer_card(officer_key)
 		cards_container.add_child(card)
 
+	# Restore the selection that existed before the repopulate.
+	if _mode == MenuMode.TEAM_SELECT and not preserved_selection.is_empty():
+		for key in preserved_selection:
+			if key in OFFICER_KEYS:
+				selected_officers.append(key)
+		_restore_selection_visuals()
+		_update_selected_label()
+		deploy_button.disabled = selected_officers.size() < MIN_TEAM_SIZE
+
+
+func _build_locked_card(officer_key: String) -> Control:
+	var panel = PanelContainer.new()
+	var locked_style = StyleBoxFlat.new()
+	locked_style.bg_color = Color(0.08, 0.08, 0.12, 0.92)
+	locked_style.border_color = Color(0.25, 0.25, 0.35, 1.0)
+	locked_style.set_border_width_all(1)
+	locked_style.set_corner_radius_all(6)
+	panel.add_theme_stylebox_override("panel", locked_style)
+	officer_card_panels[officer_key] = panel
+
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	panel.add_child(margin)
+
+	var hbox = HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 14)
+	margin.add_child(hbox)
+
+	# Lock icon placeholder (large "?" box)
+	var lock_box = PanelContainer.new()
+	var lock_box_style = StyleBoxFlat.new()
+	lock_box_style.bg_color = Color(0.12, 0.12, 0.18, 1.0)
+	lock_box_style.set_corner_radius_all(4)
+	lock_box.add_theme_stylebox_override("panel", lock_box_style)
+	lock_box.custom_minimum_size = Vector2(76, 76)
+	var lock_label = Label.new()
+	lock_label.text = "?"
+	lock_label.add_theme_font_size_override("font_size", 36)
+	lock_label.add_theme_color_override("font_color", Color(0.35, 0.35, 0.45, 1.0))
+	lock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lock_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lock_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lock_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lock_box.add_child(lock_label)
+	hbox.add_child(lock_box)
+
+	# Right side
+	var right_vbox = VBoxContainer.new()
+	right_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_vbox.add_theme_constant_override("separation", 6)
+	hbox.add_child(right_vbox)
+
+	var locked_title = Label.new()
+	locked_title.text = "LOCKED"
+	locked_title.add_theme_font_size_override("font_size", 20)
+	locked_title.add_theme_color_override("font_color", Color(0.35, 0.35, 0.45, 1.0))
+	right_vbox.add_child(locked_title)
+
+	var locked_desc = Label.new()
+	locked_desc.text = "Unlock this officer slot to recruit them."
+	locked_desc.add_theme_font_size_override("font_size", 13)
+	locked_desc.add_theme_color_override("font_color", Color(0.3, 0.3, 0.4, 1.0))
+	locked_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	right_vbox.add_child(locked_desc)
+
+	var spacer = Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right_vbox.add_child(spacer)
+
+	var unlock_btn = Button.new()
+	unlock_btn.text = "[ UNLOCK — 50 CR ]"
+	unlock_btn.custom_minimum_size = Vector2(200, 32)
+	unlock_btn.add_theme_font_size_override("font_size", 14)
+	var can_afford = GameState.cash >= 50
+	if can_afford:
+		unlock_btn.add_theme_color_override("font_color", Color(0.9, 0.75, 0.2, 1.0))
+		unlock_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.9, 0.3, 1.0))
+		unlock_btn.pressed.connect(_on_unlock_officer_pressed.bind(officer_key))
+	else:
+		unlock_btn.disabled = true
+		unlock_btn.add_theme_color_override("font_color", Color(0.3, 0.3, 0.3, 1.0))
+	right_vbox.add_child(unlock_btn)
+
+	return panel
+
+
+func _on_unlock_officer_pressed(officer_key: String) -> void:
+	if GameState.cash < 50:
+		return
+	GameState.cash -= 50
+	var od: OfficerData = GameState.get_officer(officer_key)
+	if od:
+		od.unlocked = true
+	_populate()
+
 
 func _build_officer_card(officer_key: String) -> Control:
 	var od: OfficerData = GameState.get_officer(officer_key)
+	if od != null and not od.unlocked:
+		return _build_locked_card(officer_key)
 	var accent: Color = GameState.OFFICER_COLOR.get(officer_key, Color.WHITE)
 	var is_alive: bool = od != null and od.alive
 	var is_injured: bool = od != null and od.is_injured()
@@ -516,6 +632,21 @@ func _update_selected_label() -> void:
 	_update_portrait_slots()
 
 
+## Re-applies the selected button text/colour and card highlight for every
+## officer currently in selected_officers (used after a _populate() rebuild).
+func _restore_selection_visuals() -> void:
+	for officer_key in selected_officers:
+		var btn = officer_select_buttons.get(officer_key)
+		if btn:
+			btn.text = "[ SELECTED ]"
+			btn.add_theme_color_override("font_color", Color(1, 0.85, 0.2, 1))
+			btn.add_theme_color_override("font_hover_color", Color(1, 0.95, 0.4, 1))
+		var accent: Color = GameState.OFFICER_COLOR.get(officer_key, Color.WHITE)
+		var card_panel = officer_card_panels.get(officer_key)
+		if card_panel:
+			card_panel.add_theme_stylebox_override("panel", _glass_style_selected(accent))
+
+
 func _build_portrait_slots() -> void:
 	_portrait_slot_panels.clear()
 	for child in portrait_slots_container.get_children():
@@ -637,6 +768,7 @@ func _on_deploy_pressed() -> void:
 
 
 func _on_cancel_pressed() -> void:
+	selected_officers.clear()
 	visible = false
 	cancelled.emit()
 

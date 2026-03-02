@@ -15,6 +15,8 @@ const TOOLTIP_DELAY := 0.3
 @onready var asteroid_count_label: Label = $PanelContainer/HBoxContainer/AsteroidEntry/AsteroidCountLabel
 @onready var planet_entry: HBoxContainer = $PanelContainer/HBoxContainer/PlanetEntry
 @onready var planet_count_label: Label = $PanelContainer/HBoxContainer/PlanetEntry/PlanetCountLabel
+@onready var outpost_entry: HBoxContainer = $PanelContainer/HBoxContainer/OutpostEntry
+@onready var outpost_count_label: Label = $PanelContainer/HBoxContainer/OutpostEntry/OutpostCountLabel
 @onready var wormhole_entry: HBoxContainer = $PanelContainer/HBoxContainer/WormholeEntry
 @onready var wormhole_count_label: Label = $PanelContainer/HBoxContainer/WormholeEntry/WormholeCountLabel
 
@@ -23,6 +25,7 @@ var _story_nodes: Array[NodeData] = []
 var _raider_nodes: Array[NodeData] = []
 var _asteroid_nodes: Array[NodeData] = []
 var _planet_nodes: Array[NodeData] = []
+var _outpost_nodes: Array[NodeData] = []
 var _wormhole_nodes: Array[NodeData] = []
 
 # Cycle indices — start at -1 so the first click lands on index 0.
@@ -31,6 +34,7 @@ var _story_idx: int = -1
 var _raider_idx: int = -1
 var _asteroid_idx: int = -1
 var _planet_idx: int = -1
+var _outpost_idx: int = -1
 var _wormhole_idx: int = -1
 
 
@@ -39,12 +43,14 @@ func _ready() -> void:
 	_set_tooltip_delay(raider_entry.get_node("RaiderIcon"))
 	_set_tooltip_delay(asteroid_entry.get_node("AsteroidIcon"))
 	_set_tooltip_delay(planet_entry.get_node("PlanetIcon"))
+	_set_tooltip_delay(outpost_entry.get_node("OutpostIcon"))
 	_set_tooltip_delay(wormhole_entry.get_node("WormholeIcon"))
 
 	story_entry.gui_input.connect(func(e): _on_entry_gui_input(e, "story"))
 	raider_entry.gui_input.connect(func(e): _on_entry_gui_input(e, "raider"))
 	asteroid_entry.gui_input.connect(func(e): _on_entry_gui_input(e, "asteroid"))
 	planet_entry.gui_input.connect(func(e): _on_entry_gui_input(e, "planet"))
+	outpost_entry.gui_input.connect(func(e): _on_entry_gui_input(e, "outpost"))
 	wormhole_entry.gui_input.connect(func(e): _on_entry_gui_input(e, "wormhole"))
 
 	if VoyageManager:
@@ -84,21 +90,32 @@ func _refresh_legend() -> void:
 	if asteroid_count > 0:
 		asteroid_count_label.text = str(asteroid_count)
 
-	# Planet (SCAVENGE_SITE with PLANET biome + TRADING_OUTPOST; exclude story)
+	# Planet (SCAVENGE_SITE with PLANET biome; exclude story)
 	var planet_count := 0
 	for id in VoyageManager.nodes:
 		var n = VoyageManager.nodes[id]
 		if not _is_legend_visible(n):
 			continue
-		if n.node_type == EventManager.NodeType.TRADING_OUTPOST:
-			planet_count += 1
-		elif n.node_type == EventManager.NodeType.SCAVENGE_SITE and not n.is_story_node:
+		if n.node_type == EventManager.NodeType.SCAVENGE_SITE and not n.is_story_node:
 			if n.biome_type == BiomeConfig.BiomeType.PLANET:
 				planet_count += 1
 
 	planet_entry.visible = planet_count > 0
 	if planet_count > 0:
 		planet_count_label.text = str(planet_count)
+
+	# Outpost (TRADING_OUTPOST node type)
+	var outpost_count := 0
+	for id in VoyageManager.nodes:
+		var n = VoyageManager.nodes[id]
+		if not _is_legend_visible(n):
+			continue
+		if n.node_type == EventManager.NodeType.TRADING_OUTPOST:
+			outpost_count += 1
+
+	outpost_entry.visible = outpost_count > 0
+	if outpost_count > 0:
+		outpost_count_label.text = str(outpost_count)
 
 	# Wormhole (WORMHOLE node type)
 	var wormhole_count := 0
@@ -126,12 +143,14 @@ func _build_node_lists() -> void:
 	_raider_nodes.clear()
 	_asteroid_nodes.clear()
 	_planet_nodes.clear()
+	_outpost_nodes.clear()
 	_wormhole_nodes.clear()
 
 	_story_idx = -1
 	_raider_idx = -1
 	_asteroid_idx = -1
 	_planet_idx = -1
+	_outpost_idx = -1
 	_wormhole_idx = -1
 
 	if not VoyageManager.active_story_node_id.is_empty() \
@@ -155,8 +174,7 @@ func _build_node_lists() -> void:
 				elif n.biome_type == BiomeConfig.BiomeType.PLANET:
 					_planet_nodes.append(n)
 			EventManager.NodeType.TRADING_OUTPOST:
-				if not n.is_story_node:
-					_planet_nodes.append(n)
+				_outpost_nodes.append(n)
 			EventManager.NodeType.WORMHOLE:
 				_wormhole_nodes.append(n)
 
@@ -181,6 +199,9 @@ func _on_entry_gui_input(event: InputEvent, entry_type: String) -> void:
 		"planet":
 			_planet_idx = (_planet_idx + 1) % max(1, _planet_nodes.size())
 			_snap_to(_planet_nodes, _planet_idx)
+		"outpost":
+			_outpost_idx = (_outpost_idx + 1) % max(1, _outpost_nodes.size())
+			_snap_to(_outpost_nodes, _outpost_idx)
 		"wormhole":
 			_wormhole_idx = (_wormhole_idx + 1) % max(1, _wormhole_nodes.size())
 			_snap_to(_wormhole_nodes, _wormhole_idx)

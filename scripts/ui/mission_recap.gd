@@ -264,23 +264,21 @@ func _create_officer_xp_row(data: Dictionary, mission_success: bool) -> VBoxCont
 	var status_label = Label.new()
 	status_label.add_theme_font_size_override("font_size", 16)
 
+	header.add_child(name_label)
+
 	if not alive and status == "DOWNED":
 		name_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
 		status_label.text = " - DOWNED (4 JUMPS TO RECOVER)"
 		status_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
-		header.add_child(name_label)
 		header.add_child(status_label)
-		return vbox
 	elif alive:
 		name_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))
 		if status == "WOUNDED":
 			status_label.text = " - WOUNDED (2 JUMPS TO RECOVER)"
 			status_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
-			header.add_child(name_label)
 			header.add_child(status_label)
 	else:
 		name_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))
-	header.add_child(name_label)
 
 	# HP display
 	var hp_text = "HP: %d/%d" % [hp, max_hp]

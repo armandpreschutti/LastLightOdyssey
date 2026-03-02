@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://blehn07ohr1uq"]
+[gd_scene load_steps=12 format=3 uid="uid://blehn07ohr1uq"]
 
 [ext_resource type="Script" path="res://scripts/ui/navigation_legend_strip.gd" id="1_script"]
 [ext_resource type="Script" path="res://scripts/ui/tooltip_area.gd" id="2_tooltip"]
@@ -8,6 +8,7 @@
 [ext_resource type="Texture2D" uid="uid://d2gx2j4l6lhjr" path="res://assets/sprites/navigation/asteroid.png" id="6_asteroid"]
 [ext_resource type="Texture2D" uid="uid://hmgh553sxea0" path="res://assets/sprites/navigation/planet_gas.png" id="7_planet"]
 [ext_resource type="Texture2D" uid="uid://dmwormholeid" path="res://assets/sprites/navigation/wormhole.png" id="8_wormhole"]
+[ext_resource type="Texture2D" uid="uid://ukf6ay2w864f" path="res://assets/sprites/navigation/outpost.png" id="9_outpost"]
 
 [node name="NavigationLegendStrip" type="MarginContainer"]
 anchors_preset = 2
@@ -123,6 +124,28 @@ stretch_mode = 5
 script = ExtResource("2_tooltip")
 
 [node name="PlanetCountLabel" type="Label" parent="PanelContainer/HBoxContainer/PlanetEntry"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 11
+text = "1"
+vertical_alignment = 1
+
+[node name="OutpostEntry" type="HBoxContainer" parent="PanelContainer/HBoxContainer"]
+layout_mode = 2
+mouse_filter = 1
+cursor_shape = 2
+theme_override_constants/separation = 4
+
+[node name="OutpostIcon" type="TextureRect" parent="PanelContainer/HBoxContainer/OutpostEntry"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+tooltip_text = "Trading Outpost – buy supplies and equipment."
+texture = ExtResource("9_outpost")
+expand_mode = 1
+stretch_mode = 5
+script = ExtResource("2_tooltip")
+
+[node name="OutpostCountLabel" type="Label" parent="PanelContainer/HBoxContainer/OutpostEntry"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.4, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 11

@@ -278,8 +278,8 @@ func _count_nodes_in_row(row: int) -> int:
 
 ## Assign node types to each node (pre-roll for consistency)
 func _assign_node_types() -> void:
-	# Node 0 is always the starting node (Empty Space)
-	nodes[0].node_type = EventManager.NodeType.EMPTY_SPACE
+	# Node 0 is always the starting node (Trading Outpost)
+	nodes[0].node_type = EventManager.NodeType.TRADING_OUTPOST
 	
 	# Last node is always New Earth (Empty Space - triggers win)
 	# Use actual last index in case nodes.size() differs from TOTAL_NODES
@@ -295,8 +295,8 @@ func _assign_node_types() -> void:
 	
 	available_indices.shuffle()
 	
-	# Place 10 wormholes
-	for i in range(min(10, available_indices.size())):
+	# Place 30 wormholes
+	for i in range(min(30, available_indices.size())):
 		var idx = available_indices.pop_back()
 		nodes[idx].node_type = EventManager.NodeType.WORMHOLE
 		
@@ -307,12 +307,13 @@ func _assign_node_types() -> void:
 
 ## Roll a random node type using EventManager's weighting
 func _roll_node_type() -> int:
-	# 50% chance for Empty Space (1-5), 50% chance for Scavenge Site (6-10)
-	var roll = randi_range(1, 10)
-	if roll <= 8: # Increased from 5 to 8 (80% chance for EMPTY_SPACE)
+	var roll = randi_range(1, 100)
+	if roll <= 76: # 76% chance for EMPTY_SPACE
 		return EventManager.NodeType.EMPTY_SPACE
-	else: # 20% chance for SCAVENGE_SITE (reduced from 50% by 60%)
+	elif roll <= 96: # 20% chance for SCAVENGE_SITE
 		return EventManager.NodeType.SCAVENGE_SITE
+	else: # 4% chance for TRADING_OUTPOST
+		return EventManager.NodeType.TRADING_OUTPOST
 
 
 ## Assign biome types to scavenge site nodes

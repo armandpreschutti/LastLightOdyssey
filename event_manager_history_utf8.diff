@@ -1,0 +1,1258 @@
+﻿commit 2cfa0a85f72c777a61a29a7ef60f7d14cba3fef0
+Author: armandpreschutti <armand.preschutti@gmail.com>
+Date:   Wed Feb 18 15:34:19 2026 -0500
+
+    fix various ui issues with abilities
+
+diff --git a/scripts/autoload/event_manager.gd b/scripts/autoload/event_manager.gd
+index 0fdb15c..a82b5dc 100644
+--- a/scripts/autoload/event_manager.gd
++++ b/scripts/autoload/event_manager.gd
+@@ -16,20 +16,20 @@ var random_events: Array[Dictionary] = [
+ 	{ "id": 4, "name": "Event 4", "integrity_change_pct": -20, "specialist_mitigation": "tech", "mitigated_integrity_change_pct": -10 },
+ 	{ "id": 5, "name": "Event 5", "integrity_change_pct": -30, "specialist_mitigation": "heavy", "mitigated_integrity_change_pct": -15 },
+ 	{ "id": 6, "name": "Event 6", "cash_change": -50, "integrity_change_pct": -10, "specialist_mitigation": "scout", "mitigated_integrity_change_pct": 0 },
+-	{ "id": 7, "name": "Event 7", "fuel_change": -2, "scrap_change": -15 },
++	{ "id": 7, "name": "Event 7", "fuel_change": -2, "cash_change": -15 },
+ 	{ "id": 8, "name": "Event 8", "integrity_change_pct": -10, "specialist_mitigation": "tech", "mitigated_integrity_change_pct": -5 },
+ 	{ "id": 9, "name": "Event 9", "cash_change": -75 },
+ 	{ "id": 10, "name": "Event 10", "integrity_change_pct": 0 }, # Clear skies
+ 	{ "id": 11, "name": "Event 11", "cash_change": 100 },
+ 	{ "id": 12, "name": "Event 12", "fuel_change": 3 },
+ 	{ "id": 13, "name": "Event 13", "integrity_change_pct": 15 },
+-	{ "id": 14, "name": "Event 14", "scrap_change": 40 },
++	{ "id": 14, "name": "Event 14", "cash_change": 40 },
+ 	{ "id": 15, "name": "Event 15", "cash_change": 50, "fuel_change": 1 },
+ 	{ "id": 16, "name": "Event 16", "fuel_change": 2, "integrity_change_pct": 10 },
+-	{ "id": 17, "name": "Event 17", "scrap_change": 20, "cash_change": 30 },
+-	{ "id": 18, "name": "Event 18", "integrity_change_pct": 10, "scrap_change": 15 },
+-	{ "id": 19, "name": "Event 19", "cash_change": 40, "fuel_change": 1, "scrap_change": 10 },
+-	{ "id": 20, "name": "Event 20", "cash_change": 20, "fuel_change": 1, "integrity_change_pct": 5, "scrap_change": 5 },
++	{ "id": 17, "name": "Event 17", "cash_change": 50 },
++	{ "id": 18, "name": "Event 18", "integrity_change_pct": 10, "cash_change": 15 },
++	{ "id": 19, "name": "Event 19", "cash_change": 50, "fuel_change": 1 },
++	{ "id": 20, "name": "Event 20", "cash_change": 25, "fuel_change": 1, "integrity_change_pct": 5 },
+ ]
+ 
+ 
+@@ -63,7 +63,6 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
+ 		"integrity_change": 0,
+ 		"cash_change": 0,
+ 		"fuel_change": 0,
+-		"scrap_change": 0,
+ 		"mitigated": false,
+ 	}
+ 
+@@ -81,13 +80,11 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
+ 	# Handle other resource changes
+ 	result["cash_change"] = event.get("cash_change", 0)
+ 	result["fuel_change"] = event.get("fuel_change", 0)
+-	result["scrap_change"] = event.get("scrap_change", 0)
+ 
+ 	# Apply changes to game state
+ 	GameState.ship_integrity += result["integrity_change"]
+ 	GameState.cash += result["cash_change"]
+ 	GameState.fuel += result["fuel_change"]
+-	GameState.scrap += result["scrap_change"]
+ 
+ 	# warning-ignore: INCOMPATIBLE_TERNARY
+ 	event_resolved.emit("mitigated" if result["mitigated"] else "standard")
+
+commit 289f9fc9b9a8d98c96f834130718f9a0f0cbdc61
+Author: armandpreschutti <armand.preschutti@gmail.com>
+Date:   Tue Feb 17 17:01:19 2026 -0500
+
+    implemented choice based story node system (no story points included, purely tech implementation
+
+diff --git a/scripts/autoload/event_manager.gd b/scripts/autoload/event_manager.gd
+index e42fe8b..0fdb15c 100644
+--- a/scripts/autoload/event_manager.gd
++++ b/scripts/autoload/event_manager.gd
+@@ -8,100 +8,33 @@ signal event_resolved(result: String)
+ enum NodeType { EMPTY_SPACE, SCAVENGE_SITE, TRADING_OUTPOST, WORMHOLE }
+ 
+ # Event table - roll 1d10
++# Event table - expanded to 20 entries
+ var random_events: Array[Dictionary] = [
+-	{
+-		"id": 1,
+-		"name": "Solar Flare",
+-		"description": "A massive solar flare threatens the ship's electronics.",
+-		"integrity_loss": 15,
+-		"specialist_mitigation": "tech",
+-		"mitigated_integrity_loss": 5,
+-		"mitigation_scrap_cost": 18,
+-	},
+-	{
+-		"id": 2,
+-		"name": "Meteor Shower",
+-		"description": "The ship passes through a dense meteor field.",
+-		"integrity_loss": 25,
+-		"specialist_mitigation": "scout",
+-		"mitigated_integrity_loss": 10,
+-		"mitigation_scrap_cost": 22,
+-	},
+-	{
+-		"id": 3,
+-		"name": "Disease Outbreak",
+-		"description": "A mysterious illness spreads through the cryo chambers.",
+-		"integrity_loss": 0,
+-		"specialist_mitigation": "medic",
+-		"mitigated_integrity_loss": 0,
+-		"mitigation_scrap_cost": 30,
+-	},
+-	{
+-		"id": 4,
+-		"name": "System Malfunction",
+-		"description": "Critical ship systems begin to fail.",
+-		"integrity_loss": 20,
+-		"specialist_mitigation": "tech",
+-		"mitigated_integrity_loss": 10,
+-		"mitigation_scrap_cost": 15,
+-	},
+-	{
+-		"id": 5,
+-		"name": "Pirate Ambush",
+-		"description": "Raiders emerge from a nearby asteroid field.",
+-		"integrity_loss": 30,
+-		"specialist_mitigation": "heavy",
+-		"mitigated_integrity_loss": 15,
+-		"mitigation_scrap_cost": 28,
+-	},
+-	{
+-		"id": 6,
+-		"name": "Space Debris Field",
+-		"description": "The ship navigates through a field of wreckage from past conflicts.",
+-		"integrity_loss": 20,
+-		"specialist_mitigation": "scout",
+-		"mitigated_integrity_loss": 10,
+-		"mitigation_scrap_cost": 20,
+-	},
+-	{
+-		"id": 7,
+-		"name": "Sensor Ghost",
+-		"description": "False readings on the sensors cause momentary alarm, but nothing materializes.",
+-		"integrity_loss": 0,
+-		"specialist_mitigation": "",
+-		"mitigation_scrap_cost": 0,
+-	},
+-	{
+-		"id": 8,
+-		"name": "Radiation Storm",
+-		"description": "Intense radiation bombards the ship.",
+-		"integrity_loss": 10,
+-		"specialist_mitigation": "tech",
+-		"mitigated_integrity_loss": 5,
+-		"mitigation_scrap_cost": 25,
+-	},
+-	{
+-		"id": 9,
+-		"name": "Cryo Pod Failure",
+-		"description": "A section of cryo pods experiences catastrophic failure.",
+-		"integrity_loss": 0,
+-		"specialist_mitigation": "medic",
+-		"mitigated_integrity_loss": 0,
+-		"mitigation_scrap_cost": 35,
+-	},
+-	{
+-		"id": 10,
+-		"name": "Clear Skies",
+-		"description": "The journey continues without incident.",
+-		"integrity_loss": 0,
+-		"specialist_mitigation": "",
+-		"mitigation_scrap_cost": 0,
+-	},
++	{ "id": 1, "name": "Event 1", "integrity_change_pct": -15, "specialist_mitigation": "tech", "mitigated_integrity_change_pct": -5 },
++	{ "id": 2, "name": "Event 2", "integrity_change_pct": -25, "specialist_mitigation": "scout", "mitigated_integrity_change_pct": -10 },
++	{ "id": 3, "name": "Event 3", "integrity_change_pct": -20, "specialist_mitigation": "medic", "mitigated_integrity_change_pct": -5 },
++	{ "id": 4, "name": "Event 4", "integrity_change_pct": -20, "specialist_mitigation": "tech", "mitigated_integrity_change_pct": -10 },
++	{ "id": 5, "name": "Event 5", "integrity_change_pct": -30, "specialist_mitigation": "heavy", "mitigated_integrity_change_pct": -15 },
++	{ "id": 6, "name": "Event 6", "cash_change": -50, "integrity_change_pct": -10, "specialist_mitigation": "scout", "mitigated_integrity_change_pct": 0 },
++	{ "id": 7, "name": "Event 7", "fuel_change": -2, "scrap_change": -15 },
++	{ "id": 8, "name": "Event 8", "integrity_change_pct": -10, "specialist_mitigation": "tech", "mitigated_integrity_change_pct": -5 },
++	{ "id": 9, "name": "Event 9", "cash_change": -75 },
++	{ "id": 10, "name": "Event 10", "integrity_change_pct": 0 }, # Clear skies
++	{ "id": 11, "name": "Event 11", "cash_change": 100 },
++	{ "id": 12, "name": "Event 12", "fuel_change": 3 },
++	{ "id": 13, "name": "Event 13", "integrity_change_pct": 15 },
++	{ "id": 14, "name": "Event 14", "scrap_change": 40 },
++	{ "id": 15, "name": "Event 15", "cash_change": 50, "fuel_change": 1 },
++	{ "id": 16, "name": "Event 16", "fuel_change": 2, "integrity_change_pct": 10 },
++	{ "id": 17, "name": "Event 17", "scrap_change": 20, "cash_change": 30 },
++	{ "id": 18, "name": "Event 18", "integrity_change_pct": 10, "scrap_change": 15 },
++	{ "id": 19, "name": "Event 19", "cash_change": 40, "fuel_change": 1, "scrap_change": 10 },
++	{ "id": 20, "name": "Event 20", "cash_change": 20, "fuel_change": 1, "integrity_change_pct": 5, "scrap_change": 5 },
+ ]
+ 
+ 
+ func roll_random_event() -> Dictionary:
+-	var roll = randi_range(0, 9)
++	var roll = randi_range(0, 19)
+ 	return random_events[roll]
+ 
+ 
+@@ -128,6 +61,7 @@ func get_mitigation_cost_multiplier() -> float:
+ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionary:
+ 	var result = {
+ 		"integrity_change": 0,
++		"cash_change": 0,
+ 		"fuel_change": 0,
+ 		"scrap_change": 0,
+ 		"mitigated": false,
+@@ -138,18 +72,20 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
+ 
+ 	if can_mitigate:
+ 		result["mitigated"] = true
+-		result["integrity_change"] = -event.get("mitigated_integrity_loss", event.get("integrity_loss", 0))
+-		# Scrap cost for mitigation removed per user request
+-		result["scrap_change"] = 0
++		var integrity_pct = event.get("mitigated_integrity_change_pct", event.get("integrity_change_pct", 0))
++		result["integrity_change"] = int(integrity_pct) # Assuming max integrity is 100
+ 	else:
+-		result["integrity_change"] = -event.get("integrity_loss", 0)
++		var integrity_pct = event.get("integrity_change_pct", 0)
++		result["integrity_change"] = int(integrity_pct)
+ 
+-	# Add any gains
+-	result["fuel_change"] = event.get("fuel_gain", 0)
+-	result["scrap_change"] += event.get("scrap_gain", 0)
++	# Handle other resource changes
++	result["cash_change"] = event.get("cash_change", 0)
++	result["fuel_change"] = event.get("fuel_change", 0)
++	result["scrap_change"] = event.get("scrap_change", 0)
+ 
+ 	# Apply changes to game state
+ 	GameState.ship_integrity += result["integrity_change"]
++	GameState.cash += result["cash_change"]
+ 	GameState.fuel += result["fuel_change"]
+ 	GameState.scrap += result["scrap_change"]
+ 
+
+commit caa2f14105587ff6c480ff62650c1c7206223d12
+Author: armandpreschutti <armand.preschutti@gmail.com>
+Date:   Tue Feb 17 11:50:34 2026 -0500
+
+    implemented unit ability trees
+
+diff --git a/scripts/autoload/event_manager.gd b/scripts/autoload/event_manager.gd
+index 1afd8df..e42fe8b 100644
+--- a/scripts/autoload/event_manager.gd
++++ b/scripts/autoload/event_manager.gd
+@@ -139,11 +139,8 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
+ 	if can_mitigate:
+ 		result["mitigated"] = true
+ 		result["integrity_change"] = -event.get("mitigated_integrity_loss", event.get("integrity_loss", 0))
+-		# Deduct scrap cost for mitigation (with dynamic scaling, capped at 15)
+-		var base_cost = event.get("mitigation_scrap_cost", 0)
+-		var cost_multiplier = get_mitigation_cost_multiplier()
+-		var scrap_cost = mini(int(base_cost * cost_multiplier), 15)
+-		result["scrap_change"] -= scrap_cost
++		# Scrap cost for mitigation removed per user request
++		result["scrap_change"] = 0
+ 	else:
+ 		result["integrity_change"] = -event.get("integrity_loss", 0)
+ 
+@@ -162,17 +159,8 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
+ 	return result
+ 
+ 
+-func can_mitigate_event(event: Dictionary) -> bool:
+-	var specialist_key = event.get("specialist_mitigation", "")
+-	if specialist_key == "":
+-		return false
+-	if not GameState.is_officer_alive(specialist_key):
+-		return false
+-	# Check if player has enough scrap (with dynamic scaling, capped at 15)
+-	var base_cost = event.get("mitigation_scrap_cost", 0)
+-	var cost_multiplier = get_mitigation_cost_multiplier()
+-	var scrap_cost = mini(int(base_cost * cost_multiplier), 15)
+-	return GameState.scrap >= scrap_cost
++func can_mitigate_event(_event: Dictionary) -> bool:
++	return false
+ 
+ 
+ func get_node_type(node_index: int = -1) -> NodeType:
+
+commit 4e6277de57bdd0fcf2fb169220135fb7d3674fba
+Author: armandpreschutti <armand.preschutti@gmail.com>
+Date:   Sun Feb 15 22:14:41 2026 -0500
+
+    resdesigned voyage system
+
+diff --git a/scripts/autoload/event_manager.gd b/scripts/autoload/event_manager.gd
+index 64551ab..1afd8df 100644
+--- a/scripts/autoload/event_manager.gd
++++ b/scripts/autoload/event_manager.gd
+@@ -13,10 +13,8 @@ var random_events: Array[Dictionary] = [
+ 		"id": 1,
+ 		"name": "Solar Flare",
+ 		"description": "A massive solar flare threatens the ship's electronics.",
+-		"colonist_loss": 70,
+ 		"integrity_loss": 15,
+ 		"specialist_mitigation": "tech",
+-		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 5,
+ 		"mitigation_scrap_cost": 18,
+ 	},
+@@ -24,10 +22,8 @@ var random_events: Array[Dictionary] = [
+ 		"id": 2,
+ 		"name": "Meteor Shower",
+ 		"description": "The ship passes through a dense meteor field.",
+-		"colonist_loss": 50,
+ 		"integrity_loss": 25,
+ 		"specialist_mitigation": "scout",
+-		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 10,
+ 		"mitigation_scrap_cost": 22,
+ 	},
+@@ -35,10 +31,8 @@ var random_events: Array[Dictionary] = [
+ 		"id": 3,
+ 		"name": "Disease Outbreak",
+ 		"description": "A mysterious illness spreads through the cryo chambers.",
+-		"colonist_loss": 100,
+ 		"integrity_loss": 0,
+ 		"specialist_mitigation": "medic",
+-		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 0,
+ 		"mitigation_scrap_cost": 30,
+ 	},
+@@ -46,10 +40,8 @@ var random_events: Array[Dictionary] = [
+ 		"id": 4,
+ 		"name": "System Malfunction",
+ 		"description": "Critical ship systems begin to fail.",
+-		"colonist_loss": 40,
+ 		"integrity_loss": 20,
+ 		"specialist_mitigation": "tech",
+-		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 10,
+ 		"mitigation_scrap_cost": 15,
+ 	},
+@@ -57,10 +49,8 @@ var random_events: Array[Dictionary] = [
+ 		"id": 5,
+ 		"name": "Pirate Ambush",
+ 		"description": "Raiders emerge from a nearby asteroid field.",
+-		"colonist_loss": 60,
+ 		"integrity_loss": 30,
+ 		"specialist_mitigation": "heavy",
+-		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 15,
+ 		"mitigation_scrap_cost": 28,
+ 	},
+@@ -68,10 +58,8 @@ var random_events: Array[Dictionary] = [
+ 		"id": 6,
+ 		"name": "Space Debris Field",
+ 		"description": "The ship navigates through a field of wreckage from past conflicts.",
+-		"colonist_loss": 30,
+ 		"integrity_loss": 20,
+ 		"specialist_mitigation": "scout",
+-		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 10,
+ 		"mitigation_scrap_cost": 20,
+ 	},
+@@ -79,7 +67,6 @@ var random_events: Array[Dictionary] = [
+ 		"id": 7,
+ 		"name": "Sensor Ghost",
+ 		"description": "False readings on the sensors cause momentary alarm, but nothing materializes.",
+-		"colonist_loss": 0,
+ 		"integrity_loss": 0,
+ 		"specialist_mitigation": "",
+ 		"mitigation_scrap_cost": 0,
+@@ -88,10 +75,8 @@ var random_events: Array[Dictionary] = [
+ 		"id": 8,
+ 		"name": "Radiation Storm",
+ 		"description": "Intense radiation bombards the ship.",
+-		"colonist_loss": 80,
+ 		"integrity_loss": 10,
+ 		"specialist_mitigation": "tech",
+-		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 5,
+ 		"mitigation_scrap_cost": 25,
+ 	},
+@@ -99,10 +84,8 @@ var random_events: Array[Dictionary] = [
+ 		"id": 9,
+ 		"name": "Cryo Pod Failure",
+ 		"description": "A section of cryo pods experiences catastrophic failure.",
+-		"colonist_loss": 100,
+ 		"integrity_loss": 0,
+ 		"specialist_mitigation": "medic",
+-		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 0,
+ 		"mitigation_scrap_cost": 35,
+ 	},
+@@ -110,7 +93,6 @@ var random_events: Array[Dictionary] = [
+ 		"id": 10,
+ 		"name": "Clear Skies",
+ 		"description": "The journey continues without incident.",
+-		"colonist_loss": 0,
+ 		"integrity_loss": 0,
+ 		"specialist_mitigation": "",
+ 		"mitigation_scrap_cost": 0,
+@@ -127,34 +109,24 @@ func roll_random_event() -> Dictionary:
+ ## Returns a multiplier that scales from 1.0 at node 0 to ~2.5 at node 49
+ ## Uses similar scaling pattern to mission difficulty
+ func get_mitigation_cost_multiplier() -> float:
+-	const COST_SCALE_FACTOR: float = 1.5
+-	const FINAL_STAGE_START: int = 35  # Nodes 35+ get reduced scaling
+-	const FINAL_STAGE_SCALE_REDUCTION: float = 0.4  # Reduce scaling by 40% in final stages
++	const COST_SCALE_FACTOR: float = 0.5
++	const DISTANCE_UNIT: float = 400.0
+ 	
+-	var progress_ratio: float = float(GameState.current_node_index) / float(GameState.nodes_to_new_earth)
++	# Calculate progress based on distance cycles
++	var current_node = VoyageManager.get_current_node()
++	var distance = current_node.position.length() if current_node else 0.0
++	var cycle = distance / DISTANCE_UNIT
+ 	
+-	# Reduce cost scaling in final stages
+-	if GameState.current_node_index >= FINAL_STAGE_START:
+-		# Calculate what the multiplier would be at node 35
+-		var final_stage_progress: float = float(FINAL_STAGE_START) / float(GameState.nodes_to_new_earth)
+-		var base_multiplier_at_35: float = 1.0 + (final_stage_progress * COST_SCALE_FACTOR)
+-		
+-		# Calculate remaining progress after node 35
+-		var remaining_progress: float = progress_ratio - final_stage_progress
+-		var remaining_scale_factor: float = COST_SCALE_FACTOR * (1.0 - FINAL_STAGE_SCALE_REDUCTION)
+-		
+-		# Apply reduced scaling for final stages
+-		var multiplier: float = base_multiplier_at_35 + (remaining_progress * remaining_scale_factor)
+-		return multiplier
+-	else:
+-		# Normal scaling for early/mid stages
+-		var multiplier: float = 1.0 + (progress_ratio * COST_SCALE_FACTOR)
+-		return multiplier
++	# Scale cost: Base 1.0 + (0.5 * cycle)
++	# e.g. Cycle 0 = 1.0x, Cycle 5 = 3.5x
++	# Adjust formula to match desired difficulty curve
++	var multiplier: float = 1.0 + (cycle * 0.1) # gentler slope: +10% cost per cycle
++	
++	return multiplier
+ 
+ 
+ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionary:
+ 	var result = {
+-		"colonist_change": 0,
+ 		"integrity_change": 0,
+ 		"fuel_change": 0,
+ 		"scrap_change": 0,
+@@ -166,7 +138,6 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
+ 
+ 	if can_mitigate:
+ 		result["mitigated"] = true
+-		result["colonist_change"] = -event.get("mitigated_colonist_loss", event.get("colonist_loss", 0))
+ 		result["integrity_change"] = -event.get("mitigated_integrity_loss", event.get("integrity_loss", 0))
+ 		# Deduct scrap cost for mitigation (with dynamic scaling, capped at 15)
+ 		var base_cost = event.get("mitigation_scrap_cost", 0)
+@@ -174,16 +145,13 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
+ 		var scrap_cost = mini(int(base_cost * cost_multiplier), 15)
+ 		result["scrap_change"] -= scrap_cost
+ 	else:
+-		result["colonist_change"] = -event.get("colonist_loss", 0)
+ 		result["integrity_change"] = -event.get("integrity_loss", 0)
+ 
+ 	# Add any gains
+-	result["colonist_change"] += event.get("colonist_gain", 0)
+ 	result["fuel_change"] = event.get("fuel_gain", 0)
+ 	result["scrap_change"] += event.get("scrap_gain", 0)
+ 
+ 	# Apply changes to game state
+-	GameState.colonist_count += result["colonist_change"]
+ 	GameState.ship_integrity += result["integrity_change"]
+ 	GameState.fuel += result["fuel_change"]
+ 	GameState.scrap += result["scrap_change"]
+@@ -208,9 +176,12 @@ func can_mitigate_event(event: Dictionary) -> bool:
+ 
+ 
+ func get_node_type(node_index: int = -1) -> NodeType:
+-	# If node_index is provided and we have a pre-rolled type, use it
+-	if node_index >= 0 and GameState.node_types.has(node_index):
+-		return GameState.node_types[node_index]
++	# If node_index is provided and refers to current node, we can get type from VoyageManager
++	var current_node = VoyageManager.get_current_node()
++	if node_index >= 0 and current_node and node_index == int(current_node.position.length() / 400.0): # Approximation
++		return current_node.node_type
++	
++	# If we can't determine it dynamically, fall back to random roll (legacy behavior)
+ 	
+ 	# Otherwise roll randomly (legacy behavior)
+ 	# 50% chance for Empty Space (1-5), 50% chance for Scavenge Site (6-10)
+
+commit 4878df7f093f0fecfdda9830153e52a8c2cdc4b8
+Author: armandpreschutti <armand.preschutti@gmail.com>
+Date:   Thu Feb 12 16:34:10 2026 -0500
+
+    remove outpost nodes and updated officer portraits
+
+diff --git a/scripts/autoload/event_manager.gd b/scripts/autoload/event_manager.gd
+index 94013f0..64551ab 100644
+--- a/scripts/autoload/event_manager.gd
++++ b/scripts/autoload/event_manager.gd
+@@ -5,7 +5,7 @@ extends Node
+ signal event_triggered(event_data: Dictionary)
+ signal event_resolved(result: String)
+ 
+-enum NodeType { EMPTY_SPACE, SCAVENGE_SITE, TRADING_OUTPOST }
++enum NodeType { EMPTY_SPACE, SCAVENGE_SITE, TRADING_OUTPOST, WORMHOLE }
+ 
+ # Event table - roll 1d10
+ var random_events: Array[Dictionary] = [
+@@ -213,10 +213,9 @@ func get_node_type(node_index: int = -1) -> NodeType:
+ 		return GameState.node_types[node_index]
+ 	
+ 	# Otherwise roll randomly (legacy behavior)
++	# 50% chance for Empty Space (1-5), 50% chance for Scavenge Site (6-10)
+ 	var roll = randi_range(1, 10)
+-	if roll <= 4:
++	if roll <= 5:
+ 		return NodeType.EMPTY_SPACE
+-	elif roll <= 8:
+-		return NodeType.SCAVENGE_SITE
+ 	else:
+-		return NodeType.TRADING_OUTPOST
++		return NodeType.SCAVENGE_SITE
+
+commit c060ed06cedd684ddc8eebbfdec0fcf35a1d68a6
+Author: armandpreschutti <armand.preschutti@gmail.com>
+Date:   Mon Feb 9 17:24:04 2026 -0500
+
+    Reduce rewards/loot; AI extraction & charge fixes
+    
+    Multiple balance and gameplay fixes across tactical systems:
+    
+    - docs/GAME_DESIGN_DOCUMENT.md & scripts/autoload/event_manager.gd: Replace "Supply Cache" and "Distress Signal" events with "Space Debris Field" and "Sensor Ghost" and update their properties to match new behaviors.
+    
+    - scripts/tactical/enemy_ai.gd: Prevent enemies from pathing through extraction tiles by filtering A* paths and excluding extraction tiles from BFS reachable sets; added _filter_extraction_tiles_from_path helper. This avoids enemies walking into extraction areas.
+    
+    - scripts/tactical/map_generator.gd: Apply biome-specific loot multipliers for fuel/scrap spawn counts instead of a flat 50% cut, so loot distribution varies per biome (Station/Asteroid/Planet).
+    
+    - scripts/tactical/mission_objective.gd: Reduce mission objective rewards (fuel/scrap/hull) across multiple objective types (approx. ~40% reduction) to rebalance progression.
+    
+    - scripts/tactical/tactical_controller.gd: Fix CHARGE movement and turn sequencing by tracking is_charging and skipping movement-finished processing during charge; tighten auto-end-turn checks to avoid skipping; change enemy resource drops to be rarer and smaller (10ΓÇô15% drop chance and lowered amounts), and refine boss drop placement logic.
+    
+    Overall intent: rebalance resources/mission rewards, prevent AI from using extraction tiles, and fix turn/movement edge cases around charge animations and loot drops.
+
+diff --git a/scripts/autoload/event_manager.gd b/scripts/autoload/event_manager.gd
+index 6a4c31f..94013f0 100644
+--- a/scripts/autoload/event_manager.gd
++++ b/scripts/autoload/event_manager.gd
+@@ -66,25 +66,23 @@ var random_events: Array[Dictionary] = [
+ 	},
+ 	{
+ 		"id": 6,
+-		"name": "Supply Cache",
+-		"description": "You discover a drifting supply cache from a lost vessel.",
+-		"colonist_loss": 0,
+-		"integrity_loss": 0,
+-		"fuel_gain": 2,
+-		"scrap_gain": 10,
+-		"specialist_mitigation": "",
+-		"mitigation_scrap_cost": 0,
++		"name": "Space Debris Field",
++		"description": "The ship navigates through a field of wreckage from past conflicts.",
++		"colonist_loss": 30,
++		"integrity_loss": 20,
++		"specialist_mitigation": "scout",
++		"mitigated_colonist_loss": 0,
++		"mitigated_integrity_loss": 10,
++		"mitigation_scrap_cost": 20,
+ 	},
+ 	{
+ 		"id": 7,
+-		"name": "Distress Signal",
+-		"description": "A faint distress signal beckons. Rescue attempt?",
++		"name": "Sensor Ghost",
++		"description": "False readings on the sensors cause momentary alarm, but nothing materializes.",
+ 		"colonist_loss": 0,
+-		"integrity_loss": 15,
+-		"scrap_gain": 35,
+-		"specialist_mitigation": "medic",
+-		"mitigated_integrity_loss": 0,
+-		"mitigation_scrap_cost": 18,
++		"integrity_loss": 0,
++		"specialist_mitigation": "",
++		"mitigation_scrap_cost": 0,
+ 	},
+ 	{
+ 		"id": 8,
+
+commit c87f49381fc2ae8c9fcc011fc09c52e3fa8e1239
+Author: armandpreschutti <armand.preschutti@gmail.com>
+Date:   Mon Feb 9 00:28:39 2026 -0500
+
+    Add Objective Complete scene & assorted gameplay tweaks
+    
+    Adds a new Objective Complete scene (scene + script) and integrates it into main and tactical flow, pausing gameplay to show a procedural OregonΓÇæTrail style scene when objectives complete. Updates tactical_controller to call and await the scene, and main.gd to connect dismissal signal.
+    
+    Gameplay/UI/balance changes:
+    - Default scrap initialized to 25 in GameState and shown in pause menu UI (new Ship Status panel); pause menu layout/offset adjustments.
+    - Event mitigation scrap cost now uses a dynamic multiplier capped at 15 (EventManager + event_dialog UI checks).
+    - Officer passive rework and helpers: rebalanced scout/tech/medic/heavy/captain/sniper passives, added helper getters (healing bonus, turret bonus, splash, leadership, etc.), and reduced AP cost for medic patch to 1 (and adjusted heal to apply medic bonus).
+    - Tactical changes: boss spawning switched to chance-based (currently disabled by returning 0.0), moved enemy grid position update to after movement animation completes to avoid desync, and reduced AP requirements messaging for auto patch.
+    
+    Documentation:
+    - GAME_DESIGN_DOCUMENT version bumped to 3.3 and expanded with Game Over Recap, Voyage Intro, colonist loss milestone system, unit tooltip, and persistence notes.
+    
+    Misc: small UI and code cleanups, notifications now trigger the objective scene when objectives complete.
+
+diff --git a/scripts/autoload/event_manager.gd b/scripts/autoload/event_manager.gd
+index a1d186c..6a4c31f 100644
+--- a/scripts/autoload/event_manager.gd
++++ b/scripts/autoload/event_manager.gd
+@@ -170,10 +170,10 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
+ 		result["mitigated"] = true
+ 		result["colonist_change"] = -event.get("mitigated_colonist_loss", event.get("colonist_loss", 0))
+ 		result["integrity_change"] = -event.get("mitigated_integrity_loss", event.get("integrity_loss", 0))
+-		# Deduct scrap cost for mitigation (with dynamic scaling)
++		# Deduct scrap cost for mitigation (with dynamic scaling, capped at 15)
+ 		var base_cost = event.get("mitigation_scrap_cost", 0)
+ 		var cost_multiplier = get_mitigation_cost_multiplier()
+-		var scrap_cost = int(base_cost * cost_multiplier)
++		var scrap_cost = mini(int(base_cost * cost_multiplier), 15)
+ 		result["scrap_change"] -= scrap_cost
+ 	else:
+ 		result["colonist_change"] = -event.get("colonist_loss", 0)
+@@ -202,10 +202,10 @@ func can_mitigate_event(event: Dictionary) -> bool:
+ 		return false
+ 	if not GameState.is_officer_alive(specialist_key):
+ 		return false
+-	# Check if player has enough scrap (with dynamic scaling)
++	# Check if player has enough scrap (with dynamic scaling, capped at 15)
+ 	var base_cost = event.get("mitigation_scrap_cost", 0)
+ 	var cost_multiplier = get_mitigation_cost_multiplier()
+-	var scrap_cost = int(base_cost * cost_multiplier)
++	var scrap_cost = mini(int(base_cost * cost_multiplier), 15)
+ 	return GameState.scrap >= scrap_cost
+ 
+ 
+
+commit 4d1bcef1f01865aec10a460b6b4308e2bb251947
+Author: armandpreschutti <armand.preschutti@gmail.com>
+Date:   Sun Feb 8 02:32:47 2026 -0500
+
+    Add biome sprites, fade transitions & UI tooltip
+    
+    Add asteroid/planet variants for enemy sprites and import settings; include a tool for generating biome enemy sprites. Introduce a FadeTransition scene/script and a UnitStatsTooltip scene/script, and wire the fade layer into main and title scenes. Update main.gd to use fade in/out around mission transitions and integrate the fade node. Add biome-aware enemy sprite support and initialize(enemy_id, type, biome) in enemy_unit.gd. Improve map_generator spawn logic to distribute enemies across multiple zones and accept a min_enemies parameter. Add camera helpers and custom zoom support (combat_camera.snap_to_position) and center-on-spawn/unit methods in tactical_controller; center camera on spawn positions at mission start. Add hover handling and unit tooltip display/path preview in tactical_controller. Make objective rewards deterministic and add potential reward accessor in mission_objective.gd. Soften audio errors to warnings in audio_manager.gd and bump COLONIST_LOSS_DRIFT_MODE in game_state.gd. Misc UI layout tweaks to tactical_hud and title menu to include new scenes. Overall: improves visual variety, UX for transitions/tooltips, spawn distribution, and deterministic mission rewards.
+
+diff --git a/scripts/autoload/event_manager.gd b/scripts/autoload/event_manager.gd
+index f229a68..a1d186c 100644
+--- a/scripts/autoload/event_manager.gd
++++ b/scripts/autoload/event_manager.gd
+@@ -16,7 +16,7 @@ var random_events: Array[Dictionary] = [
+ 		"colonist_loss": 70,
+ 		"integrity_loss": 15,
+ 		"specialist_mitigation": "tech",
+-		"mitigated_colonist_loss": 25,
++		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 5,
+ 		"mitigation_scrap_cost": 18,
+ 	},
+@@ -27,7 +27,7 @@ var random_events: Array[Dictionary] = [
+ 		"colonist_loss": 50,
+ 		"integrity_loss": 25,
+ 		"specialist_mitigation": "scout",
+-		"mitigated_colonist_loss": 15,
++		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 10,
+ 		"mitigation_scrap_cost": 22,
+ 	},
+@@ -38,7 +38,7 @@ var random_events: Array[Dictionary] = [
+ 		"colonist_loss": 100,
+ 		"integrity_loss": 0,
+ 		"specialist_mitigation": "medic",
+-		"mitigated_colonist_loss": 40,
++		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 0,
+ 		"mitigation_scrap_cost": 30,
+ 	},
+@@ -49,7 +49,7 @@ var random_events: Array[Dictionary] = [
+ 		"colonist_loss": 40,
+ 		"integrity_loss": 20,
+ 		"specialist_mitigation": "tech",
+-		"mitigated_colonist_loss": 15,
++		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 10,
+ 		"mitigation_scrap_cost": 15,
+ 	},
+@@ -60,7 +60,7 @@ var random_events: Array[Dictionary] = [
+ 		"colonist_loss": 60,
+ 		"integrity_loss": 30,
+ 		"specialist_mitigation": "heavy",
+-		"mitigated_colonist_loss": 25,
++		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 15,
+ 		"mitigation_scrap_cost": 28,
+ 	},
+@@ -81,7 +81,7 @@ var random_events: Array[Dictionary] = [
+ 		"description": "A faint distress signal beckons. Rescue attempt?",
+ 		"colonist_loss": 0,
+ 		"integrity_loss": 15,
+-		"colonist_gain": 30,
++		"scrap_gain": 35,
+ 		"specialist_mitigation": "medic",
+ 		"mitigated_integrity_loss": 0,
+ 		"mitigation_scrap_cost": 18,
+@@ -93,7 +93,7 @@ var random_events: Array[Dictionary] = [
+ 		"colonist_loss": 80,
+ 		"integrity_loss": 10,
+ 		"specialist_mitigation": "tech",
+-		"mitigated_colonist_loss": 30,
++		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 5,
+ 		"mitigation_scrap_cost": 25,
+ 	},
+@@ -104,7 +104,7 @@ var random_events: Array[Dictionary] = [
+ 		"colonist_loss": 100,
+ 		"integrity_loss": 0,
+ 		"specialist_mitigation": "medic",
+-		"mitigated_colonist_loss": 50,
++		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 0,
+ 		"mitigation_scrap_cost": 35,
+ 	},
+@@ -125,6 +125,35 @@ func roll_random_event() -> Dictionary:
+ 	return random_events[roll]
+ 
+ 
++## Get mitigation cost multiplier based on voyage progress
++## Returns a multiplier that scales from 1.0 at node 0 to ~2.5 at node 49
++## Uses similar scaling pattern to mission difficulty
++func get_mitigation_cost_multiplier() -> float:
++	const COST_SCALE_FACTOR: float = 1.5
++	const FINAL_STAGE_START: int = 35  # Nodes 35+ get reduced scaling
++	const FINAL_STAGE_SCALE_REDUCTION: float = 0.4  # Reduce scaling by 40% in final stages
++	
++	var progress_ratio: float = float(GameState.current_node_index) / float(GameState.nodes_to_new_earth)
++	
++	# Reduce cost scaling in final stages
++	if GameState.current_node_index >= FINAL_STAGE_START:
++		# Calculate what the multiplier would be at node 35
++		var final_stage_progress: float = float(FINAL_STAGE_START) / float(GameState.nodes_to_new_earth)
++		var base_multiplier_at_35: float = 1.0 + (final_stage_progress * COST_SCALE_FACTOR)
++		
++		# Calculate remaining progress after node 35
++		var remaining_progress: float = progress_ratio - final_stage_progress
++		var remaining_scale_factor: float = COST_SCALE_FACTOR * (1.0 - FINAL_STAGE_SCALE_REDUCTION)
++		
++		# Apply reduced scaling for final stages
++		var multiplier: float = base_multiplier_at_35 + (remaining_progress * remaining_scale_factor)
++		return multiplier
++	else:
++		# Normal scaling for early/mid stages
++		var multiplier: float = 1.0 + (progress_ratio * COST_SCALE_FACTOR)
++		return multiplier
++
++
+ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionary:
+ 	var result = {
+ 		"colonist_change": 0,
+@@ -141,8 +170,10 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
+ 		result["mitigated"] = true
+ 		result["colonist_change"] = -event.get("mitigated_colonist_loss", event.get("colonist_loss", 0))
+ 		result["integrity_change"] = -event.get("mitigated_integrity_loss", event.get("integrity_loss", 0))
+-		# Deduct scrap cost for mitigation
+-		var scrap_cost = event.get("mitigation_scrap_cost", 0)
++		# Deduct scrap cost for mitigation (with dynamic scaling)
++		var base_cost = event.get("mitigation_scrap_cost", 0)
++		var cost_multiplier = get_mitigation_cost_multiplier()
++		var scrap_cost = int(base_cost * cost_multiplier)
+ 		result["scrap_change"] -= scrap_cost
+ 	else:
+ 		result["colonist_change"] = -event.get("colonist_loss", 0)
+@@ -159,6 +190,7 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
+ 	GameState.fuel += result["fuel_change"]
+ 	GameState.scrap += result["scrap_change"]
+ 
++	# warning-ignore: INCOMPATIBLE_TERNARY
+ 	event_resolved.emit("mitigated" if result["mitigated"] else "standard")
+ 
+ 	return result
+@@ -170,8 +202,10 @@ func can_mitigate_event(event: Dictionary) -> bool:
+ 		return false
+ 	if not GameState.is_officer_alive(specialist_key):
+ 		return false
+-	# Check if player has enough scrap
+-	var scrap_cost = event.get("mitigation_scrap_cost", 0)
++	# Check if player has enough scrap (with dynamic scaling)
++	var base_cost = event.get("mitigation_scrap_cost", 0)
++	var cost_multiplier = get_mitigation_cost_multiplier()
++	var scrap_cost = int(base_cost * cost_multiplier)
+ 	return GameState.scrap >= scrap_cost
+ 
+ 
+
+commit dec0e2301afd7ed272f36c7887e2c470a25dd796
+Author: armandpreschutti <armand.preschutti@gmail.com>
+Date:   Fri Feb 6 17:44:09 2026 -0500
+
+    Add web build and tweak game scripts
+    
+    Add complete Web export under builds/web (index.html, index.js, index.wasm, service worker, audio worklets, icons and other assets/imports). Update export_presets.cfg and apply assorted fixes/adjustments across scenes and game scripts (scenes/management/star_map.tscn, scenes/ui/team_select_dialog.tscn and multiple scripts in scripts/ including combat_rng.gd, event_manager.gd, game_state.gd, main.gd, map_node.gd, star_map.gd, star_map_generator.gd, interactable.gd, officer_unit.gd, tactical_controller.gd, tactical_hud.gd, team_select_dialog.gd) to support the web build and address related runtime/interaction issues.
+
+diff --git a/scripts/autoload/event_manager.gd b/scripts/autoload/event_manager.gd
+index c1e5354..f229a68 100644
+--- a/scripts/autoload/event_manager.gd
++++ b/scripts/autoload/event_manager.gd
+@@ -13,56 +13,56 @@ var random_events: Array[Dictionary] = [
+ 		"id": 1,
+ 		"name": "Solar Flare",
+ 		"description": "A massive solar flare threatens the ship's electronics.",
+-		"colonist_loss": 50,
+-		"integrity_loss": 10,
++		"colonist_loss": 70,
++		"integrity_loss": 15,
+ 		"specialist_mitigation": "tech",
+-		"mitigated_colonist_loss": 10,
+-		"mitigated_integrity_loss": 0,
+-		"mitigation_scrap_cost": 12,
++		"mitigated_colonist_loss": 25,
++		"mitigated_integrity_loss": 5,
++		"mitigation_scrap_cost": 18,
+ 	},
+ 	{
+ 		"id": 2,
+ 		"name": "Meteor Shower",
+ 		"description": "The ship passes through a dense meteor field.",
+-		"colonist_loss": 30,
+-		"integrity_loss": 20,
++		"colonist_loss": 50,
++		"integrity_loss": 25,
+ 		"specialist_mitigation": "scout",
+-		"mitigated_colonist_loss": 0,
+-		"mitigated_integrity_loss": 5,
+-		"mitigation_scrap_cost": 15,
++		"mitigated_colonist_loss": 15,
++		"mitigated_integrity_loss": 10,
++		"mitigation_scrap_cost": 22,
+ 	},
+ 	{
+ 		"id": 3,
+ 		"name": "Disease Outbreak",
+ 		"description": "A mysterious illness spreads through the cryo chambers.",
+-		"colonist_loss": 80,
++		"colonist_loss": 100,
+ 		"integrity_loss": 0,
+ 		"specialist_mitigation": "medic",
+-		"mitigated_colonist_loss": 20,
++		"mitigated_colonist_loss": 40,
+ 		"mitigated_integrity_loss": 0,
+-		"mitigation_scrap_cost": 22,
++		"mitigation_scrap_cost": 30,
+ 	},
+ 	{
+ 		"id": 4,
+ 		"name": "System Malfunction",
+ 		"description": "Critical ship systems begin to fail.",
+-		"colonist_loss": 20,
+-		"integrity_loss": 15,
++		"colonist_loss": 40,
++		"integrity_loss": 20,
+ 		"specialist_mitigation": "tech",
+-		"mitigated_colonist_loss": 0,
+-		"mitigated_integrity_loss": 5,
+-		"mitigation_scrap_cost": 10,
++		"mitigated_colonist_loss": 15,
++		"mitigated_integrity_loss": 10,
++		"mitigation_scrap_cost": 15,
+ 	},
+ 	{
+ 		"id": 5,
+ 		"name": "Pirate Ambush",
+ 		"description": "Raiders emerge from a nearby asteroid field.",
+-		"colonist_loss": 40,
+-		"integrity_loss": 25,
++		"colonist_loss": 60,
++		"integrity_loss": 30,
+ 		"specialist_mitigation": "heavy",
+-		"mitigated_colonist_loss": 10,
+-		"mitigated_integrity_loss": 10,
+-		"mitigation_scrap_cost": 20,
++		"mitigated_colonist_loss": 25,
++		"mitigated_integrity_loss": 15,
++		"mitigation_scrap_cost": 28,
+ 	},
+ 	{
+ 		"id": 6,
+@@ -71,7 +71,7 @@ var random_events: Array[Dictionary] = [
+ 		"colonist_loss": 0,
+ 		"integrity_loss": 0,
+ 		"fuel_gain": 2,
+-		"scrap_gain": 15,
++		"scrap_gain": 10,
+ 		"specialist_mitigation": "",
+ 		"mitigation_scrap_cost": 0,
+ 	},
+@@ -80,22 +80,22 @@ var random_events: Array[Dictionary] = [
+ 		"name": "Distress Signal",
+ 		"description": "A faint distress signal beckons. Rescue attempt?",
+ 		"colonist_loss": 0,
+-		"integrity_loss": 10,
+-		"colonist_gain": 50,
++		"integrity_loss": 15,
++		"colonist_gain": 30,
+ 		"specialist_mitigation": "medic",
+ 		"mitigated_integrity_loss": 0,
+-		"mitigation_scrap_cost": 12,
++		"mitigation_scrap_cost": 18,
+ 	},
+ 	{
+ 		"id": 8,
+ 		"name": "Radiation Storm",
+ 		"description": "Intense radiation bombards the ship.",
+-		"colonist_loss": 60,
+-		"integrity_loss": 5,
++		"colonist_loss": 80,
++		"integrity_loss": 10,
+ 		"specialist_mitigation": "tech",
+-		"mitigated_colonist_loss": 15,
+-		"mitigated_integrity_loss": 0,
+-		"mitigation_scrap_cost": 18,
++		"mitigated_colonist_loss": 30,
++		"mitigated_integrity_loss": 5,
++		"mitigation_scrap_cost": 25,
+ 	},
+ 	{
+ 		"id": 9,
+@@ -104,9 +104,9 @@ var random_events: Array[Dictionary] = [
+ 		"colonist_loss": 100,
+ 		"integrity_loss": 0,
+ 		"specialist_mitigation": "medic",
+-		"mitigated_colonist_loss": 30,
++		"mitigated_colonist_loss": 50,
+ 		"mitigated_integrity_loss": 0,
+-		"mitigation_scrap_cost": 28,
++		"mitigation_scrap_cost": 35,
+ 	},
+ 	{
+ 		"id": 10,
+
+commit 72b32c9fddb02bd0a9954f5236bf4fdead13d84a
+Author: armandpreschutti <armand.preschutti@gmail.com>
+Date:   Fri Feb 6 16:23:04 2026 -0500
+
+    Add Sniper class, UI icons and voyage recap
+    
+    Introduce the Sniper officer and supporting content: add sniper sprite/import and multiple new UI icon assets. Update the game design document to v2.4 documenting the Sniper class, Precision Shot mechanics, voyage recap requirements, and tutorial updates. Add new UI scenes and scripts (event_scene_dialog, mission_recap, new_earth_scene_dialog, voyage_recap) and autoload CombatRNG; update project.godot to register the new autoload. Adjust main.tscn layout to include the new management HUD elements and dialog instances, and apply various UI and tactical script updates to integrate the new class and recap functionality.
+
+diff --git a/scripts/autoload/event_manager.gd b/scripts/autoload/event_manager.gd
+index dcd72cd..c1e5354 100644
+--- a/scripts/autoload/event_manager.gd
++++ b/scripts/autoload/event_manager.gd
+@@ -18,6 +18,7 @@ var random_events: Array[Dictionary] = [
+ 		"specialist_mitigation": "tech",
+ 		"mitigated_colonist_loss": 10,
+ 		"mitigated_integrity_loss": 0,
++		"mitigation_scrap_cost": 12,
+ 	},
+ 	{
+ 		"id": 2,
+@@ -28,6 +29,7 @@ var random_events: Array[Dictionary] = [
+ 		"specialist_mitigation": "scout",
+ 		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 5,
++		"mitigation_scrap_cost": 15,
+ 	},
+ 	{
+ 		"id": 3,
+@@ -38,6 +40,7 @@ var random_events: Array[Dictionary] = [
+ 		"specialist_mitigation": "medic",
+ 		"mitigated_colonist_loss": 20,
+ 		"mitigated_integrity_loss": 0,
++		"mitigation_scrap_cost": 22,
+ 	},
+ 	{
+ 		"id": 4,
+@@ -48,6 +51,7 @@ var random_events: Array[Dictionary] = [
+ 		"specialist_mitigation": "tech",
+ 		"mitigated_colonist_loss": 0,
+ 		"mitigated_integrity_loss": 5,
++		"mitigation_scrap_cost": 10,
+ 	},
+ 	{
+ 		"id": 5,
+@@ -58,6 +62,7 @@ var random_events: Array[Dictionary] = [
+ 		"specialist_mitigation": "heavy",
+ 		"mitigated_colonist_loss": 10,
+ 		"mitigated_integrity_loss": 10,
++		"mitigation_scrap_cost": 20,
+ 	},
+ 	{
+ 		"id": 6,
+@@ -68,6 +73,7 @@ var random_events: Array[Dictionary] = [
+ 		"fuel_gain": 2,
+ 		"scrap_gain": 15,
+ 		"specialist_mitigation": "",
++		"mitigation_scrap_cost": 0,
+ 	},
+ 	{
+ 		"id": 7,
+@@ -78,6 +84,7 @@ var random_events: Array[Dictionary] = [
+ 		"colonist_gain": 50,
+ 		"specialist_mitigation": "medic",
+ 		"mitigated_integrity_loss": 0,
++		"mitigation_scrap_cost": 12,
+ 	},
+ 	{
+ 		"id": 8,
+@@ -88,6 +95,7 @@ var random_events: Array[Dictionary] = [
+ 		"specialist_mitigation": "tech",
+ 		"mitigated_colonist_loss": 15,
+ 		"mitigated_integrity_loss": 0,
++		"mitigation_scrap_cost": 18,
+ 	},
+ 	{
+ 		"id": 9,
+@@ -98,6 +106,7 @@ var random_events: Array[Dictionary] = [
+ 		"specialist_mitigation": "medic",
+ 		"mitigated_colonist_loss": 30,
+ 		"mitigated_integrity_loss": 0,
++		"mitigation_scrap_cost": 28,
+ 	},
+ 	{
+ 		"id": 10,
+@@ -106,6 +115,7 @@ var random_events: Array[Dictionary] = [
+ 		"colonist_loss": 0,
+ 		"integrity_loss": 0,
+ 		"specialist_mitigation": "",
++		"mitigation_scrap_cost": 0,
+ 	},
+ ]
+ 
+@@ -131,6 +141,9 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
+ 		result["mitigated"] = true
+ 		result["colonist_change"] = -event.get("mitigated_colonist_loss", event.get("colonist_loss", 0))
+ 		result["integrity_change"] = -event.get("mitigated_integrity_loss", event.get("integrity_loss", 0))
++		# Deduct scrap cost for mitigation
++		var scrap_cost = event.get("mitigation_scrap_cost", 0)
++		result["scrap_change"] -= scrap_cost
+ 	else:
+ 		result["colonist_change"] = -event.get("colonist_loss", 0)
+ 		result["integrity_change"] = -event.get("integrity_loss", 0)
+@@ -138,7 +151,7 @@ func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionar
+ 	# Add any gains
+ 	result["colonist_change"] += event.get("colonist_gain", 0)
+ 	result["fuel_change"] = event.get("fuel_gain", 0)
+-	result["scrap_change"] = event.get("scrap_gain", 0)
++	result["scrap_change"] += event.get("scrap_gain", 0)
+ 
+ 	# Apply changes to game state
+ 	GameState.colonist_count += result["colonist_change"]
+@@ -155,7 +168,11 @@ func can_mitigate_event(event: Dictionary) -> bool:
+ 	var specialist_key = event.get("specialist_mitigation", "")
+ 	if specialist_key == "":
+ 		return false
+-	return GameState.is_officer_alive(specialist_key)
++	if not GameState.is_officer_alive(specialist_key):
++		return false
++	# Check if player has enough scrap
++	var scrap_cost = event.get("mitigation_scrap_cost", 0)
++	return GameState.scrap >= scrap_cost
+ 
+ 
+ func get_node_type(node_index: int = -1) -> NodeType:
+
+commit 118e17d3c4aeab5573e1a6d64a25f090710101f4
+Author: armandpreschutti <armand.preschutti@gmail.com>
+Date:   Thu Feb 5 15:25:54 2026 -0500
+
+    Add pause/confirm dialogs and HUD polish
+    
+    Adds new UI dialogs (Confirm and Pause), updates multiple HUD and scene layouts, and refactors tactical/management UI for improved readability and controls. Key changes: new scenes scenes/ui/confirm_dialog.tscn and scenes/ui/pause_menu.tscn with accompanying scripts; tactical and management HUDs reorganized (font size increases, side panel, pause button, cryo warnings, extraction/haul labels); star_map layout restructured and background added; enemy/officer unit scenes receive cover indicators and hit chance display; tactical_mode anchoring adjusted. project.godot now sets window/stretch/aspect to "expand". Game Design Document bumped to Version 2.1 with gameplay rule updates (trading costs, cover and flanking rules, mission abort penalty), tutorial and save/load system documented, and roadmap/status updates. Miscellaneous script and scene adjustments for UI polish and feature integration.
+
+diff --git a/scripts/autoload/event_manager.gd b/scripts/autoload/event_manager.gd
+index 2ccd17d..dcd72cd 100644
+--- a/scripts/autoload/event_manager.gd
++++ b/scripts/autoload/event_manager.gd
+@@ -55,7 +55,7 @@ var random_events: Array[Dictionary] = [
+ 		"description": "Raiders emerge from a nearby asteroid field.",
+ 		"colonist_loss": 40,
+ 		"integrity_loss": 25,
+-		"specialist_mitigation": "scout",
++		"specialist_mitigation": "heavy",
+ 		"mitigated_colonist_loss": 10,
+ 		"mitigated_integrity_loss": 10,
+ 	},
+
+commit 27cfd54f41a24ce77ab255ea483d33239b95ed89
+Author: armandpreschutti <armand.preschutti@gmail.com>
+Date:   Wed Feb 4 23:43:20 2026 -0500
+
+    initial commit
+
+diff --git a/scripts/autoload/event_manager.gd b/scripts/autoload/event_manager.gd
+new file mode 100644
+index 0000000..2ccd17d
+--- /dev/null
++++ b/scripts/autoload/event_manager.gd
+@@ -0,0 +1,173 @@
++extends Node
++## Random Event Manager for Last Light Odyssey
++## Handles event rolling and resolution (Section 2.3 of GDD)
++
++signal event_triggered(event_data: Dictionary)
++signal event_resolved(result: String)
++
++enum NodeType { EMPTY_SPACE, SCAVENGE_SITE, TRADING_OUTPOST }
++
++# Event table - roll 1d10
++var random_events: Array[Dictionary] = [
++	{
++		"id": 1,
++		"name": "Solar Flare",
++		"description": "A massive solar flare threatens the ship's electronics.",
++		"colonist_loss": 50,
++		"integrity_loss": 10,
++		"specialist_mitigation": "tech",
++		"mitigated_colonist_loss": 10,
++		"mitigated_integrity_loss": 0,
++	},
++	{
++		"id": 2,
++		"name": "Meteor Shower",
++		"description": "The ship passes through a dense meteor field.",
++		"colonist_loss": 30,
++		"integrity_loss": 20,
++		"specialist_mitigation": "scout",
++		"mitigated_colonist_loss": 0,
++		"mitigated_integrity_loss": 5,
++	},
++	{
++		"id": 3,
++		"name": "Disease Outbreak",
++		"description": "A mysterious illness spreads through the cryo chambers.",
++		"colonist_loss": 80,
++		"integrity_loss": 0,
++		"specialist_mitigation": "medic",
++		"mitigated_colonist_loss": 20,
++		"mitigated_integrity_loss": 0,
++	},
++	{
++		"id": 4,
++		"name": "System Malfunction",
++		"description": "Critical ship systems begin to fail.",
++		"colonist_loss": 20,
++		"integrity_loss": 15,
++		"specialist_mitigation": "tech",
++		"mitigated_colonist_loss": 0,
++		"mitigated_integrity_loss": 5,
++	},
++	{
++		"id": 5,
++		"name": "Pirate Ambush",
++		"description": "Raiders emerge from a nearby asteroid field.",
++		"colonist_loss": 40,
++		"integrity_loss": 25,
++		"specialist_mitigation": "scout",
++		"mitigated_colonist_loss": 10,
++		"mitigated_integrity_loss": 10,
++	},
++	{
++		"id": 6,
++		"name": "Supply Cache",
++		"description": "You discover a drifting supply cache from a lost vessel.",
++		"colonist_loss": 0,
++		"integrity_loss": 0,
++		"fuel_gain": 2,
++		"scrap_gain": 15,
++		"specialist_mitigation": "",
++	},
++	{
++		"id": 7,
++		"name": "Distress Signal",
++		"description": "A faint distress signal beckons. Rescue attempt?",
++		"colonist_loss": 0,
++		"integrity_loss": 10,
++		"colonist_gain": 50,
++		"specialist_mitigation": "medic",
++		"mitigated_integrity_loss": 0,
++	},
++	{
++		"id": 8,
++		"name": "Radiation Storm",
++		"description": "Intense radiation bombards the ship.",
++		"colonist_loss": 60,
++		"integrity_loss": 5,
++		"specialist_mitigation": "tech",
++		"mitigated_colonist_loss": 15,
++		"mitigated_integrity_loss": 0,
++	},
++	{
++		"id": 9,
++		"name": "Cryo Pod Failure",
++		"description": "A section of cryo pods experiences catastrophic failure.",
++		"colonist_loss": 100,
++		"integrity_loss": 0,
++		"specialist_mitigation": "medic",
++		"mitigated_colonist_loss": 30,
++		"mitigated_integrity_loss": 0,
++	},
++	{
++		"id": 10,
++		"name": "Clear Skies",
++		"description": "The journey continues without incident.",
++		"colonist_loss": 0,
++		"integrity_loss": 0,
++		"specialist_mitigation": "",
++	},
++]
++
++
++func roll_random_event() -> Dictionary:
++	var roll = randi_range(0, 9)
++	return random_events[roll]
++
++
++func resolve_event(event: Dictionary, use_specialist: bool = false) -> Dictionary:
++	var result = {
++		"colonist_change": 0,
++		"integrity_change": 0,
++		"fuel_change": 0,
++		"scrap_change": 0,
++		"mitigated": false,
++	}
++
++	var specialist_key = event.get("specialist_mitigation", "")
++	var can_mitigate = specialist_key != "" and use_specialist and GameState.is_officer_alive(specialist_key)
++
++	if can_mitigate:
++		result["mitigated"] = true
++		result["colonist_change"] = -event.get("mitigated_colonist_loss", event.get("colonist_loss", 0))
++		result["integrity_change"] = -event.get("mitigated_integrity_loss", event.get("integrity_loss", 0))
++	else:
++		result["colonist_change"] = -event.get("colonist_loss", 0)
++		result["integrity_change"] = -event.get("integrity_loss", 0)
++
++	# Add any gains
++	result["colonist_change"] += event.get("colonist_gain", 0)
++	result["fuel_change"] = event.get("fuel_gain", 0)
++	result["scrap_change"] = event.get("scrap_gain", 0)
++
++	# Apply changes to game state
++	GameState.colonist_count += result["colonist_change"]
++	GameState.ship_integrity += result["integrity_change"]
++	GameState.fuel += result["fuel_change"]
++	GameState.scrap += result["scrap_change"]
++
++	event_resolved.emit("mitigated" if result["mitigated"] else "standard")
++
++	return result
++
++
++func can_mitigate_event(event: Dictionary) -> bool:
++	var specialist_key = event.get("specialist_mitigation", "")
++	if specialist_key == "":
++		return false
++	return GameState.is_officer_alive(specialist_key)
++
++
++func get_node_type(node_index: int = -1) -> NodeType:
++	# If node_index is provided and we have a pre-rolled type, use it
++	if node_index >= 0 and GameState.node_types.has(node_index):
++		return GameState.node_types[node_index]
++	
++	# Otherwise roll randomly (legacy behavior)
++	var roll = randi_range(1, 10)
++	if roll <= 4:
++		return NodeType.EMPTY_SPACE
++	elif roll <= 8:
++		return NodeType.SCAVENGE_SITE
++	else:
++		return NodeType.TRADING_OUTPOST

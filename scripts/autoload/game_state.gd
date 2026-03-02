@@ -123,11 +123,12 @@ var dev_raider_tactical_ease: bool = false
 var dev_skip_raider_spawn_camera: bool = false
 var dev_skip_story_spawn_camera: bool = false
 var dev_skip_mission_recap_animations: bool = false
+var dev_abandoned_station_4x: bool = false
 
 # Primary Statistics (Voyage 2.0 Economy)
 const MAX_FUEL: int = 20
 
-var fuel: int = 3:
+var fuel: int = 10:
 	set(value):
 		if dev_protect_fuel and value < fuel:
 			value = fuel
@@ -144,7 +145,7 @@ var ship_integrity: int = 100:
 			_trigger_game_over("ship_destroyed")
 
 
-var cash: int = 20:
+var cash: int = 50:
 	set(value):
 		if dev_protect_cash and value < cash:
 			value = cash
@@ -236,6 +237,7 @@ func _load_developer_flags() -> void:
 		dev_skip_raider_spawn_camera = true
 		dev_skip_story_spawn_camera = true
 		dev_skip_mission_recap_animations = true
+		dev_abandoned_station_4x = true
 		return
 
 	dev_protect_fuel       = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "protect_fuel", false), false)
@@ -252,6 +254,7 @@ func _load_developer_flags() -> void:
 	dev_skip_raider_spawn_camera = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "skip_raider_spawn_camera", false), false)
 	dev_skip_story_spawn_camera = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "skip_story_spawn_camera", false), false)
 	dev_skip_mission_recap_animations = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "skip_mission_recap_animations", false), false)
+	dev_abandoned_station_4x = _coerce_bool(config.get_value(SETTINGS_DEVELOPER_SECTION, "abandoned_station_4x", false), false)
 
 
 ## Save all granular developer flags to settings.cfg.
@@ -272,6 +275,7 @@ func save_developer_flags() -> void:
 	config.set_value(SETTINGS_DEVELOPER_SECTION, "skip_raider_spawn_camera", dev_skip_raider_spawn_camera)
 	config.set_value(SETTINGS_DEVELOPER_SECTION, "skip_story_spawn_camera", dev_skip_story_spawn_camera)
 	config.set_value(SETTINGS_DEVELOPER_SECTION, "skip_mission_recap_animations", dev_skip_mission_recap_animations)
+	config.set_value(SETTINGS_DEVELOPER_SECTION, "abandoned_station_4x", dev_abandoned_station_4x)
 	# Remove legacy key if present
 	if config.has_section_key(SETTINGS_DEVELOPER_SECTION, "developer_mode"):
 		config.erase_section_key(SETTINGS_DEVELOPER_SECTION, "developer_mode")
@@ -285,7 +289,7 @@ func is_any_dev_flag_active() -> bool:
 		or dev_officers_maxed or dev_story_intel or dev_raider_fast or dev_raider_1_jump_per_turn or dev_wormhole_4x
 		or dev_story_tactical_ease or dev_raider_tactical_ease
 		or dev_skip_raider_spawn_camera or dev_skip_story_spawn_camera
-		or dev_skip_mission_recap_animations)
+		or dev_skip_mission_recap_animations or dev_abandoned_station_4x)
 
 
 func _coerce_bool(value: Variant, default_value: bool = false) -> bool:
@@ -312,6 +316,8 @@ func _init_officers() -> void:
 	for key in ["captain", "scout", "tech", "medic", "heavy", "sniper"]:
 		var od = OfficerData.new()
 		od.initialize(key)
+		if key in ["tech", "heavy", "sniper"]:
+			od.unlocked = false
 		if dev_officers_maxed:
 			od.level = 3
 			od.xp = 300  # XP threshold to reach level 3
@@ -392,9 +398,9 @@ func has_available_upgrades(officer_key: String = "") -> bool:
 
 func reset_game() -> void:
 	was_loaded_from_save = false
-	fuel = 3
+	fuel = 10
 	ship_integrity = 100
-	cash = 20
+	cash = 50
 	intel = 0
 	story_chapters_completed = 0
 	story_victory_emitted = false

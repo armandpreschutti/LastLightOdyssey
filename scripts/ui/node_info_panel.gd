@@ -62,7 +62,7 @@ func show_node(node_data: NodeData) -> void:
 	visible = true
 
 	if node_data.position == Vector2.ZERO:
-		_set_content("EARTH", EARTH_DESCRIPTION, "", COLOR_CYAN)
+		_set_content("TRADING OUTPOST", OUTPOST_DESCRIPTION, "", COLOR_CYAN)
 		return
 
 	if node_data.is_new_earth:
@@ -115,12 +115,8 @@ func _show_scavenger(node_data: NodeData) -> void:
 	_set_content(biome_name, desc_text, location_text, title_color)
 
 
-func _show_wormhole(node_data: NodeData) -> void:
-	var is_dest := VoyageManager.is_wormhole_destination(node_data.id)
-	var desc := WORMHOLE_DESCRIPTION
-	if is_dest:
-		desc = "Wormhole arrival point. You were transported here from a distant sector."
-	_set_content("WORMHOLE", desc, "", COLOR_CYAN)
+func _show_wormhole(_node_data: NodeData) -> void:
+	_set_content("WORMHOLE", WORMHOLE_DESCRIPTION, "", COLOR_CYAN)
 
 
 func _set_content(title: String, desc: String, location: String, title_color: Color) -> void:

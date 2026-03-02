@@ -16,11 +16,11 @@ var rng: RandomNumberGenerator
 
 func _init() -> void:
 	rng = RandomNumberGenerator.new()
-	rng.seed = NOISE_SEED
+	rng.randomize()
 
 ## Generate the initial start node and its first connections
 func generate_start_node() -> Dictionary: # Returns { "start_node": NodeData, "initial_nodes": Array[NodeData] }
-	var start_node = NodeData.new(generate_uuid(), Vector2.ZERO, EventManager.NodeType.EMPTY_SPACE)
+	var start_node = NodeData.new(generate_uuid(), Vector2.ZERO, EventManager.NodeType.TRADING_OUTPOST)
 	start_node.state = NodeData.NodeState.VISITED # Start is practically visited
 	
 	# Generate initial options (spreading out 360 degrees for first node)
@@ -111,6 +111,8 @@ func generate_options(source_node: NodeData, incoming_vector: Vector2, override_
 		if new_node.node_type == EventManager.NodeType.SCAVENGE_SITE:
 			new_node.biome_type = _roll_biome_type()
 			_assign_difficulty_grade(new_node)
+		elif new_node.node_type == EventManager.NodeType.ABANDONED_STATION:
+			new_node.biome_type = BiomeConfig.BiomeType.STATION
 		elif new_node.node_type == EventManager.NodeType.EMPTY_SPACE:
 			# Pre-roll random event ID (0 to 19) only 17.5% of the time (15-20% per request)
 			if rng.randf() < 0.175:
@@ -175,14 +177,19 @@ func _assign_difficulty_grade(node: NodeData) -> void:
 ## Roll node type
 func _roll_node_type() -> int:
 	var roll = rng.randf()
-	var wormhole_chance := 0.08
-	var scavenge_chance := 0.16  # 0.08..0.24
-	if GameState.dev_wormhole_4x:
-		wormhole_chance = 0.32  # 4x more frequent in dev mode
-	if roll < wormhole_chance:
-		return EventManager.NodeType.WORMHOLE
-	elif roll < wormhole_chance + scavenge_chance:
+	var scavenge_chance := 0.20
+	var outpost_chance := 0.05
+	var wormhole_chance := 0.05
+	var abandoned_station_chance := 0.20 if GameState.dev_abandoned_station_4x else 0.05
+
+	if roll < scavenge_chance:
 		return EventManager.NodeType.SCAVENGE_SITE
+	elif roll < scavenge_chance + outpost_chance:
+		return EventManager.NodeType.TRADING_OUTPOST
+	elif roll < scavenge_chance + outpost_chance + wormhole_chance:
+		return EventManager.NodeType.WORMHOLE
+	elif roll < scavenge_chance + outpost_chance + wormhole_chance + abandoned_station_chance:
+		return EventManager.NodeType.ABANDONED_STATION
 	else:
 		return EventManager.NodeType.EMPTY_SPACE
 		

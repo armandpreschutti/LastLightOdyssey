@@ -26,15 +26,15 @@ class BSPNode:
 #endregion
 
 
-func generate(biome_type: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION, node_index: int = 0, total_nodes: int = 50) -> Dictionary:
+func generate(biome_type: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION, node_index: int = 0, total_nodes: int = 50, size_multiplier: float = 1.0) -> Dictionary:
 	_biome_type = biome_type
 	_occupied_positions.clear()
 	_rooms.clear()
-	
+
 	# Get map size from biome config (scaled by voyage progression)
 	var size = BiomeConfig.get_map_size(biome_type, node_index, total_nodes)
-	map_width = size.x
-	map_height = size.y
+	map_width = int(size.x * size_multiplier)
+	map_height = int(size.y * size_multiplier)
 	
 	var layout: Dictionary = {}
 	
@@ -1144,21 +1144,21 @@ func get_loot_positions() -> Array[Dictionary]:
 	var loot_config = BiomeConfig.get_loot_config(_biome_type)
 	
 	# Biome-specific spawn rate multipliers
-	var fuel_multiplier: float = 0.5  # 2.5x boost from 0.2
+	var fuel_multiplier: float = 1.0  # Default: full count (scavenger fuel boost)
 	var cash_multiplier: float = 0.8  # 4x boosted
 	
 	match _biome_type:
 		BiomeConfig.BiomeType.STATION:
 			# Space Station: More fuel crates vs valuables piles
-			fuel_multiplier = 0.75  # 2.5x boost from 0.3
+			fuel_multiplier = 1.5  # Increased from 0.75 for more scavenger fuel
 			cash_multiplier = 0.4   # 4x boosted
 		BiomeConfig.BiomeType.ASTEROID:
-			# Asteroid: More valuables piles vs fuel crates
-			fuel_multiplier = 0.25  # 2.5x boost from 0.1
+			# Asteroid: More valuables piles vs fuel crates, but still increase fuel
+			fuel_multiplier = 0.75  # Increased from 0.25 for more scavenger fuel
 			cash_multiplier = 1.2   # 4x boosted
 		BiomeConfig.BiomeType.PLANET:
-			# Planetary Surface: 4x boosted
-			fuel_multiplier = 0.5   # 2.5x boost from 0.2
+			# Planetary Surface: boosted
+			fuel_multiplier = 1.0   # Increased from 0.5 for more scavenger fuel
 			cash_multiplier = 0.8
 	
 	# Fuel crates

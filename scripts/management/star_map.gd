@@ -6,6 +6,8 @@ signal node_clicked(node_data: NodeData)
 signal jump_animation_complete
 signal raider_animation_complete
 signal raider_outcome_animation_complete
+signal wormhole_destination_selected(node_data: NodeData)
+signal wormhole_select_cancelled
 ## Emitted at the moment the last raider laser hits the player (failure path).
 ## main.gd connects this ONE_SHOT to apply hull damage in sync with the impact.
 signal raider_attack_impact
@@ -34,6 +36,8 @@ var _raider_hit_flash_tween: Tween = null   # Killed and recreated on each raide
 var _player_hit_shake_tween: Tween = null   # Killed and recreated on each player-side hit
 var _player_hit_flash_tween: Tween = null   # Killed and recreated on each player-side hit
 var _outcome_raider_id: String = ""  # ID of the raider currently undergoing outcome animation
+var _wormhole_select_mode: bool = false
+var _wormhole_eligible_ids: Array[String] = []
 const BASE_SPEED_PPS = 300.0 # Pixels per second base speed for ship movement
 
 const ZOOM_STEP = 0.1
@@ -193,8 +197,8 @@ func _ready() -> void:
 			_create_raider_zone_visual(rid, raider_node_data.position, VoyageManager.RAIDER_DETECTION_RADIUS)
 			_create_raider_visual(rid, raider_node_data)
 	
-	# Create green travel radius circle (always visible around player)
-	_create_player_travel_zone_visual()
+	# Fast travel disabled — green travel radius circle hidden
+	# _create_player_travel_zone_visual()
 	
 	# Connect signals
 	VoyageManager.map_updated.connect(refresh)
@@ -317,15 +321,19 @@ func _run_spawn_camera_sequence(node_data: NodeData, is_story: bool = false) -> 
 	if ship_node:
 		var ship_pos = (size / 2.0) - (ship_node.position * _current_zoom)
 		tween.tween_property(map_content, "position", ship_pos, 1.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	
-	# 4. Unlock and Emit finished signal
+
+	# 4. Emit finished signal
 	tween.tween_callback(func():
-		_input_locked = false
 		if is_story:
 			VoyageManager.story_sequence_finished.emit()
 		else:
 			VoyageManager.raider_sequence_finished.emit()
 	)
+
+	# Unlock zoom 1s before the sequence ends (total = 5.0s, unlock at 4.0s)
+	var unlock_tween = create_tween()
+	unlock_tween.tween_interval(4.0)
+	unlock_tween.tween_callback(func(): _input_locked = false)
 
 
 func _create_ship_visual() -> void:
@@ -445,13 +453,13 @@ func refresh() -> void:
 	_draw_nodes()
 	_draw_connections()
 	
-	# Update player travel zone: hide when pursued, position when visible
-	if player_travel_zone_visual:
-		player_travel_zone_visual.visible = not VoyageManager.is_player_in_raider_zone()
-		if player_travel_zone_visual.visible and not _is_ship_animating:
-			var current_node = VoyageManager.get_current_node()
-			if current_node:
-				player_travel_zone_visual.position = current_node.position
+	# Fast travel disabled — player travel zone update skipped
+	# if player_travel_zone_visual:
+	# 	player_travel_zone_visual.visible = not VoyageManager.is_player_in_raider_zone()
+	# 	if player_travel_zone_visual.visible and not _is_ship_animating:
+	# 		var current_node = VoyageManager.get_current_node()
+	# 		if current_node:
+	# 			player_travel_zone_visual.position = current_node.position
 	
 	# Ensure ship position is updated (smoothly recenter when raider leaves; instant on other updates)
 	if not _is_ship_animating:
@@ -501,12 +509,10 @@ func _draw_nodes() -> void:
 		if current_node and node_data.id in current_node.connections:
 			is_reachable = true
 		
-		# Direct travel: visited nodes within green circle can be jumped to (disabled when pursued by raider or out of fuel)
+		# Visited nodes are clickable for auto-path travel (hop-by-hop along visited path)
 		var is_direct_travelable = is_reachable
-		if not is_reachable and node_data.state != NodeData.NodeState.UNVISITED:
-			is_direct_travelable = not VoyageManager.is_player_in_raider_zone() \
-				and GameState.fuel > 0 \
-				and VoyageManager.is_node_within_travel_radius(node_data)
+		if not is_reachable and (node_data.state == NodeData.NodeState.VISITED or node_data.state == NodeData.NodeState.CLEARED):
+			is_direct_travelable = true
 		
 		# Only highlight red if raider is ON the player's node AND this is a travelable node
 		var is_raider_threatened = false
@@ -568,17 +574,6 @@ func _draw_connections() -> void:
 					_draw_line(start_point, end_point, is_traveled, is_potential)
 				processed_connections[key] = true
 
-	# Draw wormhole pair pathlines (white) with directional arrows
-	for pair in VoyageManager.wormhole_pairs:
-		var from_id = str(pair[0])
-		var to_id = str(pair[1])
-		if node_visuals.has(from_id) and node_visuals.has(to_id):
-			var v_from = node_visuals[from_id]
-			var v_to = node_visuals[to_id]
-			var from_point = v_from.position + Vector2(40, 40)
-			var to_point = v_to.position + Vector2(40, 40)
-			_draw_wormhole_line(from_point, to_point)
-
 func _is_wormhole_pair(id1: String, id2: String) -> bool:
 	var key = _get_connection_key(id1, id2)
 	for pair in VoyageManager.wormhole_pairs:
@@ -617,47 +612,34 @@ func _draw_line(from: Vector2, to: Vector2, is_traveled: bool = false, is_potent
 	
 	lines_container.add_child(line)
 
-const WORMHOLE_ARROW_SPACING: float = 100.0
-const WORMHOLE_ARROW_SIZE: float = 10.0
-
-func _draw_wormhole_line(from: Vector2, to: Vector2) -> void:
-	var line = Line2D.new()
-	line.add_point(from)
-	line.add_point(to)
-	line.joint_mode = Line2D.LINE_JOINT_ROUND
-	line.end_cap_mode = Line2D.LINE_CAP_ROUND
-	line.width = 4.0
-	line.default_color = Color(1.0, 1.0, 1.0, 0.9)  # White for wormhole path (matches legend)
-	lines_container.add_child(line)
-
-	# Add directional triangles along the line (pointing towards destination)
-	var direction = (to - from).normalized()
-	var line_length = from.distance_to(to)
-	var num_arrows = max(1, int(line_length / WORMHOLE_ARROW_SPACING))
-	for i in range(num_arrows):
-		var t = (float(i) + 1.0) / (num_arrows + 1.0)  # Distribute evenly, away from endpoints
-		var pos = from.lerp(to, t)
-		_draw_wormhole_arrow(pos, direction)
+## Enter wormhole selection mode: highlight eligible nodes.
+func begin_wormhole_select_mode(eligible_ids: Array[String]) -> void:
+	_wormhole_select_mode = true
+	_wormhole_eligible_ids = eligible_ids
+	for node_id in eligible_ids:
+		if node_visuals.has(node_id):
+			node_visuals[node_id].set_wormhole_selectable(true)
 
 
-func _draw_wormhole_arrow(pos: Vector2, direction: Vector2) -> void:
-	# Triangle pointing right (0 rad), then rotate to match direction
-	var s = WORMHOLE_ARROW_SIZE
-	var triangle = Polygon2D.new()
-	triangle.polygon = PackedVector2Array([
-		Vector2(s, 0),           # Tip
-		Vector2(-s * 0.6, s * 0.8),   # Base left
-		Vector2(-s * 0.6, -s * 0.8)   # Base right
-	])
-	triangle.color = Color(1.0, 1.0, 1.0, 0.9)  # Match wormhole line
-	triangle.position = pos
-	triangle.rotation = direction.angle()
-	lines_container.add_child(triangle)
+## Exit wormhole selection mode and clean up highlights.
+func end_wormhole_select_mode() -> void:
+	_wormhole_select_mode = false
+	_wormhole_eligible_ids.clear()
+	for visual in node_visuals.values():
+		visual.set_wormhole_selectable(false)
+
 
 func _gui_input(event: InputEvent) -> void:
 	if not visible or _input_locked:
 		return
-		
+
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_ESCAPE and _wormhole_select_mode:
+			end_wormhole_select_mode()
+			wormhole_select_cancelled.emit()
+			get_viewport().set_input_as_handled()
+			return
+
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
 			_zoom_in(event.position)
@@ -704,25 +686,40 @@ func _update_zoom(center_point: Vector2, old_zoom: float) -> void:
 func _on_node_clicked(node_data: NodeData) -> void:
 	if _input_locked:
 		return
+	if _wormhole_select_mode:
+		if node_data.id in _wormhole_eligible_ids:
+			end_wormhole_select_mode()
+			wormhole_destination_selected.emit(node_data)
+		return
 	node_clicked.emit(node_data)
+
+var _suppress_camera_follow: bool = false
 
 func _on_ship_moved(new_pos: Vector2, node_data: NodeData, speed_mult: float = 1.0) -> void:
 	_input_locked = true
 	# Animate ship movement
 	_update_ship_position(true, new_pos, speed_mult)
-	
-	# Smoothly animate player travel circle to new position (match ship speed)
-	if player_travel_zone_visual:
-		var dist = player_travel_zone_visual.position.distance_to(new_pos)
-		var duration = maxf(dist / (BASE_SPEED_PPS * speed_mult), 0.1)
-		var tween = create_tween()
-		tween.tween_property(player_travel_zone_visual, "position", new_pos, duration) \
-			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	
-	# Animate camera centering
-	center_view_on_ship(true)
-	
+
+	# Fast travel disabled — player travel circle animation skipped
+	# if player_travel_zone_visual:
+	# 	var dist = player_travel_zone_visual.position.distance_to(new_pos)
+	# 	var duration = maxf(dist / (BASE_SPEED_PPS * speed_mult), 0.1)
+	# 	var tween = create_tween()
+	# 	tween.tween_property(player_travel_zone_visual, "position", new_pos, duration) \
+	# 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+
+	# Animate camera centering (suppressed during auto-travel)
+	if not _suppress_camera_follow:
+		center_view_on_ship(true)
+
 	_update_node_info_panel()
+
+
+## Pan the camera smoothly to a world-space position without moving the ship.
+func pan_to_world_pos(world_pos: Vector2, duration: float) -> void:
+	var target = (size / 2.0) - (world_pos * _current_zoom)
+	var tween = create_tween()
+	tween.tween_property(map_content, "position", target, duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 
 
 const TELEPORT_DURATION: float = 0.45  # demat 0.2s + materialize 0.25s
@@ -732,11 +729,11 @@ func _on_ship_teleported(new_pos: Vector2, _node_data: NodeData) -> void:
 	_is_ship_animating = true
 	# Teleport: dematerialize -> snap to destination -> materialize (camera animates same as jump)
 	_play_teleport_animation(new_pos)
-	# Smoothly animate player travel circle to new position during teleport
-	if player_travel_zone_visual:
-		var tween = create_tween()
-		tween.tween_property(player_travel_zone_visual, "position", new_pos, TELEPORT_DURATION) \
-			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	# Fast travel disabled — player travel circle teleport animation skipped
+	# if player_travel_zone_visual:
+	# 	var tween = create_tween()
+	# 	tween.tween_property(player_travel_zone_visual, "position", new_pos, TELEPORT_DURATION) \
+	# 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	_update_node_info_panel()
 
 
@@ -856,19 +853,22 @@ func _play_teleport_animation(target_pos: Vector2) -> void:
 	var display_center = _get_player_display_offset(target_pos)
 	var visual_pos = display_center - Vector2(72, 72)
 
-	# Dematerialize: fade out + shrink (0.2s)
+	# Dematerialize: fade out + shrink in parallel (0.2s)
 	var demat_tween = create_tween()
 	demat_tween.set_parallel(true)
 	demat_tween.tween_property(ship_visual, "modulate:a", 0.0, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	demat_tween.tween_property(ship_visual, "scale", Vector2(0.3, 0.3), 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	demat_tween.tween_property(ship_visual, "rotation", 0.0, 0.2)  # Reset rotation for clean reappearance
+	demat_tween.tween_property(ship_visual, "rotation", 0.0, 0.2)
 
-	# Snap to destination then materialize (fade in + scale up in parallel)
+	# Wait for dematerialize to finish, then snap to destination
+	demat_tween.set_parallel(false)
 	demat_tween.tween_callback(func():
 		ship_visual.position = visual_pos
 		ship_visual.modulate.a = 0.0
 		ship_visual.scale = Vector2(0.3, 0.3)
 	)
+
+	# Materialize: fade in + scale up in parallel (0.25s)
 	demat_tween.set_parallel(true)
 	demat_tween.tween_property(ship_visual, "modulate:a", 1.0, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	demat_tween.tween_property(ship_visual, "scale", Vector2(1.0, 1.0), 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)

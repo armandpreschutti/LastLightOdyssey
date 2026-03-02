@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/tactical/projectile.gd" id="5_projectile"]
 [ext_resource type="Script" path="res://scripts/tactical/biome_background.gd" id="6_background"]
 [ext_resource type="PackedScene" uid="uid://c8raider_off_screen_ind" path="res://scenes/ui/raider_off_screen_indicator.tscn" id="7_extraction_indicator"]
+[ext_resource type="PackedScene" uid="uid://turn_order_panel" path="res://scenes/ui/turn_order_panel.tscn" id="8_turn_order_panel"]
 
 [node name="TacticalMode" type="Node2D"]
 script = ExtResource("1_controller")
@@ -42,6 +43,18 @@ script = ExtResource("5_projectile")
 [node name="UILayer" type="CanvasLayer" parent="."]
 
 [node name="TacticalHUD" parent="UILayer" instance=ExtResource("3_hud")]
+
+[node name="TurnOrderPanel" parent="UILayer" instance=ExtResource("8_turn_order_panel")]
+anchor_left = 0.0
+anchor_top = 0.5
+anchor_right = 0.0
+anchor_bottom = 0.5
+offset_left = 16.0
+offset_top = -180.0
+offset_right = 80.0
+offset_bottom = 180.0
+grow_horizontal = 1
+grow_vertical = 2
 
 [node name="ExtractionIndicator" parent="UILayer" instance=ExtResource("7_extraction_indicator")]
 

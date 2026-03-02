@@ -33,6 +33,7 @@ enum DifficultyGrade {
 @export var state: NodeState = NodeState.UNVISITED
 @export var is_new_earth: bool = false
 @export var is_story_node: bool = false
+@export var is_raider_node: bool = false  # True for nodes created by raider spawn (not regular map graph)
 
 # Difficulty Properties
 @export var difficulty_grade: DifficultyGrade = DifficultyGrade.EASY

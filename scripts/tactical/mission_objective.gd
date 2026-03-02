@@ -112,6 +112,15 @@ class ObjectiveManager:
 			1
 		)
 
+	static func create_rescue_crew() -> MissionObjective:
+		## Create the Abandoned Station rescue objective (5 crew members)
+		return MissionObjective.new(
+			"rescue_crew",
+			"Rescue crew members",
+			MissionObjective.ObjectiveType.PROGRESS,
+			5
+		)
+
 	
 	
 	static func get_objective_by_id(objectives: Array[MissionObjective], id: String) -> MissionObjective:
@@ -153,6 +162,9 @@ class ObjectiveManager:
 			"eliminate_hostiles":
 				# Raider elimination: decent fuel and cash
 				return {"fuel": 4, "cash": 20, "hull_repair": 0}
+			"rescue_crew":
+				# Rescuing all crew: fuel + hull repair reward
+				return {"fuel": 3, "cash": 0, "hull_repair": 5}
 
 			
 			# Binary objectives (hack, repair, activate, etc.)

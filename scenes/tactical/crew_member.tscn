@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://crew_member_scene"]
+
+[ext_resource type="Script" path="res://scripts/tactical/crew_member.gd" id="1_crewmember"]
+[ext_resource type="Texture2D" path="res://assets/sprites/objects/crew_member.png" id="2_sprite"]
+
+[node name="CrewMember" type="Node2D"]
+script = ExtResource("1_crewmember")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+texture = ExtResource("2_sprite")
+texture_filter = 1
+
+[node name="Highlight" type="ColorRect" parent="."]
+visible = false
+offset_left = -10.0
+offset_top = -10.0
+offset_right = 10.0
+offset_bottom = 10.0
+mouse_filter = 2
+color = Color(1.0, 0.9, 0.2, 0.35)

@@ -5,7 +5,7 @@ extends Node
 signal event_triggered(event_data: Dictionary)
 signal event_resolved(result: String)
 
-enum NodeType { EMPTY_SPACE, SCAVENGE_SITE, TRADING_OUTPOST, WORMHOLE }
+enum NodeType { EMPTY_SPACE, SCAVENGE_SITE, TRADING_OUTPOST, WORMHOLE, ABANDONED_STATION }
 
 # Event table - roll 1d10
 # Event table - expanded to 20 entries

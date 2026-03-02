@@ -22,6 +22,7 @@ var map_height: int = DEFAULT_MAP_SIZE
 # Current biome theme (default to station)
 var current_theme: Dictionary = BiomeConfig.STATION_THEME
 var current_biome: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION
+var is_abandoned_station: bool = false  # Enables "falling apart" visual overlays
 
 # Gameplay highlight colors (consistent across biomes, high visibility)
 const COLOR_MOVEMENT_RANGE := Color(0.3, 0.6, 0.9, 0.35)  # Brighter blue movement highlight
@@ -34,6 +35,7 @@ const COLOR_PATHFINDING_GLOW := Color(0.2, 0.8, 1.0, 0.4)  # Glow effect for neo
 
 @onready var units_container: Node2D = $Units
 @onready var interactables_container: Node2D = $Interactables
+@onready var static_layer: Node2D = $StaticLayer
 
 var astar: AStarGrid2D
 var tile_data: Dictionary = {}  # Vector2i -> TileType
@@ -89,6 +91,13 @@ func set_biome(biome_type: BiomeConfig.BiomeType) -> void:
 	current_theme = BiomeConfig.get_theme(biome_type)
 
 
+## Mark this map as an Abandoned Station (enables decay/fire visual overlays)
+func set_abandoned_station(value: bool) -> void:
+	is_abandoned_station = value
+	if static_layer:
+		static_layer.queue_redraw()
+
+
 ## Set map dimensions
 func set_map_dimensions(width: int, height: int) -> void:
 	map_width = width
@@ -101,12 +110,13 @@ func set_map_dimensions(width: int, height: int) -> void:
 func initialize_map(layout: Dictionary, biome_type: BiomeConfig.BiomeType = BiomeConfig.BiomeType.STATION) -> void:
 	# Clear previous map data first to prevent artifacts
 	clear_map()
-	
+
 	set_biome(biome_type)
 	tile_data = layout
 	mission_highlight_tiles.clear()
 	_update_astar_solids()
 	_initialize_fog()
+	static_layer.queue_redraw()
 	queue_redraw()
 
 
@@ -176,6 +186,7 @@ func reveal_around(center: Vector2i, sight_range: int) -> void:
 					_reveal_interactables_at(pos)
 
 	if changed:
+		static_layer.queue_redraw()
 		queue_redraw()
 
 
@@ -270,52 +281,42 @@ func remove_mission_highlight(pos: Vector2i) -> void:
 
 
 func _draw() -> void:
-	# Debug counter for half cover tiles
-	var half_cover_drawn = 0
-	
-	# Draw all tiles
+	# Static tiles are drawn by StaticLayer ($StaticLayer) — only redraws on map/fog changes.
+	# This _draw() handles dynamic per-frame overlays only (highlights, hover, pathfinding).
+
 	for x in range(map_width):
 		for y in range(map_height):
 			var pos = Vector2i(x, y)
+			if not revealed_tiles.get(pos, false):
+				continue
 			var rect = Rect2(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
 
-			if not revealed_tiles.get(pos, false):
-				# Fog of war
-				draw_rect(rect, current_theme["fog"])
-			else:
-				# Get tile type and draw with variation
-				var tile_type = tile_data.get(pos, TileType.FLOOR)
-				if tile_type == TileType.HALF_COVER:
-					half_cover_drawn += 1
-				_draw_tile(x, y, rect, tile_type)
-				
+			# Mission objective highlight (Gold) with pulse effect
+			if mission_highlight_tiles.get(pos, false):
+				var highlight_color = COLOR_MISSION_HIGHLIGHT
+				highlight_color.a = mission_pulse_alpha
+				draw_rect(rect, highlight_color)
 
-				# Mission objective highlight (Gold) with pulse effect
-				if mission_highlight_tiles.get(pos, false):
-					var highlight_color = COLOR_MISSION_HIGHLIGHT
-					highlight_color.a = mission_pulse_alpha
-					draw_rect(rect, highlight_color)
-				
-				# Movement range highlight
-				if movement_range_tiles.get(pos, false):
-					draw_rect(rect, COLOR_MOVEMENT_RANGE)
-				
-				# Heal range highlight (light green)
-				if heal_range_tiles.get(pos, false):
-					draw_rect(rect, COLOR_HEAL_RANGE)
-				
-				# Execute range highlight (red)
-				if execute_range_tiles.get(pos, false):
-					draw_rect(rect, COLOR_EXECUTE_RANGE)
-				
-				# Enemy target tiles highlight (red - tiles under attackable enemies)
-				if enemy_target_tiles.get(pos, false):
-					draw_rect(rect, COLOR_EXECUTE_RANGE)
-				
-				# Hover effect
-				if pos == hovered_tile:
-					draw_rect(rect, COLOR_HOVER)
-	
+			# Movement range highlight
+			if movement_range_tiles.get(pos, false):
+				draw_rect(rect, COLOR_MOVEMENT_RANGE)
+
+			# Heal range highlight (light green)
+			if heal_range_tiles.get(pos, false):
+				draw_rect(rect, COLOR_HEAL_RANGE)
+
+			# Execute range highlight (red)
+			if execute_range_tiles.get(pos, false):
+				draw_rect(rect, COLOR_EXECUTE_RANGE)
+
+			# Enemy target tiles highlight (red - tiles under attackable enemies)
+			if enemy_target_tiles.get(pos, false):
+				draw_rect(rect, COLOR_EXECUTE_RANGE)
+
+			# Hover effect
+			if pos == hovered_tile:
+				draw_rect(rect, COLOR_HOVER)
+
 	# Draw pathfinding path line (draw after tiles but before units)
 	if pathfinding_path.size() > 1:
 		# AStarGrid2D.get_point_path() returns world positions at tile corners
@@ -354,730 +355,7 @@ func _draw() -> void:
 			draw_colored_polygon(arrow_points, COLOR_PATHFINDING_GLOW)
 			draw_colored_polygon(arrow_points, COLOR_PATHFINDING_LINE)
 	
-	# Debug output for half cover count (only print occasionally to avoid spam)
-	if half_cover_drawn > 0 and Engine.get_process_frames() % 60 == 0:
-		print("DEBUG_DRAW: Drew %d half cover tiles" % half_cover_drawn)
-
-
-## Draw a single tile with visual variation based on biome theme
-func _draw_tile(x: int, y: int, rect: Rect2, tile_type: TileType) -> void:
-	# Use position for deterministic "randomness"
-	var hash_val = (x * 73 + y * 137) % 100
-	
-	match tile_type:
-		TileType.FLOOR:
-			_draw_floor_tile(rect, hash_val)
-		TileType.WALL:
-			_draw_wall_tile(x, y, rect, hash_val)
-		TileType.EXTRACTION:
-			_draw_extraction_tile(rect, hash_val)
-		TileType.HALF_COVER:
-			_draw_cover_tile(rect, hash_val)
-
-
-## Draw floor tile with biome-specific appearance
-func _draw_floor_tile(rect: Rect2, hash_val: int) -> void:
-	# Vary floor color slightly based on position
-	var base_color = current_theme["floor_base"] if hash_val < 60 else current_theme["floor_var"]
-	draw_rect(rect, base_color)
-	
-	# Add biome-specific detail marks
-	match current_biome:
-		BiomeConfig.BiomeType.STATION:
-			_draw_station_floor_details(rect, hash_val)
-		BiomeConfig.BiomeType.ASTEROID:
-			_draw_asteroid_floor_details(rect, hash_val)
-		BiomeConfig.BiomeType.PLANET:
-			_draw_planet_floor_details(rect, hash_val)
-
-
-func _draw_station_floor_details(rect: Rect2, hash_val: int) -> void:
-	var pos = rect.position
-	var panel_line_color = current_theme.get("floor_accent", Color(0.06, 0.07, 0.10, 0.8))
-	
-	# Simple panel border lines (every tile has these for consistent grid look)
-	draw_line(pos, pos + Vector2(TILE_SIZE, 0), panel_line_color, 1.0)
-	draw_line(pos, pos + Vector2(0, TILE_SIZE), panel_line_color, 1.0)
-	
-	# Only 2 decoration types - keep it simple (about 15% of tiles get decoration)
-	if hash_val < 8:
-		# Blood splatter
-		var blood_color = current_theme.get("blood", Color(0.55, 0.08, 0.08, 0.75))
-		draw_circle(pos + Vector2(14, 16), 3, blood_color)
-		draw_circle(pos + Vector2(18, 18), 2, blood_color.darkened(0.2))
-	elif hash_val > 92:
-		# Cyan accent light strip
-		var accent_color = current_theme.get("accent_dim", Color(0.2, 0.6, 0.75, 0.6))
-		draw_rect(Rect2(pos.x + 4, pos.y + 14, 24, 4), accent_color)
-
-
-func _draw_asteroid_floor_details(rect: Rect2, hash_val: int) -> void:
-	var pos = rect.position
-	var accent_color = current_theme.get("floor_accent", Color(0.12, 0.1, 0.08, 0.6))
-	
-	# Simple rocky texture lines (subtle grid-like cracks)
-	draw_line(pos, pos + Vector2(TILE_SIZE, 0), accent_color, 1.0)
-	draw_line(pos, pos + Vector2(0, TILE_SIZE), accent_color, 1.0)
-	
-	# Only 2 decoration types - keep it simple (about 15% of tiles get decoration)
-	if hash_val < 8:
-		# Rocky crevice/crack
-		draw_line(pos + Vector2(6, 8), pos + Vector2(26, 24), accent_color.darkened(0.3), 1.5)
-	elif hash_val > 92:
-		# Small blue mineral shimmer
-		draw_circle(pos + Vector2(16, 16), 2, Color(0.3, 0.45, 0.65, 0.4))
-
-
-func _draw_planet_floor_details(rect: Rect2, hash_val: int) -> void:
-	var pos = rect.position
-	var accent_color = current_theme.get("floor_accent", Color(0.08, 0.12, 0.06))
-	var highlight_color = current_theme.get("floor_highlight", Color(0.18, 0.26, 0.14))
-	
-	# Subtle grass texture - soft edge lines
-	draw_line(pos, pos + Vector2(TILE_SIZE, 0), accent_color, 1.0)
-	draw_line(pos, pos + Vector2(0, TILE_SIZE), accent_color, 1.0)
-	
-	# Small grass blade marks on some tiles (very subtle)
-	if hash_val < 25:
-		# A few grass blade strokes
-		draw_line(pos + Vector2(8, 20), pos + Vector2(10, 12), highlight_color, 1.0)
-		draw_line(pos + Vector2(22, 22), pos + Vector2(24, 14), highlight_color, 1.0)
-	elif hash_val > 75:
-		# Different grass pattern
-		draw_line(pos + Vector2(14, 24), pos + Vector2(16, 16), highlight_color, 1.0)
-		draw_line(pos + Vector2(18, 26), pos + Vector2(19, 18), highlight_color, 1.0)
-
-
-## Draw wall tile with autotiling and biome-specific appearance
-func _draw_wall_tile(x: int, y: int, rect: Rect2, hash_val: int) -> void:
-	var pos = Vector2i(x, y)
-	
-	# Check adjacent tiles for walls
-	var has_wall_above = tile_data.get(pos + Vector2i(0, -1), TileType.FLOOR) == TileType.WALL
-	var has_wall_below = tile_data.get(pos + Vector2i(0, 1), TileType.FLOOR) == TileType.WALL
-	var has_wall_left = tile_data.get(pos + Vector2i(-1, 0), TileType.FLOOR) == TileType.WALL
-	var has_wall_right = tile_data.get(pos + Vector2i(1, 0), TileType.FLOOR) == TileType.WALL
-	
-	var neighbor_count = int(has_wall_above) + int(has_wall_below) + int(has_wall_left) + int(has_wall_right)
-	
-	# Draw floor base first (dark background)
-	draw_rect(rect, current_theme["floor_base"])
-	
-	# Biome-specific wall rendering for better visuals
-	if current_biome == BiomeConfig.BiomeType.STATION:
-		_draw_station_wall_tile(rect, hash_val, has_wall_above, has_wall_below, has_wall_left, has_wall_right, neighbor_count)
-		return
-	elif current_biome == BiomeConfig.BiomeType.PLANET:
-		_draw_planet_wall_tile(rect, hash_val, has_wall_above, has_wall_below, has_wall_left, has_wall_right, neighbor_count)
-		return
-	
-	# Build wall polygon based on connections (for other biomes)
-	var wall_points: PackedVector2Array = []
-	var inset = 4.0  # How much to inset non-connected edges
-	var edge_var = (hash_val % 6) - 3  # Edge variation
-	
-	# Corners with slight irregularity based on biome
-	var irregularity = 0.3 if current_biome == BiomeConfig.BiomeType.ASTEROID else 0.2
-	
-	var tl = rect.position + Vector2(inset if not has_wall_left else 0, inset if not has_wall_above else 0)
-	var tr = rect.position + Vector2(TILE_SIZE - (inset if not has_wall_right else 0), inset if not has_wall_above else 0)
-	var br = rect.position + Vector2(TILE_SIZE - (inset if not has_wall_right else 0), TILE_SIZE - (inset if not has_wall_below else 0))
-	var bl = rect.position + Vector2(inset if not has_wall_left else 0, TILE_SIZE - (inset if not has_wall_below else 0))
-	
-	# Add irregular edges for non-connected sides
-	if not has_wall_above:
-		wall_points.append(tl + Vector2(0, edge_var * irregularity))
-		wall_points.append(tl + Vector2(TILE_SIZE * 0.3, -1 + edge_var * irregularity * 0.6))
-		wall_points.append(tr + Vector2(-TILE_SIZE * 0.3, 1 + edge_var * irregularity * 0.6))
-		wall_points.append(tr + Vector2(0, edge_var * irregularity))
-	else:
-		wall_points.append(tl)
-		wall_points.append(tr)
-	
-	if not has_wall_right:
-		wall_points.append(tr + Vector2(edge_var * irregularity, TILE_SIZE * 0.25))
-		wall_points.append(br + Vector2(-edge_var * irregularity * 0.6, -TILE_SIZE * 0.25))
-	
-	if not has_wall_below:
-		wall_points.append(br + Vector2(0, -edge_var * irregularity))
-		wall_points.append(br + Vector2(-TILE_SIZE * 0.3, 1 - edge_var * irregularity * 0.6))
-		wall_points.append(bl + Vector2(TILE_SIZE * 0.3, -1 - edge_var * irregularity * 0.6))
-		wall_points.append(bl + Vector2(0, -edge_var * irregularity))
-	else:
-		wall_points.append(br)
-		wall_points.append(bl)
-	
-	if not has_wall_left:
-		wall_points.append(bl + Vector2(-edge_var * irregularity, -TILE_SIZE * 0.25))
-		wall_points.append(tl + Vector2(edge_var * irregularity * 0.6, TILE_SIZE * 0.25))
-	
-	# Draw shadow first
-	var shadow_points: PackedVector2Array = []
-	for p in wall_points:
-		shadow_points.append(p + Vector2(2, 2))
-	if shadow_points.size() >= 3:
-		draw_polygon(shadow_points, [Color(0.08, 0.06, 0.04, 0.6)])
-	
-	# Draw main wall body
-	if wall_points.size() >= 3:
-		draw_polygon(wall_points, [current_theme["wall"]])
-	
-	# Draw highlights on exposed edges
-	var highlight_color = current_theme["wall_highlight"]
-	var shadow_color = current_theme["wall_shadow"]
-	
-	if not has_wall_above:
-		draw_line(tl + Vector2(2, 2), tr + Vector2(-2, 2), highlight_color, 2.0)
-	if not has_wall_left:
-		draw_line(tl + Vector2(2, 2), bl + Vector2(2, -2), highlight_color.darkened(0.2), 2.0)
-	if not has_wall_below:
-		draw_line(bl + Vector2(2, -2), br + Vector2(-2, -2), shadow_color, 2.0)
-	if not has_wall_right:
-		draw_line(tr + Vector2(-2, 2), br + Vector2(-2, -2), shadow_color, 1.5)
-	
-	# Add biome-specific surface details
-	var is_edge_piece = neighbor_count < 4
-	if is_edge_piece:
-		_draw_wall_details(rect, hash_val, has_wall_above, has_wall_below, has_wall_left, has_wall_right)
-
-
-## Draw station-specific wall tile with high contrast industrial look
-func _draw_station_wall_tile(rect: Rect2, hash_val: int, has_wall_above: bool, has_wall_below: bool, has_wall_left: bool, has_wall_right: bool, neighbor_count: int) -> void:
-	var pos = rect.position
-	var wall_color = current_theme["wall"]
-	var highlight_color = current_theme["wall_highlight"]
-	var shadow_color = current_theme["wall_shadow"]
-	var panel_color = current_theme.get("wall_panel", wall_color.darkened(0.15))
-	
-	# Solid dark outline first (creates separation from floor)
-	var outline_color = Color(0.04, 0.05, 0.07)
-	var inset = 2.0
-	
-	# Draw dark outline/border around the wall
-	if not has_wall_above:
-		draw_rect(Rect2(pos.x, pos.y, TILE_SIZE, inset), outline_color)
-	if not has_wall_below:
-		draw_rect(Rect2(pos.x, pos.y + TILE_SIZE - inset, TILE_SIZE, inset), outline_color)
-	if not has_wall_left:
-		draw_rect(Rect2(pos.x, pos.y, inset, TILE_SIZE), outline_color)
-	if not has_wall_right:
-		draw_rect(Rect2(pos.x + TILE_SIZE - inset, pos.y, inset, TILE_SIZE), outline_color)
-	
-	# Main wall body - solid fill
-	var wall_inset = 2.0
-	var wall_rect = Rect2(
-		pos.x + (wall_inset if not has_wall_left else 0),
-		pos.y + (wall_inset if not has_wall_above else 0),
-		TILE_SIZE - (wall_inset if not has_wall_left else 0) - (wall_inset if not has_wall_right else 0),
-		TILE_SIZE - (wall_inset if not has_wall_above else 0) - (wall_inset if not has_wall_below else 0)
-	)
-	draw_rect(wall_rect, wall_color)
-	
-	# Inner panel (creates depth)
-	var panel_inset = 5.0
-	var panel_rect = Rect2(
-		pos.x + panel_inset,
-		pos.y + panel_inset,
-		TILE_SIZE - panel_inset * 2,
-		TILE_SIZE - panel_inset * 2
-	)
-	draw_rect(panel_rect, panel_color)
-	
-	# Highlight on top/left edges (light source from top-left)
-	if not has_wall_above:
-		draw_line(pos + Vector2(wall_inset, wall_inset), pos + Vector2(TILE_SIZE - wall_inset, wall_inset), highlight_color, 2.0)
-	if not has_wall_left:
-		draw_line(pos + Vector2(wall_inset, wall_inset), pos + Vector2(wall_inset, TILE_SIZE - wall_inset), highlight_color.darkened(0.15), 2.0)
-	
-	# Shadow on bottom/right edges
-	if not has_wall_below:
-		draw_line(pos + Vector2(wall_inset, TILE_SIZE - wall_inset - 1), pos + Vector2(TILE_SIZE - wall_inset, TILE_SIZE - wall_inset - 1), shadow_color, 2.0)
-	if not has_wall_right:
-		draw_line(pos + Vector2(TILE_SIZE - wall_inset - 1, wall_inset), pos + Vector2(TILE_SIZE - wall_inset - 1, TILE_SIZE - wall_inset), shadow_color, 2.0)
-	
-	# Add station wall details on edge pieces
-	if neighbor_count < 4:
-		_draw_station_wall_details(rect, hash_val, has_wall_above, has_wall_below, has_wall_left, has_wall_right)
-
-
-## Draw planet-specific wall tile - alien crystal/rock formations
-func _draw_planet_wall_tile(rect: Rect2, hash_val: int, has_wall_above: bool, has_wall_below: bool, has_wall_left: bool, has_wall_right: bool, _neighbor_count: int) -> void:
-	var pos = rect.position
-	var wall_color = current_theme["wall"]
-	var highlight_color = current_theme["wall_highlight"]
-	var shadow_color = current_theme["wall_shadow"]
-	var crystal_color = current_theme.get("wall_crystal", Color(0.70, 0.40, 0.75))
-	var glow_color = current_theme.get("wall_glow", Color(0.80, 0.50, 0.90, 0.6))
-	
-	# Dark purple outline for contrast
-	var outline_color = Color(0.12, 0.08, 0.15)
-	var inset = 2.0
-	
-	# Draw dark outline/border
-	if not has_wall_above:
-		draw_rect(Rect2(pos.x, pos.y, TILE_SIZE, inset), outline_color)
-	if not has_wall_below:
-		draw_rect(Rect2(pos.x, pos.y + TILE_SIZE - inset, TILE_SIZE, inset), outline_color)
-	if not has_wall_left:
-		draw_rect(Rect2(pos.x, pos.y, inset, TILE_SIZE), outline_color)
-	if not has_wall_right:
-		draw_rect(Rect2(pos.x + TILE_SIZE - inset, pos.y, inset, TILE_SIZE), outline_color)
-	
-	# Main alien rock body - purple tones
-	var wall_inset = 2.0
-	var wall_rect = Rect2(
-		pos.x + (wall_inset if not has_wall_left else 0),
-		pos.y + (wall_inset if not has_wall_above else 0),
-		TILE_SIZE - (wall_inset if not has_wall_left else 0) - (wall_inset if not has_wall_right else 0),
-		TILE_SIZE - (wall_inset if not has_wall_above else 0) - (wall_inset if not has_wall_below else 0)
-	)
-	draw_rect(wall_rect, wall_color)
-	
-	# Crystal formations based on hash (organic, irregular shapes)
-	var crystal_type = hash_val % 5
-	
-	match crystal_type:
-		0:
-			# Large crystal shard pointing up
-			var points: PackedVector2Array = [
-				pos + Vector2(8, 28),
-				pos + Vector2(16, 4),
-				pos + Vector2(24, 28)
-			]
-			draw_polygon(points, [crystal_color])
-			# Crystal highlight
-			draw_line(pos + Vector2(16, 4), pos + Vector2(14, 20), crystal_color.lightened(0.4), 2.0)
-			# Glow effect
-			draw_circle(pos + Vector2(16, 12), 4, glow_color)
-		
-		1:
-			# Cluster of smaller crystals
-			# Left crystal
-			var p1: PackedVector2Array = [pos + Vector2(6, 26), pos + Vector2(10, 8), pos + Vector2(14, 26)]
-			draw_polygon(p1, [crystal_color.darkened(0.15)])
-			# Right crystal
-			var p2: PackedVector2Array = [pos + Vector2(18, 28), pos + Vector2(24, 6), pos + Vector2(28, 28)]
-			draw_polygon(p2, [crystal_color])
-			draw_line(pos + Vector2(24, 6), pos + Vector2(22, 18), crystal_color.lightened(0.35), 1.5)
-		
-		2:
-			# Organic alien rock formation with glow spots
-			draw_rect(Rect2(pos.x + 6, pos.y + 6, 20, 20), shadow_color)
-			draw_rect(Rect2(pos.x + 8, pos.y + 8, 16, 16), wall_color.lightened(0.1))
-			# Bioluminescent spots
-			draw_circle(pos + Vector2(12, 12), 3, glow_color)
-			draw_circle(pos + Vector2(20, 20), 2, glow_color.darkened(0.2))
-		
-		3:
-			# Jagged alien rock edge
-			var rock_points: PackedVector2Array = [
-				pos + Vector2(4, 28),
-				pos + Vector2(8, 16),
-				pos + Vector2(14, 22),
-				pos + Vector2(18, 8),
-				pos + Vector2(24, 18),
-				pos + Vector2(28, 28)
-			]
-			draw_polygon(rock_points, [wall_color.lightened(0.08)])
-			# Highlight on peaks
-			draw_line(pos + Vector2(18, 8), pos + Vector2(16, 16), highlight_color, 2.0)
-		
-		4:
-			# Smooth alien structure with pink glow
-			draw_circle(pos + Vector2(16, 16), 12, wall_color)
-			draw_circle(pos + Vector2(16, 16), 8, shadow_color)
-			draw_circle(pos + Vector2(16, 16), 4, current_theme.get("biolum_pink", Color(0.95, 0.45, 0.65, 0.8)))
-	
-	# Highlight on exposed edges
-	if not has_wall_above:
-		draw_line(pos + Vector2(wall_inset + 2, wall_inset + 2), pos + Vector2(TILE_SIZE - wall_inset - 2, wall_inset + 2), highlight_color, 2.0)
-	if not has_wall_left:
-		draw_line(pos + Vector2(wall_inset + 2, wall_inset + 2), pos + Vector2(wall_inset + 2, TILE_SIZE - wall_inset - 2), highlight_color.darkened(0.2), 1.5)
-	
-	# Shadow on bottom/right edges
-	if not has_wall_below:
-		draw_line(pos + Vector2(wall_inset, TILE_SIZE - wall_inset - 1), pos + Vector2(TILE_SIZE - wall_inset, TILE_SIZE - wall_inset - 1), shadow_color, 2.0)
-	if not has_wall_right:
-		draw_line(pos + Vector2(TILE_SIZE - wall_inset - 1, wall_inset), pos + Vector2(TILE_SIZE - wall_inset - 1, TILE_SIZE - wall_inset), shadow_color, 1.5)
-
-
-func _draw_wall_details(rect: Rect2, hash_val: int, _above: bool, _below: bool, _left: bool, _right: bool) -> void:
-	var detail_color = current_theme["wall_shadow"]
-	var inset = 4.0
-	
-	match current_biome:
-		BiomeConfig.BiomeType.STATION:
-			_draw_station_wall_details(rect, hash_val, _above, _below, _left, _right)
-		
-		BiomeConfig.BiomeType.ASTEROID:
-			# Rocky details - cracks, mineral veins
-			if hash_val % 4 == 0:
-				var crack_start = rect.position + Vector2(8, 4)
-				var crack_end = rect.position + Vector2(24, 28)
-				draw_line(crack_start, crack_end, detail_color, 1.5)
-			if hash_val % 7 == 0:
-				# Blue mineral vein
-				draw_line(rect.position + Vector2(6, 16), rect.position + Vector2(26, 14), Color(0.3, 0.4, 0.6, 0.5), 2.0)
-		
-		BiomeConfig.BiomeType.PLANET:
-			# Natural details - vegetation, erosion
-			if hash_val % 3 == 0:
-				# Moss/lichen
-				draw_circle(rect.position + Vector2(10, 8), 3, current_theme["floor_accent"])
-			if hash_val % 5 == 0:
-				# Erosion marks
-				draw_line(rect.position + Vector2(4, 20), rect.position + Vector2(14, 28), detail_color, 1.5)
-
-
-## Draw extraction zone tile
-func _draw_extraction_tile(rect: Rect2, hash_val: int) -> void:
-	# Biome-specific extraction zone rendering
-	match current_biome:
-		BiomeConfig.BiomeType.STATION:
-			_draw_station_extraction(rect, hash_val)
-		BiomeConfig.BiomeType.PLANET:
-			_draw_planet_extraction(rect, hash_val)
-		_:
-			_draw_default_extraction(rect, hash_val)
-
-
-## Default extraction zone rendering (used for other biomes)
-func _draw_default_extraction(rect: Rect2, _hash_val: int) -> void:
-	# Base extraction floor
-	draw_rect(rect, current_theme["extraction"])
-	
-	# Glowing center area
-	var inner_rect = Rect2(rect.position.x + 4, rect.position.y + 4, TILE_SIZE - 8, TILE_SIZE - 8)
-	draw_rect(inner_rect, current_theme["extraction_glow"])
-	
-	# Corner markers
-	var corner_size = 6
-	var marker_color = current_theme["extraction_marker"]
-	# Top-left
-	draw_line(rect.position + Vector2(2, 2), rect.position + Vector2(2 + corner_size, 2), marker_color, 2.0)
-	draw_line(rect.position + Vector2(2, 2), rect.position + Vector2(2, 2 + corner_size), marker_color, 2.0)
-	# Bottom-right
-	draw_line(rect.position + Vector2(TILE_SIZE - 2, TILE_SIZE - 2), rect.position + Vector2(TILE_SIZE - 2 - corner_size, TILE_SIZE - 2), marker_color, 2.0)
-	draw_line(rect.position + Vector2(TILE_SIZE - 2, TILE_SIZE - 2), rect.position + Vector2(TILE_SIZE - 2, TILE_SIZE - 2 - corner_size), marker_color, 2.0)
-
-
-## Station-specific extraction zone with sci-fi landing pad look
-func _draw_station_extraction(rect: Rect2, hash_val: int) -> void:
-	var pos = rect.position
-	
-	# Dark base floor (landing pad)
-	draw_rect(rect, Color(0.08, 0.12, 0.10))
-	
-	# Green safety zone base
-	var inner_rect = Rect2(pos.x + 2, pos.y + 2, TILE_SIZE - 4, TILE_SIZE - 4)
-	draw_rect(inner_rect, current_theme["extraction"])
-	
-	# Glowing center area
-	var glow_rect = Rect2(pos.x + 6, pos.y + 6, TILE_SIZE - 12, TILE_SIZE - 12)
-	draw_rect(glow_rect, current_theme["extraction_glow"])
-	
-	# Landing pad grid pattern
-	var grid_color = current_theme["extraction_marker"].darkened(0.3)
-	# Horizontal lines
-	draw_line(pos + Vector2(4, TILE_SIZE / 2), pos + Vector2(TILE_SIZE - 4, TILE_SIZE / 2), grid_color, 1.0)
-	# Vertical lines
-	draw_line(pos + Vector2(TILE_SIZE / 2, 4), pos + Vector2(TILE_SIZE / 2, TILE_SIZE - 4), grid_color, 1.0)
-	
-	# Corner chevron markers (landing indicators)
-	var marker_color = current_theme["extraction_marker"]
-	var corner_size = 8
-	
-	# Top-left corner
-	draw_line(pos + Vector2(2, 2), pos + Vector2(2 + corner_size, 2), marker_color, 2.0)
-	draw_line(pos + Vector2(2, 2), pos + Vector2(2, 2 + corner_size), marker_color, 2.0)
-	draw_line(pos + Vector2(4, 4), pos + Vector2(4 + corner_size - 2, 4), marker_color, 1.0)
-	draw_line(pos + Vector2(4, 4), pos + Vector2(4, 4 + corner_size - 2), marker_color, 1.0)
-	
-	# Top-right corner
-	draw_line(pos + Vector2(TILE_SIZE - 2, 2), pos + Vector2(TILE_SIZE - 2 - corner_size, 2), marker_color, 2.0)
-	draw_line(pos + Vector2(TILE_SIZE - 2, 2), pos + Vector2(TILE_SIZE - 2, 2 + corner_size), marker_color, 2.0)
-	
-	# Bottom-left corner
-	draw_line(pos + Vector2(2, TILE_SIZE - 2), pos + Vector2(2 + corner_size, TILE_SIZE - 2), marker_color, 2.0)
-	draw_line(pos + Vector2(2, TILE_SIZE - 2), pos + Vector2(2, TILE_SIZE - 2 - corner_size), marker_color, 2.0)
-	
-	# Bottom-right corner
-	draw_line(pos + Vector2(TILE_SIZE - 2, TILE_SIZE - 2), pos + Vector2(TILE_SIZE - 2 - corner_size, TILE_SIZE - 2), marker_color, 2.0)
-	draw_line(pos + Vector2(TILE_SIZE - 2, TILE_SIZE - 2), pos + Vector2(TILE_SIZE - 2, TILE_SIZE - 2 - corner_size), marker_color, 2.0)
-	
-	# Central landing light (pulsing effect via color variation based on position hash)
-	var pulse_factor = 0.7 + 0.3 * sin(hash_val * 0.5)
-	var center_light_color = marker_color * pulse_factor
-	center_light_color.a = 0.8
-	draw_circle(pos + Vector2(TILE_SIZE / 2, TILE_SIZE / 2), 4, center_light_color)
-
-
-## Planet-specific extraction zone - alien beacon/portal aesthetic
-func _draw_planet_extraction(rect: Rect2, hash_val: int) -> void:
-	var pos = rect.position
-	
-	# Dark alien ground base
-	draw_rect(rect, Color(0.10, 0.15, 0.16))
-	
-	# Teal extraction zone base
-	var inner_rect = Rect2(pos.x + 2, pos.y + 2, TILE_SIZE - 4, TILE_SIZE - 4)
-	draw_rect(inner_rect, current_theme["extraction"])
-	
-	# Glowing center - brighter teal
-	var glow_rect = Rect2(pos.x + 6, pos.y + 6, TILE_SIZE - 12, TILE_SIZE - 12)
-	draw_rect(glow_rect, current_theme["extraction_glow"])
-	
-	# Alien energy pattern (circular rings instead of grid)
-	var marker_color = current_theme["extraction_marker"]
-	var center = pos + Vector2(TILE_SIZE / 2, TILE_SIZE / 2)
-	
-	# Outer ring
-	for i in range(16):
-		var angle = (float(i) / 16.0) * TAU
-		var next_angle = (float(i + 1) / 16.0) * TAU
-		var p1 = center + Vector2(cos(angle) * 12, sin(angle) * 12)
-		var p2 = center + Vector2(cos(next_angle) * 12, sin(next_angle) * 12)
-		draw_line(p1, p2, marker_color.darkened(0.2), 1.5)
-	
-	# Inner ring (brighter)
-	for i in range(12):
-		var angle = (float(i) / 12.0) * TAU
-		var next_angle = (float(i + 1) / 12.0) * TAU
-		var p1 = center + Vector2(cos(angle) * 8, sin(angle) * 8)
-		var p2 = center + Vector2(cos(next_angle) * 8, sin(next_angle) * 8)
-		draw_line(p1, p2, marker_color, 2.0)
-	
-	# Corner alien glyphs/markers
-	var corner_offset = 4
-	var glyph_size = 6
-	
-	# Top-left - alien symbol
-	draw_line(pos + Vector2(corner_offset, corner_offset), pos + Vector2(corner_offset + glyph_size, corner_offset), marker_color, 2.0)
-	draw_line(pos + Vector2(corner_offset, corner_offset), pos + Vector2(corner_offset, corner_offset + glyph_size), marker_color, 2.0)
-	draw_circle(pos + Vector2(corner_offset + 2, corner_offset + 2), 2, marker_color)
-	
-	# Top-right
-	draw_line(pos + Vector2(TILE_SIZE - corner_offset, corner_offset), pos + Vector2(TILE_SIZE - corner_offset - glyph_size, corner_offset), marker_color, 2.0)
-	draw_line(pos + Vector2(TILE_SIZE - corner_offset, corner_offset), pos + Vector2(TILE_SIZE - corner_offset, corner_offset + glyph_size), marker_color, 2.0)
-	
-	# Bottom-left
-	draw_line(pos + Vector2(corner_offset, TILE_SIZE - corner_offset), pos + Vector2(corner_offset + glyph_size, TILE_SIZE - corner_offset), marker_color, 2.0)
-	draw_line(pos + Vector2(corner_offset, TILE_SIZE - corner_offset), pos + Vector2(corner_offset, TILE_SIZE - corner_offset - glyph_size), marker_color, 2.0)
-	
-	# Bottom-right
-	draw_line(pos + Vector2(TILE_SIZE - corner_offset, TILE_SIZE - corner_offset), pos + Vector2(TILE_SIZE - corner_offset - glyph_size, TILE_SIZE - corner_offset), marker_color, 2.0)
-	draw_line(pos + Vector2(TILE_SIZE - corner_offset, TILE_SIZE - corner_offset), pos + Vector2(TILE_SIZE - corner_offset, TILE_SIZE - corner_offset - glyph_size), marker_color, 2.0)
-	
-	# Central beacon glow (alien portal effect)
-	var pulse_factor = 0.6 + 0.4 * sin(hash_val * 0.4)
-	var beacon_color = marker_color * pulse_factor
-	beacon_color.a = 0.9
-	draw_circle(center, 5, beacon_color)
-	draw_circle(center, 3, Color(0.9, 1.0, 0.95, 0.8))  # Bright white-cyan core
-
-
-## Draw cover object with biome-specific appearance
-func _draw_cover_tile(rect: Rect2, hash_val: int) -> void:
-	# Validate theme
-	if current_theme.is_empty():
-		print("DEBUG_COVER: current_theme is empty!")
-		return
-	
-	# Floor underneath
-	draw_rect(rect, current_theme["floor_base"])
-	
-	# Draw a consistent 'base' or 'foundation' for the cover
-	var base_rect = Rect2(rect.position.x + 4, rect.position.y + 4, TILE_SIZE - 8, TILE_SIZE - 8)
-	var base_color: Color
-	
-	match current_biome:
-		BiomeConfig.BiomeType.STATION:
-			base_color = current_theme.get("wall_shadow", Color(0.12, 0.14, 0.18))
-		BiomeConfig.BiomeType.ASTEROID:
-			base_color = current_theme.get("floor_accent", Color(0.12, 0.1, 0.08, 0.6))
-		BiomeConfig.BiomeType.PLANET:
-			base_color = current_theme.get("floor_accent", Color(0.08, 0.12, 0.06, 0.6))
-	
-	draw_rect(base_rect, base_color)
-	
-	# Draw biome-specific cover object
-	var center = rect.position + Vector2(TILE_SIZE / 2, TILE_SIZE / 2)
-	
-	match current_biome:
-		BiomeConfig.BiomeType.STATION:
-			_draw_station_cover(center, hash_val)
-		BiomeConfig.BiomeType.ASTEROID:
-			_draw_asteroid_cover(center, hash_val)
-		BiomeConfig.BiomeType.PLANET:
-			_draw_planet_cover(center, hash_val)
-
-
-## Draw detailed station wall decorations
-func _draw_station_wall_details(rect: Rect2, hash_val: int, _above: bool, _below: bool, _left: bool, _right: bool) -> void:
-	var pos = rect.position
-	var panel_color = current_theme.get("wall_panel", Color(0.18, 0.22, 0.28))
-	var highlight_color = current_theme["wall_highlight"]
-	var shadow_color = current_theme["wall_shadow"]
-	var accent_color = current_theme.get("accent_glow", Color(0.2, 0.8, 0.9, 0.8))
-	var accent_dim = current_theme.get("accent_dim", Color(0.15, 0.5, 0.6, 0.5))
-	
-	# Rivets on exposed edges
-	if not _left:
-		draw_circle(pos + Vector2(6, 8), 2, shadow_color)
-		draw_circle(pos + Vector2(6, 24), 2, shadow_color)
-		# Rivet highlights
-		draw_circle(pos + Vector2(5.5, 7.5), 1, highlight_color.darkened(0.3))
-		draw_circle(pos + Vector2(5.5, 23.5), 1, highlight_color.darkened(0.3))
-	
-	if not _right:
-		draw_circle(pos + Vector2(26, 8), 2, shadow_color)
-		draw_circle(pos + Vector2(26, 24), 2, shadow_color)
-	
-	# Wall panel details based on hash
-	if hash_val % 6 == 0:
-		# Recessed panel
-		var panel_rect = Rect2(pos.x + 6, pos.y + 6, 20, 20)
-		draw_rect(panel_rect, panel_color)
-		draw_line(pos + Vector2(6, 6), pos + Vector2(26, 6), shadow_color, 1.0)
-		draw_line(pos + Vector2(6, 6), pos + Vector2(6, 26), shadow_color, 1.0)
-		draw_line(pos + Vector2(26, 6), pos + Vector2(26, 26), highlight_color.darkened(0.4), 1.0)
-		draw_line(pos + Vector2(6, 26), pos + Vector2(26, 26), highlight_color.darkened(0.4), 1.0)
-	
-	elif hash_val % 6 == 1:
-		# Vertical pipe
-		var pipe_x = pos.x + 10 + (hash_val % 8)
-		draw_rect(Rect2(pipe_x - 2, pos.y, 4, TILE_SIZE), shadow_color)
-		draw_line(Vector2(pipe_x - 2, pos.y), Vector2(pipe_x - 2, pos.y + TILE_SIZE), highlight_color.darkened(0.3), 1.0)
-	
-	elif hash_val % 6 == 2:
-		# Horizontal vent/grate
-		var vent_color = shadow_color.lightened(0.1)
-		for i in range(5):
-			var y_off = 4 + i * 5
-			draw_line(pos + Vector2(6, y_off), pos + Vector2(26, y_off), vent_color, 2.0)
-	
-	elif hash_val % 6 == 3 and not _above:
-		# Cyan accent light strip at top
-		draw_rect(Rect2(pos.x + 4, pos.y + 2, 24, 3), accent_color)
-		# Glow effect
-		draw_rect(Rect2(pos.x + 2, pos.y + 1, 28, 5), accent_dim)
-	
-	elif hash_val % 6 == 4:
-		# Terminal/control panel
-		var terminal_rect = Rect2(pos.x + 8, pos.y + 8, 16, 12)
-		draw_rect(terminal_rect, Color(0.05, 0.08, 0.12))
-		# Screen
-		draw_rect(Rect2(pos.x + 10, pos.y + 10, 12, 6), accent_dim)
-		# Buttons below screen
-		draw_circle(pos + Vector2(12, 22), 2, Color(0.8, 0.2, 0.2, 0.8))  # Red button
-		draw_circle(pos + Vector2(20, 22), 2, Color(0.2, 0.8, 0.3, 0.8))  # Green button
-	
-	elif hash_val % 6 == 5:
-		# Warning stripes (hazard marking)
-		var stripe_color = Color(0.7, 0.6, 0.1, 0.6)
-		for i in range(4):
-			var start_x = pos.x + i * 8
-			draw_line(Vector2(start_x, pos.y + 4), Vector2(start_x + 6, pos.y + 28), stripe_color, 2.0)
-
-
-func _draw_station_cover(center: Vector2, hash_val: int) -> void:
-	# Machinery / Crate theme - Unified look
-	var main_color = current_theme["cover_main"]
-	var dark_color = current_theme["cover_dark"]
-	var light_color = current_theme["cover_light"]
-	var outline_color = Color(0.02, 0.02, 0.04)
-	
-	# Draw a structured machinery/crate object
-	# Base machinery block
-	var body: PackedVector2Array = [
-		center + Vector2(-10, -8),
-		center + Vector2(10, -8),
-		center + Vector2(10, 10),
-		center + Vector2(-10, 10)
-	]
-	draw_polygon(body, [main_color])
-	
-	# Top plate
-	var top: PackedVector2Array = [
-		center + Vector2(-10, -8),
-		center + Vector2(10, -8),
-		center + Vector2(8, -5),
-		center + Vector2(-8, -5)
-	]
-	draw_polygon(top, [light_color])
-	
-	# Panel details (machinery look)
-	draw_rect(Rect2(center.x - 7, center.y - 2, 14, 8), dark_color)
-	draw_line(center + Vector2(-10, -8), center + Vector2(10, -8), outline_color, 1.0)
-	draw_line(center + Vector2(-10, 10), center + Vector2(10, 10), outline_color, 1.0)
-	
-	# Small accent light if hash allows
-	if hash_val % 4 == 0:
-		var accent = current_theme.get("accent_glow", Color(0.3, 0.9, 1.0))
-		draw_circle(center + Vector2(4, 2), 2, accent)
-	
-	# Military markings
-	draw_rect(Rect2(center.x - 4, center.y + 1, 8, 2), Color(0.9, 0.8, 0.2, 0.8))
-
-
-func _draw_asteroid_cover(center: Vector2, hash_val: int) -> void:
-	# Structured rock formation
-	var rock_color = current_theme["cover_main"]
-	var rock_dark = current_theme["cover_dark"]
-	var rock_light = current_theme["cover_light"]
-	
-	# Main rocky pillar
-	var points: PackedVector2Array = [
-		center + Vector2(-8, 10),
-		center + Vector2(-10, 0),
-		center + Vector2(-4, -8),
-		center + Vector2(6, -10),
-		center + Vector2(10, 4),
-		center + Vector2(8, 10)
-	]
-	draw_polygon(points, [rock_color])
-	
-	# Cracks and highlights
-	draw_line(center + Vector2(-4, -8), center + Vector2(0, 2), rock_dark, 1.5)
-	draw_line(center + Vector2(-10, 0), center + Vector2(-4, -8), rock_light, 2.0)
-	
-	# Accent mineral
-	if hash_val % 3 == 0:
-		draw_circle(center + Vector2(3, -2), 3, Color(0.3, 0.5, 0.8, 0.4))
-
-
-func _draw_planet_cover(center: Vector2, hash_val: int) -> void:
-	# Tree / Foliage theme
-	var foliage_color = current_theme.get("cover_main", Color(0.35, 0.55, 0.58))
-	var foliage_dark = current_theme.get("cover_dark", Color(0.22, 0.38, 0.42))
-	var stem_color = current_theme.get("cover_stem", Color(0.45, 0.40, 0.35))
-	var biolum_yellow = current_theme.get("biolum_yellow", Color(1.0, 0.85, 0.30, 0.85))
-	
-	# Unified Tree formation
-	# Central Stem
-	draw_rect(Rect2(center.x - 3, center.y - 2, 6, 11), stem_color)
-	
-	# Foliage Canopy (more uniform)
-	var canopy: PackedVector2Array = [
-		center + Vector2(-12, 0),
-		center + Vector2(-10, -8),
-		center + Vector2(0, -14),
-		center + Vector2(10, -8),
-		center + Vector2(12, 0),
-		center + Vector2(0, 2)
-	]
-	draw_polygon(canopy, [foliage_color])
-	
-	# Canopy detail/shadow
-	draw_line(center + Vector2(-12, 0), center + Vector2(12, 0), foliage_dark, 2.0)
-	
-	# Bioluminescent spots
-	draw_circle(center + Vector2(-4, -6), 2, biolum_yellow)
-	draw_circle(center + Vector2(5, -4), 1.5, biolum_yellow)
-	
-	# Small companion shrub
-	draw_circle(center + Vector2(8, 6), 4, foliage_dark)
-
+## All tile drawing helpers have moved to map_static_layer.gd.
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Handle mouse movement for hover effects

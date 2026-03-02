@@ -115,6 +115,7 @@ var star_map_generator: StarMapGenerator = null
 var _is_jump_animating: bool = false  # Track if jump animation is in progress
 var _suppress_fuel_warning: bool = false  # Track if player dismissed fuel warning
 var _waiting_wormhole_enter: bool = false  # True when at wormhole entrance, waiting for ENTER WORMHOLE or jump
+var _waiting_trading_outpost_enter: bool = false  # True when at trading outpost, waiting for ENTER TRADING OUTPOST
 var _open_market: Control = null  # Tracks the live market menu instance for hotkey toggling
 
 
@@ -209,6 +210,7 @@ func _connect_signals() -> void:
 	management_hud.deploy_pressed.connect(_on_deploy_pressed)
 	management_hud.surrender_pressed.connect(_on_surrender_pressed)
 	management_hud.center_view_pressed.connect(_on_center_view_pressed)
+	management_hud.enter_trading_outpost_pressed.connect(_on_enter_trading_outpost_pressed)
 	barracks_menu.closed.connect(_on_barracks_menu_closed)
 	GameState.game_over.connect(_on_game_over)
 	GameState.game_won.connect(_on_game_won)
@@ -227,6 +229,18 @@ func _initialize_star_map() -> void:
 	if star_map.node_clicked.is_connected(_on_node_clicked):
 		star_map.node_clicked.disconnect(_on_node_clicked)
 	star_map.node_clicked.connect(_on_node_clicked)
+
+	if star_map.wormhole_destination_selected.is_connected(_on_wormhole_destination_selected):
+		star_map.wormhole_destination_selected.disconnect(_on_wormhole_destination_selected)
+	star_map.wormhole_destination_selected.connect(_on_wormhole_destination_selected)
+
+	if star_map.wormhole_select_cancelled.is_connected(_on_wormhole_select_cancelled):
+		star_map.wormhole_select_cancelled.disconnect(_on_wormhole_select_cancelled)
+	star_map.wormhole_select_cancelled.connect(_on_wormhole_select_cancelled)
+
+	if management_hud.wormhole_cancel_pressed.is_connected(_on_management_wormhole_cancel):
+		management_hud.wormhole_cancel_pressed.disconnect(_on_management_wormhole_cancel)
+	management_hud.wormhole_cancel_pressed.connect(_on_management_wormhole_cancel)
 
 
 	# Ensure voyage manager is ready
@@ -255,9 +269,10 @@ func _on_node_clicked(node_data: NodeData) -> void:
 		# Allow re-entry logic
 		var node_type = node_data.node_type
 		if node_type == EventManager.NodeType.WORMHOLE:
-			# Destination wormholes (arrow tip): no scene, you arrived here via teleport
-			if not VoyageManager.is_wormhole_destination(current_node_id):
-				_show_wormhole_scene()
+			_show_wormhole_scene()
+			return
+		if node_type == EventManager.NodeType.TRADING_OUTPOST:
+			_show_trading_outpost_scene()
 			return
 
 	# Get fuel cost for this jump
@@ -275,21 +290,21 @@ func _on_node_clicked(node_data: NodeData) -> void:
 			# Start ship jump animation, then execute jump when animation completes
 			_execute_jump_with_animation(node_data, fuel_cost)
 	else:
-		# Attempt direct travel to visited nodes
-		# We check if a path exists first (VoyageManager.attempt_direct_travel does this too, but we can checks here for UX)
-		# Just call it directly, let VoyageManager handle validation
-		
-		# For direct travel, we want speed boost (1.25x faster than normal hopping? Or just faster?)
-		# User requested 25% faster.
-		# Note: attempt_direct_travel default speed_mult is 1.25.
-		
-		# Check if target is visited
-		if node_data.state == NodeData.NodeState.UNVISITED:
-			# Can't jump directly to unvisited non-neighbors
-			# (This case shouldn't be reachable via click usually unless we allow clicking deep into fog, but logic handles it)
+		# Auto-travel: hop along the shortest path to a visited node
+		var is_visited = node_data.state == NodeData.NodeState.VISITED or node_data.state == NodeData.NodeState.CLEARED
+		if not is_visited:
 			return
-
-		_execute_direct_travel(node_data)
+		var path = VoyageManager.find_path(VoyageManager.current_node_id, node_data.id)
+		if path.size() < 2:
+			return
+		if GameState.fuel < fuel_cost and not _suppress_fuel_warning:
+			_show_fuel_warning_auto_travel(path, fuel_cost)
+		else:
+			_execute_auto_travel(path)
+		# -- Original fast travel code preserved below (disabled) --
+		# if node_data.state == NodeData.NodeState.UNVISITED:
+		# 	return
+		# _execute_direct_travel(node_data)
 
 
 ## Show fuel warning dialog when player doesn't have enough fuel for the jump
@@ -314,6 +329,26 @@ func _show_fuel_warning(node_data: NodeData, fuel_cost: int) -> void:
 	)
 
 
+func _show_fuel_warning_auto_travel(path: Array[NodeData], fuel_cost: int) -> void:
+	var hull_loss = VoyageManager.HULL_DAMAGE_NO_FUEL
+
+	var dialog_scene = load("res://scenes/ui/fuel_warning_dialog.tscn")
+	var dialog = dialog_scene.instantiate()
+	$DialogLayer.add_child(dialog)
+
+	dialog.setup(hull_loss)
+	dialog.show_dialog()
+
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "menu_open")
+
+	dialog.confirmed.connect(func(suppress_warning: bool):
+		if suppress_warning:
+			_suppress_fuel_warning = true
+		_execute_auto_travel(path)
+	)
+
+
 ## Execute jump with ship animation
 func _execute_jump_with_animation(node_data: NodeData, _fuel_cost: int) -> void:
 	# Capture visited state BEFORE jump attempt changes it.
@@ -322,6 +357,10 @@ func _execute_jump_with_animation(node_data: NodeData, _fuel_cost: int) -> void:
 	
 	# Set flag to prevent multiple clicks during animation
 	_is_jump_animating = true
+	_waiting_wormhole_enter = false
+	_waiting_trading_outpost_enter = false
+	management_hud.set_enter_wormhole_button_active(false)
+	management_hud.set_enter_trading_outpost_button_active(false)
 	management_hud.set_deploy_active(false)
 	management_hud.set_surrender_active(false)
 	
@@ -420,11 +459,85 @@ func _execute_direct_travel(target_node: NodeData) -> void:
 		_update_deploy_button_visibility()
 
 
+## Auto-travel: hop along a pre-computed path one node at a time.
+## Camera pans smoothly to the destination; ship animates at 40% speed off-camera.
+## If starting in drift mode (fuel=0), all hops continue with hull damage.
+## If starting with fuel, stops as soon as fuel hits 0 mid-path.
+func _execute_auto_travel(path: Array[NodeData]) -> void:
+	var destination = path[path.size() - 1]
+
+	# Pan camera to destination at the same pace as raider/story node reveal (1.5s)
+	star_map.pan_to_world_pos(destination.position, 1.5)
+	star_map._suppress_camera_follow = true
+
+	var started_in_drift = GameState.fuel <= 0
+	for i in range(1, path.size()):
+		var hop_node = path[i]
+
+		# Stop mid-path only if we started with fuel and have now run out
+		if not started_in_drift and GameState.fuel <= 0:
+			break
+
+		_is_jump_animating = true
+		management_hud.set_deploy_active(false)
+		management_hud.set_surrender_active(false)
+		_waiting_wormhole_enter = false
+		_waiting_trading_outpost_enter = false
+		management_hud.set_enter_wormhole_button_active(false)
+		management_hud.set_enter_trading_outpost_button_active(false)
+
+		# Jump at 40% duration (2.5× speed multiplier)
+		var success = VoyageManager.attempt_jump(hop_node, 2.5)
+		if not success:
+			_is_jump_animating = false
+			break
+
+		await star_map.jump_animation_complete
+
+		VoyageManager.begin_player_jump_processing()
+		var raider_jumps = VoyageManager.get_raider_jumps_per_turn()
+		for j in range(raider_jumps):
+			if j > 0:
+				VoyageManager._raider_turn_index = 0
+			for ri in range(VoyageManager.raider_node_ids.size()):
+				var raider_moved = VoyageManager.process_raider_turn()
+				if raider_moved:
+					await star_map.raider_animation_complete
+				if VoyageManager.raider_ambush_triggered:
+					break
+			if VoyageManager.raider_ambush_triggered:
+				break
+
+		_is_jump_animating = false
+
+		if current_phase == GamePhase.GAME_WON or current_phase == GamePhase.GAME_OVER:
+			star_map._suppress_camera_follow = false
+			star_map._input_locked = false
+			return
+
+		GameState.save_game()
+
+		# Raider ambush or final hop — restore camera follow, hand off to post-jump
+		var is_last_hop = (i == path.size() - 1)
+		if VoyageManager.is_any_raider_on_player_node() or is_last_hop:
+			star_map._suppress_camera_follow = false
+			star_map._input_locked = false
+			star_map.center_view_on_ship(true)
+			_process_node_after_jump(hop_node, true)
+			return
+
+	# Stopped early (ran out of fuel) — restore camera follow
+	star_map._suppress_camera_follow = false
+	star_map._input_locked = false
+	star_map.center_view_on_ship(true)
+
+
 func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) -> void:
 	# Check for raider ambush first
 	if VoyageManager.is_any_raider_on_player_node():
 		_pending_ambush_raider_id = VoyageManager.get_ambushing_raider_id()
 		_waiting_wormhole_enter = false
+		_waiting_trading_outpost_enter = false
 		_show_raider_ambush_scene()
 		return
 	
@@ -433,14 +546,14 @@ func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) ->
 	pending_biome_type = node_data.biome_type
 	
 	match pending_node_type:
-		EventManager.NodeType.SCAVENGE_SITE:
+		EventManager.NodeType.SCAVENGE_SITE, EventManager.NodeType.ABANDONED_STATION:
 			if was_visited and node_data.state != NodeData.NodeState.STORY:
 				if node_data.state == NodeData.NodeState.STORY or node_data.state != NodeData.NodeState.CLEARED:
 					management_hud.set_deploy_active(true)
 				else:
 					management_hud.set_deploy_active(false)
 				return
-			
+
 			# Show mission scene first, then team selection
 			current_phase = GamePhase.EVENT_DISPLAY
 			if node_data.state == NodeData.NodeState.STORY:
@@ -455,21 +568,19 @@ func _process_node_after_jump(node_data: NodeData, was_visited: bool = false) ->
 					_on_mission_scene_dismissed()
 
 		EventManager.NodeType.WORMHOLE:
-			# Destination wormholes: arrived via teleport, no scene - go straight to IDLE
-			if VoyageManager.is_wormhole_destination(node_data.id):
-				current_phase = GamePhase.IDLE
-				_update_deploy_button_visibility()
-			else:
-				_show_wormhole_scene()
+			_show_wormhole_scene()
+
+		EventManager.NodeType.TRADING_OUTPOST:
+			_show_trading_outpost_scene()
 
 		# Outpost logic removed (deprecated)
 
 		_:
 			if was_visited:
 				return
-			
-			# Empty space - roll random event
-			_trigger_random_event()
+
+			# Empty space - random events disabled for waypoints
+			# _trigger_random_event()
 
 
 func _trigger_random_event() -> void:
@@ -577,10 +688,10 @@ func _on_team_selected(officer_keys: Array[String], objectives: Array[MissionObj
 	_pending_officer_keys.clear()
 	_pending_objectives.clear()
 	
-	# Start tactical music if this is a scavenger mission
-	if pending_node_type == EventManager.NodeType.SCAVENGE_SITE:
+	# Start tactical music if this is a scavenger or abandoned station mission
+	if pending_node_type == EventManager.NodeType.SCAVENGE_SITE or pending_node_type == EventManager.NodeType.ABANDONED_STATION:
 		MusicManager.play_tactical_music()
-	
+
 	# Wait a frame to ensure map generation and rendering catch up before fading in
 	await get_tree().process_frame
 	
@@ -622,8 +733,8 @@ func _on_mission_scene_dismissed() -> void:
 		_pending_officer_keys.clear()
 		_pending_objectives.clear()
 		
-		# Start tactical music if this is a scavenger mission
-		if pending_node_type == EventManager.NodeType.SCAVENGE_SITE:
+		# Start tactical music if this is a scavenger or abandoned station mission
+		if pending_node_type == EventManager.NodeType.SCAVENGE_SITE or pending_node_type == EventManager.NodeType.ABANDONED_STATION:
 			MusicManager.play_tactical_music()
 	else:
 		# New flow - show deploy button after scene
@@ -637,12 +748,10 @@ func _on_deploy_pressed() -> void:
 	var raider_on_node = VoyageManager.is_any_raider_on_player_node()
 	if raider_on_node:
 		_waiting_wormhole_enter = false  # Clear stale state
+		_waiting_trading_outpost_enter = false  # Clear stale state
 
 	if _waiting_wormhole_enter:
-		_execute_wormhole_teleport()
-		# We land on destination wormhole - hide button (entrance-only)
-		_waiting_wormhole_enter = false
-		management_hud.set_enter_wormhole_button_active(false)
+		_enter_wormhole_select_mode()
 		return
 
 	if current_phase != GamePhase.IDLE and current_phase != GamePhase.EVENT_DISPLAY:
@@ -680,12 +789,15 @@ func _transition_to_team_select() -> void:
 	
 	# Check if this is a raider ambush
 	var is_raider_ambush = VoyageManager.is_any_raider_on_player_node()
-	barracks_menu.show_team_select(pending_biome_type, is_raider_ambush)
+	barracks_menu.show_team_select(pending_biome_type, is_raider_ambush, pending_node_type)
 
 
 func _on_mission_complete(success: bool, stats: Dictionary) -> void:
 	# Stop tactical music when leaving tactical mode
 	MusicManager.stop_music()
+
+	# Clear selected team so the next mission starts with a fresh roster
+	barracks_menu.selected_officers.clear()
 
 	# Fade to black, then transition back to management mode
 	await _fade_out(0.6)
@@ -719,8 +831,9 @@ func _on_mission_complete(success: bool, stats: Dictionary) -> void:
 			VoyageManager.message_log_added.emit("Raider bounty claimed: 50 CR")
 		_pending_raider_clear = true
 		_pending_raider_success = success
-	elif success and pending_node_type == EventManager.NodeType.SCAVENGE_SITE:
+	elif (pending_node_type == EventManager.NodeType.SCAVENGE_SITE and success) or pending_node_type == EventManager.NodeType.ABANDONED_STATION:
 		# Normal mission: handle story completion and mark node CLEARED
+		# Abandoned Station always clears (success, failure, or abandon)
 		var current_node = VoyageManager.get_current_node()
 		if current_node:
 			if current_node.state == NodeData.NodeState.STORY:
@@ -992,6 +1105,11 @@ func _on_restart_pressed() -> void:
 	_suppress_fuel_warning = false
 	_waiting_wormhole_enter = false
 	management_hud.set_enter_wormhole_button_active(false)
+	_waiting_trading_outpost_enter = false
+	management_hud.set_enter_trading_outpost_button_active(false)
+	
+	# Clear team selection in case of restart
+	barracks_menu.selected_officers.clear()
 	
 	# Ensure management UI is visible
 	management_layer.visible = true
@@ -1013,18 +1131,111 @@ func _on_restart_pressed() -> void:
 	_show_voyage_intro()
 
 
-## Arrive at wormhole entrance - go straight to ENTER WORMHOLE button (no scene)
+## Arrive at any wormhole - show ENTER WORMHOLE button (all wormholes are bidirectional)
 func _show_wormhole_scene() -> void:
 	current_phase = GamePhase.IDLE
 	var raider_on_node = VoyageManager.is_any_raider_on_player_node()
-	var is_destination = VoyageManager.is_wormhole_destination(VoyageManager.current_node_id)
-	if raider_on_node or is_destination:
+	if raider_on_node:
 		_waiting_wormhole_enter = false
 		_update_deploy_button_visibility()
 	else:
 		_waiting_wormhole_enter = true
 		management_hud.set_enter_wormhole_button_active(true)
 		TutorialManager.request_tutorial("wormholes")
+
+
+## Arrive at trading outpost - show ENTER TRADING OUTPOST button
+func _show_trading_outpost_scene() -> void:
+	current_phase = GamePhase.IDLE
+	var raider_on_node = VoyageManager.is_any_raider_on_player_node()
+	if raider_on_node:
+		_waiting_trading_outpost_enter = false
+		_update_deploy_button_visibility()
+	else:
+		_waiting_trading_outpost_enter = true
+		management_hud.set_enter_trading_outpost_button_active(true)
+
+
+## Handle ENTER TRADING OUTPOST button press
+func _on_enter_trading_outpost_pressed() -> void:
+	if not _waiting_trading_outpost_enter:
+		return
+	_waiting_trading_outpost_enter = false
+	management_hud.set_enter_trading_outpost_button_active(false)
+	current_phase = GamePhase.TRADING
+	var market_scene = load("res://scenes/ui/market_menu.tscn")
+	var market = market_scene.instantiate()
+	$DialogLayer.add_child(market)
+	_open_market = market
+	market.closed.connect(_on_trading_outpost_closed)
+
+
+func _on_trading_outpost_closed() -> void:
+	_open_market = null
+	current_phase = GamePhase.IDLE
+	star_map.refresh()
+	# Re-show the ENTER TRADING OUTPOST button (player can trade again)
+	_waiting_trading_outpost_enter = true
+	management_hud.set_enter_trading_outpost_button_active(true)
+
+
+## Enter wormhole selection mode. Always activates so the player can cancel if no destinations.
+func _enter_wormhole_select_mode() -> void:
+	var eligible = VoyageManager.get_visited_wormhole_nodes(VoyageManager.current_node_id)
+	management_hud.set_enter_wormhole_button_active(false)
+	management_hud.set_wormhole_cancel_mode(true)
+	management_hud.set_wormhole_select_panel_visible(true)
+	var eligible_ids: Array[String] = []
+	for n in eligible:
+		eligible_ids.append(n.id)
+	star_map.begin_wormhole_select_mode(eligible_ids)
+
+
+## Called when player picks a destination wormhole node on the map.
+func _on_wormhole_destination_selected(destination: NodeData) -> void:
+	_execute_wormhole_teleport_to(destination)
+
+
+## Called when player cancels wormhole selection via Escape key (star_map emits this
+## AFTER it has already called end_wormhole_select_mode internally).
+func _on_wormhole_select_cancelled() -> void:
+	management_hud.set_wormhole_cancel_mode(false)
+	management_hud.set_wormhole_select_panel_visible(false)
+	management_hud.set_enter_wormhole_button_active(true)
+
+
+## Called when player presses the CANCEL button in the management HUD during selection mode.
+func _on_management_wormhole_cancel() -> void:
+	star_map.end_wormhole_select_mode()
+	management_hud.set_wormhole_cancel_mode(false)
+	management_hud.set_wormhole_select_panel_visible(false)
+	management_hud.set_enter_wormhole_button_active(true)
+
+
+## Teleport to a wormhole destination. Does NOT count as a jump (no raider move, no injury tick).
+func _execute_wormhole_teleport_to(arrival_node: NodeData) -> void:
+	_is_jump_animating = true
+	_waiting_wormhole_enter = false
+	management_hud.set_wormhole_cancel_mode(false)
+	management_hud.set_wormhole_select_panel_visible(false)
+	management_hud.set_enter_wormhole_button_active(false)
+	management_hud.set_deploy_active(false)
+	management_hud.set_surrender_active(false)
+
+	VoyageManager.current_node_id = arrival_node.id
+	VoyageManager.ship_teleported.emit(arrival_node.position, arrival_node)
+	VoyageManager.map_updated.emit()
+
+	if SFXManager:
+		SFXManager.play_sfx_by_name("ui", "outpost_arrival")
+
+	VoyageManager.message_log_added.emit("Wormhole transport successful.")
+
+	# Wait for animation then show arrival options (wormhole can be used again from destination)
+	await star_map.jump_animation_complete
+	_is_jump_animating = false
+	GameState.save_game()
+	_show_wormhole_scene()
 
 
 ## Execute wormhole teleport
@@ -1278,8 +1489,20 @@ func _update_deploy_button_visibility() -> void:
 	elif _waiting_wormhole_enter and (not current_node or current_node.node_type != EventManager.NodeType.WORMHOLE):
 		_waiting_wormhole_enter = false
 		management_hud.set_enter_wormhole_button_active(false)
+	# Raider takes priority over trading outpost button too
+	if _waiting_trading_outpost_enter and raider_on_node:
+		_waiting_trading_outpost_enter = false
+		management_hud.set_enter_trading_outpost_button_active(false)
+	# Clear trading outpost button state when we're no longer at a trading outpost
+	elif _waiting_trading_outpost_enter and (not current_node or current_node.node_type != EventManager.NodeType.TRADING_OUTPOST):
+		_waiting_trading_outpost_enter = false
+		management_hud.set_enter_trading_outpost_button_active(false)
 	# Don't overwrite ENTER WORMHOLE button when at wormhole (no raider) and waiting for choice
 	if _waiting_wormhole_enter:
+		management_hud.set_surrender_visible(false)
+		return
+	# Don't overwrite ENTER TRADING OUTPOST button when at outpost (no raider) and waiting for choice
+	if _waiting_trading_outpost_enter:
 		management_hud.set_surrender_visible(false)
 		return
 	if not current_node:
@@ -1300,14 +1523,18 @@ func _update_deploy_button_visibility() -> void:
 		management_hud.set_deploy_active(true)
 		management_hud.set_surrender_visible(true)
 		management_hud.set_surrender_active(true)
-	elif current_node.node_type == EventManager.NodeType.WORMHOLE and not VoyageManager.is_wormhole_destination(current_node.id):
-		# Show ENTER WORMHOLE at entrances and unpaired wormholes; NOT at destinations (arrow tip)
+	elif current_node.node_type == EventManager.NodeType.WORMHOLE:
 		_waiting_wormhole_enter = true
 		management_hud.set_enter_wormhole_button_active(true)
 		management_hud.set_surrender_visible(false)
 		management_hud.set_surrender_active(false)
-	elif current_node.node_type == EventManager.NodeType.SCAVENGE_SITE and current_node.state != NodeData.NodeState.CLEARED:
-		# Ensure pending state is set for normal scavenge sites too
+	elif current_node.node_type == EventManager.NodeType.TRADING_OUTPOST:
+		_waiting_trading_outpost_enter = true
+		management_hud.set_enter_trading_outpost_button_active(true)
+		management_hud.set_surrender_visible(false)
+		management_hud.set_surrender_active(false)
+	elif (current_node.node_type == EventManager.NodeType.SCAVENGE_SITE or current_node.node_type == EventManager.NodeType.ABANDONED_STATION) and current_node.state != NodeData.NodeState.CLEARED:
+		# Ensure pending state is set for normal scavenge sites and abandoned stations
 		pending_node_type = current_node.node_type
 		pending_biome_type = current_node.biome_type
 		management_hud.set_deploy_active(true)

@@ -13,7 +13,7 @@ signal closed
 @onready var close_button: Button = $PanelContainer/MarginContainer/VBoxContainer/CloseButton
 
 # Base prices
-const FUEL_PRICE: int = 15
+const FUEL_PRICE: int = 5
 const REPAIR_PRICE: int = 50
 const REPAIR_AMOUNT: int = 25
 
@@ -47,7 +47,7 @@ func update_ui() -> void:
 	
 	# Update button states based on affordability
 	if buy_fuel_button:
-		buy_fuel_button.disabled = GameState.cash < FUEL_PRICE
+		buy_fuel_button.disabled = GameState.cash < FUEL_PRICE or GameState.fuel >= GameState.MAX_FUEL
 	
 	if repair_hull_button:
 		# Can't repair if full health or not enough cash
@@ -55,7 +55,7 @@ func update_ui() -> void:
 
 
 func _on_buy_fuel_pressed() -> void:
-	if GameState.cash >= FUEL_PRICE:
+	if GameState.cash >= FUEL_PRICE and GameState.fuel < GameState.MAX_FUEL:
 		GameState.cash -= FUEL_PRICE
 		GameState.fuel += 1
 		if SFXManager:

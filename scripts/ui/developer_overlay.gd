@@ -17,6 +17,7 @@ const TOGGLES: Array = [
 	["RAIDER FAST RESPAWN (2 vs 10 jumps)", "dev_raider_fast"],
 	["RAIDER 1 JUMP PER TURN (vs 2)", "dev_raider_1_jump_per_turn"],
 	["WORMHOLE 4x SPAWN RATE", "dev_wormhole_4x"],
+	["ABANDONED STATION 4x SPAWN RATE", "dev_abandoned_station_4x"],
 	# Tactical
 	["STORY TACTICAL EASE (no boss, 1 enemy)", "dev_story_tactical_ease"],
 	["RAIDER AMBUSH TACTICAL EASE (no boss, 1 enemy)", "dev_raider_tactical_ease"],
@@ -30,9 +31,9 @@ const SECTION_HEADERS: Dictionary = {
 	0: "RESOURCES",
 	4: "PROGRESSION",
 	5: "VOYAGE",
-	8: "TACTICAL",
-	10: "SPAWN CAMERAS",
-	12: "RECAP",
+	9: "TACTICAL",
+	11: "SPAWN CAMERAS",
+	13: "RECAP",
 }
 
 # Colors matching game palette

@@ -30,6 +30,7 @@ var wormhole_pairs: Array[Array] = []  # Each is [exit_id, arrival_id] from tele
 
 # Raider State
 var raider_node_ids: Array[String] = []  # All active raider node IDs, up to MAX_RAIDERS
+var total_jumps_made: int = 0              # Total jumps made this voyage (for wormhole schedule)
 var jumps_since_raider_cleared: int = 0   # Jumps since ALL raiders were cleared (first spawn)
 var jumps_since_last_raider_spawn: int = 0 # Jumps since the last individual raider spawned
 var raider_ambush_triggered: bool = false  # True when a raider has landed on the player's node
@@ -37,8 +38,8 @@ var _raider_turn_index: int = 0            # Round-robin index for per-raider tu
 const MAX_RAIDERS: int = 3
 const RAIDER_RESPAWN_JUMPS: int = 10
 const RAIDER_RESPAWN_JUMPS_DEV: int = 2
-const RAIDER_SPAWN_DISTANCE_MIN: float = 2400.0
-const RAIDER_SPAWN_DISTANCE_MAX: float = 3600.0
+const RAIDER_SPAWN_DISTANCE_MIN: float = 1900.0
+const RAIDER_SPAWN_DISTANCE_MAX: float = 3100.0
 const RAIDER_DETECTION_RADIUS: float = 1200.0
 const RAIDER_JUMPS_PER_TURN: int = 2
 
@@ -132,10 +133,17 @@ func _initialize_voyage() -> void:
 	
 	for node in initial_nodes:
 		nodes[node.id] = node
-	
+
+	# Spawn the first wormhole in the initial cluster so it's reachable from the start node
+	if initial_nodes.size() > 0:
+		var wormhole_node = initial_nodes[0]
+		wormhole_node.node_type = EventManager.NodeType.WORMHOLE
+		wormhole_node.biome_type = -1
+
 	# Reset Raider and wormhole state on new voyage
 	wormhole_pairs.clear()
 	raider_node_ids.clear()
+	total_jumps_made = 0
 	jumps_since_raider_cleared = 0
 	jumps_since_last_raider_spawn = 0
 	raider_ambush_triggered = false
@@ -152,7 +160,7 @@ func _initialize_voyage() -> void:
 
 ## Move the ship to a target node
 ## Returns true if move was successful
-func attempt_jump(target_node: NodeData) -> bool:
+func attempt_jump(target_node: NodeData, speed_mult: float = 1.0) -> bool:
 	if is_voyage_complete:
 		message_log_added.emit("Voyage has ended. Navigation systems offline.")
 		return false
@@ -207,7 +215,7 @@ func attempt_jump(target_node: NodeData) -> bool:
 			_handle_arrival_generation(target_node, nodes[previous_node_id])
 
 	_try_spawn_story_node()
-	ship_moved.emit(target_node.position, target_node, 1.0)
+	ship_moved.emit(target_node.position, target_node, speed_mult)
 	map_updated.emit()
 
 	# Award 1 Intel only for new exploration - jumping to unvisited nodes or new story missions (capped at intel threshold)
@@ -231,6 +239,7 @@ func attempt_jump(target_node: NodeData) -> bool:
 ## Call exactly once after each player jump to update spawn counters and attempt spawning.
 ## Must be called before the process_raider_turn() loop.
 func begin_player_jump_processing() -> void:
+	total_jumps_made += 1
 	if raider_node_ids.is_empty():
 		jumps_since_raider_cleared += 1
 	jumps_since_last_raider_spawn += 1
@@ -422,6 +431,17 @@ func is_wormhole_destination(wormhole_id: String) -> bool:
 	return false
 
 
+## Returns all visited wormhole nodes, optionally excluding one (e.g. current node).
+func get_visited_wormhole_nodes(exclude_id: String = "") -> Array[NodeData]:
+	var result: Array[NodeData] = []
+	for node in nodes.values():
+		if node.node_type == EventManager.NodeType.WORMHOLE \
+				and node.state != NodeData.NodeState.UNVISITED \
+				and node.id != exclude_id:
+			result.append(node)
+	return result
+
+
 ## Get the paired wormhole ID for a given wormhole (the other end of the white pathline).
 ## Returns "" if this wormhole has no pair yet.
 func _get_paired_wormhole_id(wormhole_id: String) -> String:
@@ -442,15 +462,13 @@ func get_fuel_cost(target_node: NodeData) -> int:
 	if not current_node:
 		return FUEL_COST_PER_JUMP
 		
-	# Check if this is a traveled path (amber line)
-	if is_path_traveled(current_node, target_node):
-		return 0
-		
+	# Traveled paths (amber lines) cost 1 fuel, same as any other jump
+	
 	return FUEL_COST_PER_JUMP
 
 
 ## Check if a path between two nodes has been traveled (visited and connected)
-## Used for amber lines and 0 fuel cost
+## Used for amber lines visual display
 func is_path_traveled(node_a: NodeData, node_b: NodeData) -> bool:
 	if not node_a or not node_b:
 		return false
@@ -465,10 +483,10 @@ func is_path_traveled(node_a: NodeData, node_b: NodeData) -> bool:
 func _handle_arrival_generation(target_node: NodeData, previous_node: NodeData) -> void:
 	# Calculate direction vector
 	var incoming_vector = target_node.position - previous_node.position
-	
+
 	# Generate new options
 	var new_nodes = generator.generate_options(target_node, incoming_vector, -1, false, nodes)
-	
+
 	# Register and link new nodes
 	for node in new_nodes:
 		nodes[node.id] = node
@@ -596,11 +614,12 @@ func get_current_node() -> NodeData:
 		return nodes[current_node_id]
 	return null
 
-## Get all known/visible nodes
+## Get all known/visible nodes (excludes raider-owned spawn nodes — they are not part of the player map)
 func get_visible_nodes() -> Array[NodeData]:
 	var visible_nodes: Array[NodeData] = []
 	for id in nodes:
-		visible_nodes.append(nodes[id])
+		if not nodes[id].is_raider_node:
+			visible_nodes.append(nodes[id])
 	return visible_nodes
 
 ## Find a path between two nodes using Breadth-First Search
@@ -723,6 +742,7 @@ func get_save_data() -> Dictionary:
 			"parent": node.parent_id,
 			"new_earth": node.is_new_earth,
 			"is_story_node": node.is_story_node,
+			"is_raider_node": node.is_raider_node,
 			"campaign_mission_id": node.campaign_mission_id
 		}
 
@@ -734,6 +754,7 @@ func get_save_data() -> Dictionary:
 		"current_story_mission_id": current_story_mission_id,
 		"pending_branch_choice": pending_branch_choice,
 		"raider_node_ids": raider_node_ids,
+		"total_jumps_made": total_jumps_made,
 		"jumps_since_raider_cleared": jumps_since_raider_cleared,
 		"jumps_since_last_raider_spawn": jumps_since_last_raider_spawn
 	}
@@ -750,6 +771,7 @@ func load_save_data(data: Dictionary) -> void:
 	active_story_node_id = data.get("active_story_node_id", "")
 	current_story_mission_id = data.get("current_story_mission_id", "")
 	pending_branch_choice = data.get("pending_branch_choice", "")
+	total_jumps_made = data.get("total_jumps_made", 0)
 	jumps_since_raider_cleared = data.get("jumps_since_raider_cleared", 0)
 	jumps_since_last_raider_spawn = data.get("jumps_since_last_raider_spawn", 0)
 	raider_node_ids.clear()
@@ -778,6 +800,7 @@ func load_save_data(data: Dictionary) -> void:
 			node.parent_id = n_data.get("parent", "")
 			node.is_new_earth = n_data.get("new_earth", false)
 			node.is_story_node = n_data.get("is_story_node", false)
+			node.is_raider_node = n_data.get("is_raider_node", false)
 			node.campaign_mission_id = n_data.get("campaign_mission_id", "")
 
 			nodes[id] = node
@@ -815,10 +838,13 @@ func _rebuild_connections_from_structure() -> void:
 			if not node.id in nodes[node.parent_id].connections:
 				nodes[node.parent_id].connections.append(node.id)
 	
-	# Orphan nodes (no parent or start node): connect via proximity
+	# Orphan nodes (no parent or start node): connect via proximity.
+	# Raider-tagged nodes are excluded — they must never be connected to the
+	# player map graph. Without this, raider spawn nodes become orphans on
+	# load and get spurious proximity links, causing long lines on the star map.
 	var orphan_ids: Array[String] = []
 	for id in nodes:
-		if nodes[id].connections.is_empty():
+		if nodes[id].connections.is_empty() and not nodes[id].is_raider_node:
 			orphan_ids.append(id)
 	if orphan_ids.size() > 0:
 		_apply_proximity_connections_for_new_nodes(orphan_ids)
@@ -886,6 +912,7 @@ func _try_spawn_raider() -> void:
 	new_node.node_type = EventManager.NodeType.EMPTY_SPACE
 	new_node.biome_type = BiomeConfig.BiomeType.ASTEROID
 	new_node.difficulty_grade = NodeData.DifficultyGrade.EASY
+	new_node.is_raider_node = true  # Mark as raider-only — excluded from map visuals and connection rebuild
 	nodes[new_id] = new_node
 
 	# Register as active raider

@@ -3,9 +3,10 @@
 [ext_resource type="Script" uid="uid://bhfsk44lrvrqc" path="res://scripts/ui/management_hud.gd" id="1_hud"]
 [ext_resource type="Theme" uid="uid://c6rjhh6buixy4" path="res://assets/themes/base_ui_theme.tres" id="3_theme"]
 [ext_resource type="Texture2D" uid="uid://cpy36v51jmkqa" path="res://assets/sprites/ui/icons/icon_hull.png" id="4_hull"]
-[ext_resource type="StyleBox" path="res://assets/themes/style_panel_red.tres" id="4_panel_red"]
+[ext_resource type="StyleBox" uid="uid://djlp4a1y4go2v" path="res://assets/themes/style_panel_red.tres" id="4_panel_red"]
 [ext_resource type="Texture2D" uid="uid://bogrtadpxsc8r" path="res://assets/sprites/ui/icons/icon_fuel.png" id="6_fuel"]
 [ext_resource type="Texture2D" uid="uid://boa53jw1bdpa7" path="res://assets/sprites/ui/icons/icon_credits.png" id="7_credits"]
+[ext_resource type="StyleBox" path="res://assets/themes/style_panel_yellow.tres" id="7_rpkk0"]
 
 [node name="ManagementHUD" type="Control" unique_id=2015427981]
 layout_mode = 3
@@ -258,6 +259,46 @@ size_flags_vertical = 1
 theme_override_colors/font_color = Color(1, 0.3, 0.2, 1)
 theme_override_font_sizes/font_size = 20
 text = "[ DRIFT MODE - NO FUEL ]"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="HostileStatusPanel" type="PanelContainer" parent="." unique_id=777777772]
+visible = false
+layout_mode = 0
+offset_left = 818.99994
+offset_top = -521.0
+offset_right = 1100.0
+offset_bottom = -471.0
+scale = Vector2(1.05, 1.05)
+theme_override_styles/panel = ExtResource("4_panel_red")
+
+[node name="HostileLabel" type="Label" parent="HostileStatusPanel" unique_id=777777773]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 1
+theme_override_colors/font_color = Color(1, 0.3, 0.2, 1)
+theme_override_font_sizes/font_size = 20
+text = "[ HOSTILE INCOMING ]"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="WormholeSelectPanel" type="PanelContainer" parent="." unique_id=777777770]
+visible = false
+layout_mode = 0
+offset_left = 807.99994
+offset_top = -649.0
+offset_right = 1120.0
+offset_bottom = -599.0
+scale = Vector2(1.05, 1.05)
+theme_override_styles/panel = ExtResource("7_rpkk0")
+
+[node name="WormholeSelectLabel" type="Label" parent="WormholeSelectPanel" unique_id=777777771]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 1
+theme_override_colors/font_color = Color(1, 0.9, 0.1, 1)
+theme_override_font_sizes/font_size = 20
+text = "[ SELECT WORMHOLE DESTINATION ]"
 horizontal_alignment = 1
 vertical_alignment = 1
 

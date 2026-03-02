@@ -28,6 +28,7 @@ const NODE_TEXTURES = {
 	EventManager.NodeType.SCAVENGE_SITE: preload("res://assets/sprites/navigation/asteroid.png"),
 	EventManager.NodeType.TRADING_OUTPOST: preload("res://assets/sprites/navigation/outpost.png"),
 	EventManager.NodeType.WORMHOLE: preload("res://assets/sprites/navigation/wormhole.png"),
+	EventManager.NodeType.ABANDONED_STATION: preload("res://assets/sprites/navigation/station_trading.png"),
 }
 
 # Planet variations no longer used - EMPTY_SPACE nodes now use waypoint sprite
@@ -69,6 +70,8 @@ const SHOW_NODE_LABELS := false
 var is_hovered: bool = false
 var _pulse_tween: Tween = null
 var _story_pulse_tween: Tween = null
+var _wormhole_selectable: bool = false
+var _wormhole_pulse_tween: Tween = null
 
 
 func _ready() -> void:
@@ -80,6 +83,7 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if _pulse_tween: _pulse_tween.kill()
 	if _story_pulse_tween: _story_pulse_tween.kill()
+	if _wormhole_pulse_tween: _wormhole_pulse_tween.kill()
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -191,11 +195,11 @@ func _update_visual() -> void:
 				if glow_effect:
 					glow_effect.visible = true
 					_apply_panel_color(glow_effect, COLOR_STORY, 0.55)
-			elif node_data.node_type == EventManager.NodeType.EMPTY_SPACE:
-				if glow_effect:
-					# Always show glow for available waypoints, even if visited
-					glow_effect.visible = true
-					_apply_panel_color(glow_effect, COLOR_WAYPOINT_IN_RANGE)
+			#elif node_data.node_type == EventManager.NodeType.EMPTY_SPACE:
+				#if glow_effect:
+					## Always show glow for available waypoints, even if visited
+					#glow_effect.visible = true
+					#_apply_panel_color(glow_effect, COLOR_WAYPOINT_IN_RANGE)
 			else:
 				# Temporarily hide, difficulty visuals will show it if needed
 				if glow_effect:
@@ -278,7 +282,7 @@ func _update_difficulty_visuals() -> void:
 			$SkullContainer.visible = false
 		return
 
-	if not node_data or node_data.node_type != EventManager.NodeType.SCAVENGE_SITE:
+	if not node_data or (node_data.node_type != EventManager.NodeType.SCAVENGE_SITE and node_data.node_type != EventManager.NodeType.ABANDONED_STATION):
 		if has_node("SkullContainer"):
 			$SkullContainer.visible = false
 		return
@@ -350,8 +354,9 @@ func _update_skulls(grade: int) -> void:
 
 
 func _update_cleared_marker() -> void:
-	# Only relevant for Scavenge Sites
-	if not node_data or node_data.node_type != EventManager.NodeType.SCAVENGE_SITE:
+	# Only relevant for Scavenge Sites and Abandoned Stations
+	var is_mission_node = node_data and (node_data.node_type == EventManager.NodeType.SCAVENGE_SITE or node_data.node_type == EventManager.NodeType.ABANDONED_STATION)
+	if not is_mission_node:
 		if has_node("ClearedLabel"):
 			$ClearedLabel.visible = false
 		return
@@ -392,28 +397,28 @@ func _update_event_result_visuals() -> void:
 	var pl = get_node_or_null("PenaltyLabel")
 	var penalty_text = node_data.event_penalty_text
 	
-	# Forecast for penalty if not yet resolved
-	if penalty_text == "" and current_state == NodeState.AVAILABLE and node_data.pending_event_id >= 0:
-		var event = EventManager.random_events[node_data.pending_event_id]
-		var effects = []
-		
-		var integrity_change = event.get("integrity_change_pct", 0)
-		if integrity_change != 0:
-			var prefix = "+" if integrity_change > 0 else ""
-			effects.append(prefix + str(integrity_change) + "% HULL")
-			
-		var cash_change = event.get("cash_change", 0)
-		if cash_change != 0:
-			var prefix = "+" if cash_change > 0 else ""
-			effects.append(prefix + str(cash_change) + " CR")
-			
-		var fuel_change = event.get("fuel_change", 0)
-		if fuel_change != 0:
-			var prefix = "+" if fuel_change > 0 else ""
-			effects.append(prefix + str(fuel_change) + " FUEL")
-		
-		if not effects.is_empty():
-			penalty_text = ", ".join(effects)
+	# Forecast for penalty if not yet resolved (disabled - waypoints show no event preview)
+	#if penalty_text == "" and current_state == NodeState.AVAILABLE and node_data.pending_event_id >= 0:
+	#	var event = EventManager.random_events[node_data.pending_event_id]
+	#	var effects = []
+	#
+	#	var integrity_change = event.get("integrity_change_pct", 0)
+	#	if integrity_change != 0:
+	#		var prefix = "+" if integrity_change > 0 else ""
+	#		effects.append(prefix + str(integrity_change) + "% HULL")
+	#
+	#	var cash_change = event.get("cash_change", 0)
+	#	if cash_change != 0:
+	#		var prefix = "+" if cash_change > 0 else ""
+	#		effects.append(prefix + str(cash_change) + " CR")
+	#
+	#	var fuel_change = event.get("fuel_change", 0)
+	#	if fuel_change != 0:
+	#		var prefix = "+" if fuel_change > 0 else ""
+	#		effects.append(prefix + str(fuel_change) + " FUEL")
+	#
+	#	if not effects.is_empty():
+	#		penalty_text = ", ".join(effects)
 
 	# Determine if we should show the label
 	# We show it if it's UNVISITED (forecast) OR if it's the CURRENT node (result)
@@ -469,8 +474,8 @@ func _update_sprite_texture() -> void:
 	# Special cases for start and end nodes (always show actual type)
 	# Special cases for start and end nodes
 	if node_data.position == Vector2.ZERO:
-		# Start node - use Earth
-		sprite.texture = preload("res://assets/sprites/navigation/planet_red.png")
+		# Start node - Trading Outpost
+		sprite.texture = preload("res://assets/sprites/navigation/outpost.png")
 	elif node_data.is_new_earth:
 		# End node (New Earth)
 		sprite.texture = preload("res://assets/sprites/navigation/planet_earth.png")
@@ -498,6 +503,8 @@ func _update_sprite_texture() -> void:
 				sprite.texture = NODE_TEXTURES[EventManager.NodeType.TRADING_OUTPOST]
 			EventManager.NodeType.WORMHOLE:
 				sprite.texture = NODE_TEXTURES[EventManager.NodeType.WORMHOLE]
+			EventManager.NodeType.ABANDONED_STATION:
+				sprite.texture = NODE_TEXTURES[EventManager.NodeType.ABANDONED_STATION]
 			_:
 				sprite.texture = NODE_TEXTURES[EventManager.NodeType.EMPTY_SPACE]
 
@@ -519,7 +526,7 @@ func _update_label_text() -> void:
 	
 	# Special cases for start and end nodes (always show actual type)
 	if node_data.position == Vector2.ZERO:
-		label.text = "EARTH"
+		label.text = "TRADING OUTPOST"
 	elif node_data.is_new_earth:
 		label.text = "NEW EARTH"
 	elif node_data.is_story_node:
@@ -535,6 +542,8 @@ func _update_label_text() -> void:
 				label.text = "OUTPOST"
 			EventManager.NodeType.WORMHOLE:
 				label.text = "WORMHOLE"
+			EventManager.NodeType.ABANDONED_STATION:
+				label.text = "DERELICT STATION"
 			_:
 				label.text = "???"
 
@@ -616,12 +625,43 @@ func stop_story_pulse() -> void:
 
 ## Check if node is clickable
 func is_clickable() -> bool:
+	if _wormhole_selectable:
+		return true
 	if current_state == NodeState.AVAILABLE:
 		return true
 	if current_state == NodeState.VISITED:
-		# Visited non-neighbors: only clickable if within travel radius (direct travel)
 		return is_direct_travelable
 	return false
+
+
+## Enable/disable wormhole destination highlight on this node
+func set_wormhole_selectable(val: bool) -> void:
+	_wormhole_selectable = val
+	if val:
+		_start_wormhole_pulse()
+	else:
+		_stop_wormhole_pulse()
+
+
+func _start_wormhole_pulse() -> void:
+	_stop_wormhole_pulse()
+	if not glow_effect:
+		return
+	glow_effect.visible = true
+	_apply_panel_color(glow_effect, Color(1.0, 1.0, 1.0, 1.0))
+	_wormhole_pulse_tween = create_tween()
+	_wormhole_pulse_tween.set_loops()
+	_wormhole_pulse_tween.tween_property(glow_effect, "modulate:a", 0.25, 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	_wormhole_pulse_tween.tween_property(glow_effect, "modulate:a", 1.0, 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+
+func _stop_wormhole_pulse() -> void:
+	if _wormhole_pulse_tween:
+		_wormhole_pulse_tween.kill()
+		_wormhole_pulse_tween = null
+	if glow_effect:
+		glow_effect.modulate.a = 1.0
+		_update_visual()  # Restore correct glow state for this node's actual status
 
 
 ## Check if this is the New Earth node
@@ -660,7 +700,7 @@ func _apply_panel_color(control: Control, color: Color, alpha: float = -1.0) -> 
 
 func _on_mouse_entered() -> void:
 	is_hovered = true
-	if current_state == NodeState.AVAILABLE or current_state == NodeState.VISITED:
+	if _wormhole_selectable or current_state == NodeState.AVAILABLE or current_state == NodeState.VISITED:
 		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
 		var tween = create_tween()
 		tween.tween_property(self, "scale", Vector2(1.1, 1.1), 0.15).set_ease(Tween.EASE_OUT)
@@ -676,6 +716,9 @@ func _on_mouse_exited() -> void:
 	var tween = create_tween()
 	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.15).set_ease(Tween.EASE_OUT)
 	_update_visual()
+	# Restore wormhole pulse if this node is still selectable (update_visual resets the glow)
+	if _wormhole_selectable:
+		_start_wormhole_pulse()
 	hover_ended.emit()
 
 
